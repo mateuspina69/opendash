@@ -8,6 +8,10 @@
 
 namespace od::port {
 
+const TableFamily<RoomParamsRecord> roomParamsRecords{TableId::RoomParams};
+const TableFamily<FloorUvs> floorUvTables{TableId::FloorUvs};
+const DataTable<FloorOrientations> floorOrientationTable{TableId::FloorOrientations};
+
 namespace {
 constexpr int32_t kFogDistanceCap = 0x3333;       // exe 0x5f5df0 caps the shifted fog distance
 constexpr RoutineId kExeEmptyRoutine = RoutineId::EmptyRoutine;

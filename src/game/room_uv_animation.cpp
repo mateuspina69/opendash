@@ -7,6 +7,7 @@
 #include "game/actor_pools.hpp"
 #include "game/loaded_data.hpp"
 #include "game/projection_state.hpp"
+#include "game/room_params.hpp"
 #include "game/room_grid.hpp"
 #include "game/stage_state.hpp"
 
@@ -47,10 +48,9 @@ struct UvFrame {
 };
 constexpr uint32_t kUvFrameSize = 4;
 // exe data 0x91bdcc: the corner orders (four corner indices each, as a word), by the flags' order -- the floor's
-// orientation table (engine/room FloorOrientations), one record for every reader of it
-const DataTable<FloorOrientations> floorOrientations{TableId::FloorOrientations};
+// orientation table (game/room_params floorOrientationTable)
 uint32_t uvCornerOrder(uint32_t order) {
-    const auto& c = floorOrientations->orient[order];
+    const auto& c = floorOrientationTable->orient[order];
     return uint32_t(c[0]) | uint32_t(c[1]) << 8 | uint32_t(c[2]) << 16 | uint32_t(c[3]) << 24;
 }
 

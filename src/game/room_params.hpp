@@ -9,6 +9,7 @@
 #include <cstdint>
 
 #include "engine/data_source.hpp"
+#include "engine/room.hpp"
 #include "game/loaded_data.hpp"
 #include "game/state_array.hpp"
 
@@ -79,6 +80,12 @@ inline RoomDrawState& roomDraw() {
 // depth offset, the draw bytes, the LOD distances (the last one << shift), the texture animations cleared and the
 // vertex-colour hook reset. Not covered by a golden.
 void roomParamsSetup(uint32_t params);
+
+// the room records (by roomIndex), the stages' floor UVs (by stage) and the floor orientations, as the room build and
+// the draw read them
+extern const TableFamily<RoomParamsRecord> roomParamsRecords;
+extern const TableFamily<FloorUvs> floorUvTables;
+extern const DataTable<FloorOrientations> floorOrientationTable;
 // exe 0x40ba60(distance): the fog distance and its depth (scaled by the projection's focal length / 1000)
 void setFogDistance(int32_t distance);
 // exe 0x40ba90(colour): the fog colour from a record's three bytes

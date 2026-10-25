@@ -10,8 +10,9 @@
 // Tables the PS1 keeps in another form, made from the disc: the DAT names of the load indices (the file table of
 // SLUS_011.40, its entries named by the ISO directory), the stages' geometry / texture files (ST%02X / ST%02XT), the
 // banks the PC keeps in dash2.exe (engine/ps1_exe_banks).
-// A table the disc has no copy of (not found whole, or changed by the PC: the room parameters' fog floats ...) is no
-// table of this source: hasTable false, table() throws DataSourceError naming it.
+// The room parameters: their PS1 records, 0x24 bytes (the PS1's colour; the PC's D3D fog range past them reads as
+// zero: no fog range). A table the disc has no copy of (not found whole, or changed by the PC) is no table of this
+// source: hasTable false, table() throws DataSourceError naming it.
 #pragma once
 
 #include <map>

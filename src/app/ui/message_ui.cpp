@@ -28,7 +28,6 @@
 namespace od::app {
 
 namespace {
-const DataTable<ScalarTable<int8_t, 16>> handBob{TableId::MessageHandBob}; // the choice hand's bob (exe 0x8b1f3c)
 } // namespace
 
 uint32_t MessageUi::nameAt(uint32_t id) {
@@ -564,7 +563,7 @@ void MessageUi::draw(ui::Canvas& cv, float width, float height, int pass) const 
         // 0x9c, v 0x90)
         const int16_t kx = win.handX, ky = win.handY;
         if ((kx || ky) && (win.flags & 0x20)) {
-            const float hx = x0 + float(kx) - 2.0f + float(handBob[(od::port::gameState().frame >> 1) & 15]), hy = y0 + float(ky);
+            const float hx = x0 + float(kx) - 2.0f + float(od::port::messageHandBob[(od::port::gameState().frame >> 1) & 15]), hy = y0 + float(ky);
             const bool plain = win.baseColour == 0;
             // its CLUT: text colour 0 (plain) / 1 (SLUS 0x8004bc34: gp + 0x2ec / 0x2ee)
             if (pk) glyphPs1(cv, plain ? 12 * 20 + 16 : 12 * 20 + 13, hx, hy, s, o, white, nullptr, plain ? 0 : 1);

@@ -1,5 +1,6 @@
 #include "engine/ps1_data_source.hpp"
 
+#include <algorithm>
 #include <cctype>
 #include <cstdio>
 #include <cstring>
@@ -46,6 +47,10 @@ std::string upper(std::string s) {
     for (char& c : s) c = char(std::toupper(uint8_t(c)));
     return s;
 }
+
+// the PS1 record's byte count of a table whose PS1 records are shorter than the PC's (0: the PC's): the bytes past it
+// read as zero -- the room parameters' D3D fog range (+0x24 / +0x28, the PC's), none on the PS1
+uint32_t ps1RecordBytes(TableId id) { return id == TableId::RoomParams ? 0x24 : 0; }
 
 void put32(std::vector<uint8_t>& b, size_t o, uint32_t v) {
     for (int k = 0; k < 4; ++k) b[o + size_t(k)] = uint8_t(v >> (8 * k));
@@ -219,11 +224,16 @@ TableReader Ps1DataSource::table(TableKey key, uint32_t bytes) const {
         if (!r.empty()) std::memcpy(b.data(), r.bytes(0, r.size()).data(), r.size());
         return TableReader(*this, std::move(b));
     }
+    const uint32_t own = ps1RecordBytes(key.id) ? std::min(bytes, ps1RecordBytes(key.id)) : bytes;
     for (const size_t p : partsOf(t.file)) {
         const Part& pt = parts_[p];
-        if (t.address >= pt.base && size_t(t.address - pt.base) + bytes <= pt.data->size()) {
+        if (t.address >= pt.base && size_t(t.address - pt.base) + own <= pt.data->size()) {
             (void)virtualOf(p, t.address, Region{key, 0});
-            return regionBytes(p, t.address, bytes, Region{key, 0});
+            TableReader r = regionBytes(p, t.address, own, Region{key, 0});
+            if (own == bytes) return r;
+            std::vector<uint8_t> b(bytes, 0);
+            std::memcpy(b.data(), r.bytes(0, own).data(), own);
+            return TableReader(*this, std::move(b));
         }
     }
     throw DataSourceError("data source (PS1): " + describe(key) + " runs past its block in " + t.file);

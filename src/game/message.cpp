@@ -13,6 +13,8 @@
 
 namespace od::port {
 
+const DataTable<ScalarTable<int8_t, 16>> messageHandBob{TableId::MessageHandBob};
+
 namespace {
 
 // the open's defaults (exe 0x557390)

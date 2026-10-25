@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include "engine/data_source.hpp"
 #include "game/message_state.hpp"
 
 namespace od::port {
@@ -54,5 +55,8 @@ enum class WindowLayout : int8_t {
 };
 // exe 0x557860(layout): the layout bits set for the next windows
 void windowLayoutVariant(WindowLayout layout);
+
+// the choice hand's bob (exe 0x8b1f3c), 16 pixel offsets by (frame >> 1) & 15
+extern const DataTable<ScalarTable<int8_t, 16>> messageHandBob;
 
 } // namespace od::port

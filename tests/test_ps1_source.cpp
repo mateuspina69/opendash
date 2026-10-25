@@ -88,9 +88,10 @@ bool same(const std::vector<Event>& pc, const std::vector<Event>& ps, std::strin
     return true;
 }
 
-// the tables the PS1 source makes from the disc in the PS1's own form (another content than the PC's)
+// the tables the PS1 source makes from the disc in the PS1's own form (another content than the PC's), and the room
+// parameters (the PS1's records, checked apart)
 bool madeTable(od::TableId id) {
-    if (id == od::TableId::DatFileNames || id == od::TableId::StageGeometryFiles ||
+    if (id == od::TableId::DatFileNames || id == od::TableId::StageGeometryFiles || id == od::TableId::RoomParams ||
         id == od::TableId::StageTextureFiles || id == od::TableId::MenuBankShopPriceStrings)
         return true;
     for (const od::Ps1ExeBank& b : od::ps1ExeBanks())
@@ -140,6 +141,21 @@ int main(int argc, char** argv) {
         const od::TableReader texture = ps1.table({od::TableId::StageTextureFiles, 0}, 2 * od::kStageCount);
         CHECK(od::datFileName(geometry.u16(9 * 2)) == "ST09.DAT" && od::datFileName(texture.u16(9 * 2)) == "ST09T.DAT");
         CHECK(ps1.hasTable({od::TableId::MenuBankItemNames, 0}));
+    }
+    { // the room parameters: the PS1's 0x24-byte records, the PC's from +0x3 on, no fog range past them
+        size_t rooms = 0, same = 0;
+        for (int stage = 0; stage < od::kStageCount; ++stage)
+            for (int room = 0; room < 256; ++room) {
+                const od::TableKey key{od::TableId::RoomParams, od::roomIndex(stage, room)};
+                if (!ps1.hasTable(key) || !pc.hasTable(key)) continue;
+                ++rooms;
+                const od::TableReader a = pc.table(key, 0x2c), b = ps1.table(key, 0x2c);
+                bool equal = b.f32(0x24) == 0.0f && b.f32(0x28) == 0.0f;
+                for (uint32_t o = 3; o < 0x24; ++o) equal = equal && a.u8(o) == b.u8(o);
+                same += equal;
+            }
+        std::printf("%zu room parameter records on the disc: %zu the PC's\n", rooms, same);
+        CHECK(rooms > 0 && same == rooms && ps1.hasTable({od::TableId::RoomParams, od::roomIndex(9, 0)}));
     }
     std::printf("%zu tables on the disc: %zu read as the PC's\n", tables, equal);
     CHECK(tables > 0 && equal == tables);

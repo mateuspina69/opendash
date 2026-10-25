@@ -43,9 +43,6 @@ od::port::LoadedDataIdentity loadedDataIdentity() { return {g_stageFilesGeo, g_s
 namespace {
 
 // the room / stage tables of the room build (engine/data_source)
-const od::TableFamily<od::port::RoomParamsRecord> g_roomParams{od::TableId::RoomParams};
-const od::TableFamily<od::FloorUvs> g_floorUvs{od::TableId::FloorUvs};
-const od::DataTable<od::FloorOrientations> g_floorOrientations{od::TableId::FloorOrientations};
 
 // Decode model-space geometry from the stage bank. Placement and poses come only
 // from the actors spawned and updated by game/stage_setup and the actor pools.
@@ -325,12 +322,12 @@ RoomMesh loadRoom(int stage, int sub) {
     // +3 = the coordinate shift (0x6d00b5; a camera script may switch it at run time, FUN_005118a0 -- the render
     // follows the live byte), +0..+2 = the D3D fog colour, floats +0x24 / +0x28 = its start / end (FUN_00401760)
     const uint32_t paramsIndex = od::roomIndex(stage, sub < 0 ? 0 : sub);
-    if (!g_roomParams.has(paramsIndex)) throw std::runtime_error(std::string(name) + ": no room params");
-    const od::port::RoomParamsRecord& roomParams = g_roomParams[paramsIndex];
+    if (!od::port::roomParamsRecords.has(paramsIndex)) throw std::runtime_error(std::string(name) + ": no room params");
+    const od::port::RoomParamsRecord& roomParams = od::port::roomParamsRecords[paramsIndex];
     const int roomShift = roomParams.coordinateShift;
     auto quads = od::parseRoom(block, roomShift, sub, &stats, 0, true);
     const size_t sceneryQuads = quads.size();
-    const auto floor = od::parseFloor(block, g_floorUvs[uint32_t(stage)].uv, g_floorOrientations->orient,
+    const auto floor = od::parseFloor(block, od::port::floorUvTables[uint32_t(stage)].uv, od::port::floorOrientationTable->orient,
                                       roomShift, sub < 0 ? 0 : sub);
     quads.insert(quads.end(), floor.begin(), floor.end());
     SDL_Log("%s sub %d/%zu: shift %d, %zu scenery quads (%d segments, %d skipped faces, %d unowned), %zu floor quads",
@@ -507,7 +504,7 @@ RoomMesh loadRoom(int stage, int sub) {
         mesh.player = characterMesh(pm, od::port::PlayerLook{}, slice);
         // spawn: room centre, standing on the ground the game's own probe finds
         mesh.shift = roomShift;
-        mesh.roomParams = od::dataSource().stateAddress({g_roomParams.id(), paramsIndex}); // the record's address the game state keeps
+        mesh.roomParams = od::dataSource().stateAddress({od::port::roomParamsRecords.id(), paramsIndex}); // the record's address the game state keeps
         mesh.roomFile = std::make_shared<const od::GameFile>(st);
         mesh.roomFileName = geometryFile;
         mesh.textureFile = textureFile;
