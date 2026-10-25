@@ -199,7 +199,7 @@ void PlayerView::setLanguage(od::lang::Language l) {
     }
     language = l;
     applyVoiceDirs();
-    if (mixer) od::lang_sfx::reloadAll(pack ? pack->folder() : std::filesystem::path()); // the voice barks (app/lang_sfx)
+    if (mixer) od::lang_sfx::reloadAll(pack.get()); // the voice barks (app/lang_sfx)
     loadExeBanks();
     if (bankStage >= 0 && bankLanguage != l) loadMessageBank();
     SDL_Log("lang: %s", od::lang::code(l));
@@ -545,7 +545,7 @@ void PlayerView::audioInit(const od::Config& cfg, bool device) {
         const od::GameFile init = od::dataSource().gameFile("INIT.DAT");
         for (const od::FilePart& seg : init.parts)
             if (seg.kind == od::FilePart::Kind::WavSfxBank)
-                od::lang_sfx::load(pack ? pack->folder() : std::filesystem::path(), "INIT.DAT", seg.bytes, seg.arg, seg.extra);
+                od::lang_sfx::load(pack.get(), "INIT.DAT", seg.bytes, seg.arg, seg.extra);
         SDL_Log("audio: %s, INIT bank loaded", mixer->hasDevice() ? "device" : "silent");
     } catch (const std::exception& e) {
         SDL_Log("audio disabled: %s", e.what());
@@ -563,7 +563,7 @@ void PlayerView::audioBindRoom(const RoomMesh& mesh) {
         int banks = 0, mp3 = 0;
         for (const od::FilePart& seg : mesh.roomFile->parts)
             if (seg.kind == od::FilePart::Kind::WavSfxBank) {
-                od::lang_sfx::load(pack ? pack->folder() : std::filesystem::path(), mesh.roomFileName, seg.bytes, seg.arg, seg.extra);
+                od::lang_sfx::load(pack.get(), mesh.roomFileName, seg.bytes, seg.arg, seg.extra);
                 ++banks;
             }
         if (od::dataSource().hasFile(mesh.textureFile)) {
@@ -1531,7 +1531,7 @@ void PlayerView::processDatQueue() {
                 } else if (sg.kind == od::FilePart::Kind::Vram) {
                     vramSeg = true;
                 } else if (sg.kind == od::FilePart::Kind::WavSfxBank) { // 0x40ed0e: Maybe_LoadSfxBank 0x5d5010(data, size, TOC arg, extra)
-                    od::lang_sfx::load(pack ? pack->folder() : std::filesystem::path(), name, d, sg.arg, sg.extra);
+                    od::lang_sfx::load(pack.get(), name, d, sg.arg, sg.extra);
                 } else if (sg.kind == od::FilePart::Kind::Mp3Music) {
                     od::port::loadMp3Slot(d, mp3++, sg.arg);
                 }

@@ -7,13 +7,15 @@
 //     (item names, menus, the shops, the memory card screens: SLUS_011.40, SUBSCN.BIN, DEMO.BIN and the stage
 //     overlays), the voices (the clips of XA/*.XA: per channel, up to the sector that ends the clip, in (channel,
 //     first sector) order = the PC voice file's track order), the title's pictures (art/TITLE.bin, COMMON/TITLE.BIN's
-//     rects). Not read from the disc yet: the sub-screen's art (art/GAME.bin, art/SUBSCN0x.bin: PS1 cells composed with
-//     the PC's key boxes) and the SFX banks.
+//     rects), the SFX banks (the PS1 sound bank blocks in the PC layout where they differ from the PC's: the voice
+//     barks). Not read from the disc yet: the sub-screen's art (art/GAME.bin, art/SUBSCN0x.bin: PS1 cells composed with
+//     the PC's key boxes).
 #pragma once
 
 #include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -35,6 +37,11 @@ public:
     // voice track `track` of the PC voice file `file` ("xa02_37.dat") as an ODXA track (engine/lang parseXaTrack),
     // for a source without a folder (the disc: the clips of XA/ST02_37.XA); empty when there is none. Thread safe.
     virtual std::vector<uint8_t> voiceTrack(const std::string& file, uint32_t track) const = 0;
+    // the pack's SFX bank in the PC layout for the PC bank `pcBank` of game file datName ("ST0E.DAT"), slot arg, bank
+    // id extra: the folder's sfx/<STEM>_<arg>_<extra>.bin, the disc's bank rebuilt from its PS1 copy (engine/ps1_sfx);
+    // empty = the PC's bank (the pack has none, or it is the PC's)
+    virtual std::vector<uint8_t> sfxBank(const std::string& datName, uint32_t arg, uint32_t extra,
+                                         std::span<const uint8_t> pcBank) const = 0;
 };
 
 std::unique_ptr<LangPack> folderPack(std::filesystem::path dir);

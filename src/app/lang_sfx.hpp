@@ -3,6 +3,7 @@
 // layout. Every SFX bank load goes through here so a language switch can reload the banks in place.
 #pragma once
 
+#include "engine/lang_pack.hpp"
 #include <cstdint>
 #include <filesystem>
 #include <span>
@@ -12,9 +13,9 @@ namespace od::lang_sfx {
 
 // od::port::loadSfxBank of the pack's bank for datName (arg = slot, extra = bank id) if packDir has one, else of
 // the PC segment; packDir "" = Japanese
-void load(const std::filesystem::path& packDir, std::string_view datName, std::span<const uint8_t> pcSeg,
+void load(const od::lang::LangPack* pack, std::string_view datName, std::span<const uint8_t> pcSeg,
           uint32_t arg, uint32_t extra);
 // the loaded slots again with packDir's banks (language switch)
-void reloadAll(const std::filesystem::path& packDir);
+void reloadAll(const od::lang::LangPack* pack);
 
 } // namespace od::lang_sfx

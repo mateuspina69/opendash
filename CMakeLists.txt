@@ -185,7 +185,7 @@ add_test(NAME test_ps1_files COMMAND test_ps1_files ${OPENDASH_DISC_CUE} ${OPEND
 add_executable(test_lang_pack tests/test_lang_pack.cpp)
 target_link_libraries(test_lang_pack PRIVATE odengine)
 target_include_directories(test_lang_pack PRIVATE tests)
-add_test(NAME test_lang_pack COMMAND test_lang_pack ${OPENDASH_DISC_CUE} ${CMAKE_SOURCE_DIR}/lang/en)
+add_test(NAME test_lang_pack COMMAND test_lang_pack ${OPENDASH_DISC_CUE} ${CMAKE_SOURCE_DIR}/lang/en ${OPENDASH_DAT_DIR})
 
 add_executable(test_lang tests/test_lang.cpp)
 target_link_libraries(test_lang PRIVATE odengine)

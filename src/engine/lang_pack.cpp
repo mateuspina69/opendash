@@ -10,6 +10,8 @@
 #include "engine/dat.hpp"
 #include "engine/game_file.hpp"
 #include "engine/lang.hpp"
+#include "engine/ps1_container.hpp"
+#include "engine/ps1_sfx.hpp"
 #include "engine/vram.hpp"
 
 namespace od::lang {
@@ -30,6 +32,12 @@ public:
     }
     std::filesystem::path folder() const override { return dir_; }
     std::vector<uint8_t> voiceTrack(const std::string&, uint32_t) const override { return {}; } // the folder's snd/
+    std::vector<uint8_t> sfxBank(const std::string& datName, uint32_t arg, uint32_t extra,
+                                 std::span<const uint8_t>) const override {
+        const std::string name = "sfx/" + std::filesystem::path(datName).stem().string() + "_" + std::to_string(arg) +
+                                 "_" + std::to_string(extra) + ".bin";
+        return has(name) ? file(name) : std::vector<uint8_t>();
+    }
 
 private:
     std::filesystem::path dir_;
@@ -204,6 +212,19 @@ public:
             out.insert(out.end(), s.begin() + 24, s.begin() + 24 + kXaSectorBytes);
         }
         return out;
+    }
+
+    std::vector<uint8_t> sfxBank(const std::string& datName, uint32_t arg, uint32_t extra,
+                                 std::span<const uint8_t> pcBank) const override {
+        std::string stem = std::filesystem::path(datName).stem().string();
+        for (char& c : stem) c = char(std::toupper(uint8_t(c)));
+        const DiscFile* f = disc_->find("DAT/" + stem + ".BIN");
+        if (!f) f = disc_->find("COMMON/" + stem + ".BIN");
+        if (!f) return {};
+        for (const FilePart& p : ps1GameFile(datName, disc_->file(f->path)).parts)
+            if (p.kind == FilePart::Kind::Ps1Block && p.arg == kPs1SoundBank && ps1SfxBankKey(p.bytes) == (extra << 16 | arg))
+                return ps1SfxBank(p.bytes, pcBank);
+        return {};
     }
 
 private:

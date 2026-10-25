@@ -21,6 +21,7 @@ inline constexpr uint32_t kPs1Models = 0x0a;         // PC 1: room actor models,
 inline constexpr uint32_t kPs1PackedModels = 0x0c;   // PC 1, LZ (bitfield bytes at +0x10)
 inline constexpr uint32_t kPs1PackedGeometry = 0x0d; // PC 2: room geometry, LZ (bitfield bytes at +0x10)
 inline constexpr uint32_t kPs1Messages = 0x12;       // PC 6's layout, raw; the text in the PS1 font's encoding
+inline constexpr uint32_t kPs1SoundBank = 0x05;      // PC 8's samples as SPU ADPCM (engine/ps1_sfx)
 
 struct Ps1Block {
     uint32_t type = 0;

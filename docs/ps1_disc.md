@@ -66,5 +66,7 @@ the load / save menus, Roll's development room) sit at fixed offsets of `SLUS_01
 `COMMON/DEMO.BIN`, `DAT/ST0AT.BIN` and `DAT/ST04T.BIN`, with the shop's 7 price strings. The voices are the clips
 of `XA/*.XA` (the audio sectors per channel up to the one with the EOF bit, in (channel, first sector) order: the
 PC voice file's track order; 424 tracks in 14 files). The title's pictures are 11 VRAM rects of
-`COMMON/TITLE.BIN`. Not read from the disc yet: the sub-screen's art (PS1 cells of `GAME.BIN` / `SUBSCN.BIN` composed
-with the PC's key boxes, tabs and labels) and the SFX banks.
+`COMMON/TITLE.BIN`. The SFX banks are the 0x05 blocks (engine/ps1_sfx: SPU ADPCM, one PC entry per tone record) in
+the PC layout, where they differ from the PC's beyond its decoder's rounding: 60 of the 163 PC banks (the voice
+barks). Not read from the disc yet: the sub-screen's art (PS1 cells of `GAME.BIN` / `SUBSCN.BIN` composed with the
+PC's key boxes, tabs and labels).
