@@ -287,6 +287,7 @@ int App::init() {
                 SDL_Log("netplay settings: %s (netplay off)", e.what());
             }
             netplay.start(net, mirrorArg, cfg.datDir, cfg.exePath);
+            netplay.world().setCombat({cfg.netFriendlyFire, cfg.netFfScale});
         }
         stages = scanStages();
         for (const auto& si : stages) playerView.stageSubs.emplace_back(si.stage, si.subs);
@@ -517,6 +518,12 @@ int App::init() {
 }
 
 void App::reload(int newStage, int newSub, bool transition) {
+    // netplay: only the host changes the room (its clients follow it, app/netplay_world)
+    if (netplay.isClient() && netplay.world().active() && !netTravelling) {
+        if (!netRefusedLogged) SDL_Log("netplay: só o host muda o cenário");
+        netRefusedLogged = true;
+        return;
+    }
     // a new room from the browser (F1, PgUp / PgDn, [ ]): out of play first -- the character's state kept for the
     // next F2 (leavePlay) before the room load writes over the game's memory
     if (!transition) {
@@ -552,6 +559,7 @@ void App::reload(int newStage, int newSub, bool transition) {
         mesh.slices.clear();
         current = std::move(mesh);
         loadError.clear();
+        if (!netplay.isClient()) netplay.world().hostTravelled(newStage, newSub, transition);
     } catch (const std::exception& e) {
         loadError = e.what();
         SDL_Log("load ST%02X sub %d failed: %s (set OPENDASH_DAT_DIR / OPENDASH_EXE or opendash.ini)",

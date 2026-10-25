@@ -69,6 +69,7 @@ void App::frame() {
     updateCamera();
     updateScene();
     drawOverlays();
+    drawNetOverlay();
     if (showMenu) drawDebugMenu();
     present();
 }

@@ -1,5 +1,6 @@
 #include "config.hpp"
 
+#include <algorithm>
 #include <cstdlib>
 #include <fstream>
 #include <string>
@@ -86,6 +87,9 @@ Config loadConfig() {
             if (key == "net_join") cfg.netJoin = trim(line.substr(eq + 1));
             if (key == "net_name") cfg.netName = trim(line.substr(eq + 1));
             if (key == "net_key") cfg.netKey = trim(line.substr(eq + 1));
+            if (key == "net_friendly_fire") cfg.netFriendlyFire = trim(line.substr(eq + 1)) == "1";
+            if (key == "net_ff_scale")
+                cfg.netFfScale = std::clamp(std::atoi(trim(line.substr(eq + 1)).c_str()), 25, 100);
         }
     }
     if (const std::string v = envValue("OPENDASH_DAT_DIR"); !v.empty()) cfg.datDir = v;

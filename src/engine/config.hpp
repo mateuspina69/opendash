@@ -37,6 +37,10 @@ struct Config {
     std::string netJoin;
     std::string netName;
     std::string netKey;
+    // the shared world's combat (F1 Netplay, the host's; app/netplay_world): net_friendly_fire= 0|1 the players' hits
+    // on each other, net_ff_scale= 25..100 the % of their damage
+    bool netFriendlyFire = false;
+    int netFfScale = 100;
 };
 
 // opendash.ini's folder: the executable's (the app sets it before loadConfig); an opendash.ini in the working directory
