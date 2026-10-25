@@ -4,6 +4,7 @@
 #include <cctype>
 #include <cstdio>
 #include <cstring>
+#include <set>
 
 #include "engine/dat.hpp"
 #include "engine/file_data.hpp"
@@ -112,7 +113,10 @@ Ps1DataSource::Ps1DataSource(std::shared_ptr<const DiscImage> disc) : disc_(std:
     for (const Ps1LabelTable& t : kPs1LabelTables) {
         const Ps1Label& l = kPs1Labels[t.label];
         if (t.stride == 0) {
-            tables_.emplace(TableKey{t.id, t.index}, Located{size_t(-1), l.file, l.address, false});
+            const TableKey key{t.id, t.index};
+            if (const auto it = tables_.find(key); it != tables_.end() && !it->second.made && it->second.file != l.file)
+                it->second.copies.push_back({l.file, l.address}); // another copy of the table
+            else tables_.emplace(key, Located{size_t(-1), l.file, l.address, false, {}});
             continue;
         }
         for (uint32_t room = 0; room * t.stride < l.bytes; ++room)
@@ -202,6 +206,10 @@ bool Ps1DataSource::hasFile(const std::string& name) const { return !name.empty(
 GameFile Ps1DataSource::gameFile(const std::string& name) const {
     const std::string path = discPath(name);
     if (path.empty()) throw DataSourceError("data source (PS1): no game file " + name + " on the disc");
+    {
+        std::lock_guard lock(lock_);
+        loadedAt_[path] = ++loads_;
+    }
     return ps1GameFile(name, disc_->file(path));
 }
 
@@ -303,18 +311,19 @@ TableReader Ps1DataSource::table(TableKey key, uint32_t bytes) const {
         return TableReader(*this, std::move(b));
     }
     const uint32_t own = ps1RecordBytes(key.id) ? std::min(bytes, ps1RecordBytes(key.id)) : bytes;
-    for (const size_t p : partsOf(t.file)) {
+    const auto [file, address] = placeOf(t);
+    for (const size_t p : partsOf(file)) {
         const Part& pt = parts_[p];
-        if (t.address >= pt.base && size_t(t.address - pt.base) + own <= pt.data->size()) {
-            (void)virtualOf(p, t.address, Region{key, 0});
-            TableReader r = regionBytes(p, t.address, own, Region{key, 0});
+        if (address >= pt.base && size_t(address - pt.base) + own <= pt.data->size()) {
+            (void)virtualOf(p, address, Region{key, 0});
+            TableReader r = regionBytes(p, address, own, Region{key, 0});
             if (own == bytes) return r;
             std::vector<uint8_t> b(bytes, 0);
             std::memcpy(b.data(), r.bytes(0, own).data(), own);
             return TableReader(*this, std::move(b));
         }
     }
-    throw DataSourceError("data source (PS1): " + describe(key) + " runs past its block in " + t.file);
+    throw DataSourceError("data source (PS1): " + describe(key) + " runs past its block in " + file);
 }
 
 uint32_t Ps1DataSource::stateAddress(TableKey key) const {
@@ -322,11 +331,26 @@ uint32_t Ps1DataSource::stateAddress(TableKey key) const {
     if (it == tables_.end()) throw DataSourceError("data source (PS1): the disc has no table " + describe(key));
     const Located& t = it->second;
     if (t.made) return parts_[t.part].vbase;
-    for (const size_t p : partsOf(t.file)) {
+    const auto [file, address] = placeOf(t);
+    for (const size_t p : partsOf(file)) {
         const Part& pt = parts_[p];
-        if (t.address >= pt.base && t.address - pt.base < pt.data->size()) return virtualOf(p, t.address, Region{key, 0});
+        if (address >= pt.base && address - pt.base < pt.data->size()) return virtualOf(p, address, Region{key, 0});
     }
-    throw DataSourceError("data source (PS1): " + describe(key) + " is in no block of " + t.file);
+    throw DataSourceError("data source (PS1): " + describe(key) + " is in no block of " + file);
+}
+
+std::pair<std::string, uint32_t> Ps1DataSource::placeOf(const Located& t) const {
+    std::pair<std::string, uint32_t> at{t.file, t.address};
+    if (t.copies.empty()) return at;
+    std::lock_guard lock(lock_);
+    auto when = [&](const std::string& f) {
+        const auto it = loadedAt_.find(f);
+        return it == loadedAt_.end() ? uint64_t(0) : it->second;
+    };
+    uint64_t best = when(t.file);
+    for (const auto& c : t.copies)
+        if (when(c.first) > best) best = when(c.first), at = c;
+    return at;
 }
 
 TableReader Ps1DataSource::pointee(uint32_t pointer, uint32_t n) const {
@@ -360,9 +384,10 @@ RoutineRef Ps1DataSource::routineOf(uint32_t pointer) const {
 
 std::vector<Ps1DataSource::AddressTable> Ps1DataSource::addressTables() {
     std::vector<AddressTable> out;
+    std::set<TableKey> seen;
     for (const Ps1LabelTable& t : kPs1LabelTables) {
         if (t.stride == 0) {
-            out.push_back({{t.id, t.index}, kPs1Labels[t.label].bytes, t.own});
+            if (seen.insert({t.id, t.index}).second) out.push_back({{t.id, t.index}, kPs1Labels[t.label].bytes, t.own}); // the first copy
             continue;
         }
         for (uint32_t room = 0; room * t.stride < kPs1Labels[t.label].bytes; ++room)

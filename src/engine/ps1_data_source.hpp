@@ -102,8 +102,15 @@ private:
         std::string file;
         uint32_t address = 0;
         bool made = false;
+        // a table the PS1 keeps a copy of in several files (the overlays of the stages that use it): the others; the
+        // one read is in the file loaded last (the overlay in PS1 RAM), the first before any of them is loaded
+        std::vector<std::pair<std::string, uint32_t>> copies;
     };
     std::map<TableKey, Located> tables_;
+    // the file and address of a disc table: its copy in the file loaded last
+    std::pair<std::string, uint32_t> placeOf(const Located& t) const;
+    mutable std::map<std::string, uint64_t> loadedAt_; // a disc file: when gameFile last loaded it
+    mutable uint64_t loads_ = 0;
     // the slots by (table, region): the function pointers' offsets / routines, the data pointers' offsets / child regions
     std::map<std::pair<TableKey, int>, std::vector<std::pair<uint32_t, RoutineId>>> routineSlots_;
     std::map<std::pair<TableKey, int>, std::vector<std::pair<uint32_t, int>>> dataSlots_;
