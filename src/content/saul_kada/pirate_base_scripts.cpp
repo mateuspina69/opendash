@@ -31,6 +31,7 @@
 #include "game/story.hpp"
 #include "game/story_flags.hpp"
 #include "game/transition.hpp"
+#include "game/dat_names.hpp"
 
 using namespace od::port::pirate_base_scripts_state;
 
@@ -177,10 +178,7 @@ void startStepsOnVoice(uint8_t& opened) {
 }
 
 // ---- script 0x5c ---------------------------------------------------------------------------------------------------
-constexpr RoutineId kGateLook = RoutineId::PirateBaseScriptsGateLook, kGateTurn = RoutineId::PirateBaseScriptsGateTurn,
-                    kGateSweep = RoutineId::PirateBaseScriptsGateSweep,
-                    kGateBreak = RoutineId::PirateBaseScriptsGateBreak,
-                   kGateGuards = RoutineId::PirateBaseScriptsGateGuards;
+constexpr RoutineId kGateLook = RoutineId::PirateBaseScriptsGateLook, kGateTurn = RoutineId::PirateBaseScriptsGateTurn, kGateSweep = RoutineId::PirateBaseScriptsGateSweep, kGateBreak = RoutineId::PirateBaseScriptsGateBreak, kGateGuards = RoutineId::PirateBaseScriptsGateGuards;
 // the gate's debris points (exe data, 8 bytes each)
 void gateStep(const RoutineRef& routine) {
     ScriptState& s = scriptState();
@@ -306,12 +304,8 @@ void gateScript() { // exe 0x535f80
 }
 
 // ---- script 0x5d ---------------------------------------------------------------------------------------------------
-constexpr RoutineId kArrivalLoad = RoutineId::PirateBaseScriptsArrivalLoad,
-                    kArrivalReset = RoutineId::PirateBaseScriptsArrivalReset,
-                    kArrivalWalk = RoutineId::PirateBaseScriptsArrivalWalk,
-                   kArrivalPlace = RoutineId::PirateBaseScriptsArrivalPlace,
-                   kArrivalReact = RoutineId::PirateBaseScriptsArrivalReact;
-constexpr uint32_t kArrivalDat = 0x10e;
+constexpr RoutineId kArrivalLoad = RoutineId::PirateBaseScriptsArrivalLoad, kArrivalReset = RoutineId::PirateBaseScriptsArrivalReset, kArrivalWalk = RoutineId::PirateBaseScriptsArrivalWalk, kArrivalPlace = RoutineId::PirateBaseScriptsArrivalPlace, kArrivalReact = RoutineId::PirateBaseScriptsArrivalReact;
+constexpr DatFile kArrivalDat{"ST3C02.DAT"};
 void arrivalStep(const RoutineRef& routine) {
     ScriptState& s = scriptState();
     const int32_t t = tick();
@@ -438,7 +432,7 @@ void arrivalScript() { // exe 0x5366b0
 
 // ---- script 0x5e ---------------------------------------------------------------------------------------------------
 constexpr RoutineId kVictoryFade = RoutineId::PirateBaseScriptsVictoryFade;
-constexpr uint32_t kVictoryDat = 0x10b;
+constexpr DatFile kVictoryDat{"ST3C00.DAT"};
 constexpr uint32_t kFlagFirstCleared = 0x7e5, kFlagLastCleared = 0x7ee;
 enum class VictoryEnd : uint8_t { FadeVoice = 0, WaitVoice = 1, Load = 2, Finish = 3 };
 void victoryStep(const RoutineRef& routine) {

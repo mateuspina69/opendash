@@ -26,6 +26,7 @@
 #include "game/story.hpp"
 #include "game/transition.hpp"
 #include "game/transition_state.hpp"
+#include "game/dat_names.hpp"
 
 namespace od::port {
 
@@ -40,7 +41,7 @@ constexpr TableId kSecondCastRecords[3] = {TableId::St1cScript13SecondCastRecord
 constexpr TableId kThirdCastRecords[3] = {TableId::St1cScript13ThirdCastRecord0, TableId::St1cScript13ThirdCastRecord1, TableId::St1cScript13ThirdCastRecord2};
 // the voices and the DATs loaded for them
 constexpr uint32_t kVoiceArrival = 0xd, kVoiceSecond = 0x11, kVoiceThird = 0x19;
-constexpr uint16_t kDatSecondVoice = 0xac, kDatThirdVoice = 0xad, kDatNextStage = 0x24;
+constexpr DatFile kDatSecondVoice{"ST1C01.DAT"}, kDatThirdVoice{"ST1C02.DAT"}, kDatNextStage{"PL00T2.DAT"};
 constexpr uint32_t kVoiceFadeStep = 8;
 // the script's effect (pool 0xa0 stage type 0x19)
 constexpr uint8_t kEffectType = 0x19;
@@ -55,8 +56,7 @@ constexpr uint8_t kArrivalFadeIn = 2;
 constexpr int32_t kGroundPoseX = 0x2000000, kGroundPoseZ = 0x15800000;
 
 // the fades of the steps
-constexpr uint32_t kFadeLongIn = 1, kFadeIn = 2, kFadeOutSlow = 0xc, kFadeOut = 0x12, kFadeToWhite = 0x14,
-                   kFadeOutFast = 0x1a;
+constexpr uint32_t kFadeLongIn = 1, kFadeIn = 2, kFadeOutSlow = 0xc, kFadeOut = 0x12, kFadeToWhite = 0x14, kFadeOutFast = 0x1a;
 
 ScriptState& block() { return scriptState(); }
 St1cScriptBytes& cues() { return st1cScriptBytes(); }

@@ -48,75 +48,123 @@ constexpr uint32_t kStageAnimMarkerReset = 0xffffffffu;
 // values / flags they test, by stage
 // ST0D (exe 0x5d5ce0)
 constexpr uint8_t kST0DLaterStory = 0xe;
-constexpr uint16_t kST0DGeometry = 0x65, kST0DLaterGeometry = 0x66;
+constexpr DatFile kST0DGeometry{"ST0D.DAT"}, kST0DLaterGeometry{"ST0D01.DAT"};
 // ST0E (exe 0x5d5d00)
 constexpr uint8_t kST0EVariantStory = 0xf;
 constexpr uint32_t kST0EFlagA = 0x5a1, kST0EFlagB = 0x5a0;
-constexpr uint16_t kST0EGeometryA = 0x6b, kST0ETextureA = 0x6c, kST0EGeometryB = 0x69, kST0ETextureB = 0x6a,
-                   kST0EGeometry = 0x68, kST0ETexture = 0x6d;
+constexpr DatFile kST0EGeometryA{"ST0E02.DAT"},
+                  kST0ETextureA{"ST0E02T.DAT"},
+                  kST0EGeometryB{"ST0E01.DAT"},
+                  kST0ETextureB{"ST0E01T.DAT"},
+                  kST0EGeometry{"ST0E.DAT"},
+                  kST0ETexture{"ST0ET.DAT"};
 // ST10 / ST11 / ST1D (exe 0x5d5d70 / 0x5d5d90 / 0x5d6010): the texture after the story's first steps
 constexpr uint8_t kEarlyStory = 1;
-constexpr uint16_t kST10Texture = 0x73, kST10EarlyTexture = 0x74;
-constexpr uint16_t kST11Texture = 0x76, kST11EarlyTexture = 0x78;
-constexpr uint16_t kST1DTexture = 0xb0, kST1DEarlyTexture = 0xb2;
+constexpr DatFile kST10Texture{"ST1001T.DAT"}, kST10EarlyTexture{"ST10T.DAT"};
+constexpr DatFile kST11Texture{"ST1101T.DAT"}, kST11EarlyTexture{"ST11T.DAT"};
+constexpr DatFile kST1DTexture{"ST1D01T.DAT"}, kST1DEarlyTexture{"ST1DT.DAT"};
 // ST13 (exe 0x5d5db0)
 constexpr uint32_t kST13Flag = 0x5b1;
 constexpr uint8_t kST13LaterStory = 4;
-constexpr uint16_t kST13Geometry = 0x7d, kST13EarlyGeometry = 0x7f;
+constexpr DatFile kST13Geometry{"ST13.DAT"}, kST13EarlyGeometry{"ST1301.DAT"};
 // ST17 (exe 0x5d5de0)
 constexpr uint8_t kST17LaterStory = 6, kST17Story9 = 9;
 constexpr uint32_t kST17LandedFlag = 0x31, kST17Story9Flag = 0x2c;
-constexpr uint16_t kST17Geometry = 0x8a, kST1704Geometry = 0x90, kST17Texture = 0x94, kST1704Texture = 0x91,
-                   kST1703Geometry = 0x8e, kST1706Texture = 0x93, kST1703Texture = 0x8f;
+constexpr DatFile kST17Geometry{"ST17.DAT"},
+                  kST1704Geometry{"ST1704.DAT"},
+                  kST17Texture{"ST17T.DAT"},
+                  kST1704Texture{"ST1704T.DAT"},
+                  kST1703Geometry{"ST1703.DAT"},
+                  kST1706Texture{"ST1706T.DAT"},
+                  kST1703Texture{"ST1703T.DAT"};
 // ST18 (exe 0x5d5e50)
 constexpr uint8_t kST18LateStory = 9, kST18Story6 = 6;
 constexpr uint32_t kST18LateFlag = 0x2c, kST18Story6Flag = 0x25;
-constexpr uint16_t kST1802Geometry = 0x98, kST1802Texture = 0x99, kST18Geometry = 0x95, kST18Texture = 0x9c,
-                   kST1804Texture = 0x9b;
+constexpr DatFile kST1802Geometry{"ST1802.DAT"},
+                  kST1802Texture{"ST1802T.DAT"},
+                  kST18Geometry{"ST18.DAT"},
+                  kST18Texture{"ST18T.DAT"},
+                  kST1804Texture{"ST1804T.DAT"};
 // ST19 (exe 0x5d5eb0)
 constexpr uint8_t kST19Story6 = 6, kST19Story9 = 9;
 constexpr uint32_t kST19DoneFlag = 0x2b, kST19FlagA = 0x25, kST19FlagB = 0x580, kST19FlagC = 0x581;
 constexpr uint32_t kST19Story9Flag = 0x2c, kST19Story9DoneFlag = 0x2e;
-constexpr uint16_t kST19Geometry = 0x9d, kST19Texture = 0xa2, kST19AltGeometry = 0xa0, kST19AltTexture = 0xa1;
-// ST1A / ST1B (exe 0x5d5f50 / 0x5d5fb0): ST1B's ids are ST1A's + 4
+constexpr DatFile kST19Geometry{"ST19.DAT"},
+                  kST19Texture{"ST19T.DAT"},
+                  kST19AltGeometry{"ST1902.DAT"},
+                  kST19AltTexture{"ST1902T.DAT"};
+// ST1A / ST1B (exe 0x5d5f50 / 0x5d5fb0): the same choice, each its stage's files
 constexpr uint8_t kST1AStory6 = 6, kST1AStory9 = 9;
 constexpr uint32_t kST1AStory6Flag = 0x25, kST1AStory9Flag = 0x2c;
-constexpr uint16_t kST1AAltGeometry = 0xa4, kST1AGeometry = 0xa3, kST1AAltTexture = 0xa5, kST1ATexture = 0xa6;
-constexpr uint16_t kST1BIdOffset = 4;
+constexpr DatFile kST1AAltGeometry{"ST1A01.DAT"},
+                  kST1AGeometry{"ST1A.DAT"},
+                  kST1AAltTexture{"ST1A01T.DAT"},
+                  kST1ATexture{"ST1AT.DAT"};
+constexpr DatFile kST1BAltGeometry{"ST1B01.DAT"}, kST1BGeometry{"ST1B.DAT"}, kST1BAltTexture{"ST1B01T.DAT"},
+                  kST1BTexture{"ST1BT.DAT"};
 // ST1F (exe 0x5d6030)
 constexpr uint8_t kST1FMiddleStory = 8, kST1FLateStory = 0x10;
 constexpr uint32_t kST1FFlag = 0x586;
-constexpr uint16_t kST1FGeometry = 0xb5, kST1FTexture = 0xba, kST1FMiddleGeometry = 0xb6, kST1FMiddleTexture = 0xb7,
-                   kST1FLateGeometry = 0xb8, kST1FLateTexture = 0xb9;
+constexpr DatFile kST1FGeometry{"ST1F.DAT"},
+                  kST1FTexture{"ST1FT.DAT"},
+                  kST1FMiddleGeometry{"ST1F01.DAT"},
+                  kST1FMiddleTexture{"ST1F01T.DAT"},
+                  kST1FLateGeometry{"ST1F02.DAT"},
+                  kST1FLateTexture{"ST1F02T.DAT"};
 // ST25 (exe 0x5d6090)
 constexpr uint8_t kST25EarlyStory = 3;
-constexpr uint16_t kST25EarlyGeometry = 0xc5, kST25Geometry = 0xc7, kST25EarlyTexture = 0xca, kST25Texture = 0xc8;
+constexpr DatFile kST25EarlyGeometry{"ST25.DAT"},
+                  kST25Geometry{"ST2502.DAT"},
+                  kST25EarlyTexture{"ST25T.DAT"},
+                  kST25Texture{"ST2502T.DAT"};
 // ST26 / ST27 (exe 0x5d60c0 / 0x5d6100)
 constexpr uint32_t kST26ST27DoneFlag = 0x56, kST26Flag = 0x3ed, kST27FlagA = 0x44, kST27FlagB = 0x45;
-constexpr uint16_t kST26AltGeometry = 0xcc, kST26Geometry = 0xcb, kST27AltGeometry = 0xcf, kST27Geometry = 0xce;
+constexpr DatFile kST26AltGeometry{"ST2601.DAT"},
+                  kST26Geometry{"ST26.DAT"},
+                  kST27AltGeometry{"ST2701.DAT"},
+                  kST27Geometry{"ST27.DAT"};
 // ST29 / ST3C (exe 0x5d6140 / 0x5d6280)
 constexpr uint8_t kST29LaterStory = 0xd, kST3CLaterStory = 0xd;
-constexpr uint16_t kST29Geometry = 0xd5, kST29LaterGeometry = 0xd6, kST29Texture = 0xd8, kST29LaterTexture = 0xd7;
-constexpr uint16_t kST3CGeometry = 0x10a, kST3CLaterGeometry = 0x10c, kST3CTexture = 0x10f, kST3CLaterTexture = 0x10d;
+constexpr DatFile kST29Geometry{"ST29.DAT"},
+                  kST29LaterGeometry{"ST2901.DAT"},
+                  kST29Texture{"ST29T.DAT"},
+                  kST29LaterTexture{"ST2901T.DAT"};
+constexpr DatFile kST3CGeometry{"ST3C.DAT"},
+                  kST3CLaterGeometry{"ST3C01.DAT"},
+                  kST3CTexture{"ST3CT.DAT"},
+                  kST3CLaterTexture{"ST3C01T.DAT"};
 // ST30 (exe 0x5d6170)
 constexpr uint32_t kST30Flag = 0x23;
-constexpr uint16_t kST30AltGeometry = 0xe8, kST30Geometry = 0xe7, kST30AltTexture = 0xe9, kST30Texture = 0xea;
+constexpr DatFile kST30AltGeometry{"ST3001.DAT"},
+                  kST30Geometry{"ST30.DAT"},
+                  kST30AltTexture{"ST3001T.DAT"},
+                  kST30Texture{"ST30T.DAT"};
 // ST33 (exe 0x5d61b0)
 constexpr uint32_t kST33Flag = 0x3ed;
-constexpr uint16_t kST33Geometry = 0xef, kST33AltTexture = 0xf1, kST33Texture = 0xf2;
+constexpr DatFile kST33Geometry{"ST33.DAT"}, kST33AltTexture{"ST3302T.DAT"}, kST33Texture{"ST33T.DAT"};
 // ST35 (exe 0x5d61e0): room 7 has its own files; else after the first guardian until the second the other geometry
 constexpr uint8_t kST35OwnFilesRoom = 7;
 constexpr uint32_t kST35FirstGuardianFlag = 0x94, kST35SecondGuardianFlag = 0x95;
-constexpr uint16_t kST3502Geometry = 0xf8, kST3501Texture = 0xf7, kST3501Geometry = 0xf6, kST35Geometry = 0xf5,
-                   kST35Texture = 0xf9;
+constexpr DatFile kST3502Geometry{"ST3502.DAT"},
+                  kST3501Texture{"ST3501T.DAT"},
+                  kST3501Geometry{"ST3501.DAT"},
+                  kST35Geometry{"ST35.DAT"},
+                  kST35Texture{"ST35T.DAT"};
 // ST39 (exe 0x5d6250)
 constexpr uint8_t kST39LaterStory = 0x11;
-constexpr uint16_t kST39Geometry = 0x100, kST39LaterGeometry = 0x101, kST39Texture = 0x103, kST39LaterTexture = 0x102;
+constexpr DatFile kST39Geometry{"ST39.DAT"},
+                  kST39LaterGeometry{"ST3901.DAT"},
+                  kST39Texture{"ST39T.DAT"},
+                  kST39LaterTexture{"ST3901T.DAT"};
 // ST53 (exe 0x5d62b0)
 constexpr uint8_t kST53VariantStory = 0xf;
 constexpr uint32_t kST53FlagA = 0x5a1, kST53FlagB = 0x5a0;
-constexpr uint16_t kST53GeometryA = 0x142, kST53TextureA = 0x143, kST53GeometryB = 0x140, kST53TextureB = 0x141,
-                   kST53Geometry = 0x13f, kST53Texture = 0x145;
+constexpr DatFile kST53GeometryA{"ST5302.DAT"},
+                  kST53TextureA{"ST5302T.DAT"},
+                  kST53GeometryB{"ST5301.DAT"},
+                  kST53TextureB{"ST5301T.DAT"},
+                  kST53Geometry{"ST53.DAT"},
+                  kST53Texture{"ST53T.DAT"};
 
 } // namespace
 
@@ -240,9 +288,13 @@ bool stageDatFiles(int stage, std::string& geometry, std::string& texture) {
     case 0x1b: {
         const bool alt = (story == kST1AStory6 && storyFlag(kST1AStory6Flag)) ||
                          (story == kST1AStory9 && storyFlag(kST1AStory9Flag));
-        const uint16_t k = stage == 0x1a ? 0 : kST1BIdOffset;
-        geo = uint16_t((alt ? kST1AAltGeometry : kST1AGeometry) + k);
-        tex = uint16_t((alt ? kST1AAltTexture : kST1ATexture) + k);
+        if (stage == 0x1a) {
+            geo = alt ? kST1AAltGeometry : kST1AGeometry;
+            tex = alt ? kST1AAltTexture : kST1ATexture;
+        } else {
+            geo = alt ? kST1BAltGeometry : kST1BGeometry;
+            tex = alt ? kST1BAltTexture : kST1BTexture;
+        }
         break;
     }
     case 0x1d: tex = story > kEarlyStory ? kST1DTexture : kST1DEarlyTexture; break;

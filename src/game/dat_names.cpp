@@ -18,4 +18,11 @@ std::string datFileName(uint16_t index) {
     return datFileNames->names[index];
 }
 
+uint16_t datFileIndex(std::string_view name) {
+    const DatFileNames& t = *datFileNames;
+    for (size_t i = 0; i < DatFileNames::kCount; ++i)
+        if (t.names[i] == name) return uint16_t(i);
+    throw DataSourceError("data source: no load index names " + std::string(name));
+}
+
 } // namespace od

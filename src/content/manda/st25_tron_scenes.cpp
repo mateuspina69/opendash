@@ -38,6 +38,7 @@
 #include "game/story.hpp"
 #include "game/transition.hpp"
 #include "game/transition_state.hpp"
+#include "game/dat_names.hpp"
 
 using namespace od::port::st25_tron_scenes_state;
 
@@ -643,7 +644,7 @@ void script1b(const PlayerEnv& env) {
 }
 
 // ---- script 0x1c's states ----------------------------------------------------------------------------------------------
-constexpr uint16_t kDatAfterBank = 0xc6, kDatVillage = 0xc9;
+constexpr DatFile kDatAfterBank{"ST2501.DAT"}, kDatVillage{"ST2503.DAT"};
 constexpr uint32_t kVoiceAfter = 7;
 constexpr uint16_t kSoundVillageSaved = 0x2c;
 constexpr size_t kTankLeftArmPart = 1, kTankRightArmPart = 5;

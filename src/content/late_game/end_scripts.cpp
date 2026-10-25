@@ -43,6 +43,7 @@
 #include "game/transition.hpp"
 #include "game/transition_state.hpp"
 #include "game/vram_moves.hpp"
+#include "game/dat_names.hpp"
 
 using namespace od::port::end_scripts_state;
 
@@ -596,7 +597,7 @@ void script6d() {
             return;
         case 2:
             if (fileLoading()) return;
-            datLoadRequest(0x157); // exe 0x40efe0
+            datLoadRequest(DatFile{"ST5C01.DAT"}); // exe 0x40efe0
             s.subState += 1u;
             return;
         case 3:
@@ -910,7 +911,7 @@ void returnStep(const RoutineRef& routine) {
             break;
         case 3:
             if (voiceClipIdle()) {
-                datLoadRequest(0x13d);
+                datLoadRequest(DatFile{"ST5201.DAT"});
                 s.stepPhase += 1u;
             }
             break;

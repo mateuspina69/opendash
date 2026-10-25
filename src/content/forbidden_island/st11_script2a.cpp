@@ -32,6 +32,7 @@
 #include "game/stage_files.hpp"
 #include "game/story.hpp"
 #include "game/transition.hpp"
+#include "game/dat_names.hpp"
 
 namespace od::port {
 
@@ -79,7 +80,8 @@ void spawnScreenFlash() {
 
 // the phases of the walk-in step (the script's sub-state)
 enum class WalkInPhase : uint8_t { Wait = 0, Walk = 1, LoadVoice = 2, WaitLoad = 3, WaitStream = 4, StartVoice = 5 };
-constexpr uint32_t kVoiceDat = 0x77, kVoiceArrival = 0x11;
+constexpr uint32_t kVoiceArrival = 0x11;
+constexpr DatFile kVoiceDat{"ST1102.DAT"};
 // exe 0x525890: at 10 the player walks on the replay pad (its forward button), released at 0x48; once the music is
 // quiet the voice's DAT, then the voice; when it plays the skip back and the next step
 void stepWalkIn(int32_t t) {

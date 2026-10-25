@@ -60,6 +60,7 @@
 #include "game/transition.hpp"
 #include "game/transition_state.hpp"
 #include "game/visited_rooms.hpp"
+#include "game/dat_names.hpp"
 
 using namespace od::port::nino_return_scripts_state;
 
@@ -119,7 +120,7 @@ void ninoReturnStep(const RoutineRef& routine) {
         case ArrivalPhase::Warp:
             if (fadeState().busy != 0 || !voiceClipIdle()) return;
             warpTo(kNinoStage, 0, int16_t(0xf523), int16_t(0xf7ff), int16_t(0xf928));
-            datLoadRequest(0x8d); // exe 0x40efe0
+            datLoadRequest(DatFile{"ST1702.DAT"}); // exe 0x40efe0
             ++s.stepPhase;
             return;
         case ArrivalPhase::Load:
@@ -232,7 +233,7 @@ void ninoReturnScript() {
             if (fadeState().busy != 0 || !soundDone(kMusicFades)) return; // exe 0x5d5900
             actorsSweep(kSweepAll, kSweepKeep);                           // exe 0x5e05d0
             warpTo(kNinoStage, 2);
-            datLoadRequest(0x8c); // exe 0x40efe0
+            datLoadRequest(DatFile{"ST1701.DAT"}); // exe 0x40efe0
             ++s.subState;
             return;
         case ReturnSetUp::WaitBank:
@@ -275,7 +276,7 @@ void ninoReturnScript() {
             return;
         case ReturnWrapUp::LoadBank:
             if (transitionRequest().state != 0 || fadeState().busy != 0) return;
-            datLoadRequest(0x92); // exe 0x40efe0
+            datLoadRequest(DatFile{"ST1705.DAT"}); // exe 0x40efe0
             ++s.subState;
             return;
         case ReturnWrapUp::Request:
@@ -484,7 +485,7 @@ void rollToMachineScript() {
         case MachineWrapUp::Wait: ++s.subState; return;
         case MachineWrapUp::LoadBank:
             if (fadeState().busy != 0) return;
-            datLoadRequest(0x96); // exe 0x40efe0
+            datLoadRequest(DatFile{"ST1800.DAT"}); // exe 0x40efe0
             ++s.subState;
             return;
         case MachineWrapUp::Request:
@@ -691,7 +692,7 @@ void ninoAttackEndScript() {
             if (fadeState().busy != 0 || playerToScriptIfFree() != 0) return; // exe 0x572300
             actorsSweep(kSweepAll, kSweepKeep);                               // exe 0x5e05d0
             warpTo(kAttackStage, 5);
-            datLoadRequest(0x9a); // exe 0x40efe0
+            datLoadRequest(DatFile{"ST1803.DAT"}); // exe 0x40efe0
             ++s.subState;
             return;
         case EndSetUp::WaitBank:

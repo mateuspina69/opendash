@@ -43,6 +43,7 @@
 #include "game/story.hpp"
 #include "game/transition.hpp"
 #include "game/transition_state.hpp"
+#include "game/dat_names.hpp"
 
 using namespace od::port::st02_attract_script_state;
 
@@ -68,7 +69,7 @@ constexpr uint32_t kVibrationStop = 0x1000000;
 constexpr uint8_t kGamePace = 2, kSlowPace = 3;
 // the script's DAT files (the scenes of rooms 2 .. 2's last part: ST0201 / ST0202 / ST0203.DAT) and the narration's
 // voice clips, by the scene they play over (their words are not transcribed)
-constexpr uint16_t kFileST0201 = 0x48, kFileST0202 = 0x49, kFileST0203 = 0x4a;
+constexpr DatFile kFileST0201{"ST0201.DAT"}, kFileST0202{"ST0202.DAT"}, kFileST0203{"ST0203.DAT"};
 constexpr uint32_t kVoiceOpening = 0, kVoiceRoom2 = 3, kVoiceSecondScene = 4, kVoiceThirdScene = 7;
 
 // the script block

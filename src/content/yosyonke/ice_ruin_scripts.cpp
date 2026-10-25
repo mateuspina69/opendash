@@ -33,6 +33,7 @@
 #include "game/story_flags.hpp"
 #include "game/transition.hpp"
 #include "game/transition_state.hpp"
+#include "game/dat_names.hpp"
 
 using namespace od::port::ice_ruin_scripts_state;
 
@@ -222,8 +223,7 @@ void shrinkScript() {
 // the replay pad, the cast's cues at ticks 0 / 0xa / 0x1e / 0x21 / 0x23; the end frees the classes and reloads ST2F
 // sub 6 at (-0x192a, -0x100, 0x1766) yaw 0x800 (an in-stage warp).
 constexpr TableId kCritterRecords[] = {TableId::IceRuinScriptsCritterRecord0, TableId::IceRuinScriptsCritterRecord1, TableId::IceRuinScriptsCritterRecord2};
-constexpr int32_t kSceneStartX = int32_t(0xe5c00000u), kSceneStartY = int32_t(0xff000000u),
-                  kSceneStartZ = int32_t(0x17660000u);
+constexpr int32_t kSceneStartX = int32_t(0xe5c00000u), kSceneStartY = int32_t(0xff000000u), kSceneStartZ = int32_t(0x17660000u);
 constexpr int16_t kSceneStartYaw = 0xc00;
 constexpr int32_t kSceneWalkEnd = 0x1e;
 constexpr uint8_t kSt2fStage = 0x2f, kCritterSceneRoom = 6;
@@ -334,7 +334,8 @@ void critterScene() {
 // once loaded (draw buffer 1) sound 0x35 and the cutscene skippable again. End: a skip waits for the sounds then fades
 // 1; the second groups swept, record 0x8a9614 (0x4d6b40 variant 1) into its slot, the player back, the block ended.
 constexpr RoutineId kTutorialStep = RoutineId::IceRuinScriptsTutorialStep;
-constexpr uint16_t kTutorialDat = 0xe5, kTutorialSound = 0x35;
+constexpr uint16_t kTutorialSound = 0x35;
+constexpr DatFile kTutorialDat{"ST2F01.DAT"};
 
 void tutorialStep(const RoutineRef& routine) {
     ScriptState& s = block();

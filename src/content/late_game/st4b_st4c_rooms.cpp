@@ -37,6 +37,7 @@
 #include "game/story_flags.hpp"
 #include "game/transition.hpp"
 #include "game/transition_state.hpp"
+#include "game/dat_names.hpp"
 
 using namespace od::port::st4b_st4c_rooms_state;
 
@@ -479,7 +480,7 @@ void script59Step(const RoutineRef& routine) {
         case 3:
             if (voiceClipIdle() && !fadeBusy()) {
                 actorsSweep(0xffe, 0x80);
-                datLoadRequest(0x12d); // exe 0x40efe0
+                datLoadRequest(DatFile{"ST4B01.DAT"}); // exe 0x40efe0
                 s.subState += 1u;
             }
             return;
@@ -700,7 +701,7 @@ void script59Step(const RoutineRef& routine) {
         case 2:
             if (voiceClipIdle() && !fadeBusy()) {
                 actorsSweep(0xffe, 0x80);
-                datLoadRequest(0x12e);
+                datLoadRequest(DatFile{"ST4B02.DAT"});
                 s.subState = 3;
             }
             return;
@@ -983,7 +984,7 @@ void script59() {
             return;
         case 3:
             actorsSweep(0xffe, 0x80);
-            datLoadRequest(0x12e);
+            datLoadRequest(DatFile{"ST4B02.DAT"});
             s.subState = 4;
             return;
         case 4:

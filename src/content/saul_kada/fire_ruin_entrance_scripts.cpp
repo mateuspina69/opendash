@@ -34,6 +34,7 @@
 #include "game/story_flags.hpp"
 #include "game/table_records.hpp"
 #include "game/transition.hpp"
+#include "game/dat_names.hpp"
 
 namespace od::port {
 
@@ -226,12 +227,7 @@ void emberParams(uint32_t slot, int16_t lifetime) {
 // ST27 sub 8, the first visit: Megaman walks in backwards from (-0x400, 0, 0xad9) (animation 0x81, then 0x50 once its
 // key holds), two embers at tick 0x14 of the third step, the face tracks 0x8a845c / 0x8a84b0 and the voice 0x16. The
 // end: records 0x8a8148 x 6 / 0x8a81d8 x 3, the player at (-0x400, 0, 0xa00) yaw 0, the ruin's music.
-constexpr RoutineId kEntranceWalkIn = RoutineId::FireRuinEntranceScriptsEntranceWalkIn,
-                    kEntranceFaces = RoutineId::FireRuinEntranceScriptsEntranceFaces,
-                    kEntranceEmbers = RoutineId::FireRuinEntranceScriptsEntranceEmbers,
-                   kEntranceTalk = RoutineId::FireRuinEntranceScriptsEntranceTalk,
-                   kEntranceStepUp = RoutineId::FireRuinEntranceScriptsEntranceStepUp,
-                   kEntranceMouth = RoutineId::FireRuinEntranceScriptsEntranceMouth;
+constexpr RoutineId kEntranceWalkIn = RoutineId::FireRuinEntranceScriptsEntranceWalkIn, kEntranceFaces = RoutineId::FireRuinEntranceScriptsEntranceFaces, kEntranceEmbers = RoutineId::FireRuinEntranceScriptsEntranceEmbers, kEntranceTalk = RoutineId::FireRuinEntranceScriptsEntranceTalk, kEntranceStepUp = RoutineId::FireRuinEntranceScriptsEntranceStepUp, kEntranceMouth = RoutineId::FireRuinEntranceScriptsEntranceMouth;
 constexpr uint8_t kAnimEntranceWalk = 0x81, kAnimStand = 0x50, kAnimStepUp = 0x82;
 constexpr uint8_t kEntranceEmber = 0x17;
 constexpr int16_t kEntranceEmberLife = 0x3c;
@@ -347,12 +343,7 @@ void entranceScript() { // exe 0x52ce90
 // embers, story flag 0x683, the gate's cells opened and the third actor to its state 2; the player placed per step,
 // the face tracks 0x8a8754 / 0x8a87ac and the voice 1. The end: records 0x8a8548 x 2 / 0x8a8570 x 3, the player at
 // (-0x400, 0, 0x400) yaw 0, the look pitch level, the gate open, the ruin's music.
-constexpr RoutineId kGateShake = RoutineId::FireRuinEntranceScriptsGateShake,
-                    kGateOpen = RoutineId::FireRuinEntranceScriptsGateOpen,
-                    kGatePlaceA = RoutineId::FireRuinEntranceScriptsGatePlaceA,
-                    kGateLook = RoutineId::FireRuinEntranceScriptsGateLook,
-                   kGatePlaceB = RoutineId::FireRuinEntranceScriptsGatePlaceB,
-                   kGateTalk = RoutineId::FireRuinEntranceScriptsGateTalk;
+constexpr RoutineId kGateShake = RoutineId::FireRuinEntranceScriptsGateShake, kGateOpen = RoutineId::FireRuinEntranceScriptsGateOpen, kGatePlaceA = RoutineId::FireRuinEntranceScriptsGatePlaceA, kGateLook = RoutineId::FireRuinEntranceScriptsGateLook, kGatePlaceB = RoutineId::FireRuinEntranceScriptsGatePlaceB, kGateTalk = RoutineId::FireRuinEntranceScriptsGateTalk;
 constexpr uint8_t kAnimGateLook = 0x83, kAnimGateLeave = 0x84;
 constexpr uint8_t kGateEmber = 0xf;
 constexpr int16_t kGateEmberLife = 0x46;
@@ -481,11 +472,10 @@ void gateScript() { // exe 0x52d5a0
 // walks in from (-0x6d9, 0x10, 0x200) yaw 0xc00 (animation 0x95), the voice 5, then the stage bank's other buffer and
 // his animation paused / resumed over the face tracks 0x8a89e8 / 0x8a8a14. The end: records 0x8a8850 / 0x8a8824 x 2,
 // the player at (-0x500, 0x10, 0x200) yaw 0xc00, the depths' music.
-constexpr RoutineId kDepthsWalkIn = RoutineId::FireRuinEntranceScriptsDepthsWalkIn,
-                    kDepthsPause = RoutineId::FireRuinEntranceScriptsDepthsPause,
-                    kDepthsBlink = RoutineId::FireRuinEntranceScriptsDepthsBlink;
+constexpr RoutineId kDepthsWalkIn = RoutineId::FireRuinEntranceScriptsDepthsWalkIn, kDepthsPause = RoutineId::FireRuinEntranceScriptsDepthsPause, kDepthsBlink = RoutineId::FireRuinEntranceScriptsDepthsBlink;
 constexpr uint8_t kAnimDepthsWalk = 0x95, kAnimDepthsLook = 0x82;
-constexpr uint16_t kDepthsDat = 0xd2, kDepthsMusic = 0x3f;
+constexpr uint16_t kDepthsMusic = 0x3f;
+constexpr DatFile kDepthsDat{"ST2801.DAT"};
 // the depths' walk-in's own phases (after the walk-in's), and its file load's (the step phase)
 enum class DepthsWalk : uint8_t { Wait = 4, WaitFile = 5, Voice = 6, WaitVoice = 7 };
 enum class DepthsFile : uint8_t { Request = 0, Loading = 1, Loaded = 2 };
@@ -602,13 +592,9 @@ void depthsScript() { // exe 0x52de50
 // fall around him, he walks in (animation 0x83) and turns, the script's actors 1 / 2 placed. The end (its own): the
 // voice faded, DAT 0xd3, the stage bank's other buffer, records 0x8a8a64 x 2, the player at (0, 0x10, 0x200) yaw
 // 0xc00, the look pitch level, the ruin's music.
-constexpr RoutineId kRubbleFall = RoutineId::FireRuinEntranceScriptsRubbleFall,
-                    kRubbleWalkIn = RoutineId::FireRuinEntranceScriptsRubbleWalkIn,
-                    kRubbleFaces = RoutineId::FireRuinEntranceScriptsRubbleFaces,
-                    kRubbleCast = RoutineId::FireRuinEntranceScriptsRubbleCast,
-                   kRubblePlace = RoutineId::FireRuinEntranceScriptsRubblePlace;
+constexpr RoutineId kRubbleFall = RoutineId::FireRuinEntranceScriptsRubbleFall, kRubbleWalkIn = RoutineId::FireRuinEntranceScriptsRubbleWalkIn, kRubbleFaces = RoutineId::FireRuinEntranceScriptsRubbleFaces, kRubbleCast = RoutineId::FireRuinEntranceScriptsRubbleCast, kRubblePlace = RoutineId::FireRuinEntranceScriptsRubblePlace;
 constexpr uint8_t kAnimRubbleWalk = 0x83, kAnimRubbleLook = 0x85, kAnimRubbleBrace = 0x86;
-constexpr uint16_t kRubbleDat = 0xd3;
+constexpr DatFile kRubbleDat{"ST2802.DAT"};
 constexpr uint8_t kRubbleFlame = 0x20;
 constexpr int16_t kRubbleFlameLife = 0x50;
 constexpr int16_t kRubbleFlameYaw = 0x800;

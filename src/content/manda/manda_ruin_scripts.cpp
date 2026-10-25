@@ -40,6 +40,7 @@
 #include "game/story_flags.hpp"
 #include "game/transition.hpp"
 #include "game/transition_state.hpp"
+#include "game/dat_names.hpp"
 
 using namespace od::port::manda_ruin_scripts_state;
 
@@ -154,7 +155,7 @@ void stepFirstHallWalkIn() {
         return;
     case 1:
         if (musicFaded()) {
-            datLoadRequest(0x80);
+            datLoadRequest(DatFile{"ST1302.DAT"});
             ++block().stepSubPhase;
         }
         return;
@@ -337,7 +338,7 @@ void stepsA(const RoutineRef& routine) {
     case RoutineId::MandaScriptAAfterGuardianSoundStep: stepAfterGuardianSound(); return;
     case RoutineId::MandaScriptABlockStep: block().clearStepPhase(); return;
     case RoutineId::MandaScriptAAfterGuardianWalkStep: stepAfterGuardianWalk(); return;
-    case RoutineId::MandaScriptAFreeAndLoadStep: stepFreeAndLoad(stateAddress(TableId::MandaRuinScriptsFirstHallFigureRecord), 0x7e, true); return;
+    case RoutineId::MandaScriptAFreeAndLoadStep: stepFreeAndLoad(stateAddress(TableId::MandaRuinScriptsFirstHallFigureRecord), DatFile{"ST1300.DAT"}, true); return;
     default: notPortedAt(kRuinArea, "script 10 step", routine.pointerValue());
     }
 }
@@ -401,7 +402,7 @@ void scriptAWrapUp() {
     case 2:
         if (s.stepPhase == 0) {
             if (musicFaded()) {
-                datLoadRequest(0x7e);
+                datLoadRequest(DatFile{"ST1300.DAT"});
                 ++s.stepPhase;
             }
         } else if (fileLoaded()) {
@@ -458,7 +459,7 @@ void stepSecondGuardianTurn() {
         return;
     case 1:
         if (musicFaded()) {
-            datLoadRequest(0x7b);
+            datLoadRequest(DatFile{"ST1201.DAT"});
             ++s.stepSubPhase;
         }
         return;
@@ -617,7 +618,7 @@ void stepsC(const RoutineRef& routine) {
     case RoutineId::MandaScriptCAfterSecondSoundStep: stepAfterSecondSound(); return;
     case RoutineId::MandaScriptABlockStep: block().clearStepPhase(); return;
     case RoutineId::MandaScriptCAfterSecondWalkStep: stepAfterSecondWalk(); return;
-    case RoutineId::MandaScriptCFreeAndLoadStep: stepFreeAndLoad(stateAddress(TableId::MandaRuinScriptsSecondHallFigureRecord), 0x7a, false); return;
+    case RoutineId::MandaScriptCFreeAndLoadStep: stepFreeAndLoad(stateAddress(TableId::MandaRuinScriptsSecondHallFigureRecord), DatFile{"ST1200.DAT"}, false); return;
     default: notPortedAt(kRuinArea, "script 0xc step", routine.pointerValue());
     }
 }
@@ -645,7 +646,7 @@ void scriptCWrapUp() {
     case 2:
         if (s.stepPhase == 0) {
             if (musicFaded()) {
-                datLoadRequest(0x7a);
+                datLoadRequest(DatFile{"ST1200.DAT"});
                 ++s.stepPhase;
             }
         } else if (fileLoaded()) {
@@ -682,7 +683,7 @@ void stepLastHallVoice() {
         return;
     case 1:
         if (soundDone(kMusicChannel0) && !voiceClipPlaying()) {
-            datLoadRequest(0x84);
+            datLoadRequest(DatFile{"ST1401.DAT"});
             ++s.stepPhase;
         }
         return;
@@ -900,7 +901,7 @@ void scriptEWrapUp() {
         return;
     case 2:
         if (s.stepPhase == 0) {
-            datLoadRequest(0x83);
+            datLoadRequest(DatFile{"ST1400.DAT"});
             ++s.stepPhase;
         } else if (fileLoaded()) {
             s.subState = 3;

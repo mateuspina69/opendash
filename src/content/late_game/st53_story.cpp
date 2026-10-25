@@ -31,6 +31,7 @@
 #include "game/story_flags.hpp"
 #include "game/transition.hpp"
 #include "game/transition_state.hpp"
+#include "game/dat_names.hpp"
 
 using namespace od::port::st53_story_state;
 
@@ -43,7 +44,7 @@ namespace {
 constexpr RoutineId kStepIdle = RoutineId::EmptyRoutine;
 constexpr uint32_t kSweepAll = 0xffe;
 constexpr uint8_t kSweepFree = 0x80;
-constexpr uint16_t kNextSceneDat = 0x144;
+constexpr DatFile kNextSceneDat{"ST5303.DAT"};
 
 St53ScriptFields& fields() {
     return scriptState().part<St53ScriptFields>();

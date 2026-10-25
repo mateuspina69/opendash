@@ -35,6 +35,7 @@
 #include "game/stage_files.hpp"
 #include "game/story.hpp"
 #include "game/transition.hpp"
+#include "game/dat_names.hpp"
 
 using namespace od::port::st03_attract_script_state;
 
@@ -56,7 +57,7 @@ constexpr uint32_t kVoiceFade = 8;
 constexpr uint8_t kGamePace = 2, kSlowPace = 3;
 // the script's DAT files (ST0301 .. ST0305.DAT) and the narration's voice clips, by the step they play in (their
 // words are not transcribed)
-constexpr uint16_t kFileST0301 = 0x4d, kFileST0302 = 0x4e, kFileST0303 = 0x4f, kFileST0304 = 0x50, kFileST0305 = 0x51;
+constexpr DatFile kFileST0301{"ST0301.DAT"}, kFileST0302{"ST0302.DAT"}, kFileST0303{"ST0303.DAT"}, kFileST0304{"ST0304.DAT"}, kFileST0305{"ST0305.DAT"};
 constexpr uint32_t kVoiceRoom1 = 9, kVoiceChapter1 = 0xb, kVoiceDip = 0xe, kVoiceRoom4 = 0xf, kVoiceLast = 0x10;
 constexpr uint16_t kEngineSound = 0xe1, kEngineStopSound = 0xe2, kLoopSound = 0xd7, kChipsSound = 0x50;
 constexpr uint32_t kLoopFade = 0x20;      // the fade entry of the loop sounds (game/audio_logic)

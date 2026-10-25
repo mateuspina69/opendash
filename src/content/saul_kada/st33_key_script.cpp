@@ -42,6 +42,7 @@
 #include "game/story.hpp"
 #include "game/story_flags.hpp"
 #include "game/transition.hpp"
+#include "game/dat_names.hpp"
 
 namespace od::port {
 
@@ -177,12 +178,12 @@ void figure(AnimatedActor& actor) {
 enum class KeySetUp : uint8_t { Start = 0, Place = 1, WaitFiles = 2, Voice = 3, WaitVoice = 4 };
 enum class KeyWrapUp : uint8_t { FadeVoice = 0, WaitVoice = 1, WaitMusic = 2, Load = 3, End = 4, SkipFade = 5,
                                  SkipWait = 6 };
-constexpr RoutineId kFallStep = RoutineId::St33KeyScriptFallStep, kTurnStep = RoutineId::St33KeyScriptTurnStep,
-                    kDropStep = RoutineId::St33KeyScriptDropStep, kPlaceStep = RoutineId::St33KeyScriptPlaceStep;
+constexpr RoutineId kFallStep = RoutineId::St33KeyScriptFallStep, kTurnStep = RoutineId::St33KeyScriptTurnStep, kDropStep = RoutineId::St33KeyScriptDropStep, kPlaceStep = RoutineId::St33KeyScriptPlaceStep;
 constexpr uint32_t kFigure = 0; // the script's actor: the guardian figure (record 0x8a5ad0)
 constexpr uint32_t kDropBone = 3;
 constexpr int16_t kDropYaw = 0x200;
-constexpr uint16_t kRuinMusic = 0x3c, kKeyDat = 0xf0;
+constexpr uint16_t kRuinMusic = 0x3c;
+constexpr DatFile kKeyDat{"ST3301.DAT"};
 constexpr uint8_t kSkipFade = 0x22, kWrapUpFade = 0x14, kEndFade = 1;
 constexpr uint32_t kVoiceFade = 8;
 

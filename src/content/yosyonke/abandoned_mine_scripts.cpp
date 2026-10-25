@@ -35,6 +35,7 @@
 #include "game/story_flags.hpp"
 #include "game/transition.hpp"
 #include "game/transition_state.hpp"
+#include "game/dat_names.hpp"
 
 using namespace od::port::abandoned_mine_scripts_state;
 
@@ -69,7 +70,7 @@ constexpr uint8_t kDeviceSpin = 0x40;
 constexpr int16_t kMusicFadeOutStep = 0xfff;
 constexpr uint16_t kSoundGuardianWakes = 0x30;
 // the guardian's DAT (sub 12's second model bank) and the hall's back after the fight
-constexpr uint16_t kGuardianDat = 0x70, kHallDat = 0x6f;
+constexpr DatFile kGuardianDat{"ST0F01.DAT"}, kHallDat{"ST0F00.DAT"};
 
 // script 0x50's sweep: every pool but the player's, except the group-2 animated actors / statics / effects and the
 // projectiles (the lift and Roll stay)

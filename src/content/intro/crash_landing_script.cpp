@@ -46,6 +46,7 @@
 #include "game/table_records.hpp"
 #include "game/transition.hpp"
 #include "game/transition_state.hpp"
+#include "game/dat_names.hpp"
 
 namespace od::port {
 
@@ -59,7 +60,7 @@ constexpr uint32_t kCrashRngSeed = 0x873ca9e6u;
 constexpr uint32_t kVoiceFade = 8;
 constexpr uint32_t kOpeningVoice = 8, kAlarmVoice = 10, kLandingVoice = 0xc;
 constexpr uint16_t kAlarmOnSound = 0x2a2, kAlarmOffSound = 0x2a3;
-constexpr uint16_t kFirstFile = 0x105, kSecondFile = 0x106; // ST3A01.DAT / ST3A02.DAT
+constexpr DatFile kFirstFile{"ST3A01.DAT"}, kSecondFile{"ST3A02.DAT"}; // ST3A01.DAT / ST3A02.DAT
 constexpr uint32_t kVibrationStop = 0x1000000;
 constexpr int32_t kVoiceDelay = 0x77;
 // the sweeps of the steps (the effects / the projectiles and the shots)

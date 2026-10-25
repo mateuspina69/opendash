@@ -30,6 +30,7 @@
 #include "game/status_screen.hpp"
 #include "game/story_flags.hpp"
 #include "game/transition_state.hpp"
+#include "game/dat_names.hpp"
 
 using namespace od::port::title_state;
 
@@ -42,7 +43,7 @@ TitleHost* H = nullptr;
 std::vector<ScreenPrim>* D = nullptr;
 
 // the DATs the flow loads (the DAT ids of exe 0x40efe0)
-constexpr uint16_t kDemoDat = 0, kGameDat = 1, kGameOverDat = 2, kInitDat = 5, kLogoDat = 6, kTitleDat = 0x42;
+constexpr DatFile kDemoDat{"DEMO.DAT"}, kGameDat{"GAME.DAT"}, kGameOverDat{"G_OVER00.DAT"}, kInitDat{"INIT.DAT"}, kLogoDat{"LOGO.DAT"}, kTitleDat{"TITLE.DAT"};
 // the boot's draw defaults: the depth offset, the depth ranges / the effects' far depths by coordinate shift, the LOD
 // distances
 constexpr uint16_t kBootDepthOffset = 1;

@@ -5,6 +5,7 @@
 #include <array>
 #include <cstdint>
 #include <string>
+#include <string_view>
 
 #include "engine/data_source.hpp"
 
@@ -21,5 +22,14 @@ struct DatFileNames : DataRecord {
 
 // the DAT file name of load index `index` ("" when the table has none)
 std::string datFileName(uint16_t index);
+// the load index of the DAT file `name` (each source numbers the files its own way); throws DataSourceError when none
+uint16_t datFileIndex(std::string_view name);
+
+// A DAT file the code names (a stage's geometry, a script's next scene ...): its load index in the bound source's
+// numbering
+struct DatFile {
+    const char* name;
+    operator uint16_t() const { return datFileIndex(name); }
+};
 
 } // namespace od

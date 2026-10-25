@@ -55,6 +55,7 @@
 #include "game/transition_state.hpp"
 #include "game/vectors.hpp"
 #include "game/visibility.hpp"
+#include "game/dat_names.hpp"
 
 using namespace od::port::elephant_boss_state;
 
@@ -290,7 +291,7 @@ void stepCrystalReacts() {
     case 0:
         if (voiceClipIdle()) {
             cameraShake(1, 0x4000, 0);
-            datLoadRequest(0xb1);
+            datLoadRequest(DatFile{"ST1D02.DAT"});
             soundPlayPanned(kSoundQuake, 0, 0);
             ++s.subState;
         }

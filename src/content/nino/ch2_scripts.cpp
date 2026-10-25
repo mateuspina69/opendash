@@ -55,6 +55,7 @@
 #include "game/story_flags.hpp"
 #include "game/transition.hpp"
 #include "game/transition_state.hpp"
+#include "game/dat_names.hpp"
 
 namespace od::port {
 
@@ -349,7 +350,7 @@ void cityGateStep(const RoutineRef& routine) {
         switch (GateBank(s.stepPhase)) {
         case GateBank::Load:
             if (!voiceClipPlaying()) {
-                datLoadRequest(0x9f); // exe 0x40efe0
+                datLoadRequest(DatFile{"ST1901.DAT"}); // exe 0x40efe0
                 s.stepPhase += 1u;
             }
             return;
@@ -918,7 +919,7 @@ void shipFightStep(const RoutineRef& routine) {
         switch (FightVoice(s.stepPhase)) {
         case FightVoice::Load:
             if (!voiceClipPlaying()) {
-                datLoadRequest(0x97);
+                datLoadRequest(DatFile{"ST1801.DAT"});
                 s.stepPhase += 1u;
             }
             return;
@@ -985,7 +986,7 @@ void shipFightStep(const RoutineRef& routine) {
     }
     case kFightLoad:
         if (s.stepPhase == 0 && !voiceClipPlaying() && t > 0x32) {
-            datLoadRequest(0x96);
+            datLoadRequest(DatFile{"ST1800.DAT"});
             scriptSequenceSkip(1);
         }
         return;
@@ -1025,7 +1026,7 @@ void shipFightScript() { // exe 0x529270
             if (!voiceClipPlaying() && fadeState().busy == 0) s.subState += 1u;
             return;
         case FightWrapUp::Load:
-            if (skipTaken()) datLoadRequest(0x96);
+            if (skipTaken()) datLoadRequest(DatFile{"ST1800.DAT"});
             s.subState += 1u;
             return;
         case FightWrapUp::Warp:
