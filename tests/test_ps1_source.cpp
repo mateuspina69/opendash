@@ -13,6 +13,8 @@
 #include "engine/disc_image.hpp"
 #include "engine/pc_data_source.hpp"
 #include "engine/ps1_data_source.hpp"
+#include "engine/ps1_exe_banks.hpp"
+#include "game/dat_names.hpp"
 
 namespace {
 
@@ -60,9 +62,10 @@ private:
     const od::DataSource& in_;
 };
 
-// the PS1 source's pointer words: its routine values and data handles
+// the PS1 source's pointer words: its routine values and its data addresses
 bool ps1Pointer(uint32_t w) {
-    return (w & 0xffff0000u) == od::Ps1DataSource::kRoutineTag || (w & 0xe0000000u) == od::Ps1DataSource::kDataTag;
+    return (w & 0xffff0000u) == od::Ps1DataSource::kRoutineTag ||
+           (w >= od::Ps1DataSource::kVirtualBase && w < od::Ps1DataSource::kRoutineTag);
 }
 
 bool same(const std::vector<Event>& pc, const std::vector<Event>& ps, std::string& why) {
@@ -85,6 +88,16 @@ bool same(const std::vector<Event>& pc, const std::vector<Event>& ps, std::strin
     return true;
 }
 
+// the tables the PS1 source makes from the disc in the PS1's own form (another content than the PC's)
+bool madeTable(od::TableId id) {
+    if (id == od::TableId::DatFileNames || id == od::TableId::StageGeometryFiles ||
+        id == od::TableId::StageTextureFiles || id == od::TableId::MenuBankShopPriceStrings)
+        return true;
+    for (const od::Ps1ExeBank& b : od::ps1ExeBanks())
+        if (b.table == id) return true;
+    return false;
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -96,7 +109,7 @@ int main(int argc, char** argv) {
     std::set<od::TableKey> done;
     for (const od::TableUse& u : od::tableUses()) {
         auto check = [&](od::TableKey key) {
-            if (!ps1.hasTable(key) || !done.insert(key).second) return;
+            if (!ps1.hasTable(key) || !done.insert(key).second || madeTable(key.id)) return;
             ++tables;
             Recorder a(pc), b(ps1);
             std::string why;
@@ -118,6 +131,15 @@ int main(int argc, char** argv) {
                 check({u.id, uint32_t(stage)});
                 for (int room = 0; room < 256; ++room) check({u.id, od::roomIndex(stage, room)});
             }
+    }
+    { // the tables made from the disc: the load indices' names (SLUS_011.40's file table, the PS1's numbering) and the
+      // stages' files by name
+        const od::ScopedDataSource bound(ps1);
+        CHECK(od::datFileName(0) == "DEMO.DAT" && od::datFileName(56) == "ST00.DAT");
+        const od::TableReader geometry = ps1.table({od::TableId::StageGeometryFiles, 0}, 2 * od::kStageCount);
+        const od::TableReader texture = ps1.table({od::TableId::StageTextureFiles, 0}, 2 * od::kStageCount);
+        CHECK(od::datFileName(geometry.u16(9 * 2)) == "ST09.DAT" && od::datFileName(texture.u16(9 * 2)) == "ST09T.DAT");
+        CHECK(ps1.hasTable({od::TableId::MenuBankItemNames, 0}));
     }
     std::printf("%zu tables on the disc: %zu read as the PC's\n", tables, equal);
     CHECK(tables > 0 && equal == tables);

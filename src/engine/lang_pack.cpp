@@ -11,6 +11,7 @@
 #include "engine/game_file.hpp"
 #include "engine/lang.hpp"
 #include "engine/ps1_container.hpp"
+#include "engine/ps1_exe_banks.hpp"
 #include "engine/ps1_sfx.hpp"
 #include "engine/vram.hpp"
 
@@ -49,60 +50,11 @@ constexpr uint32_t kWidthLimitInsn = 0x80049b10; // sltiu v0, v0, limit: glyphs 
 constexpr uint32_t kTextCluts = 0x80078c0c;      // the CLUT ids of the text colours 0..7 (gp + 0x2ec)
 constexpr uint32_t kButtonCluts = 0x8006b988;    // the CLUT ids of the button glyphs 0x51..0x54
 
-// The banks the PC keeps in dash2.exe and their PS1 (USA) copies: the disc file, the raw file offset and the message
-// count (the PC bank's). The shop's 7 price strings are no bank: 7 x 12 bytes (u16 2, 7 digits, the zenny sign, fb 1f).
-struct ExeBank {
-    const char* name;
-    const char* file;
-    uint32_t offset;
-    uint16_t count;
-};
-constexpr ExeBank kExeBanks[] = {
-    {"item_names", "SLUS_011.40", 0x5d7cc, 263},   {"item_descs", "SLUS_011.40", 0x5e5c0, 263},
-    {"status_help", "SLUS_011.40", 0x5cad8, 6},    {"status_misc", "SLUS_011.40", 0x5ca64, 6},
-    {"system", "SLUS_011.40", 0x5cf58, 30},        {"items_help", "COMMON/SUBSCN.BIN", 0x353e4, 4},
-    {"item_use", "COMMON/SUBSCN.BIN", 0x35440, 37}, {"areas", "SLUS_011.40", 0x60b2c, 117},
-    {"opt_help", "COMMON/SUBSCN.BIN", 0x370a0, 10}, {"opt_camera", "COMMON/SUBSCN.BIN", 0x37454, 3},
-    {"opt_lock", "COMMON/SUBSCN.BIN", 0x374cc, 3},  {"opt_lockmode", "COMMON/SUBSCN.BIN", 0x37540, 3},
-    {"opt_vibration", "COMMON/SUBSCN.BIN", 0x375b0, 3}, {"opt_sound", "COMMON/SUBSCN.BIN", 0x37644, 3},
-    {"opt_volume", "COMMON/SUBSCN.BIN", 0x37698, 4}, {"opt_defaults", "COMMON/SUBSCN.BIN", 0x377a4, 2},
-    {"equip_help", "COMMON/SUBSCN.BIN", 0x36530, 5}, {"equip_weapon", "COMMON/SUBSCN.BIN", 0x365cc, 4},
-    {"equip_buster", "COMMON/SUBSCN.BIN", 0x36650, 4}, {"equip_sort", "COMMON/SUBSCN.BIN", 0x366c8, 9},
-    {"equip_body", "COMMON/SUBSCN.BIN", 0x367dc, 5}, {"shop", "DAT/ST0AT.BIN", 0x8e88, 101},
-    {"places", "SLUS_011.40", 0x5d598, 29},        {"load_menu", "COMMON/DEMO.BIN", 0x419c, 8},
-    {"save_menu", "DAT/ST04T.BIN", 0x9400, 9},     {"dev_room", "DAT/ST04T.BIN", 0xb5e4, 75},
-};
 // The PS1 title's pictures (COMMON/TITLE.BIN), drawn with the PS1 overlay's geometry: the menu / difficulty pages,
 // their CLUT rows, the logo (four strips of 60 lines) and its CLUT
 constexpr std::array<std::array<int16_t, 4>, 11> kTitleRects = {{{640, 0, 64, 256}, {704, 0, 64, 256}, {768, 0, 64, 256},
     {0, 496, 48, 1}, {0, 497, 32, 1}, {0, 498, 96, 1}, {640, 256, 272, 60}, {640, 316, 272, 60}, {640, 376, 272, 60},
     {640, 436, 272, 60}, {0, 503, 256, 1}}};
-
-constexpr const char* kShopPricesFile = "DAT/ST0AT.BIN";
-constexpr uint32_t kShopPrices = 0xa894;
-// The PC reuses the system bank's message 0xb (the PS1's "No MEMORY CARD detected!") for "no save data", the bytes of
-// its 0xd: the copy points 0xb at the PS1's 0xd.
-constexpr int kSystemNoSave = 0xb, kSystemNoSaveText = 0xd;
-
-// the bank at `at` (n u16 offsets, the first one 2n, non-decreasing, the last message ending 0xff) up to the 0xff
-// after its last offset (a last entry that is no message runs to the next 0xff, at most 0x400 bytes)
-std::vector<uint8_t> exeBank(const std::vector<uint8_t>& d, const ExeBank& b) {
-    const size_t at = b.offset, n = b.count;
-    auto fail = [&] { throw std::runtime_error(std::string("language pack (disc): no ") + b.name + " bank at " +
-                                               b.file + " offset " + std::to_string(at)); };
-    if (at + 2 * n > d.size() || rd16(d.data() + at) != 2 * n) fail();
-    uint16_t last = 0;
-    for (size_t k = 0; k < n; ++k) {
-        const uint16_t o = rd16(d.data() + at + 2 * k);
-        if (k > 0 && o < rd16(d.data() + at + 2 * (k - 1))) fail();
-        last = std::max(last, o);
-    }
-    if (at + last > d.size() || d[at + rd16(d.data() + at + 2 * (n - 1)) - 1] != 0xff) fail();
-    size_t end = at + last;
-    while (end < d.size() && d[end] != 0xff) ++end;
-    end = std::min({end + 1, d.size(), at + last + 0x400});
-    return {d.begin() + std::ptrdiff_t(at), d.begin() + std::ptrdiff_t(end)};
-}
 
 class DiscPack final : public LangPack {
 public:
@@ -130,26 +82,8 @@ public:
         files_["colours.bin"] = cluts(vram, kTextCluts, 8);
         files_["buttons.bin"] = cluts(vram, kButtonCluts, 4);
 
-        std::map<std::string, std::vector<uint8_t>> raw; // the disc files the banks are in
-        auto fileBytes = [&](const char* path) -> const std::vector<uint8_t>& {
-            auto it = raw.find(path);
-            if (it == raw.end()) it = raw.emplace(path, disc_->file(path)).first;
-            return it->second;
-        };
-        for (const ExeBank& b : kExeBanks) {
-            std::vector<uint8_t> bank = exeBank(fileBytes(b.file), b);
-            if (std::string_view(b.name) == "system")
-                std::copy_n(bank.begin() + 2 * kSystemNoSaveText, 2, bank.begin() + 2 * kSystemNoSave);
-            files_[std::string("exe/") + b.name + ".bin"] = std::move(bank);
-        }
-        const std::vector<uint8_t>& shop = fileBytes(kShopPricesFile);
-        if (kShopPrices + 7 * 12 > shop.size()) throw std::runtime_error("language pack (disc): no shop prices");
-        for (int k = 0; k < 7; ++k) {
-            const uint8_t* p = shop.data() + kShopPrices + k * 12;
-            if (rd16(p) != 2 || p[10] != 0xfb || p[11] != 0x1f)
-                throw std::runtime_error("language pack (disc): the shop prices are not at " + std::string(kShopPricesFile));
-        }
-        files_["exe/shop_prices.bin"].assign(shop.begin() + kShopPrices, shop.begin() + kShopPrices + 7 * 12);
+        for (const Ps1ExeBank& b : ps1ExeBanks()) files_[std::string("exe/") + b.name + ".bin"] = ps1ExeBank(*disc_, b);
+        files_["exe/shop_prices.bin"] = ps1ShopPrices(*disc_);
 
         // art/TITLE.bin: b"ODVR", u32 count, {u16 x, y, w, h, w * h u16} (the rects over TITLE.DAT's)
         const GameFile title = ps1GameFile("TITLE.DAT", disc_->file("COMMON/TITLE.BIN"));

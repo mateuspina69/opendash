@@ -4,8 +4,12 @@
 // layout is the PC's, but the pointers:
 //   * a function pointer slot (table_slots.inc kTableRoutineSlots) reads as the routine's value in this source's
 //     encoding: kRoutineTag | RoutineId (the PS1 has MIPS addresses there, which name no C++ routine);
-//   * a data pointer slot (kTableRegions) reads as a handle (kDataTag | n) to the PS1 data the PS1 pointer points at,
-//     whose own slots are translated the same way when it is followed.
+//   * a data pointer slot (kTableRegions) reads as an address in this source's address space -- every block of PS1
+//     memory placed at its own virtual base from kVirtualBase, so the game's pointer arithmetic holds -- whose data has
+//     its own slots translated the same way when it is followed.
+// Tables the PS1 keeps in another form, made from the disc: the DAT names of the load indices (the file table of
+// SLUS_011.40, its entries named by the ISO directory), the stages' geometry / texture files (ST%02X / ST%02XT), the
+// banks the PC keeps in dash2.exe (engine/ps1_exe_banks).
 // A table the disc has no copy of (not found whole, or changed by the PC: the room parameters' fog floats ...) is no
 // table of this source: hasTable false, table() throws DataSourceError naming it.
 #pragma once
@@ -13,6 +17,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -23,8 +28,8 @@ namespace od {
 
 class Ps1DataSource final : public DataSource {
 public:
-    static constexpr uint32_t kRoutineTag = 0x40000000u; // | RoutineId
-    static constexpr uint32_t kDataTag = 0x60000000u;    // | handle
+    static constexpr uint32_t kRoutineTag = 0x40000000u;  // | RoutineId
+    static constexpr uint32_t kVirtualBase = 0x10000000u; // the data address space [kVirtualBase, kRoutineTag)
 
     // throws std::runtime_error when the disc is not the USA release
     explicit Ps1DataSource(std::shared_ptr<const DiscImage> disc);
@@ -43,45 +48,48 @@ protected:
     RoutineRef routineOf(uint32_t pointer) const override;
 
 private:
-    // a block of PS1 memory: SLUS_011.40's text or a type-1 block of a disc file, at its load address
+    // a block of PS1 memory (SLUS_011.40's text, a type-1 block of a disc file, at its load address) or of data made
+    // from the disc (a made table, its strings), at its own virtual base
     struct Part {
         std::string file;
-        uint32_t base = 0;
+        uint32_t base = 0;  // its PS1 address (made data: 0)
+        uint32_t vbase = 0; // its address in this source's space
         std::shared_ptr<const std::vector<uint8_t>> data;
     };
-    // the PS1 data a handle names: which table load's region, where on the PS1
-    struct Handle {
+    // which table load's region a PS1 address holds
+    struct Region {
         TableKey key;
         int region = 0;
-        size_t part = 0;
-        uint32_t address = 0;
-        bool operator<(const Handle& o) const {
-            return std::tie(key, region, part, address) < std::tie(o.key, o.region, o.part, o.address);
-        }
     };
 
     std::string discPath(const std::string& name) const; // "" when the disc has no such file
+    size_t addPart(std::string file, uint32_t base, std::vector<uint8_t> data) const;
     const std::vector<size_t>& partsOf(const std::string& file) const; // the file's type-1 blocks, loaded on first use
     // the part holding [address, address + n): `near` first, then near's file's other blocks, then SLUS_011.40
     std::optional<size_t> partFor(size_t near, uint32_t address, uint32_t n) const;
-    // n bytes of the part from address (fewer at its end), with the region's pointer slots translated
-    TableReader regionBytes(const Handle& h, uint32_t n) const;
-    uint32_t handleOf(const Handle& h) const;
+    // the address in this source's space of (part, PS1 address); records the region it starts
+    uint32_t virtualOf(size_t part, uint32_t address, std::optional<Region> region) const;
+    // n bytes of the part from address (fewer at its end), the region's pointer slots translated
+    TableReader regionBytes(size_t part, uint32_t address, uint32_t n, std::optional<Region> region) const;
+    void makeTables();
 
     std::shared_ptr<const DiscImage> disc_;
     mutable std::vector<Part> parts_;
+    mutable std::map<uint32_t, size_t> partByVbase_;
+    mutable uint32_t nextVbase_ = kVirtualBase;
     mutable std::map<std::string, std::vector<size_t>> partsByFile_;
     size_t slus_ = 0;
     struct Located {
+        size_t part = 0; // made tables: their part; disc tables: resolved on first use (npos)
         std::string file;
         uint32_t address = 0;
+        bool made = false;
     };
     std::map<TableKey, Located> tables_;
     // the slots by (table, region): the function pointers' offsets / routines, the data pointers' offsets / child regions
     std::map<std::pair<TableKey, int>, std::vector<std::pair<uint32_t, RoutineId>>> routineSlots_;
     std::map<std::pair<TableKey, int>, std::vector<std::pair<uint32_t, int>>> dataSlots_;
-    mutable std::vector<Handle> handles_;
-    mutable std::map<Handle, uint32_t> handleIndex_;
+    mutable std::map<uint32_t, Region> regionAt_; // by virtual address
     mutable std::recursive_mutex lock_;
 };
 
