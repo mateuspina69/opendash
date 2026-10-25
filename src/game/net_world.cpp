@@ -1,8 +1,10 @@
 // The game's side of netplay's shared world (see net_world.hpp).
 #include "game/net_world.hpp"
 
+#include <algorithm>
 #include <set>
 
+#include "game/game_state.hpp"
 #include "game/hit_list.hpp"
 #include "game/player/player_state.hpp"
 
@@ -142,5 +144,46 @@ NetWorldHooks& netWorldHooks() {
 }
 
 bool playerDown() { return player().state == uint8_t(PlayerState::Dead); }
+
+uint32_t netPlayerHitAttack(uint32_t attack, int scalePercent) {
+    const uint32_t damage = attack & kHitDamageMask;
+    const uint32_t scaled = damage == 0 ? 0 : std::max<uint32_t>(1, damage * uint32_t(scalePercent) / 100);
+    return (attack & ~kHitDamageMask) | scaled | kHitAttackSolid;
+}
+
+NetStory liveStory() {
+    NetStory s;
+    s.story = gameState().story;
+    s.nextStory = gameState().nextStory;
+    s.flags = storyFlags();
+    return s;
+}
+
+void showStory(const NetStory& s) {
+    gameState().story = s.story;
+    gameState().nextStory = s.nextStory;
+    const auto local = [](uint32_t flag) { return storyFlag(flag); };
+    const bool menuOpen = local(kFlagStoryMenuOpen), rescue = local(kFlagGameOverRescue);
+    const uint8_t transition = storyFlagByte(kFlagTransitionArmed); // 0x700..0x707: the transition's, the door's
+    storyFlags() = s.flags;
+    storyFlagByte(kFlagTransitionArmed) = transition;
+    menuOpen ? setStoryFlag(kFlagStoryMenuOpen) : clearStoryFlag(kFlagStoryMenuOpen);
+    rescue ? setStoryFlag(kFlagGameOverRescue) : clearStoryFlag(kFlagGameOverRescue);
+}
+
+std::optional<NetStory>& netHostStory() {
+    static std::optional<NetStory> s;
+    return s;
+}
+std::optional<NetStory>& netOwnStory() {
+    static std::optional<NetStory> s;
+    return s;
+}
+
+void netStoryLoaded() {
+    if (!netHostStory()) return;
+    netOwnStory() = liveStory();
+    showStory(*netHostStory());
+}
 
 } // namespace od::port

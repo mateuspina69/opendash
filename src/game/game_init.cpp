@@ -5,6 +5,7 @@
 #include "game/audio_logic.hpp"
 #include "game/game_state.hpp"
 #include "game/items.hpp"
+#include "game/net_world.hpp"
 #include "game/player/player_model.hpp"
 #include "game/player/player_state.hpp"
 #include "game/player/player_weapons.hpp"
@@ -381,6 +382,7 @@ void gameModeInitState() {
     const int load = g.loadSave;
     gameStateInit(load);
     storyFlagsInit(load);
+    netStoryLoaded(); // netplay client: the host's story shown, the player's own kept
     visitedRoomsInit(load);
     extraFlagsInit(load);
     // exe 0x5d4f30(load) is empty

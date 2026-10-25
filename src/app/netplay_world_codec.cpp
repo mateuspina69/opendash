@@ -40,6 +40,8 @@ void writePuppet(ByteWriter& w, const WorldPuppet& p) {
     w.u32(s.typeWord);
     w.u32(s.paramsWord);
     w.u8(s.loopFlags);
+    w.u8(s.flags);
+    w.u8(s.runFlags);
     for (int32_t v : s.pos) w.i32(v);
     writeShorts(w, s.rotation);
     w.i16(s.hitPoints);
@@ -73,6 +75,8 @@ WorldPuppet readPuppet(ByteReader& r) {
     s.typeWord = r.u32();
     s.paramsWord = r.u32();
     s.loopFlags = r.u8();
+    s.flags = r.u8();
+    s.runFlags = r.u8();
     for (int32_t& v : s.pos) v = r.i32();
     readShorts(r, s.rotation);
     s.hitPoints = r.i16();
@@ -218,6 +222,9 @@ std::vector<uint8_t> encodeEvent(const NetEvent& e) {
         w.u8(uint8_t(e.travel.stage));
         w.u8(uint8_t(e.travel.sub));
         w.boolean(e.travel.transition);
+        w.u8(e.travel.story.story);
+        w.u8(e.travel.story.nextStory);
+        for (uint8_t b : e.travel.story.flags.bytes) w.u8(b);
         break;
     case EventKind::Settings:
         w.boolean(e.settings.friendlyFire);
@@ -281,6 +288,9 @@ std::optional<NetEvent> decodeEvent(std::span<const uint8_t> payload) {
         e.travel.stage = r.u8();
         e.travel.sub = r.u8();
         e.travel.transition = r.boolean();
+        e.travel.story.story = r.u8();
+        e.travel.story.nextStory = r.u8();
+        for (uint8_t& b : e.travel.story.flags.bytes) b = r.u8();
         break;
     case EventKind::Settings:
         e.settings.friendlyFire = r.boolean();

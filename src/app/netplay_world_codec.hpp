@@ -73,6 +73,7 @@ struct PlayerHit {
 struct TravelOrder {
     int stage = 0, sub = 0;
     bool transition = false;
+    od::port::NetStory story; // the host's: the room loads with it on the client
 };
 struct NetCombatSettings {
     bool friendlyFire = false;

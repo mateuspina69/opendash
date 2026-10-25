@@ -361,6 +361,11 @@ target_link_libraries(test_net_protocol PRIVATE odnet)
 target_include_directories(test_net_protocol PRIVATE tests)
 add_test(NAME test_net_protocol COMMAND test_net_protocol)
 
+add_executable(test_net_world tests/test_net_world.cpp src/app/netplay_world_codec.cpp)
+target_link_libraries(test_net_world PRIVATE odtranslator odnet)
+target_include_directories(test_net_world PRIVATE tests src)
+add_test(NAME test_net_world COMMAND test_net_world ${OPENDASH_EXE})
+
 add_executable(test_render_logic tests/test_render_logic.cpp)
 target_link_libraries(test_render_logic PRIVATE odrender)
 target_include_directories(test_render_logic PRIVATE tests)

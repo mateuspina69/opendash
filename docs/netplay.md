@@ -9,7 +9,11 @@ movement, smoothed over the network. And they play in **one world, the host's**:
   dies the same way on every screen.
 - **Everyone travels together.** When the host changes room (a door, the F1 *Cenarios* tab, PgUp/PgDn, `[` `]`), every
   client loads the same room and is placed beside the host. Only the host can change the room: a client's *Cenarios*
-  tab is locked ("só o host muda o cenário"), and its keys do nothing.
+  tab is locked ("só o host muda o cenário"), and its keys do nothing. A client that starts or loads a game after
+  joining (the title's new game or continue) is sent to the host's room as soon as it is in play.
+- **The host's story.** The rooms load as in the host's game: its story progress and event flags pick the stage files,
+  the room's actors and its scripts, whatever the client's own save says. The client's own story is kept aside: its
+  saves write its own progress, and it comes back when the host leaves.
 - **Drops: each player gets their own copy.** The host rolls the drop, and every player sees it in the same place.
   Picking it up is local, so nobody takes it from anyone else. Chests work the same way: everyone opens their own.
 - **Breakable walls are shared.** A client's hit on a wall goes to the host, and the wall breaks on every screen.
@@ -24,7 +28,7 @@ movement, smoothed over the network. And they play in **one world, the host's**:
 - **If the host leaves**, every client goes back to its own world: the room loads again with its own enemies, and the
   player keeps their health, items and position. F1 → Netplay shows "host saiu".
 
-Each player keeps their own story, items and save. Enemies are shared only in the host's room; a cutscene's own cast
+Each player keeps their own items and save (the story shown is the host's, the one saved is the player's). Enemies are shared only in the host's room; a cutscene's own cast
 stays each player's.
 
 One player **hosts** and the others **join** the host's `ip:port` over UDP. Up to 8 players: the host and 7 others.

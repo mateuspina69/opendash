@@ -62,7 +62,13 @@ void NetWorld::end() {
     allowScript_ = hostScript_ = -1;
     queuedScripts_.clear();
     travel_.reset();
+    hostRoom_.reset();
+    strayFrom_.reset();
     travelling_ = false;
+    // a client's own story back (the room the app loads next is its own world's)
+    if (od::port::netOwnStory()) od::port::showStory(*od::port::netOwnStory());
+    od::port::netOwnStory().reset();
+    od::port::netHostStory().reset();
     heldEvents_.clear();
     partsSeen_ = 0;
     bodyPlayers_.clear();
@@ -250,9 +256,7 @@ void NetWorld::hostClaim(uint8_t from, const HitClaim& c) {
             ++stats_.claimsDropped;
             return;
         }
-        const uint32_t damage = c.attack & od::port::kHitDamageMask;
-        const uint32_t scaled = damage == 0 ? 0 : std::max<uint32_t>(1, damage * uint32_t(combat_.scale) / 100);
-        const uint32_t attack = (c.attack & ~od::port::kHitDamageMask) | scaled;
+        const uint32_t attack = od::port::netPlayerHitAttack(c.attack, combat_.scale);
         if (c.playerId == localId_) {
             od::port::hitListQueueExternal(
                 {od::port::player().slot, attack, {c.contact[0], c.contact[1], c.contact[2]}});
@@ -319,6 +323,8 @@ void NetWorld::clientApply(uint64_t nowNs, const NetEvent& e) {
         break;
     case EventKind::Travel: {
         travel_ = e.travel;
+        hostRoom_ = e.travel;
+        od::port::netHostStory() = e.travel.story;
         travelling_ = true;
         // the room changes under the scripts: nothing more to wait for
         std::vector<uint8_t> done = std::move(queuedScripts_);
@@ -480,6 +486,7 @@ void NetWorld::peerJoined(uint8_t id) {
         NetEvent t;
         t.kind = EventKind::Travel;
         t.travel = *room_;
+        t.travel.story = od::port::liveStory(); // the story now (scripts may have moved it since the room loaded)
         send(id, t);
     }
 }
@@ -505,7 +512,7 @@ void NetWorld::setCombat(const NetCombatSettings& c) {
 
 void NetWorld::hostTravelled(int stage, int sub, bool transition) {
     if (active_ && !host_) return;
-    room_ = TravelOrder{stage, sub, transition};
+    room_ = TravelOrder{stage, sub, transition, od::port::liveStory()};
     tracks_ = {}; // a new room: every shared actor a new one
     if (!active_) return;
     NetEvent e;
@@ -515,6 +522,21 @@ void NetWorld::hostTravelled(int stage, int sub, bool transition) {
 }
 
 std::optional<TravelOrder> NetWorld::takeTravel() { return std::exchange(travel_, std::nullopt); }
+
+std::optional<TravelOrder> NetWorld::strayed() {
+    if (!active_ || host_ || !hostRoom_ || travelling_) return std::nullopt;
+    const od::port::GhostRoom room = od::port::ghostRoomOf();
+    if (!room.fieldPlay) return std::nullopt;
+    if (room.stage == hostRoom_->stage && room.sub == hostRoom_->sub) {
+        strayFrom_.reset();
+        return std::nullopt;
+    }
+    if (strayFrom_ && sameRoom(*strayFrom_, room)) return std::nullopt; // sent once from this room (a failed load)
+    strayFrom_ = room;
+    TravelOrder t = *hostRoom_;
+    t.transition = true; // in play again, beside the host
+    return t;
+}
 
 void NetWorld::sharedScriptEnded() {
     const bool wasHeld = !waiting_.empty();

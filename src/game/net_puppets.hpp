@@ -38,6 +38,7 @@ struct PuppetState {
     uint32_t typeWord = 0;  // type / subtype / variant / spawn byte
     uint32_t paramsWord = 0;
     uint8_t loopFlags = 0;
+    uint8_t flags = 0, runFlags = 0; // +0 (drawn, the model's bits) / +1 (shown): what the draw pass tests
     int32_t pos[3] = {};    // 16.16
     int16_t rotation[3] = {};
     int16_t hitPoints = 0, maxHitPoints = 0;

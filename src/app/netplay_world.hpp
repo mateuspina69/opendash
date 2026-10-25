@@ -60,6 +60,9 @@ public:
     void hostTravelled(int stage, int sub, bool transition);
     // client: a room the host loaded, for the app to load
     std::optional<TravelOrder> takeTravel();
+    // client: the host's room, when this player is in play in another (a game started after the join: the title's new
+    // game or load); once per room it strays to
+    std::optional<TravelOrder> strayed();
     // host: its ticks held (a client still in a shared script)
     bool holdTicks() const { return !waiting_.empty(); }
     std::string waitingFor() const;
@@ -129,6 +132,8 @@ private:
     int hostScript_ = -1;                // the host's script running here (its end: ScriptDone)
     std::vector<uint8_t> queuedScripts_; // the host's scripts that came while one ran here (started after it)
     std::optional<TravelOrder> travel_;
+    std::optional<TravelOrder> hostRoom_;          // the host's room (its last Travel)
+    std::optional<od::port::GhostRoom> strayFrom_; // the room strayed() last sent this player from
     bool travelling_ = false;            // a Travel taken, the room not loaded yet
     std::vector<NetEvent> heldEvents_;   // events for the room the client goes to (applied once it is there)
     uint32_t partTick_ = 0;              // the world step being received

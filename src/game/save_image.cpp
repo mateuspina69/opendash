@@ -14,6 +14,7 @@
 #include "game/audio_logic.hpp"
 #include "game/game_state.hpp"
 #include "game/loaded_data.hpp"
+#include "game/net_world.hpp"
 #include "game/patched_data.hpp"
 #include "game/player/player_state.hpp"
 #include "game/save_slots.hpp"
@@ -361,8 +362,10 @@ void saveSerialise(uint32_t image) {
     b.room = g.room;
     b.flutterDock = g.flutterDock;
     b.playerKind = g.playerKind;
-    b.story = g.story;
-    b.nextStory = g.nextStory;
+    // netplay client: the player's own story while the host's is shown
+    const NetStory story = netOwnStory().value_or(liveStory());
+    b.story = story.story;
+    b.nextStory = story.nextStory;
     b.difficulty = g.difficulty;
     b.bestTime = g.bestTime;
     b.bestDifficulty = g.bestDifficulty;
@@ -437,8 +440,7 @@ void saveSerialise(uint32_t image) {
     for (size_t i = 0; i < p.unreadPartBytes.size(); ++i) b.ownedParts[kOwnedPartSlots + i] = p.unreadPartBytes[i];
     for (size_t k = 0; k < kSaveWeaponLevels; ++k) // the first bytes of each 8-byte slot
         for (size_t i = 0; i < kSaveLevelBytes; ++i) b.weaponLevels[k * 8 + i] = p.weaponLevels[k * 8 + i];
-    StoryFlags& flags = storyFlags();
-    for (size_t i = 0; i < b.storyFlags.size(); ++i) b.storyFlags[i] = flags.word(i);
+    for (size_t i = 0; i < b.storyFlags.size(); ++i) b.storyFlags[i] = story.flags.word(i);
     ExtraFlags& extra = extraFlags();
     for (size_t i = 0; i < b.extraFlags.size(); ++i) b.extraFlags[i] = extra.word(i);
     VisitedRoomBlock& rooms = visitedRooms();

@@ -8,10 +8,13 @@
 // cutscene on its own).
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <functional>
+#include <optional>
 
 #include "engine/routine_ids.hpp"
+#include "game/story_flags.hpp"
 
 namespace od::port {
 
@@ -58,5 +61,24 @@ bool playerDown();
 // game/player/player_update: the held player back: hit points full, the status cleared, at `pos` (16.16) facing `yaw`,
 // in its init state
 void playerRespawn(const int32_t pos[3], int16_t yaw);
+
+// a PvP hit's attack on its victim: the damage scaled (25..100 %, at least 1), made solid -- the player is hurt only
+// by a solid or strong attack (game/player/player_damage); a shot's own kind is the one the enemies take damage from
+uint32_t netPlayerHitAttack(uint32_t attack, int scalePercent);
+
+// The story a room loads with (its stage files, its actors, its scripts: game/stage_files, the room setups)
+struct NetStory {
+    uint8_t story = 0, nextStory = 0;
+    StoryFlags flags;
+};
+NetStory liveStory();
+// the live story set to s, the transient system flags kept (the transition's, the story menu's)
+void showStory(const NetStory& s);
+// netplay client: the host's story, shown in place of the player's own while it is set (the rooms load as the host's);
+// the player's own is kept aside (its saves write it; the host leaving brings it back)
+std::optional<NetStory>& netHostStory();
+std::optional<NetStory>& netOwnStory();
+// game/game_init, a game's start (a new game, a load, F2): the story just loaded is the player's own; the host's shown
+void netStoryLoaded();
 
 } // namespace od::port

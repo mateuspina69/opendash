@@ -60,6 +60,8 @@ void fill(PuppetState& s, const Actor& a) {
     s.typeWord = uint32_t(a.type) | uint32_t(a.subtype) << 8 | uint32_t(a.variant) << 16 | uint32_t(a.spawnByte) << 24;
     s.paramsWord = a.paramsWord();
     s.loopFlags = a.loopFlags;
+    s.flags = a.flags;
+    s.runFlags = a.runFlags;
     s.pos[0] = a.pos.x;
     s.pos[1] = a.pos.y;
     s.pos[2] = a.pos.z;
@@ -76,6 +78,8 @@ void puppetTick(ActorHeader& h) {
     const PuppetState& t = p.target;
     Actor& a = static_cast<Actor&>(h);
     a.savePreviousPose();
+    a.flags = uint8_t(t.flags | kActorLive); // drawn or hidden as on the host
+    a.runFlags = uint8_t((a.runFlags & ~kActorShown) | (t.runFlags & kActorShown));
     a.pos.x = t.pos[0];
     a.pos.y = t.pos[1];
     a.pos.z = t.pos[2];
@@ -183,7 +187,7 @@ uint32_t puppetSpawn(const PuppetState& s) {
     const uint32_t address = s.pool == kAnimatedFirst ? allocActor20() : allocActor40(s.loopFlags);
     if (address == 0) return 0;
     ActorHeader& h = actorHeaderAt(address);
-    h.flags = kActorLive;
+    h.flags = uint8_t(s.flags | kActorLive);
     h.setTypeWord(s.typeWord);
     h.setParamsWord(s.paramsWord);
     h.loopFlags = s.loopFlags;

@@ -157,6 +157,7 @@ void App::simStep(int gameFrames) {
     paceFrames = gameFrames; // the title task / the game loop (paced by the exe's pacer, app/game_pacer)
     bool netStepped = false; // netplay's step ran this sim step (after the tick loop in play)
     if (const auto t = netplay.world().takeTravel()) followHost(*t); // netplay client: the host's room
+    else if (const auto r = playerView.play ? netplay.world().strayed() : std::nullopt) followHost(*r); // ... again
     if (titleScreen.active) { // the main task / title task: logical buttons -> PS1 pad bits
         static constexpr std::pair<uint32_t, uint16_t> kPs1t[] = {
             {kUp, 0x10}, {kRight, 0x20}, {kDown, 0x40}, {kLeft, 0x80}, {kCross, 0x4000}, {kSquare, 0x8000},
@@ -295,6 +296,9 @@ void App::simStep(int gameFrames) {
 void App::followHost(const TravelOrder& t) {
     const bool wasPlaying = playerView.play;
     netplay.world().leavingRoom();
+    // the room loads with the host's story; the player's own kept aside (its saves, the host leaving)
+    if (!od::port::netOwnStory()) od::port::netOwnStory() = od::port::liveStory();
+    od::port::showStory(t.story);
     netTravelling = true;
     reload(t.stage, t.sub); // out of play first, the character kept (as a jump from F1)
     netTravelling = false;
