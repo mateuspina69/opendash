@@ -1,7 +1,6 @@
 // The PC data source's fixed tables: {table, virtual address in dash2.exe} (engine/pc_data_source). Addresses only,
 // no data of the exe's; the per-stage tables are found by engine/exetables and engine/pc_room_tables.inc.
 {TableId::FloorOrientations, 0x91bdccu},
-{TableId::AtanScale, 0x831848u},
 {TableId::TrigTable, 0x847ad8u},
 {TableId::DatFileNames, 0x8886d4u},
 {TableId::PlayerBodyFiles, 0x8d37b4u},

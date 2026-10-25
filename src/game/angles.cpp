@@ -18,8 +18,9 @@ struct TrigRecord : DataRecord {
 };
 const DataTable<RecordTable<TrigRecord, 0x1000, 4>> trigTable{TableId::TrigTable};
 
-// exe constant 0x831848: the double 1 / 3.14 that turns the arctangent's radians into angle units (with * 2048)
-const DataTable<ScalarTable<double, 1>> atanScaleTable{TableId::AtanScale};
+// the double 1 / 3.14 that turns the arctangent's radians into angle units (with * 2048): the PC's arctangent's own
+// constant (exe 0x831848, bit for bit), part of the routine x87::atanAngle ports
+constexpr double kAtanScale = 1.0 / 3.14;
 
 } // namespace
 
@@ -28,7 +29,7 @@ int16_t fixedCos(int angle) { return trigTable[uint32_t(angle) & kAngleMask].cos
 bool fixedSinMapped(int) { return trigTable.available(); }
 bool fixedCosMapped(int) { return trigTable.available(); }
 
-double atanScale() { return atanScaleTable[0]; }
+double atanScale() { return kAtanScale; }
 
 int atanAngle(float a, float b) { return x87::atanAngle(atanScale(), a, b); }
 

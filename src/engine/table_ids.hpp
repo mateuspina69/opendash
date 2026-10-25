@@ -38,7 +38,6 @@ namespace od {
     X(EncounterLayoutTable) /* index: the encounter layout trees' op that writes it (a zone / group table) */       \
     /* ---- the engine's / the game's math */                                                                          \
     X(FloorOrientations) /* the floor quads' 16 corner orders */                                                       \
-    X(AtanScale) /* the arc tangent's scale (a double: 1 / 3.14) */                                                    \
     X(TownNpcPauseTicks) /* the town people's arrival pauses by rng & 0xf */ \
     X(TrigTable) /* the sine / cosine of the 4096 angles {s16 sin, s16 cos} */                                         \
     /* ---- files */                                                                                                   \

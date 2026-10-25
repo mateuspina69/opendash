@@ -1305,7 +1305,7 @@ uint32_t wallQuery(const CollisionRoom& room, CollisionState& st, const std::arr
     const Query::Gathered gt = q.gather();
     st.setBox(box);
     auto atan = [](int a, int b) { // exe 0x40b960 (engine/x87)
-        return port::x87::atanAngle(port::atanScale(), float(a), float(b)); // the data source's scale (game/angles)
+        return port::x87::atanAngle(port::atanScale(), float(a), float(b)); // the arctangent scale (game/angles)
     };
     // the travel direction's quadrant: 0 = -z ... (the wall directions 0, 0x400, 0x800, 0xc00)
     const int dir = ((yaw + port::kQuarterTurn / 2) >> 10) & 3;
