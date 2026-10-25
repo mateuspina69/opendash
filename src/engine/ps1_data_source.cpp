@@ -39,6 +39,20 @@ struct TableRoutineSlot {
 };
 #include "engine/table_slots.inc"
 
+struct Ps1Label {
+    TableId id;
+    const char* file;
+    uint32_t address;
+    uint32_t bytes;
+};
+struct Ps1LabelSlot {
+    TableId id;
+    uint32_t offset;
+    bool function;     // a function pointer, else a data pointer
+    RoutineId routine; // the function's (None: no C++ routine)
+};
+#include "engine/ps1_labels.inc"
+
 // SLUS_011.40 (USA): the file table of the load indices, {u32 LBA, u32 bytes, u32 flags} each
 constexpr uint32_t kFileTable = 0x8006849c;
 constexpr size_t kLoadIndices = 0x200;
@@ -73,6 +87,17 @@ Ps1DataSource::Ps1DataSource(std::shared_ptr<const DiscImage> disc) : disc_(std:
     for (const TableRegion& r : kTableRegions) dataSlots_[{{r.id, r.index}, r.parent}].push_back({r.offset, r.region});
     for (const TableRoutineSlot& s : kTableRoutineSlots)
         routineSlots_[{{s.id, s.index}, s.region}].push_back({s.offset, s.routine});
+    std::map<TableId, std::vector<Label::Slot>> labelSlots;
+    for (const Ps1LabelSlot& s : kPs1LabelSlots) labelSlots[s.id].push_back({s.offset, s.function, s.routine});
+    for (const Ps1Label& l : kPs1Labels) {
+        tables_.emplace(TableKey{l.id, 0}, Located{size_t(-1), l.file, l.address, false});
+        // two PC tables on one PS1 table (the PC keeps a copy per use): the longer extent, the slots of both
+        Label& at = labels_[l.file][l.address];
+        at.bytes = std::max(at.bytes, l.bytes);
+        for (const Label::Slot& slot : labelSlots[l.id])
+            if (std::none_of(at.slots.begin(), at.slots.end(), [&](const Label::Slot& x) { return x.offset == slot.offset; }))
+                at.slots.push_back(slot);
+    }
     makeTables();
 }
 
@@ -193,6 +218,32 @@ TableReader Ps1DataSource::regionBytes(size_t part, uint32_t address, uint32_t n
     const size_t off = address - pt.base;
     const size_t take = off < pt.data->size() ? std::min<size_t>(n, pt.data->size() - off) : 0;
     std::vector<uint8_t> b(pt.data->begin() + std::ptrdiff_t(off), pt.data->begin() + std::ptrdiff_t(off + take));
+    const uint8_t* raw = pt.data->data() + off; // the PS1 words (every translation reads them, not b)
+    auto dataPointer = [&](size_t o, std::optional<Region> to) {
+        const uint32_t p = rd32(raw + o);
+        if (p == 0) return;
+        const auto at = partFor(part, p, 1);
+        put32(b, o, at ? virtualOf(*at, p, to) : 0);
+    };
+    // the slots of the tables the game reads by address whose extent [address, address + take) meets
+    if (const auto f = labels_.find(pt.file); f != labels_.end() && take > 0) {
+        auto it = f->second.upper_bound(address + uint32_t(take) - 1);
+        while (it != f->second.begin()) {
+            --it;
+            const uint32_t start = it->first;
+            const Label& l = it->second;
+            if (start + l.bytes <= address) {
+                if (address - start > kMaxLabelBytes) break;
+                continue;
+            }
+            for (const Label::Slot& slot : l.slots) {
+                const uint32_t at = start + slot.offset;
+                if (at < address || at + 4 > address + take) continue;
+                if (!slot.function) dataPointer(at - address, std::nullopt);
+                else if (rd32(raw + (at - address)) != 0) put32(b, at - address, kRoutineTag | static_cast<uint16_t>(slot.routine));
+            }
+        }
+    }
     if (region) {
         // the function pointers: this source's routine values
         if (const auto it = routineSlots_.find({region->key, region->region}); it != routineSlots_.end())
@@ -200,13 +251,8 @@ TableReader Ps1DataSource::regionBytes(size_t part, uint32_t address, uint32_t n
                 if (o + 4 <= b.size()) put32(b, o, kRoutineTag | static_cast<uint16_t>(routine));
         // the data pointers: this source's addresses of the PS1 data they point at (null stays null)
         if (const auto it = dataSlots_.find({region->key, region->region}); it != dataSlots_.end())
-            for (const auto& [o, child] : it->second) {
-                if (o + 4 > b.size()) continue;
-                const uint32_t p = rd32(b.data() + o);
-                if (p == 0) continue;
-                const auto at = partFor(part, p, 1);
-                put32(b, o, at ? virtualOf(*at, p, Region{region->key, child}) : 0);
-            }
+            for (const auto& [o, child] : it->second)
+                if (o + 4 <= b.size()) dataPointer(o, Region{region->key, child});
     }
     return TableReader(*this, std::move(b));
 }
@@ -278,6 +324,12 @@ std::string Ps1DataSource::pointeeString(uint32_t pointer, size_t maxLength) con
 RoutineRef Ps1DataSource::routineOf(uint32_t pointer) const {
     if ((pointer & 0xffff0000u) == kRoutineTag) return RoutineRef(RoutineId(pointer & 0xffffu), pointer);
     return RoutineRef(RoutineId::None, pointer);
+}
+
+std::vector<Ps1DataSource::AddressTable> Ps1DataSource::addressTables() {
+    std::vector<AddressTable> out;
+    for (const Ps1Label& l : kPs1Labels) out.push_back({l.id, l.bytes});
+    return out;
 }
 
 uint32_t Ps1DataSource::routineStateValue(RoutineId id) const {

@@ -88,14 +88,17 @@ bool same(const std::vector<Event>& pc, const std::vector<Event>& ps, std::strin
     return true;
 }
 
-// the tables the PS1 source makes from the disc in the PS1's own form (another content than the PC's), and the room
-// parameters (the PS1's records, checked apart)
+// the tables the PS1 source makes from the disc in the PS1's own form (another content than the PC's), and the ones
+// checked apart: the room parameters (the PS1's records), the tables the game reads by address (their extent the PC's;
+// a load past it reads the PS1's own neighbours, as the PS1 does)
 bool madeTable(od::TableId id) {
     if (id == od::TableId::DatFileNames || id == od::TableId::StageGeometryFiles || id == od::TableId::RoomParams ||
         id == od::TableId::StageTextureFiles || id == od::TableId::MenuBankShopPriceStrings)
         return true;
     for (const od::Ps1ExeBank& b : od::ps1ExeBanks())
         if (b.table == id) return true;
+    for (const auto& t : od::Ps1DataSource::addressTables())
+        if (t.id == id) return true;
     return false;
 }
 
@@ -156,6 +159,35 @@ int main(int argc, char** argv) {
             }
         std::printf("%zu room parameter records on the disc: %zu the PC's\n", rooms, same);
         CHECK(rooms > 0 && same == rooms && ps1.hasTable({od::TableId::RoomParams, od::roomIndex(9, 0)}));
+    }
+    { // the tables the game reads by address: their bytes the PC's but at the pointer words, which are null on both or
+      // name the same routine (a function pointer) or are a PS1 data pointer where the PC has one
+        size_t n = 0, same = 0;
+        for (const auto& t : od::Ps1DataSource::addressTables()) {
+            ++n;
+            const od::TableKey key{t.id, 0};
+            const uint32_t at = pc.stateAddress(key);
+            const od::TableReader a = pc.stateData(at, t.bytes), b = ps1.stateData(ps1.stateAddress(key), t.bytes);
+            bool ok = a.size() == t.bytes && b.size() == t.bytes;
+            const uint32_t align = (4 - (at & 3)) & 3; // the first 4-aligned word's offset
+            for (uint32_t o = 0; ok && o < t.bytes; ++o) {
+                if (a.u8(o) == b.u8(o)) continue;
+                const uint32_t w = o - ((o - align) & 3);
+                ok = o >= align && w + 4 <= t.bytes && ps1Pointer(b.u32(w));
+                if (!ok) std::fprintf(stderr, "  byte %u: %02x / %02x\n", o, a.u8(o), b.u8(o));
+            }
+            for (uint32_t w = align; ok && w + 4 <= t.bytes; w += 4) {
+                const uint32_t pw = a.u32(w), sw = b.u32(w);
+                if (pw == sw || !ps1Pointer(sw)) continue;
+                if ((sw & 0xffff0000u) == od::Ps1DataSource::kRoutineTag) ok = pc.stateRoutine(pw).id() == ps1.stateRoutine(sw).id();
+                else ok = pw != 0;
+                if (!ok) std::fprintf(stderr, "  word %u: %08x / %08x\n", w, pw, sw);
+            }
+            if (ok) ++same;
+            else std::fprintf(stderr, "%s: not the PC's\n", od::describe(key).c_str());
+        }
+        std::printf("%zu tables read by address on the disc: %zu read as the PC's\n", n, same);
+        CHECK(n > 0 && same == n);
     }
     std::printf("%zu tables on the disc: %zu read as the PC's\n", tables, equal);
     CHECK(tables > 0 && equal == tables);

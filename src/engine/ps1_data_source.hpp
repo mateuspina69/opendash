@@ -10,6 +10,8 @@
 // Tables the PS1 keeps in another form, made from the disc: the DAT names of the load indices (the file table of
 // SLUS_011.40, its entries named by the ISO directory), the stages' geometry / texture files (ST%02X / ST%02XT), the
 // banks the PC keeps in dash2.exe (engine/ps1_exe_banks).
+// The tables the game reads by address (ps1_labels.inc: scripts, spawn records, cameras ...): at their PS1 address, the
+// pointer slots in their extent translated the same way on every read that meets them.
 // The room parameters: their PS1 records, 0x24 bytes (the PS1's colour; the PC's D3D fog range past them reads as
 // zero: no fog range). A table the disc has no copy of (not found whole, or changed by the PC) is no table of this
 // source: hasTable false, table() throws DataSourceError naming it.
@@ -42,6 +44,13 @@ public:
     TableReader table(TableKey key, uint32_t bytes) const override;
     uint32_t stateAddress(TableKey key) const override;
     uint32_t routineStateValue(RoutineId id) const override;
+
+    // the tables the game reads by address this source has (ps1_labels.inc): the table, its bytes equal to the PC's
+    struct AddressTable {
+        TableId id;
+        uint32_t bytes;
+    };
+    static std::vector<AddressTable> addressTables();
 
 protected:
     TableReader pointee(uint32_t pointer, uint32_t n) const override;
@@ -91,6 +100,19 @@ private:
     std::map<std::pair<TableKey, int>, std::vector<std::pair<uint32_t, RoutineId>>> routineSlots_;
     std::map<std::pair<TableKey, int>, std::vector<std::pair<uint32_t, int>>> dataSlots_;
     mutable std::map<uint32_t, Region> regionAt_; // by virtual address
+    // the tables the game reads by address (ps1_labels.inc), by file and PS1 address: their extent and slots, applied to
+    // every read that meets them
+    struct Label {
+        struct Slot {
+            uint32_t offset;
+            bool function;     // a function pointer (this source's routine value), else a data pointer
+            RoutineId routine; // the function's (None: no C++ routine)
+        };
+        uint32_t bytes = 0;
+        std::vector<Slot> slots;
+    };
+    static constexpr uint32_t kMaxLabelBytes = 0x1000;
+    std::map<std::string, std::map<uint32_t, Label>> labels_;
     mutable std::recursive_mutex lock_;
 };
 
