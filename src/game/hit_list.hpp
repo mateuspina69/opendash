@@ -15,7 +15,9 @@
 // kHitClosestCandidate).
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
+#include <vector>
 
 namespace od::port {
 
@@ -95,7 +97,31 @@ void hitListSubmitCapsule(const int16_t a[3], uint16_t ra, const int16_t b[3], u
 void hitListSubmitCapsule(const int16_t a[3], uint16_t ra, const int16_t b[3], uint16_t rb, HitBox& box,
                           uint32_t ownerShape, uint32_t attack);
 // exe 0x5e4260: the lock-on selection (exe 0x5e4b60 over every group), then every pair of entries whose groups collide
-// and whose owners differ tested (exe 0x5e4350); the list emptied
+// and whose owners differ tested (exe 0x5e4350); the list emptied. Netplay (not the exe): the remote bodies submitted
+// first, the external hits applied after the pairs
 void hitListPass();
+
+// ---- netplay (app/netplay_world; none of this is the exe's) ---------------------------------------------------------
+// a hit decided outside this tick's pair tests (a remote player's claim): it lands on the box of the first entry whose
+// owner slot is targetSlot, as if a player attack at `contact` had touched it (none submitted: dropped)
+struct ExternalHit {
+    uint8_t targetSlot = 0;
+    uint32_t attack = 0;
+    int16_t contact[3] = {};
+};
+// queued for the next pass
+void hitListQueueExternal(const ExternalHit& hit);
+// a body with no actor (a remote player's stand-in): submitted at the start of every pass while set, in the bodies'
+// group, never a lock-on target, with a contact output
+struct RemoteBody {
+    uint8_t slot = 0; // an owner slot no actor uses (0x01..0x0f)
+    int16_t pos[3] = {};
+    uint16_t radius = 0x30;
+    uint32_t attack = 0;
+};
+// replaces the set (empty: none)
+void hitListSetRemoteBodies(std::vector<RemoteBody> bodies);
+// body `index`'s box after the last pass (its result, its contact)
+const HitBox& hitListRemoteBodyBox(size_t index);
 
 } // namespace od::port
