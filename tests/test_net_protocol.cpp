@@ -203,6 +203,7 @@ void testMessages() {
         {Pong{123456789}, 0},
         {Bye{}, 5},
         {Ack{42}, 0},
+        {Event{{1, 2, 3}}, 6},
     };
     CHECK(all.size() == std::variant_size_v<Message>);
     for (const auto& [m, seq] : all) {

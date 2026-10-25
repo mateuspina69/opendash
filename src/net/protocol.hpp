@@ -18,7 +18,7 @@
 namespace od::net {
 
 constexpr uint32_t kMagic = 0x504e444f; // "ODNP" little endian
-constexpr uint16_t kProtocolVersion = 1;
+constexpr uint16_t kProtocolVersion = 2;
 constexpr int kMaxPlayers = 8;          // the host (player 0) and up to 7 clients
 constexpr uint8_t kHostPlayerId = 0;
 
@@ -29,11 +29,12 @@ enum class MessageType : uint8_t {
     PeerJoined = 4,  // host -> clients: a player joined (reliable)
     PeerLeft = 5,    // host -> clients: a player left (reliable)
     PlayerState = 6, // a player's own character (unreliable, newest wins; the host forwards it unchanged)
-    WorldState = 7,  // reserved: the host's shared world (co-op milestones); defined, not sent by this milestone
+    WorldState = 7,  // host -> clients: the host's shared world, one sim step (unreliable; a step may come in parts)
     Ping = 8,        // round-trip probe (unreliable)
     Pong = 9,        // its echo (unreliable)
     Bye = 10,        // leaving (reliable)
     Ack = 11,        // the reliable messages received in order so far (unreliable)
+    Event = 12,      // a game event between a client and the host (reliable; the host forwards none)
 };
 // the types that travel on the reliable channel (they carry a sequence number after the header)
 bool isReliable(MessageType t);
@@ -108,11 +109,16 @@ struct Ack {
     uint32_t next = 0; // every reliable message below this sequence arrived
     bool operator==(const Ack&) const = default;
 };
+struct Event {
+    std::vector<uint8_t> payload; // the app's (app/netplay_world_codec)
+    bool operator==(const Event&) const = default;
+};
 
-using Message = std::variant<Hello, Welcome, Refuse, PeerJoined, PeerLeft, PlayerState, WorldState, Ping, Pong, Bye, Ack>;
+using Message =
+    std::variant<Hello, Welcome, Refuse, PeerJoined, PeerLeft, PlayerState, WorldState, Ping, Pong, Bye, Ack, Event>;
 static_assert(std::is_same_v<std::variant_alternative_t<0, Message>, Hello> &&
-              std::is_same_v<std::variant_alternative_t<size_t(MessageType::Ack) - 1, Message>, Ack> &&
-              std::variant_size_v<Message> == size_t(MessageType::Ack),
+              std::is_same_v<std::variant_alternative_t<size_t(MessageType::Event) - 1, Message>, Event> &&
+              std::variant_size_v<Message> == size_t(MessageType::Event),
               "Message lists the types in MessageType order from Hello = 1 (typeOf)");
 MessageType typeOf(const Message& m);
 
