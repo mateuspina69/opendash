@@ -35,9 +35,11 @@ RoomSkyLayers RoomSkyLayers::load(const TableReader& r) {
     return result;
 }
 
-const RoomSkyLayers& roomSkyLayers(int stage, int room) {
-    return loadTable<RoomSkyLayers>({TableId::RoomSkyLayers, roomIndex(stage, room)});
-}
+namespace {
+const TableFamily<RoomSkyLayers> roomSkyLayerLists{TableId::RoomSkyLayers};
+} // namespace
+
+const RoomSkyLayers& roomSkyLayers(int stage, int room) { return roomSkyLayerLists[roomIndex(stage, room)]; }
 
 void skyLayersSetup() {
     const GameState& g = gameState();

@@ -39,6 +39,10 @@ using namespace st11_script2a_state;
 
 namespace {
 
+// the tick's case of the switches exe 0x5259f0 (its byte table, exe 0x525a04) and exe 0x4b5a44 (exe 0x4b5a58)
+const DataTable<ScalarTable<uint8_t, 0x8d>> flashTickCases{TableId::St11ArrivalFlashTickCases};
+const DataTable<ScalarTable<uint8_t, 0x47>> castTickCases{TableId::St11ArrivalCastTickCases};
+
 constexpr uint32_t kSweepScriptActors = 0xefe, kSweepKeep = 0x80; // exe 0x5e05d0's arguments of the scene
 constexpr uint32_t kVoiceFadeStep = 8;
 constexpr uint32_t kMusicFade = 0xf;
@@ -130,9 +134,8 @@ void stepFlashes(int32_t t) {
     if (s.subState == 0) {
         if (uint32_t(t - 0x28) > 0x8c) return;
         // the tick's case of the switch exe 0x5259f0 (its byte table, exe 0x525a04)
-        static const DataTable<ScalarTable<uint8_t, 0x8d>> cases{TableId::St11ArrivalFlashTickCases};
         const auto cue = [&s](uint8_t c) { (*s.actors[0]).params[0] = c; }; // the script's actor 0
-        switch (cases[uint32_t(t - 0x28)]) {
+        switch (flashTickCases[uint32_t(t - 0x28)]) {
         case 0:
             spawnScreenFlash();
             cue(kCastCueFlash);
@@ -346,8 +349,7 @@ void runCast(const PlayerEnv& env, AnimatedActor& a, ArrivalCastFields& fields) 
     case ArrivalCastPhase::Watch: {
         if (uint32_t(t - 0xbe) > 0x46) return;
         // the tick's case of the switch exe 0x4b5a44 (its byte table, exe 0x4b5a58)
-        static const DataTable<ScalarTable<uint8_t, 0x47>> cases{TableId::St11ArrivalCastTickCases};
-        switch (cases[uint32_t(t - 0xbe)]) {
+        switch (castTickCases[uint32_t(t - 0xbe)]) {
         case 0: a.anim = 4; return;
         case 1: fields.animating = 0; return;
         case 2: fields.animating = 1; return;

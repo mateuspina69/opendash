@@ -182,6 +182,13 @@ target_link_libraries(test_ps1_files PRIVATE odengine)
 target_include_directories(test_ps1_files PRIVATE tests)
 add_test(NAME test_ps1_files COMMAND test_ps1_files ${OPENDASH_DISC_CUE} ${OPENDASH_DAT_DIR})
 
+# every table the game's handles name loads from the PC source (the whole libraries: their handles register)
+add_executable(test_tables tests/test_tables.cpp)
+target_link_libraries(test_tables PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,odcontent>" "$<LINK_LIBRARY:WHOLE_ARCHIVE,odgame>"
+    "$<LINK_LIBRARY:WHOLE_ARCHIVE,odengine>")
+target_include_directories(test_tables PRIVATE tests)
+add_test(NAME test_tables COMMAND test_tables ${OPENDASH_EXE} ${OPENDASH_DAT_DIR})
+
 add_executable(test_lang_pack tests/test_lang_pack.cpp)
 target_link_libraries(test_lang_pack PRIVATE odengine)
 target_include_directories(test_lang_pack PRIVATE tests)

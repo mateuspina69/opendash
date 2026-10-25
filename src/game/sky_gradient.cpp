@@ -17,15 +17,18 @@ SkyGradient SkyGradient::load(const TableReader& r) {
     return g;
 }
 
+namespace {
+const TableFamily<SkyGradient> skyGradients{TableId::RoomSkyGradient};
+const TableFamily<SkyGradient> earlySkyGradients{TableId::RoomSkyGradientEarly};
+} // namespace
+
 std::optional<SkyGradient> roomSkyGradient(int stage, int sub, int story) {
     if (stage < 0 || sub < 0) return std::nullopt;
-    const DataSource& source = dataSource();
-    const TableKey early{TableId::RoomSkyGradientEarly, roomIndex(stage, sub)};
-    const TableKey key = story <= kStormySkyLastStory && source.hasTable(early)
-                             ? early
-                             : TableKey{TableId::RoomSkyGradient, roomIndex(stage, sub)};
-    if (!source.hasTable(key)) return std::nullopt;
-    return loadTable<SkyGradient>(key);
+    const uint32_t index = roomIndex(stage, sub);
+    const TableFamily<SkyGradient>& family =
+        story <= kStormySkyLastStory && earlySkyGradients.has(index) ? earlySkyGradients : skyGradients;
+    if (!family.has(index)) return std::nullopt;
+    return family[index];
 }
 
 } // namespace od::port

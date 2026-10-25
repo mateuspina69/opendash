@@ -59,6 +59,16 @@ const uint8_t* TableReader::at(size_t o, size_t n) const {
 
 DataSource::DataSource() : serial_(++g_serials) {}
 
+namespace {
+std::vector<TableUse>& uses() {
+    static std::vector<TableUse> v; // constructed on the first handle's registration (static initialisation order)
+    return v;
+}
+} // namespace
+
+const std::vector<TableUse>& tableUses() { return uses(); }
+void registerTableUse(const TableUse& use) { uses().push_back(use); }
+
 const DataSource& dataSource() {
     if (!g_bound) throw DataSourceError("data source: none bound (the host binds one before the game runs)");
     return *g_bound;

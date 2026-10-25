@@ -12,11 +12,16 @@
 
 namespace od::port {
 
+namespace {
+const DataTable<ScalarTable<uint16_t, kStageFileIds>> stageGeometryFiles{TableId::StageGeometryFiles};
+const DataTable<ScalarTable<uint16_t, kStageFileIds>> stageTextureFiles{TableId::StageTextureFiles};
+} // namespace
+
 StageFileTables& stageFileTables() {
     static StageFileTables s = [] {
         StageFileTables t;
-        const auto& geometry = loadTable<ScalarTable<uint16_t, kStageFileIds>>({TableId::StageGeometryFiles});
-        const auto& texture = loadTable<ScalarTable<uint16_t, kStageFileIds>>({TableId::StageTextureFiles});
+        const auto& geometry = *stageGeometryFiles;
+        const auto& texture = *stageTextureFiles;
         for (size_t i = 0; i < kStageFileIds; ++i) {
             t.geometry[i] = geometry[i];
             t.texture[i] = texture[i];

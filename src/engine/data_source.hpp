@@ -340,12 +340,26 @@ template <size_t N> struct RoutineTable : DataRecord {
     }
 };
 
+// ---- the tables the game reads: every handle (DataTable, TableFamily) registers its table, its byte count and its
+// typed loader when it is constructed, so a test or a generator can load every table the game names
+struct TableUse {
+    TableId id{};
+    uint32_t index = 0;   // the table's (a DataTable's); unused for a family
+    bool family = false;  // a TableFamily: one table per index (a stage's, a room's: roomIndex)
+    uint32_t bytes = 0;   // the bytes the typed loader reads
+    void (*load)(TableKey) = nullptr; // loads the table of `key` through the bound source as the handle's type
+};
+const std::vector<TableUse>& tableUses();
+void registerTableUse(const TableUse& use);
+
 // A typed table of the bound source as a namespace-scope handle, loaded on first use:
 //     const DataTable<ScalarTable<uint8_t, 8>> puffU{TableId::PuffU};
 //     ... puffU[puff & 7] ...
 template <class T> class DataTable {
 public:
-    explicit constexpr DataTable(TableId id, uint32_t index = 0) : key_{id, index} {}
+    explicit DataTable(TableId id, uint32_t index = 0) : key_{id, index} {
+        registerTableUse({id, index, false, T::kBytes, [](TableKey k) { (void)dataSource().load<T>(k); }});
+    }
 
     const T& get() const {
         const DataSource& s = dataSource();
@@ -378,7 +392,22 @@ private:
     mutable uint64_t serial_ = 0;
 };
 
-// the typed table T of `key` in the bound source (a table picked at run time: per stage / room)
-template <class T> const T& loadTable(TableKey key) { return dataSource().load<T>(key); }
+// A table the game keeps one of per stage / per room (the index: the stage, or roomIndex), as a namespace-scope
+// handle:
+//     const TableFamily<RoomCamera> roomCameras{TableId::RoomCamera};
+//     ... if (roomCameras.has(roomIndex(stage, room))) ... roomCameras[roomIndex(stage, room)] ...
+template <class T> class TableFamily {
+public:
+    explicit TableFamily(TableId id) : id_(id) {
+        registerTableUse({id, 0, true, T::kBytes, [](TableKey k) { (void)dataSource().load<T>(k); }});
+    }
+    // the bound source has the table of `index`
+    bool has(uint32_t index) const { return dataSource().hasTable({id_, index}); }
+    const T& operator[](uint32_t index) const { return dataSource().load<T>({id_, index}); }
+    TableId id() const { return id_; }
+
+private:
+    TableId id_;
+};
 
 } // namespace od

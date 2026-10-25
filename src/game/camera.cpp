@@ -283,11 +283,15 @@ void cameraUpdate() {
 
 void cameraReset() { cameraState().resetHeader(); }
 
+namespace {
+const TableFamily<RoomCamera> roomCameras{TableId::RoomCamera};
+} // namespace
+
 std::optional<RoomCamera> roomCamera(int stage, int room) {
     if (stage < 0 || room < 0) return std::nullopt;
-    const TableKey key{TableId::RoomCamera, roomIndex(stage, room)};
-    if (!dataSource().hasTable(key)) return std::nullopt;
-    return loadTable<RoomCamera>(key);
+    const uint32_t index = roomIndex(stage, room);
+    if (!roomCameras.has(index)) return std::nullopt;
+    return roomCameras[index];
 }
 
 void cameraRoomInit(const RoomCamera& rec) {

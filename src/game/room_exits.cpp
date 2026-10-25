@@ -27,12 +27,16 @@ RoomExitList RoomExitList::load(const TableReader& r) {
     return t;
 }
 
+namespace {
+const TableFamily<RoomExitList> roomExitLists{TableId::RoomExits};
+} // namespace
+
 const std::vector<RoomExit>& roomExits(int stage, int room) {
     static const std::vector<RoomExit> none;
     if (stage < 0 || room < 0) return none;
-    const TableKey key{TableId::RoomExits, roomIndex(stage, room)};
-    if (!dataSource().hasTable(key)) return none;
-    return loadTable<RoomExitList>(key).exits;
+    const uint32_t index = roomIndex(stage, room);
+    if (!roomExitLists.has(index)) return none;
+    return roomExitLists[index].exits;
 }
 
 } // namespace od::port
