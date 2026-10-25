@@ -6,6 +6,7 @@
 #include <cstring>
 
 #include "engine/dat.hpp"
+#include "engine/file_data.hpp"
 #include "engine/game_file.hpp"
 #include "engine/ps1_container.hpp"
 #include "engine/ps1_exe_banks.hpp"
@@ -45,11 +46,12 @@ struct Ps1Label {
     uint32_t address;
     uint32_t bytes;
 };
+using SlotKind = Ps1DataSource::SlotKind;
 struct Ps1LabelSlot {
     TableId id;
     uint32_t offset;
-    bool function;     // a function pointer, else a data pointer
-    RoutineId routine; // the function's (None: no C++ routine)
+    SlotKind kind;
+    RoutineId routine; // a function's (None: no C++ routine)
 };
 #include "engine/ps1_labels.inc"
 
@@ -88,7 +90,7 @@ Ps1DataSource::Ps1DataSource(std::shared_ptr<const DiscImage> disc) : disc_(std:
     for (const TableRoutineSlot& s : kTableRoutineSlots)
         routineSlots_[{{s.id, s.index}, s.region}].push_back({s.offset, s.routine});
     std::map<TableId, std::vector<Label::Slot>> labelSlots;
-    for (const Ps1LabelSlot& s : kPs1LabelSlots) labelSlots[s.id].push_back({s.offset, s.function, s.routine});
+    for (const Ps1LabelSlot& s : kPs1LabelSlots) labelSlots[s.id].push_back({s.offset, s.kind, s.routine});
     for (const Ps1Label& l : kPs1Labels) {
         tables_.emplace(TableKey{l.id, 0}, Located{size_t(-1), l.file, l.address, false});
         // two PC tables on one PS1 table (the PC keeps a copy per use): the longer extent, the slots of both
@@ -239,8 +241,16 @@ TableReader Ps1DataSource::regionBytes(size_t part, uint32_t address, uint32_t n
             for (const Label::Slot& slot : l.slots) {
                 const uint32_t at = start + slot.offset;
                 if (at < address || at + 4 > address + take) continue;
-                if (!slot.function) dataPointer(at - address, std::nullopt);
-                else if (rd32(raw + (at - address)) != 0) put32(b, at - address, kRoutineTag | static_cast<uint16_t>(slot.routine));
+                const uint32_t v = rd32(raw + (at - address));
+                switch (slot.kind) {
+                case SlotKind::Data: dataPointer(at - address, std::nullopt); break;
+                case SlotKind::Function:
+                    if (v != 0) put32(b, at - address, kRoutineTag | static_cast<uint16_t>(slot.routine));
+                    break;
+                case SlotKind::Ram: // the engine's address of that PS1 RAM (engine/file_data LoadedFileData)
+                    if (v != 0) put32(b, at - address, (v & 0x1fffffffu) + LoadedFileData::kPsxBase);
+                    break;
+                }
             }
         }
     }

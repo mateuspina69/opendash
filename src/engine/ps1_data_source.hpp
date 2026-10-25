@@ -33,6 +33,9 @@ class Ps1DataSource final : public DataSource {
 public:
     static constexpr uint32_t kRoutineTag = 0x40000000u;  // | RoutineId
     static constexpr uint32_t kVirtualBase = 0x10000000u; // the data address space [kVirtualBase, kRoutineTag)
+    // a pointer slot of a table the game reads by address: to a function (this source's routine value), to data (this
+    // source's address of it), into the loaded files' memory (the engine's address of that PS1 RAM)
+    enum class SlotKind : uint8_t { Function, Data, Ram };
 
     // throws std::runtime_error when the disc is not the USA release
     explicit Ps1DataSource(std::shared_ptr<const DiscImage> disc);
@@ -105,8 +108,8 @@ private:
     struct Label {
         struct Slot {
             uint32_t offset;
-            bool function;     // a function pointer (this source's routine value), else a data pointer
-            RoutineId routine; // the function's (None: no C++ routine)
+            SlotKind kind;
+            RoutineId routine; // a function's (None: no C++ routine)
         };
         uint32_t bytes = 0;
         std::vector<Slot> slots;
