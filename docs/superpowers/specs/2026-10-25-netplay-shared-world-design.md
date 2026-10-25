@@ -179,3 +179,30 @@ No new unit tests for now (the user's decision). Required:
 
 Players in different rooms; host-decided hits; the wipe when everyone is down; shared story beyond what the
 cutscene scripts themselves set; NPCs, shops and dialogue (they stay `Local`); host migration.
+
+## Corrections found while planning (2026-10-25)
+
+What the code showed, and how it changes the design above:
+
+- **Chests are `Local`.** A chest's opened state is the story flag `ChestContent::openedFlag`, and opening it is a talk
+  event that gives its content to the local `player()`. So every player opens their own copy, as with drops. No
+  `ObjectChanged` for chests.
+- **Lift boxes and throwables are `Local`.** They are props the player carries and throws (player physics).
+- **Breakable walls are cells of the room grid, not actors.** `ObjectChanged` carries `{cellWord, variant}` (host:
+  observed in `breakableWallsTick` when a segment breaks; client: `switchCellSegmentVariant`). A client's wall hit
+  (`queueBreakableWallHit(result, attack)`) goes to the host as a `HitClaim` of kind wall, and the client's own
+  `breakableWallsTick` applies no damage.
+- **NPC talk is an event (`eventStart`), not a script,** so it isn't held back. Only script 8 (the shop, started by
+  the clerk's flag) is a script a client starts locally. The host sends no `ScriptStarted` for scripts 0 (exit), 7
+  (world travel) and 8 (shop): rooms come through `Travel`.
+- **`Travel` carries `{stage, sub, transition}` only.** After the load, the client places its player beside the host
+  (the host's newest player state, already received for its ghost).
+- **`Respawn` carries the player id only.** The player respawns at its own room's arrival point
+  (`transitionRequest().destination`), the same point on every machine.
+- **`WorldState` delivery:** the session delivers every `WorldState` whose tick is not older than the newest
+  delivered (the parts of one tick share their tick), not only the newest by sequence.
+- **Roles are keyed by the class's `RoutineId`,** which is the same across stages (the type byte isn't).
+- **Generations:** the host's app layer counts them, by comparing each slot's occupant (live, routine) between
+  captures.
+- **PvP stand-ins use the unused slot ids 0x01..0x07** (one per ghost slot) and carry `kHitNoLockOn`: no actor
+  lives there, so they must never become the lock-on target.
