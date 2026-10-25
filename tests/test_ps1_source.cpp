@@ -140,7 +140,7 @@ int main(int argc, char** argv) {
     { // the tables made from the disc: the load indices' names (SLUS_011.40's file table, the PS1's numbering) and the
       // stages' files by name
         const od::ScopedDataSource bound(ps1);
-        CHECK(od::datFileName(0) == "DEMO.DAT" && od::datFileName(56) == "ST00.DAT");
+        CHECK(od::datFileName(2) == "DEMO.DAT" && od::datFileName(58) == "ST00.DAT");
         const od::TableReader geometry = ps1.table({od::TableId::StageGeometryFiles, 0}, 2 * od::kStageCount);
         const od::TableReader texture = ps1.table({od::TableId::StageTextureFiles, 0}, 2 * od::kStageCount);
         CHECK(od::datFileName(geometry.u16(9 * 2)) == "ST09.DAT" && od::datFileName(texture.u16(9 * 2)) == "ST09T.DAT");

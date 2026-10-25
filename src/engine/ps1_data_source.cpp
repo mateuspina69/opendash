@@ -60,8 +60,9 @@ struct Ps1LabelTable {
 };
 #include "engine/ps1_labels.inc"
 
-// SLUS_011.40 (USA): the file table of the load indices, {u32 LBA, u32 bytes, u32 flags} each
-constexpr uint32_t kFileTable = 0x8006849c;
+// SLUS_011.40 (USA): the file table of the load indices, {u32 LBA, u32 bytes, u32 flags} each (0 SYSTEM.CNF,
+// 1 SLUS_011.40, 2 COMMON/DEMO.BIN ...: the numbering the PS1's data uses)
+constexpr uint32_t kFileTable = 0x80068484;
 constexpr size_t kLoadIndices = 0x200;
 
 std::string upper(std::string s) {
