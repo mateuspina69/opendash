@@ -61,6 +61,12 @@ struct Ps1LabelTable {
     bool own;        // the PS1's own: its bytes not the PC's (its slots the PS1 words that point)
     uint32_t stride; // a room array (index: the stage): a table per room, this many bytes apart (0: one table)
 };
+struct Ps1StateTable {
+    TableId id;
+    uint32_t index;
+    uint32_t address; // the engine's address of it
+    uint32_t bytes;
+};
 #include "engine/ps1_labels.inc"
 
 // SLUS_011.40 (USA): the file table of the load indices, {u32 LBA, u32 bytes, u32 flags} each (0 SYSTEM.CNF,
@@ -109,6 +115,11 @@ Ps1DataSource::Ps1DataSource(std::shared_ptr<const DiscImage> disc) : disc_(std:
         for (const Label::Slot& slot : labelSlots[i])
             if (std::none_of(at.slots.begin(), at.slots.end(), [&](const Label::Slot& x) { return x.offset == slot.offset; }))
                 at.slots.push_back(slot);
+    }
+    for (const Ps1StateTable& t : kPs1StateTables) {
+        Located at;
+        at.state = t.address;
+        tables_.emplace(TableKey{t.id, t.index}, std::move(at));
     }
     for (const Ps1LabelTable& t : kPs1LabelTables) {
         const Ps1Label& l = kPs1Labels[t.label];
@@ -303,6 +314,7 @@ TableReader Ps1DataSource::table(TableKey key, uint32_t bytes) const {
     const auto it = tables_.find(key);
     if (it == tables_.end()) throw DataSourceError("data source (PS1): the disc has no table " + describe(key));
     const Located& t = it->second;
+    if (t.state) return TableReader(*this, std::vector<uint8_t>(bytes, 0)); // the state's initial bytes
     if (t.made) { // a made table: as many bytes as asked (zeros past its own)
         TableReader r = regionBytes(t.part, 0, bytes, std::nullopt);
         if (r.size() >= bytes) return r;
@@ -330,6 +342,7 @@ uint32_t Ps1DataSource::stateAddress(TableKey key) const {
     const auto it = tables_.find(key);
     if (it == tables_.end()) throw DataSourceError("data source (PS1): the disc has no table " + describe(key));
     const Located& t = it->second;
+    if (t.state) return t.state;
     if (t.made) return parts_[t.part].vbase;
     const auto [file, address] = placeOf(t);
     for (const size_t p : partsOf(file)) {
@@ -354,6 +367,8 @@ std::pair<std::string, uint32_t> Ps1DataSource::placeOf(const Located& t) const 
 }
 
 TableReader Ps1DataSource::pointee(uint32_t pointer, uint32_t n) const {
+    // the program's state: its initial bytes (zero), as the PC reads its .bss
+    if (pointer >= kEngineState[0] && pointer < kEngineState[1]) return TableReader(*this, std::vector<uint8_t>(n, 0));
     if (pointer < kVirtualBase || pointer >= kRoutineTag) return TableReader(*this, {});
     size_t part;
     std::optional<Region> region;

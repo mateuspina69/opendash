@@ -102,6 +102,7 @@ private:
         std::string file;
         uint32_t address = 0;
         bool made = false;
+        uint32_t state = 0; // a table in the program's state (built at run time, initially zero): the engine's address
         // a table the PS1 keeps a copy of in several files (the overlays of the stages that use it): the others; the
         // one read is in the file loaded last (the overlay in PS1 RAM), the first before any of them is loaded
         std::vector<std::pair<std::string, uint32_t>> copies;
