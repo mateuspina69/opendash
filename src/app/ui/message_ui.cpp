@@ -33,19 +33,18 @@ uint32_t MessageUi::nameAt(uint32_t id) {
 
 float MessageUi::ps1Advance(uint8_t c) const { return ps1.advance(c); }
 
-MessageUi::Ps1Font MessageUi::loadFont(od::Renderer& r, const std::filesystem::path& pack, bool allColours) {
+MessageUi::Ps1Font MessageUi::loadFont(od::Renderer& r, const od::lang::LangPack& pack, bool allColours) {
     Ps1Font f;
     try {
-        const auto page = od::readFile(pack / "font.bin");
-        const auto w = od::readFile(pack / "widths.bin");
+        const auto page = pack.file("font.bin");
+        const auto w = pack.file("widths.bin");
         if (page.size() < 0x8000 || w.size() < 256) throw std::runtime_error("font.bin / widths.bin too small");
         std::copy_n(w.begin(), 256, f.widths.begin());
         if (w.size() > 256) f.limit = w[256];
         constexpr int kUp = 4;
-        std::error_code ec;
         auto opt = [&](const char* name, size_t need) {
             std::vector<uint8_t> v;
-            if (std::filesystem::exists(pack / name, ec)) v = od::readFile(pack / name);
+            if (pack.has(name)) v = pack.file(name);
             if (v.size() < need) v.clear();
             return v;
         };
@@ -94,27 +93,23 @@ MessageUi::Ps1Font MessageUi::loadFont(od::Renderer& r, const std::filesystem::p
             f.fill[size_t(ci)] = known ? rgba(clutAt(colours, ci, 1)) : rgba(0x7fffu);
             f.edge[size_t(ci)] = known ? rgba(clutAt(colours, ci, 3)) : 0u;
         }
-        SDL_Log("message font: PS1 pack %s%s%s", pack.string().c_str(), colours.empty() ? "" : " (+ text CLUTs)",
+        SDL_Log("message font: PS1 pack %s%s%s", pack.id().c_str(), colours.empty() ? "" : " (+ text CLUTs)",
                 f.buttons ? " (+ button CLUTs)" : "");
     } catch (const std::exception& e) {
-        SDL_Log("message font (PS1 pack %s): %s", pack.string().c_str(), e.what());
+        SDL_Log("message font (PS1 pack %s): %s", pack.id().c_str(), e.what());
     }
     return f;
 }
 
-void MessageUi::usePack(od::Renderer& r, const std::filesystem::path& root, const std::filesystem::path& pack) {
-    if (!pack.empty() && ps1Dir != pack) {
-        ps1Dir = pack;
-        ps1 = loadFont(r, pack);
+void MessageUi::usePack(od::Renderer& r, const od::lang::LangPack* pack, const od::lang::LangPack* labels) {
+    if (pack && ps1Pack != pack->id()) {
+        ps1Pack = pack->id();
+        ps1 = loadFont(r, *pack);
     }
-    usePs1 = !pack.empty();
+    usePs1 = pack != nullptr;
     if (!labelTried) { // the Latin labels name the installed packs: with none, Japanese only, no label to draw
         labelTried = true;
-        for (const od::lang::Language l : {od::lang::Language::Portuguese, od::lang::Language::English}) {
-            if (!od::lang::packAvailable(root, l)) continue;
-            labelFont = loadFont(r, od::lang::packDir(root, l), false);
-            if (labelFont.tex) break;
-        }
+        if (labels) labelFont = loadFont(r, *labels, false);
     }
 }
 

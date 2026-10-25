@@ -127,13 +127,12 @@ void PlayerView::tick() {
 void PlayerView::loadMessageBank() {
     if (!bankRoomFile) return;
     std::vector<uint8_t> bank(0x4000, 0);
-    const auto pack = od::lang::bankPath(langDir, language, bankRoomName);
-    std::error_code ec;
-    if (!pack.empty() && std::filesystem::exists(pack, ec)) {
-        const auto b = od::readFile(pack);
+    const std::string name = "msg/" + std::filesystem::path(bankRoomName).stem().string() + ".bin";
+    if (pack && pack->has(name)) {
+        const auto b = pack->file(name);
         std::copy_n(b.begin(), std::min(b.size(), bank.size()), bank.begin());
     } else {
-        if (!pack.empty()) SDL_Log("lang: %s missing, Japanese bank", pack.string().c_str());
+        if (pack) SDL_Log("lang: %s missing in %s, Japanese bank", name.c_str(), pack->id().c_str());
         for (const od::FilePart& seg : bankRoomFile->parts)
             if (seg.kind == od::FilePart::Kind::PcMessages)
                 std::copy_n(seg.bytes.begin(), std::min(seg.bytes.size(), bank.size()), bank.begin());
@@ -142,15 +141,44 @@ void PlayerView::loadMessageBank() {
     bankLanguage = language;
 }
 
+std::unique_ptr<od::lang::LangPack> PlayerView::makePack(od::lang::Language l) const {
+    if (l == od::lang::Language::Japanese) return nullptr;
+    if (l == od::lang::Language::English && disc) {
+        try {
+            return od::lang::discPack(disc, "disc:" + std::string(od::lang::code(l)));
+        } catch (const std::exception& e) {
+            SDL_Log("lang: the disc image has no English pack: %s", e.what());
+            return nullptr;
+        }
+    }
+    if (!od::lang::packAvailable(langDir, l)) return nullptr;
+    return od::lang::folderPack(od::lang::packDir(langDir, l));
+}
+
+bool PlayerView::packOffered(od::lang::Language l) const {
+    if (l == od::lang::Language::Japanese) return true;
+    if (const auto it = packOfferedCache.find(l); it != packOfferedCache.end()) return it->second;
+    return packOfferedCache[l] = makePack(l) != nullptr;
+}
+
+const od::lang::LangPack* PlayerView::labelPack() {
+    if (!labelsTried) {
+        labelsTried = true;
+        labels = makePack(od::lang::Language::Portuguese);
+        if (!labels) labels = makePack(od::lang::Language::English);
+    }
+    return labels.get();
+}
+
 bool PlayerView::restoredAvailable() const {
-    const auto dir = od::lang::packDir(langDir, language);
+    const auto dir = pack ? pack->folder() : std::filesystem::path();
     std::error_code ec;
     return !dir.empty() && std::filesystem::is_directory(dir / "snd_restored", ec);
 }
 
 void PlayerView::applyVoiceDirs() {
     if (!mixer) return;
-    const auto dir = od::lang::packDir(langDir, language);
+    const auto dir = pack ? pack->folder() : std::filesystem::path();
     std::vector<std::filesystem::path> dirs;
     if (!dir.empty()) {
         if (restoredVoices && restoredAvailable()) dirs.push_back(dir / "snd_restored");
@@ -160,13 +188,14 @@ void PlayerView::applyVoiceDirs() {
 }
 
 void PlayerView::setLanguage(od::lang::Language l) {
-    if (l != od::lang::Language::Japanese && !od::lang::packAvailable(langDir, l)) {
-        SDL_Log("lang: no %s pack in %s", od::lang::code(l), langDir.string().c_str());
+    pack = makePack(l);
+    if (l != od::lang::Language::Japanese && !pack) {
+        SDL_Log("lang: no %s pack (disc image or %s)", od::lang::code(l), langDir.string().c_str());
         l = od::lang::Language::Japanese;
     }
     language = l;
     applyVoiceDirs();
-    if (mixer) od::lang_sfx::reloadAll(od::lang::packDir(langDir, language)); // the voice barks (app/lang_sfx)
+    if (mixer) od::lang_sfx::reloadAll(pack ? pack->folder() : std::filesystem::path()); // the voice barks (app/lang_sfx)
     loadExeBanks();
     if (bankStage >= 0 && bankLanguage != l) loadMessageBank();
     SDL_Log("lang: %s", od::lang::code(l));
@@ -175,18 +204,16 @@ void PlayerView::setLanguage(od::lang::Language l) {
 void PlayerView::loadExeBanks() {
     od::port::MenuBanks b = od::port::exeMenuBanks();
     std::vector<std::pair<uint32_t, uint32_t>> redirects;
-    const auto dir = od::lang::packDir(langDir, language);
-    if (!dir.empty()) {
+    if (pack) {
         if (!files.mapped(kLangBanks, 0x10000)) files.zero(kLangBanks, 0x10000);
         uint32_t at = kLangBanks;
         auto put = [&](const char* name, uint32_t& field) {
-            const auto f = dir / "exe" / (std::string(name) + ".bin");
-            std::error_code ec;
-            if (!std::filesystem::exists(f, ec)) {
-                SDL_Log("lang: %s missing: Japanese", f.string().c_str());
+            const std::string f = "exe/" + std::string(name) + ".bin";
+            if (!pack->has(f)) {
+                SDL_Log("lang: %s missing in %s: Japanese", f.c_str(), pack->id().c_str());
                 return;
             }
-            const auto d = od::readFile(f);
+            const auto d = pack->file(f);
             if (at + d.size() > kLangBanks + 0x10000) return;
             files.map(at, d);
             field = at;
@@ -231,11 +258,10 @@ void PlayerView::loadExeBanks() {
     od::port::clearBankRedirects();
     for (auto [exe, pack] : redirects) od::port::setBankRedirect(exe, pack);
     od::port::setMenuBanks(b);
-    od::port::setPs1Text(!dir.empty());
+    od::port::setPs1Text(pack != nullptr);
     { // the layout pass's advance = the pack font's (game/message)
         std::vector<uint8_t> w;
-        std::error_code ec;
-        if (!dir.empty() && std::filesystem::exists(dir / "widths.bin", ec)) w = od::readFile(dir / "widths.bin");
+        if (pack && pack->has("widths.bin")) w = pack->file("widths.bin");
         od::port::setPs1Widths(w.size() >= 256 ? w.data() : nullptr, w.size() > 256 ? w[256] : 0x6b);
     }
     od::port::setNameBank(b.names);
@@ -515,7 +541,7 @@ void PlayerView::audioInit(const od::Config& cfg, bool device) {
         const od::GameFile init = od::dataSource().gameFile("INIT.DAT");
         for (const od::FilePart& seg : init.parts)
             if (seg.kind == od::FilePart::Kind::WavSfxBank)
-                od::lang_sfx::load(od::lang::packDir(langDir, language), "INIT.DAT", seg.bytes, seg.arg, seg.extra);
+                od::lang_sfx::load(pack ? pack->folder() : std::filesystem::path(), "INIT.DAT", seg.bytes, seg.arg, seg.extra);
         SDL_Log("audio: %s, INIT bank loaded", mixer->hasDevice() ? "device" : "silent");
     } catch (const std::exception& e) {
         SDL_Log("audio disabled: %s", e.what());
@@ -533,7 +559,7 @@ void PlayerView::audioBindRoom(const RoomMesh& mesh) {
         int banks = 0, mp3 = 0;
         for (const od::FilePart& seg : mesh.roomFile->parts)
             if (seg.kind == od::FilePart::Kind::WavSfxBank) {
-                od::lang_sfx::load(od::lang::packDir(langDir, language), mesh.roomFileName, seg.bytes, seg.arg, seg.extra);
+                od::lang_sfx::load(pack ? pack->folder() : std::filesystem::path(), mesh.roomFileName, seg.bytes, seg.arg, seg.extra);
                 ++banks;
             }
         if (od::dataSource().hasFile(mesh.textureFile)) {
@@ -1501,7 +1527,7 @@ void PlayerView::processDatQueue() {
                 } else if (sg.kind == od::FilePart::Kind::Vram) {
                     vramSeg = true;
                 } else if (sg.kind == od::FilePart::Kind::WavSfxBank) { // 0x40ed0e: Maybe_LoadSfxBank 0x5d5010(data, size, TOC arg, extra)
-                    od::lang_sfx::load(od::lang::packDir(langDir, language), name, d, sg.arg, sg.extra);
+                    od::lang_sfx::load(pack ? pack->folder() : std::filesystem::path(), name, d, sg.arg, sg.extra);
                 } else if (sg.kind == od::FilePart::Kind::Mp3Music) {
                     od::port::loadMp3Slot(d, mp3++, sg.arg);
                 }

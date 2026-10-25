@@ -1,6 +1,7 @@
 // The message windows and the sub-screens' text drawn on the game canvas (the PC font, the language packs' PS1 fonts).
 #pragma once
 
+#include "engine/lang_pack.hpp"
 #include "render/ui_canvas.hpp"
 
 #include <array>
@@ -56,12 +57,13 @@ struct MessageUi {
     Ps1Font ps1;         // the language's pack
     Ps1Font labelFont;   // OpenDash's Latin labels (the language row): the PT-BR pack's (EN's glyphs + the accents)
     float ps1Advance(uint8_t c) const;
-    std::filesystem::path ps1Dir; // the pack ps1 was built from
+    std::string ps1Pack; // the pack ps1 was built from (LangPack::id)
     bool labelTried = false;
-    static Ps1Font loadFont(od::Renderer& r, const std::filesystem::path& pack, bool allColours = true);
+    static Ps1Font loadFont(od::Renderer& r, const od::lang::LangPack& pack, bool allColours = true);
     bool usePs1 = false; // draw with the pack font (set per frame from the language)
     // the language's pack font (Japanese: the PC font) and the labels' font
-    void usePack(od::Renderer& r, const std::filesystem::path& root, const std::filesystem::path& pack);
+    // the language's pack (nullptr: Japanese) and the pack OpenDash's Latin labels are drawn with (nullptr: none)
+    void usePack(od::Renderer& r, const od::lang::LangPack* pack, const od::lang::LangPack* labels);
 
     void load(od::Renderer& r); // INIT.DAT's fonts (the data source's)
 

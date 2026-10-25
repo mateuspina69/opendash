@@ -69,6 +69,7 @@ Config loadConfig() {
             if (key == "aa_quality") cfg.aaQuality = trim(line.substr(eq + 1));
             if (key == "lang_dir") cfg.langDir = trim(line.substr(eq + 1));
             if (key == "lang") cfg.lang = trim(line.substr(eq + 1));
+            if (key == "disc") cfg.disc = trim(line.substr(eq + 1));
             if (key == "restored_voices") cfg.restoredVoices = trim(line.substr(eq + 1)) != "0";
             if (key == "story_save") cfg.storySave = trim(line.substr(eq + 1));
             if (key == "display") cfg.display = trim(line.substr(eq + 1));
@@ -91,6 +92,7 @@ Config loadConfig() {
     if (const std::string v = envValue("OPENDASH_EXE"); !v.empty()) cfg.exePath = v;
     if (const std::string v = envValue("OPENDASH_LANG_DIR"); !v.empty()) cfg.langDir = v;
     if (const std::string v = envValue("OPENDASH_LANG"); !v.empty()) cfg.lang = v;
+    if (const std::string v = envValue("OPENDASH_DISC"); !v.empty()) cfg.disc = v;
     if (cfg.exePath.empty()) cfg.exePath = cfg.datDir.parent_path() / "dash2.exe";
     return cfg;
 }

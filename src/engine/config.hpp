@@ -12,6 +12,7 @@ struct Config {
     std::string aaQuality = "native"; // aa_quality= native|quality|balanced|performance
     std::filesystem::path langDir; // lang_dir= / OPENDASH_LANG_DIR: language packs, default opendash/lang (resolved from the exe: <exe dir>/../../lang)
     std::string lang = "jp";       // lang= jp|en|ptbr / OPENDASH_LANG (--lang overrides)
+    std::filesystem::path disc;    // disc= / OPENDASH_DISC: the PS1 disc image (.cue); the English pack is read off it
     bool restoredVoices = true;    // restored_voices= 0|1: the pack's AI-restored voices (snd_restored) when present
     // story_save= the save whose story state / event flags free play (F2, the stage browser) uses: a slot number
     // (DASH2-NN.DAT next to dash2.exe, read only), a path, or nenhum / none (story 0). Unset: DASH2-00 if present.

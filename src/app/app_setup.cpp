@@ -297,6 +297,13 @@ int App::init() {
         playerView.logSkateCam = !playScript.empty();
         playerView.audioInit(cfg, audioArg && (!scripted || audioDeviceArg)); // scripted runs: silent (no device)
         playerView.langDir = cfg.langDir;
+        if (!cfg.disc.empty()) { // the PS1 disc image: the English pack (engine/lang_pack)
+            try {
+                playerView.disc = std::make_shared<const od::DiscImage>(cfg.disc);
+            } catch (const std::exception& e) {
+                SDL_Log("disc %s: %s", cfg.disc.string().c_str(), e.what());
+            }
+        }
         playerView.restoredVoices = cfg.restoredVoices;
         playerView.setLanguage(od::lang::parseLanguage(langArg.empty() ? cfg.lang : langArg));
         {

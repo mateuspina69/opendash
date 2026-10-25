@@ -21,7 +21,9 @@
 #include "audio/mixer.hpp"
 #include "engine/config.hpp"
 #include "engine/file_data.hpp"
+#include "engine/disc_image.hpp"
 #include "engine/lang.hpp"
+#include "engine/lang_pack.hpp"
 #include "engine/screen_prim.hpp"
 #include "game/actors.hpp"
 #include "game/audio_logic.hpp"
@@ -81,6 +83,17 @@ struct PlayerView {
     // (engine/lang): message banks of the same stem as the room DAT, PS1 font, ODXA voice packs
     od::lang::Language language = od::lang::Language::Japanese;
     std::filesystem::path langDir;
+    // the PS1 disc image (opendash.ini disc=): the English pack is read off it (engine/lang_pack), the other packs
+    // from their folders in langDir
+    std::shared_ptr<const od::DiscImage> disc;
+    std::unique_ptr<od::lang::LangPack> pack; // the language's pack (nullptr: Japanese)
+    std::unique_ptr<od::lang::LangPack> makePack(od::lang::Language l) const; // nullptr when there is none
+    bool packOffered(od::lang::Language l) const; // the language can be chosen (Japanese, or its pack exists)
+    // the pack OpenDash's Latin labels (the language row) are drawn with: PT-BR's (EN's glyphs + the accents), else EN's
+    const od::lang::LangPack* labelPack();
+    mutable std::map<od::lang::Language, bool> packOfferedCache;
+    std::unique_ptr<od::lang::LangPack> labels;
+    bool labelsTried = false;
     od::lang::Language bankLanguage = od::lang::Language::Japanese;
     std::shared_ptr<const od::GameFile> bankRoomFile; // the room file whose bank is loaded
     std::string bankRoomName;

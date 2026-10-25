@@ -601,9 +601,9 @@ void App::drawOverlays() {
         if (!messageUi.tried) messageUi.load(*renderer);
         if (!messageUi.hdTried) messageUi.loadHd(*renderer);
         {
-            const auto pack = od::lang::packDir(playerView.langDir, playerView.language);
-            messageUi.usePack(*renderer, playerView.langDir, pack);
-            playerView.menuVram.setArtDir(pack.empty() ? std::filesystem::path() : pack / "art");
+            const auto folder = playerView.pack ? playerView.pack->folder() : std::filesystem::path();
+            messageUi.usePack(*renderer, playerView.pack.get(), playerView.labelPack());
+            playerView.menuVram.setArtDir(folder.empty() ? std::filesystem::path() : folder / "art");
         }
         if (!hudUi.tried || hudUi.vramGen != g_roomVramGen) hudUi.load(*renderer); // a new room's VRAM
         if (!playerView.minimapPrims.empty()) { // the minimap (game/minimap): the HUD's entry +0x78, linked after it
@@ -671,9 +671,9 @@ void App::drawOverlays() {
     }
     if (titleScreen.active) { // the 2D screens of the main task / title task + the load menu's windows
         {
-            const auto pack = od::lang::packDir(playerView.langDir, playerView.language);
-            messageUi.usePack(*renderer, playerView.langDir, pack);
-            titleScreen.mv.setArtDir(pack.empty() ? std::filesystem::path() : pack / "art");
+            const auto folder = playerView.pack ? playerView.pack->folder() : std::filesystem::path();
+            messageUi.usePack(*renderer, playerView.pack.get(), playerView.labelPack());
+            titleScreen.mv.setArtDir(folder.empty() ? std::filesystem::path() : folder / "art");
         }
         titleScreen.draw(*renderer, canvas, float(width), float(height),
                          [&](const od::port::ScreenPrim& p, float s, ui::Vec2 o) {

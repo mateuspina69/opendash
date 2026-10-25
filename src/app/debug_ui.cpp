@@ -278,7 +278,7 @@ void App::drawDebugMenu() {
                 if (ImGui::BeginCombo("texto e vozes", od::lang::displayName(playerView.language))) {
                     for (int k = 0; k < 3; ++k) {
                         const auto l = od::lang::Language(k);
-                        const bool have = l == od::lang::Language::Japanese || od::lang::packAvailable(playerView.langDir, l);
+                        const bool have = playerView.packOffered(l);
                         if (!have) ImGui::BeginDisabled();
                         if (ImGui::Selectable(od::lang::displayName(l), cur == k)) {
                             playerView.setLanguage(l);
