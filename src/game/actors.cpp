@@ -65,6 +65,7 @@
 #include "game/treasure_chest.hpp"
 #include "game/vram_moves.hpp"
 #include "game/walker_shot.hpp"
+#include "game/net_puppets.hpp"
 #include "game/wall_crumble.hpp"
 #include "game/wall_debris.hpp"
 
@@ -313,6 +314,7 @@ int updatePool(const PlayerEnv& env, ActorContext& ctx, ActorPool pool) {
         }
         const RoutineRef h = actorHandler(actor, pool);
         if (!h) continue;
+        if (netPoolBefore(env, actor, pool, h.id())) continue; // netplay: a puppet, or a client's copy of a shared actor
         const ActorUpdateFn fn = ctx.disabled.count(h.id()) ? nullptr : portedActorClass(h.id());
         if (!fn) {
             ctx.skipped.push_back(actor.at);
@@ -327,6 +329,7 @@ int updatePool(const PlayerEnv& env, ActorContext& ctx, ActorPool pool) {
         try {
             fn(env, actor.at);
             ++n;
+            netPoolAfter(actor, pool, h.id());
         } catch (const std::logic_error& e) {
             ctx.disabled.insert(h.id());
             if (ctx.log) ctx.log(std::string("PORT GAP: actor class disabled: ") + e.what());
