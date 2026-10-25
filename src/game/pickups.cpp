@@ -18,6 +18,7 @@
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/rewards.hpp"
+#include "game/net_world.hpp"
 #include "game/shots/shot_common.hpp"
 #include "game/story_flags.hpp"
 #include "game/vectors.hpp"
@@ -163,6 +164,24 @@ void give(const StaticActor& actor, const PickupFields& pickup) {
 
 namespace {
 
+// netplay host: a drop's pickup, as the clients spawn it (game/net_world)
+void notePickupSpawned(const StaticActor& d) {
+    const NetWorldHooks& net = netWorldHooks();
+    if (!net.pickupSpawned) return;
+    const auto& pickup = heldClassStateOf<PickupFields>(d);
+    PickupSpawn p;
+    p.pos[0] = d.pos.x;
+    p.pos[1] = d.pos.y;
+    p.pos[2] = d.pos.z;
+    p.kind = pickup ? uint8_t(pickup->kind) : 0;
+    p.size = pickup ? uint8_t(pickup->size) : 0;
+    p.variant = d.variant;
+    p.velocityXY = d.velocity.xyWord();
+    p.velocityZSpare = d.velocity.zSpareWord();
+    p.yaw = d.rotation.y;
+    net.pickupSpawned(p);
+}
+
 // exe 0x5f1270's body on a point read through `x` / `y` / `z` (each pickup reads the point again)
 template <class X, class Y, class Z> void spawnDropsAt(X x, Y y, Z z, uint32_t table) {
     if (storyFlag(kFlagNoDrops)) return;
@@ -184,6 +203,7 @@ template <class X, class Y, class Z> void spawnDropsAt(X x, Y y, Z z, uint32_t t
                 pickup.size = int8_t(size);
                 d.pos.z = z();
                 pickup.kind = int8_t(kind);
+                notePickupSpawned(d);
             }
     }
 }
@@ -229,6 +249,25 @@ void spawnLaunchedPickup(const int32_t pos[3], uint32_t velocityXY, uint32_t vel
     }
     pickup.kind = int8_t(kind);
     pickup.size = int8_t(size);
+    notePickupSpawned(d);
+}
+
+void spawnPickup(const PickupSpawn& p) {
+    const uint32_t address = allocActor60(0);
+    if (address == 0) return;
+    StaticActor& d = staticActorAt(address);
+    auto&& pickup = classState<PickupFields>(d);
+    d.flags = kActorLive;
+    d.loopFlags |= kActorSweepGroup1 | kActorLateLoop;
+    d.type = typeByte(GlobalStaticType::Pickup);
+    d.variant = p.variant;
+    d.pos.x = p.pos[0];
+    d.pos.y = p.pos[1];
+    d.pos.z = p.pos[2];
+    d.velocity.setWords(p.velocityXY, p.velocityZSpare);
+    d.rotation.y = p.yaw;
+    pickup.kind = int8_t(p.kind);
+    pickup.size = int8_t(p.size);
 }
 
 void spawnLaunchedDrops(const Fixed16Vec3& pos, const ShortVec4& velocity, uint32_t table) {

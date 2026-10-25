@@ -35,6 +35,7 @@
 #include "game/script_state.hpp"
 #include "game/message.hpp"
 #include "game/event.hpp"
+#include "game/net_world.hpp"
 #include "game/story_flags.hpp"
 #include "game/transition_state.hpp"
 
@@ -339,7 +340,7 @@ void playingState(const PlayerEnv& env, Player& p) {
 void deadState(const PlayerEnv& env, Player& p) {
     actorPushOut(env, p);
     p.prevPos = p.pos;
-    if (p.subState == uint8_t(DeadStep::Enter)) {
+    if (p.subState == uint8_t(DeadStep::Enter) && !netWorldHooks().holdDeath) { // netplay: held for the respawn
         gameState().setMode(GameMode::GameOver);
         gameState().modeStep = 0;
         p.subState = uint8_t(p.subState + 1u);
@@ -530,6 +531,23 @@ void playerRestore() {
     p.hitPoints = p.maxHitPoints;
     p.clearStatusWords();
     for (size_t i = 0; i < p.statusTicks.size(); ++i) p.statusTicks[i] = 0;
+}
+
+void playerRespawn() {
+    playerRestore();
+    Player& p = player();
+    const TransitionRequest& r = transitionRequest();
+    const int32_t at[3] = {wholeToFixed16(r.destination.x), wholeToFixed16(r.destination.y),
+                           wholeToFixed16(r.destination.z)};
+    p.pos.x = at[0];
+    p.pos.y = at[1];
+    p.pos.z = at[2];
+    p.prevPos = p.pos;
+    p.rotation.y = r.destination.yaw;
+    p.prevRotation.y = r.destination.yaw;
+    p.airborne = 0;
+    p.wasAirborne = 0;
+    p.enterState(PlayerState::Init);
 }
 
 } // namespace od::port

@@ -13,6 +13,7 @@
 #include "game/throwable.hpp"
 #include "game/wall_debris.hpp"
 #include "game/port_gap.hpp"
+#include "game/net_world.hpp"
 #include "game/random.hpp"
 #include "game/room_grid.hpp"
 #include "game/wall_crumble.hpp"
@@ -217,6 +218,10 @@ void probeBlastWalls(const PlayerEnv& env, Actor& actor, int r) {
 }
 
 void queueBreakableWallHit(uint32_t result, int attack) {
+    if (const NetWorldHooks& net = netWorldHooks(); net.mirror && net.wallHit) { // netplay client: the host's walls
+        net.wallHit(result, attack);
+        return;
+    }
     BreakableWallState& s = state();
     if (!(roomGrid().roomFlags & kRoomSwitchableSegments) || int16_t(s.queuedHits) == kQueueCapacity ||
         !(result & kCellCollides) || (result & kCellFloor))
@@ -277,6 +282,8 @@ void breakableWallsTick() {
             if (next >= 0) {
                 e.flags = uint8_t(next);
                 breakReaction(e, pe);
+                if (const NetWorldHooks& net = netWorldHooks(); net.wallBroken)
+                    net.wallBroken({uint16_t(i), e.flags, e.hitPoints});
             }
         }
     }
@@ -284,6 +291,16 @@ void breakableWallsTick() {
     for (size_t k = 0; k < s.queue.size(); ++k) s.queue[k] = 0;
     for (size_t k = 0; k < s.damage.size(); ++k) s.damage[k] = 0;
     for (size_t k = 0; k < s.sharedDamage.size(); ++k) s.sharedDamage[k] = 0;
+}
+
+void breakableWallApplyStep(const WallStep& w) {
+    if (!(roomGrid().roomFlags & kRoomSwitchableSegments) || w.segment >= listHeader().breakableCount) return;
+    auto&& e = segmentEntry(w.segment);
+    if (e.flags == w.flags) return;
+    const SegmentPoolEntry pe = segmentPoolEntry(e.poolIndex);
+    e.hitPoints = w.hitPoints;
+    e.flags = w.flags;
+    breakReaction(e, pe);
 }
 
 int32_t cellSegmentVariant(uint32_t cellWord) {
