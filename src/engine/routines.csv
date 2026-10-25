@@ -1,0 +1,2799 @@
+# game/text_script: the message codes' logic pass (exe table 0x8b14b8) and layout pass (0x8b15e8)
+TextLogicSkipOne,0x5575b0,fb 03: nothing
+TextLogicSkipTwo,0x5575d0,fb 0b / 17 / 31 / 3b / 46: nothing (the layout pass's codes)
+TextLogicSkipThree,0x5575f0,fb 0a / 0f / 2e / 2f / 45 / 49: nothing
+TextLogicNewLine,0x5597a0,fc
+TextLogicWaitPage,0x559830,fd hi lo: a wait, then the next page
+TextLogicRubyGlyph,0x559890,fe: a glyph with ruby, typed as one
+TextLogicCloseAfter,0x559a30,fb 04 n: the window closed after n ticks
+TextLogicFrameOpen,0x559a70,fb 05 style: the frame opened, the text goes on once it is open
+TextLogicGeometry,0x559ab0,fb 06 x y columns lines: the window's place and size
+TextLogicWaitWindow,0x559b70,fb 07 win closed: wait for another window
+TextLogicPause,0x559bd0,fb 08 n: a pause of n ticks
+TextLogicTypeDelay,0x559c20,fb 09 n: the typing delay
+TextLogicFrameClose,0x559d00,fb 0c: the frame closed, the text goes on once it is
+TextLogicScrollPage,0x559d30,fb 0d n: the text scrolled up, then the next page
+TextLogicJump,0x559db0,fb 0e id: to another message
+TextLogicChoiceNoCancel,0x559ec0,fb 10: a choice cross does not cancel
+TextLogicChoice,0x559f00,fb 39: a choice, cross cancels
+TextLogicJumpByChoice,0x55a110,fb 11 n targets: to the message of the answer
+TextLogicOpenWindow,0x55a1b0,fb 12 win id: another window opened
+TextLogicOpenWindowByChoice,0x55a1f0,fb 13 win n ids: another window opened on the answer's message
+TextLogicOpenWindowOnChoice,0x55a290,fb 14 answer win id: another window opened for one answer
+TextLogicTalkCamera,0x55a2f0,fb 15: the talk camera's pose
+TextLogicJumpByStory,0x55a390,fb 16 s lt eq gt: by the story's progress
+TextLogicWaitButton,0x55a400,fb 18: wait for circle / start (no "more" arrow)
+TextLogicSound,0x55a440,fb 19 id: a sound
+TextLogicVoice,0x55a470,fb 1a id: a voice clip, the text goes on once it plays
+TextLogicWaitVoice,0x55a4d0,fb 1b: wait until the voice clip is over
+TextLogicTypingSoundOn,0x55a4f0,fb 1c
+TextLogicTypingSoundOff,0x55a510,fb 1d
+TextLogicHold,0x55a530,fb 1e: nothing; the read pointer stays on it
+TextLogicReturn,0x55a540,fb 1f: back from an inserted text
+TextLogicInsertString,0x55a580,fb 20 id: a system string
+TextLogicInsertNumber,0x55a610,fb 21 k: a number
+TextLogicInsertKeyName,0x55a6e0,fb 22 k: a key's name
+TextLogicInsertTime,0x55a810,fb 23 k: a time
+TextLogicWaitButtonArrow,0x55ab70,fb 24: wait for circle / start with the "more" arrow
+TextLogicLayoutBits,0x55abb0,fb 25 k: the system layout bits
+TextLogicSetFlag,0x55ac20,fb 26 / 36 flag: an event flag set
+TextLogicClearFlag,0x55ac50,fb 27 flag
+TextLogicJumpByFlag,0x55ac80,fb 28 flag set clear: by an event flag
+TextLogicFastForward,0x55ace0,fb 29 b: circle / start may speed the text up (0: not)
+TextLogicJumpByDifficulty,0x55ad20,fb 2a t0..t4
+TextLogicWaitEvent,0x55ada0,fb 2b: wait for the event runner
+TextLogicPlayerShown,0x55adf0,fb 2c b: the player drawn or not
+TextLogicPlayerImmune,0x55ae30,fb 2d b: the player's immunity held or not
+TextLogicLayer,0x55aeb0,fb 30 n: the OT layer
+TextLogicWaitOrHelp,0x55aed0,fb 32 id: circle / start goes on; triangle opens a help window first
+TextLogicSpeaker,0x55af70,fb 33 b: the speaker byte
+TextLogicHitPoints,0x55afa0,fb 34 n: the player's hit points
+TextLogicWeaponEnergy,0x55afe0,fb 35 n: the special weapon's energy
+TextLogicAddCounter,0x55b020,fb 37 k v: a counter or the zenny
+TextLogicAskInWindow,0x55b090,fb 38 id n targets: a question in another window, then by its answer
+TextLogicSmallLayout,0x55b160,fb 3a
+TextLogicWarp,0x55b1b0,fb 3c: a warp to a stage / room
+TextLogicInsertItemName,0x55b330,fb 3d: the window's item's name
+TextLogicBalance,0x55b3b0,fb 3e n: the good / bad balance
+TextLogicJumpByBalanceTier,0x55b3e0,fb 3f t0 t1 t2
+TextLogicToolKitBalance,0x55b440,fb 40 n
+TextLogicJumpByToolKitTier,0x55b470,fb 41 t0 t1 t2
+TextLogicJumpByCounter,0x55b4d0,fb 42 k v ge lt: by a counter or the zenny
+TextLogicSetFlagByChoice,0x55b560,fb 43 n flags: the answer's event flag
+TextLogicInsertPlace,0x55b600,fb 44: a place's name
+TextLogicJumpByDockCounter,0x55b6c0,fb 47 i v ge lt
+TextLogicLoadRecordTime,0x55b730,fb 48 k: a best time into the window
+TextLogicNameRecord,0x55b8b0,fb 4a k: a best time's name entered
+TextLogicClearRecordName,0x55b9c0,fb 4b k
+TextLayoutSkipOne,0x557610
+TextLayoutSkipThree,0x557620
+TextLayoutSkipFour,0x557630
+TextLayoutSkipFive,0x557640
+TextLayoutSkipSix,0x557650
+TextLayoutSkipSeven,0x557660
+TextLayoutSkipEight,0x557670
+TextLayoutSkipNine,0x557680
+TextLayoutSkipThirteen,0x557690
+TextLayoutSkipFourteen,0x5576a0
+TextLayoutSkipTwo,0x55a3f0
+TextLayoutNewLine,0x5597d0,fc
+TextLayoutRubyGlyph,0x5598f0,fe: the glyph and its ruby
+TextLayoutColour,0x559c70,fb 0a c: the text colour
+TextLayoutColourBack,0x559cc0,fb 0b: the previous colour
+TextLayoutChoiceOption,0x559de0,fb 0f i: an option's colour
+TextLayoutSkipOptions,0x559ed0,fb 10 / 39: past the option table
+TextLayoutSkipJumps,0x55a180,fb 11: past the jump table
+TextLayoutSkipWindows,0x55a260,fb 13 / 38: past the id list
+TextLayoutReturn,0x55a560,fb 1f
+TextLayoutInsertString,0x55a5d0,fb 20
+TextLayoutInsertNumber,0x55a680,fb 21
+TextLayoutInsertKeyName,0x55a780,fb 22
+TextLayoutInsertTime,0x55aaf0,fb 23
+TextLayoutPenShift,0x55ae60,fb 2e dx: the pen moved
+TextLayoutInsertItemName,0x55b380,fb 3d
+TextLayoutInsertPlace,0x55b630,fb 44
+TextLayoutLoadSaveSlot,0x55b660,fb 45 slot: a save slot's summary into the window
+# the empty routine (a bare ret) many tables point at
+EmptyRoutine,0x52ef00,does nothing
+# game/player/player_update: the player's states (exe table 0x8c4f5c) and sub-state input / motion handlers (0x8c4fc0 / 0x8c4f6c)
+PlayerInitState,0x575330
+PlayerPlayingState,0x575440
+PlayerDeadState,0x57b6d0
+PlayerScriptedUpdate,0x57b710
+PlayerIdleInput,0x579110
+PlayerRunInput,0x5794c0
+PlayerTurnInPlaceInput,0x579ab0
+PlayerTurnInPlaceMotion,0x576750
+PlayerJumpInput,0x579db0
+PlayerIdleMotion,0x575a70
+PlayerRunMotion,0x575d70
+PlayerJumpMotion,0x576ad0
+PlayerRunningJumpMotion,0x576d20
+PlayerSideHopMotion,0x577810
+PlayerBarHangMotion,0x577a60
+PlayerLiftMotion,0x578b10
+PlayerBarHangInput,0x579e40
+PlayerLedgeHangInput,0x579e60
+PlayerLedgeHangMotion,0x577c70
+PlayerWalkInput,0x579310
+PlayerWalkMotion,0x575bc0
+PlayerQuickTurnMotion,0x576840
+PlayerSideStepInput,0x579c70
+PlayerSideStepMotion,0x576990
+PlayerLookInput,0x579e80
+PlayerLookMotion,0x577f30
+PlayerTalkMotion,0x578d40
+PlayerEventPoseMotion,0x578e90
+PlayerItemGetMotion,0x578fd0
+PlayerSkateInput,0x5799f0
+PlayerSkateMotion,0x576240
+PlayerTryLedgeGrab,0x579e30
+PlayerSkateFallMotion,0x577640
+PlayerKnockBackInput,0x579ee0
+PlayerKnockBackMotion,0x5786d0
+PlayerKnockDownMotion,0x578810
+PlayerHeldInput,0x579f00
+PlayerHeldMotion,0x578c60
+# game/camera_script: the script camera's easing curves (exe table 0x89b6b0)
+CameraEaseLinear,0x512360
+CameraEaseCosine,0x512460
+CameraEaseOut,0x512510
+CameraEaseIn,0x512590
+# game/event: the event modes' runners (exe table 0x8ae928)
+EventTalk,0x5436a0
+EventPose,0x5438f0,Pose and PoseThenItem
+EventItemGet,0x543970
+EventStandThenItem,0x543a40
+# game/shop: the shop's script block handlers (exe table 0x8d1c94) and its menus' (0x8d1ca0; buy / sell steps 0x8d1cb0 / 0x8d1cbc)
+ShopSetUp,0x5d1e50
+ShopMenus,0x5d1ec0
+ShopGoodbye,0x5d1ef0
+ShopMainMenu,0x5d1ff0
+ShopBuyMenu,0x5d2130
+ShopSellMenu,0x5d2150
+ShopUpgradesMenu,0x5d27b0
+ShopPageMenu,0x5d2170
+ShopListMenu,0x5d22b0
+# game/player/player_weapons: the arms' handlers (exe tables 0x8c4f40 / 0x8c4ef8)
+PlayerBusterArm,0x573150,the buster's arm (every buster)
+PlayerGenericSpecialArm,0x572aa0,weapons 1..3, 5..7, 9, 13, 14, 16
+PlayerCannonArm,0x572c50,weapon 4 (the Buster Cannon)
+PlayerExtinguisherArm,0x572d10,weapon 15
+PlayerBladeArm,0x572e50,weapon 11
+# game/exit_transitions: the transition kinds' script states (exe tables 0x88c5b8 .. 0x88c968)
+PassageStart,0x42bd60
+TransitionSequence,0x42d4c0,the camera and step sequence of a transition
+PassageEnd,0x42c190
+WalkOffStart,0x42d280
+WalkOffEnd,0x42d500
+DoorActorStart,0x42d5c0
+TransitionHandshakeEnd,0x42c5f0
+HingedDoorStart,0x42a8c0
+HingedDoorEnd,0x42ab50
+DoubleDoorStart,0x42ac60
+DoubleDoorEnd,0x42afb0
+SlidingPairStart,0x42b0f0
+SlidingPairEnd,0x42b430
+PitStart,0x42c4d0
+PitWait,0x42c5c0
+# the scripts' shared sequence state (state 1 of many script and transition tables)
+ScriptSequenceState,0x53f090,a script's camera and step sequence
+# game/message_triggers: the story triggers' conditions by variant (exe table 0x88bec0)
+TriggerAtOnce,0x4264a0,fires at once
+TriggerInPlanarReach,0x4264b0,the player within range * 0x100 on x / z (the first tick arms)
+TriggerInReach,0x426530,the player within range * 0x100 in 3D
+TriggerCrossedXUp,0x4265a0,the player's x crossed the line params[0] upward
+TriggerCrossedXDown,0x426600,the player's x crossed the line params[0] downward
+TriggerCrossedZUp,0x426660,the player's z crossed the line params[2] upward
+TriggerReachedZ,0x4266c0,z <= the line and the previous z below it (as the exe compares)
+TriggerAllFlags,0x426720,the three flags params[0..2] set
+TriggerFlagsByMask,0x426750,the flags set where the mask has the bit, clear elsewhere
+TriggerSpecialWeapon,0x426730,the saved special weapon == params[0]
+TriggerCountdown,0x4267c0,params[0] counted down to 0
+# game/sky_arc: the sky arc's states (exe table 0x889f80)
+SkyArcStart,0x417510
+SkyArcDraw,0x417540
+# content/subruins/subruin_rooms: the sub-ruins' room handlers (exe tables 0x8cd624 .. 0x8cd748)
+St4dSub0Locks,0x58b5e0,ST4D sub 0: the lock flags 0 / 1 cleared
+St4dLockCleared,0x58b600,ST4D subs 1..3 / 5: the lock flag cleared
+St4dCellAWatch,0x58b610,ST4D sub 4: its cell and flag
+St4dSub6Group,0x58b6e0,ST4D sub 6 (layouts A / C): the lock flag cleared then group 10 once the object group is marked
+St4dCellBWatch,0x58b760,ST4D sub 7: its cell and flag
+St4dSub8Lock,0x58b830,ST4D sub 8 (and sub 6 of layout B): the lock flag cleared
+St4fSub7Roll,0x58b9d0,ST4F sub 7: group 7 and the stage's roll record
+St4fSub11Records,0x58bab0,ST4F sub 11: its 2 records with the doors locked
+St4fSub12Record,0x58bb40,ST4F sub 12: its record
+St50Sub9Group,0x58be50,ST50 sub 9: groups 10 / 9 with the doors locked
+St50Sub10Record,0x58bf10,ST50 sub 10: its record
+SubruinGroup0,0x58bc10,encounter group 0 in the zone slot, the door test
+SubruinGroup1,0x58bc50,encounter group 1 in the zone slot, the door test
+SubruinGroup2,0x58bc90,encounter group 2 in the zone slot, the door test
+SubruinGroup3,0x58bcd0,encounter group 3 in the zone slot, the door test
+SubruinGroup4,0x58bd10,encounter group 4 in the zone slot, the door test
+SubruinGroup5,0x58bd50,encounter group 5 in the zone slot, the door test
+SubruinGroup6,0x58bd90,encounter group 6 in the zone slot, the door test
+SubruinGroup7,0x58bdd0,encounter group 7 in the zone slot, the door test
+SubruinGroup8,0x58be10,encounter group 8 in the zone slot, the door test
+SubruinGroup9,0x58ba30,encounter group 9 in the zone slot, the door test
+SubruinGroup10,0x58ba70,encounter group 10 in the zone slot, the door test
+# game/transition: the room handlers the door test names (exe room handler tables 0x8cab00 / 0x8cab50 / 0x8cd690 / 0x8cd7b8)
+RoomDoorScript,0x582490,runs the transition script on flag 0x700 and nothing else
+St2eRoom4Handler,0x584a60
+St4eRoom4Handler,0x58b900
+St51Room1Handler,0x58bf80
+St51Room2Handler,0x58c010
+# game/travel: the destinations' callbacks (exe table 0x89f938)
+TravelPickNextOnMapE,0x518820,the next story +1 on map 0xe
+TravelPickFirstDrop,0x518830,on map 1 the first drop to ST49 sub 2
+TravelPickNoFlight,0x518880,no flight
+TravelPickNextOnMap2,0x518890,the next story +1 on map 2
+TravelPickSt46,0x5188b0,on map 5 to ST46
+TravelPickNextOrSt39,0x5188f0,the next story on map 7 / ST39 on map 0x11
+TravelPickNextOnMapB,0x518940,the next story +1 on map 0xb
+# game/turret_bullet: the bullet sub-classes by variant (exe table 0x8d1168)
+TurretBulletHoming,0x5c4250
+# content/calbania/st32_quiz: the story scripts' handlers (exe table 0x89b6d0)
+QuizShowScript,0x525af0
+# content/forbidden_island/elephant_boss: the story scripts' handlers (exe table 0x89b6d0)
+ElephantScript28,0x524a30
+ElephantScript29,0x525480
+# content/forbidden_island/st11_script2a: the story scripts' handlers (exe table 0x89b6d0)
+St11Script2a,0x525680
+# content/forbidden_island/st1c_script13: the story scripts' handlers (exe table 0x89b6d0)
+St1cScript13,0x51bb10
+# content/forbidden_island/st3e_reports: the story scripts' handlers (exe table 0x89b6d0)
+St3eScript64,0x538520
+# content/forbidden_island/st49_landing: the story scripts' handlers (exe table 0x89b6d0)
+St49LandingScript,0x51dd90
+# content/intro/attract: the story scripts' handlers (exe table 0x89b6d0)
+St02AttractScript,0x5129e0
+St03AttractScript,0x513740
+# content/intro/crash_landing_script: the story scripts' handlers (exe table 0x89b6d0)
+CrashLandingScript,0x516520
+# content/intro/mission_result: the story scripts' handlers (exe table 0x89b6d0)
+MissionResultScript,0x519df0
+# content/intro/opening_script: the story scripts' handlers (exe table 0x89b6d0)
+OpeningScript,0x5151c0
+# content/intro/st39_script68: the story scripts' handlers (exe table 0x89b6d0)
+St39Script68,0x5397d0
+# content/late_game/ch4_story: the story scripts' handlers (exe table 0x89b6d0)
+Ch4ArrivalScript,0x53a0c0
+Ch4RidingScript,0x537b20
+# content/late_game/end_scripts: the story scripts' handlers (exe table 0x89b6d0)
+EndScript75,0x53e880
+EndScript6d,0x53aec0
+EndScript3f,0x52bc40
+EndScript6f,0x53c3f0
+StaffRollScript,0x53bb60
+# content/late_game/st4b_scripts: the story scripts' handlers (exe table 0x89b6d0)
+St4bRetreatScript,0x5357a0
+St4bEscapeScript,0x535b00
+# content/late_game/st4b_st4c_rooms: the story scripts' handlers (exe table 0x89b6d0)
+St4bScript59,0x533b20
+# content/late_game/st4c_story: the story scripts' handlers (exe table 0x89b6d0)
+St4cIntroScript,0x53a4a0
+St4cOutroScript,0x53aa60
+# content/late_game/st53_story: the story scripts' handlers (exe table 0x89b6d0)
+St53SnowTrackScript,0x537260
+St53RideScript,0x5376b0
+# content/late_game/st54_clear_screen: the story scripts' handlers (exe table 0x89b6d0)
+ClearScreenScript,0x53ef40
+# content/manda/manda_ruin_scripts: the story scripts' handlers (exe table 0x89b6d0)
+MandaRuinScript9,0x518d60
+MandaRuinScriptA,0x5191a0
+MandaRuinScriptB,0x5195d0
+MandaRuinScriptC,0x519a20
+MandaRuinScript1a,0x51ecc0
+MandaRuinScriptE,0x51a660
+MandaRuinScriptF,0x51a980
+# content/manda/st24_ruin_gate: the story scripts' handlers (exe table 0x89b6d0)
+St24GateScript,0x51d140
+# content/manda/st25_tron_scenes: the story scripts' handlers (exe table 0x89b6d0)
+St25TronScript1b,0x51f0c0
+St25TronScript1c,0x520050
+# content/nino/ch2_scripts: the story scripts' handlers (exe table 0x89b6d0)
+Ch2TakeOffScript,0x527810
+Ch2LandingScript,0x52b910
+Ch2CityGateScript,0x527d30
+Ch2CraneDoneScript,0x528310
+Ch2CannonDoneScript,0x5287f0
+Ch2LookAroundScript,0x52b7c0
+Ch2ShipsDoneScript,0x528e30
+Ch2ShipFightScript,0x529270
+Ch2GunshipDownScript,0x529890
+# content/nino/st16_script33: the story scripts' handlers (exe table 0x89b6d0)
+St16CatchScript,0x528020
+# content/nino/st35_scripts: the story scripts' handlers (exe table 0x89b6d0)
+St35WakesScript,0x51d3e0
+St35BeatenScript,0x51d740
+St35DropsInScript,0x51d9e0
+St35DissolvesScript,0x51e8d0
+# content/nino/st37_scripts: the story scripts' handlers (exe table 0x89b6d0)
+St37OpeningScript,0x536ec0
+# content/saul_kada/fire_ruin_depths_scripts: the story scripts' handlers (exe table 0x89b6d0)
+FireRuinEdgeScript,0x52ea50
+FireRuinReturnScript,0x52ef50
+FireRuinBeatenScript,0x52f320
+FireRuinLeaveScript,0x52f5e0
+# content/saul_kada/fire_ruin_entrance_scripts: the story scripts' handlers (exe table 0x89b6d0)
+FireRuinEntranceScript,0x52ce90
+FireRuinGateScript,0x52d5a0
+FireRuinDepthsScript,0x52de50
+FireRuinRubbleScript,0x52e2e0
+# content/saul_kada/fire_ruin_visit_scripts: the story scripts' handlers (exe table 0x89b6d0)
+FireRuinEscapeEveScript,0x526fa0
+FireRuinHallScript,0x538390
+FireRuinVisitScript,0x526b40
+# content/saul_kada/pirate_base_scripts: the story scripts' handlers (exe table 0x89b6d0)
+PirateBaseGateScript,0x535f80
+PirateBaseArrivalScript,0x5366b0
+PirateBaseVictoryScript,0x536b60
+# content/saul_kada/st33_key_script: the story scripts' handlers (exe table 0x89b6d0)
+St33KeyDropScript,0x527360,script 0x2f's handler
+# content/saul_kada/st48_sand_script: the story scripts' handlers (exe table 0x89b6d0)
+St48SandScript,0x533820
+# content/yosyonke/abandoned_mine_exit: the story scripts' handlers (exe table 0x89b6d0)
+AbandonedMineExitScript,0x51b820
+# content/yosyonke/abandoned_mine_scripts: the story scripts' handlers (exe table 0x89b6d0)
+AbandonedMineLiftScript,0x531840,script 0x50 (states 0x8a9e80)
+AbandonedMineHallScript,0x532090,script 0x51 (states 0x8a9fe0)
+AbandonedMineEntranceScript,0x532560,script 0x52 (states 0x8aa098)
+AbandonedMineEndScript,0x532790,script 0x53 (states 0x8aa100)
+AbandonedMineDeviceScript,0x5329c0,script 0x54 (states 0x8aa258)
+# content/yosyonke/arrival: the story scripts' handlers (exe table 0x89b6d0)
+ArrivalDescentScript,0x532ec0
+ArrivalCabinScript,0x5302d0
+# content/yosyonke/ice_ruin_scripts: the story scripts' handlers (exe table 0x89b6d0)
+IceRuinShrinkScript,0x52f8f0,0x48
+IceRuinCritterScene,0x52fb60,0x49
+IceRuinTutorialScript,0x52fe00,0x4a
+IceRuinTutorialScene,0x530010,0x4b
+# content/yosyonke/st05_entry_list: the story scripts' handlers (exe table 0x89b6d0)
+St05EntryListScript,0x53dd20
+# content/yosyonke/town_side_scripts: the story scripts' handlers (exe table 0x89b6d0)
+ExamDoorsScript,0x524540
+St06VoiceScript,0x53d060
+BystanderScript,0x53d3b0
+VisitorScript,0x53d640
+# content/yosyonke/town_story: the story scripts' handlers (exe table 0x89b6d0)
+JunkShopScript,0x5305d0
+RollRunsOffScript,0x531030
+JoesLabScript,0x531210
+TrainLostScript,0x53d220
+# game/story: the story scripts' handlers (exe table 0x89b6d0)
+StageCallbackScript,0x5128f0,script 8: the stage callback StageState::script8Callback
+ContentCallbackScript,0x512900,script 0x30: the stage callback StageState::script30Callback (the content's)
+TravelScript,0x517f30,the travel map's script (game/travel)
+# content/calbania/st24_script56: the story scripts' handlers (exe table 0x89b6d0)
+St24Script56,0x533220,script 0x56
+# content/calbania/appo_dah_b: the script puppets' routines (exe tables 0x894e88 / 0x894eb8)
+AppoDahScript1dAppo,0x4c6070
+AppoDahScript1dDah,0x4c6310
+AppoDahScript1fPuppet,0x4c6bb0
+# content/calbania/st21_props: the rising model's step routines (exe table 0x8ce054)
+St21RisingModelRise,0x5958d0
+St21RisingModelBob,0x595ae0
+St21RisingModelSink,0x595b20
+St21RisingModelDrift,0x595cf0
+# content/calbania/ch3_story: the story scripts' handlers (exe table 0x89b6d0)
+CalbaniaArrivalScript,0x533520
+TownFirstVisitScript,0x51b090
+SquareOpeningScript,0x520c70
+SquareSecondPhaseScript,0x5212a0
+SquareThirdPhaseScript,0x521760
+SquareWallLiftScript,0x521c60
+BaseEntranceScript,0x522100
+BaseCameraScript,0x522450
+RescueScript,0x5235f0
+BrotherHeldScript,0x522c70
+BrotherFreedScript,0x522f30
+BaseExplosionScript,0x523e90
+TownReturnScript,0x51b390
+CalbaniaDepartureScript,0x539a60
+NinoAttackEndScript,0x52ab20
+RollToMachineScript,0x52a290
+NinoReturnScript,0x529ac0
+IslandBlownScript,0x52b3b0
+St3eKeyReport65,0x538c30,script 0x65: a ruin key reported
+St3eKeyReport66,0x539010,script 0x66
+St3eKeyReport67,0x5393f0,script 0x67
+# content/intro/st02_attract_cast: the attract cast's variant routines
+St02CastPropDrifts,0x48a250
+St02CastDrifts,0x59d0a0
+St02CastRollFirst,0x475e00
+St02CastRollSecond,0x476610
+St02CastBarrelFirst,0x47c0b0
+St02CastBarrelSecond,0x47c590
+St02CastPlaced,0x59ae40
+St02CastWatcherLooks,0x47f950
+St02CastWatcherWalks,0x47f990
+St02CastWatcherWalksLater,0x47f9f0
+St02CastWatcherOnce,0x47fa50
+St02CastScreenShows,0x4b5db0
+St02CastBlinkerBlinks,0x484a30
+St02CastStanderStands,0x4890b0
+St02CastTalkerLines,0x480700
+St02CastFaceLines,0x481f20
+St02CastSpeakerLines,0x48b070
+# content/intro/st03_attract_cast: the attract cast's variant routines
+St03CastCarrierWalksIn,0x47ec40
+St03CastCarrierTalks,0x47f460
+St03CastWalkerWaits,0x481210
+St03CastWalkerWalks,0x481510
+St03CastFlutterBobs,0x49d940
+St03CastFlutterLifts,0x49d9e0
+St03CastPlacedStill,0x58d9e0
+St03CastPlacedTurning,0x58da30
+St03CastPlacedMovedA,0x58da90
+St03CastPlacedMovedB,0x58db10
+St03CastRollTalks,0x477090
+St03CastRollLater,0x477440
+St03CastRollLast,0x4775e0
+St03CastBarrelPlaced,0x47c8c0
+St03CastBarrelTurns,0x47ca30
+St03CastBarrelTalksLate,0x47cac0
+CastBarrelTalks,0x47ce60
+CastBarrelStill,0x47d060
+CastBarrelStillB,0x47d0e0,the last two alike
+St03CastWatcherStill,0x47fbb0
+St03CastWatcherComes,0x47fc20
+St03CastWatcherSparks,0x47fda0
+St03CastWatcherCarries,0x47fed0
+St03CastWatcherHoldsA,0x480000
+St03CastWatcherHoldsB,0x480090
+St03CastBodyWalks,0x499760
+St03CastBodyHops,0x4999b0
+St03CastBodyRides,0x49a110
+St03CastBodyRidesLater,0x49a2a0
+St03CastBlinkerMoves,0x484d50
+St03CastStanderMoves,0x489210
+St03CastPartBlinks,0x499430
+St03CastScreenStill,0x4b5e90
+St03CastCraftSinks,0x4baf70
+St03CastCraftFlies,0x4bb000
+St03CastCraftReturns,0x4bb330
+St03CastTalkerLines,0x480b20
+St03CastFaceLines,0x4822c0
+St03CastSpeakerLines,0x48b440
+# content/intro/crash_landing_cast: the crash-landing cast's variant routines
+CrashCastPropDrifting,0x48a3a0
+CrashCastPropFalling,0x48a460
+CrashCastPropLarge,0x48a590
+CrashCastPropSmall,0x48a620
+CrashCastPropHuge,0x48a6b0
+CrashCastPropHugeB,0x48a740
+CrashCastPropTrailing,0x48a7d0
+CrashCastRollTalk,0x477800
+CrashCastRollLater,0x477ce0
+CrashCastRollSub3,0x477ee0
+CrashCastRollLate,0x478020
+CrashCastSecondBodyTalk,0x49a850
+CrashCastSecondBodyIdle,0x49aad0
+CrashCastSecondBodyStill,0x49ab70
+CrashCastSecondBodyBlink,0x49ac00
+CrashCastSecondBodySpeech,0x49acb0
+CrashCastTalker,0x4b0ed0
+CrashCastCraftParked,0x4bbca0
+CrashCastCraftLeaving,0x4bbd20
+CrashCastJetLeader,0x4fab00
+CrashCastJetFighter,0x4fac60
+CrashCastJetCompanion,0x4fae60
+CrashCastWatcher,0x480240
+CrashCastFaceFirst,0x4824e0
+CrashCastFaceLater,0x482670
+CrashCastSpeakerFirst,0x48b650
+CrashCastSpeakerLater,0x48b730
+# content/intro/crash_landing: the storm's clouds, the falling pieces and the craft by variant
+CrashCloudPuffs,0x598bd0
+CrashCloudPuffsSmall,0x599100
+CrashCloudScroll,0x599e50
+CrashCloudQuad,0x59a670
+CrashCloudSprites,0x599580
+CrashCloudYawFollow,0x599a50
+CrashCloudYawFollowOne,0x59a3e0
+CrashPieceDives,0x5cbf40
+CrashPieceFalls,0x5cc090
+CrashCraftArriving,0x4bb820
+CrashCraftLanding,0x4bb9b0
+CrashCraftDiving,0x4bbb20
+# content/intro/opening_cast: the opening cast's variant routines
+OpeningCastCrewWatcher,0x4e9bf0,variant 0: keyed by the step sub and tick, placed for the talk
+OpeningCastCrewWalker,0x4ea000,variant 1: turns and walks off at step sub 6
+OpeningCastCrewScript68,0x4ea120,variant 2: script 0x68's (content/intro/st39_script68)
+OpeningCastTalkerArriving,0x4af8c0,variant 0: arrives, keyed on the step tick
+OpeningCastTalkerTalking,0x4afc70,variant 1: the long talk, the choice, the end
+# content/intro/attract_effects: the attract's lightning variants and ring flash states
+AttractEmitter,0x59afe0
+AttractFlashingEmitter,0x59b0f0
+AttractBolt,0x59b240
+AttractRingFlashInit,0x4236c0
+AttractRing,0x423730
+AttractFlash,0x423bf0
+# content/intro/attract: ST02's room handlers
+AttractStartsScript3,0x57bb50
+# content/intro/st02_attract_script: script 3's states
+St02Script3SetUpState,0x512a00
+ScriptCastStepsState,0x537c50,the steps runner with the cast's copy of the timeline (shared by the scripts)
+St02Script3WrapUpState,0x512a80
+# content/intro/st03_attract_script: script 4's states
+St03Script4SetUpState,0x513760
+St03Script4StepsState,0x5137b0
+St03Script4WrapUpState,0x513810
+# content/intro/opening_script: the opening script's states
+OpeningSetUpState,0x5151e0
+ScriptStepsState,0x53a5e0,the steps runner (shared by the scripts)
+OpeningWrapUpState,0x515310
+# content/intro/mission_result: the result script's states
+MissionResultSetUpState,0x519e10
+MissionResultStepsState,0x519f60
+MissionResultWrapUpState,0x519fb0
+# content/intro/fire_mission_rooms: ST1E's room handlers
+FireMissionRoom0,0x580750
+FireMissionRoom1,0x5808d0
+FireMissionRoom2,0x580a70
+# content/intro/st39_script68: script 0x68's states and cast
+St39SetUpState,0x5397f0
+St39TimerState,0x5398e0
+St39WrapUpState,0x539970
+St39CastMember,0x44ba00
+# content/intro/burning_data: the result scene's sub-state routines (exe tables via 0x8964d4)
+BurningDataSceneHop,0x4ea360
+BurningDataSceneBurnt,0x4ea470
+# content/yosyonke/dev_room: the development room's script states
+DevRoomRollSetUp,0x545e80
+DevRoomRollEnd,0x546010
+DevRoomNinoSetUp,0x548670
+DevRoomNinoEnd,0x5487a0
+# content/yosyonke/flutter_cabin: the cabin NPC's variants
+FlutterCabinCabinNpc,0x4e74c0
+# content/yosyonke/st05_entry_list: the entry list's script and menu states
+St05EntryListEntryScriptSetUp,0x53dd40
+St05EntryListEntryScriptMenu,0x53dd80
+St05EntryListEntryScriptWrapUp,0x53ddb0
+St05EntryListEntryMenuList,0x53de50
+St05EntryListEntryMenuText,0x53dfb0
+# content/yosyonke/st09_props: the still model's states
+St09StillModelBind,0x5b6a40
+StaticFreedState,0x5afdd0,the static freed (shared by the static classes)
+# content/yosyonke/town_side_scripts: the side scripts' states
+TownSideExamDoorsSetUp,0x524560
+TownSideExamDoorsSteps,0x5247c0
+TownSideExamDoorsWrapUp,0x524810
+TownSideSt06VoiceSetUp,0x53d080
+TownSideSt06VoiceWrapUp,0x53d0e0
+TownSideBystanderSetUp,0x53d3d0
+TownSideBystanderSteps,0x531310
+TownSideBystanderWrapUp,0x53d4a0
+TownSideVisitorSetUp,0x53d660
+TownSideVisitorWrapUp,0x53d870
+# content/yosyonke/town_story_cast: the town story cast's variants
+TownCastJunkShopRoll,0x447cd0
+TownCastJunkShopClerk,0x448090
+TownCastJunkShopThird,0x448220
+TownCastRunningRoll,0x4483f0
+TownCastJoesLabRoll,0x448750
+TownCastJoesLabMaria,0x448a20
+TownCastSt47Person,0x447710
+# content/late_game/ch4_story: chapter 4's script states, train steps and exam handlers
+Ch4ArrivalSetUp,0x53a0e0
+Ch4StepRunner,0x52f420
+Ch4ArrivalEnd,0x53a160
+Ch4TrainBrake,0x5b6b80
+Ch4RidingSetUp,0x537b40
+Ch4RidingEnd,0x537cb0
+# content/late_game/st4b_scripts: ST4B's script and cast states
+St4bRetreatOpening,0x5357c0
+St4bRetreatSteps,0x5358e0
+St4bRetreatEnd,0x535940
+St4bEscapeOpening,0x535b20
+St4bEscapeSteps,0x535c50
+St4bEscapeEnd,0x535ca0
+St4bRetreatBind,0x4bc9e0
+St4bRetreatRun,0x4bca50
+St4bCastFree,0x468fa0
+St4bEscapeBind,0x4bcea0
+St4bEscapeRun,0x4bcf00
+St4bStillBind,0x48ae70
+# content/late_game/st53_story: ST53's script states
+St53SnowTrackOpening,0x537280
+St53SnowTrackEnd,0x537360
+St53RideOpening,0x5376d0
+St53RideEnd,0x5377b0
+# content/late_game/st54_clear_screen: the clear screen's states
+ClearScreenOpening,0x53ef60
+ClearScreenClosing,0x53f0c0
+# content/late_game/st54_props: the swing's states
+St54BindRoutine,0x5b7ee0
+St54SwingRoutine,0x5b7f60
+# content/late_game/st4c_story: ST4C's script states
+St4cIntro0,0x53a4c0
+St4cIntro2,0x53a640
+St4cOutro0,0x53aa80
+St4cOutro2,0x53aba0
+# content/saul_kada/st2b_props: the props' routines (exe tables 0x8cdd54 / 0x8cdd60)
+St2bPropPotMain,0x590800
+St2bPropPotWait,0x590960
+St2bPropPotRest,0x590970
+St2bPropPotCarried,0x5909d0
+St2bPropPotFlight,0x590aa0
+St2bPropPotBreak,0x590b00
+St2bPropRebindInPlace,0x5904f0
+St2bPropPlateBind,0x590cf0
+St2bPropSwitchRun,0x590bc0
+St2bPropPlateRun,0x590d50
+
+# game/actors: the game's own actor classes (their update: the class tables' entries)
+TownNpcUpdate,0x441950,Maybe_TownWalkerUpdate (town NPC: route walker / stationary, talk)
+DoorActorUpdate,0x59ce50,door actor (talk -> transition kind 0xe)
+DoorLeafHingedUpdate,0x5628b0,door leaf, hinged (transition kind 0)
+DoorLeafDoubleUpdate,0x562b50,door leaf, double hinged (transition kind 1)
+DoorLeafSlidingUpdate,0x562e10,door leaf, sliding (transition kind 2)
+SignUpdate,0x58d6e0,sign / notice you read (static pool type 0: ST09, ST19, ST20 ...)
+SnowUpdate,0x591640,static type 2: the snow of the towns (ST08 / ST09 / ST0B / ST1C / ST5A; game/snow)
+WallCrumbleUpdate,0x419a20,pool e0 type 9: a breakable wall crumbling (the breakable segments' reaction; game/wall_crumble)
+BombUpdate,0x5a7330,static type 0x22: the bomb (ST15 gunships 0x59d310 / ST30 0x59f880 drop it, ST18 bombers carry it; game/bomb)
+LiftBoxUpdate,0x5a89b0,static type 0x25: the box you lift / carry / throw and stand on (ST16 ...; game/lift_box)
+RiderFollowUpdate,0x4250d0,pool 0xe0 type 0x14: an actor standing on a platform follows it (game/carry)
+ServbotUpdate,0x4628b0,Maybe_ServbotUpdate (servbots, pool 0x20 type 0xb: route / stand / talk, hit reactions)
+TownKickUpdate,0x56bde0,pool 0x10 type 0: the town's kick (game/shots/buster)
+BusterShotUpdate,0x56bfa0,pool 0x10 type 1: the buster shot (game/shots/buster)
+HitSparkUpdate,0x55d210,pool 0xa0 type 0: the hit spark (game/hit_effects)
+BurstUpdate,0x55d3c0,pool 0xa0 type 1: a shot's burst (game/hit_effects)
+PickupUpdate,0x562240,static type 0: a pickup (zenny / energy / life drop; game/pickups)
+ExplosionUpdate,0x564370,static type 8: the death explosion (game/explosions)
+HurtSparksUpdate,0x566130,static type 13: the player's hurt sparks (game/hit_effects)
+DrainBurnMarkerUpdate,0x5684a0,static global type 0x12: the player's drain / burn status marker (draw commands; game/status_markers)
+SlowMarkerUpdate,0x568b40,static global type 0x13: the player's slow status marker (OT lightning; game/status_markers)
+PlacedModelUpdate,0x563180,static global type 4: a model put by the player (game/placed_models)
+DarkTrailUpdate,0x563400,static global type 5: the hyper shell's dark trail (draw commands; game/shots/hyper_shell)
+ThrowableUpdate,0x564690,static global type 9: a falling / liftable / throwable object (game/throwable)
+TurningModelUpdate,0x564d60,static global type 0xa: a turning model put by the player (game/placed_models)
+FlashBurstUpdate,0x564e90,static global type 0xb: the buster cannon's flash burst (draw commands, OT spikes; game/shots/buster_cannon)
+WallDebrisUpdate,0x565af0,static global type 0xc: the debris of a broken wall (OT FT4; game/wall_debris)
+ChargeMarkerUpdate,0x566540,static global type 0xe: the charge's marker (game/shots/charge)
+SparkSprayUpdate,0x566d40,static global type 0xf: the reflector's spray of sparks (draw commands; game/shots/reflector)
+EnergyOrbUpdate,0x567080,static global type 0x10: the crusher's energy orb (game/shots/crusher)
+ShellCasingUpdate,0x568260,static global type 0x11: the machine gun's shell casing (draw command; game/shots/machine_gun)
+SparkleUpdate,0x56a110,static global type 0x15: the spread buster's sparkle (game/shots/spread_buster)
+ShockWaveUpdate,0x56aae0,static global type 0x17: the charge's shock wave (game/shots/charge)
+CrystalShotUpdate,0x56b150,static global type 0x18: the hunter seeker's crystal (game/shots/hunter_seeker)
+DrillConeUpdate,0x56b970,static global type 0x19: the drill arm's cone (game/shots/drill_arm)
+ExtinguisherShotUpdate,0x5705a0,pool 0x10 type 14: weapon 15, the extinguisher's stream (game/shots/extinguisher)
+BladeArmShotUpdate,0x56ee10,pool 0x10 type 10: weapon 11, the Blade Arm's swing (game/shots/blade_arm)
+ExtinguisherMistUpdate,0x56a690,static type 0x16: the extinguisher's mist (game/shots/extinguisher)
+DustPuffUpdate,0x55f850,pool 0xa0 global type 7: a dust puff (game/dust_puff)
+StormRibbonUpdate,0x431f50,pool 0xa0 stage type 0xb (ST10 / ST11): the storm ribbon, vertical colour bands (game/storm_ribbon)
+ClutAnimationUpdate,0x55da50,pool 0xa0 global type 2: a CLUT animation (game/clut_animation)
+LineOfSightUpdate,0x418bd0,pool 0xe0 type 7: an actor's line-of-sight probe (game/line_of_sight)
+RoomUvAnimationUpdate,0x418350,pool 0xe0 type 4 (ST00 / ST0A): the room's texture animations (game/room_uv_animation)
+FootstepDustUpdate,0x5acbc0,static type 0x32 (ST45 / ST33): the footstep dust of exe 0x5ad170 (game/footstep_dust)
+SkidSparksUpdate,0x55dec0,pool 0xa0 global type 3: the skid sparks (game/skid_sparks)
+BladeTrailUpdate,0x55e870,pool 0xa0 global type 5: the Blade Arm's trail (game/shots/blade_arm)
+DrillArmShotUpdate,0x571280,pool 0x10 type 0x10: weapon 17, the drill arm (game/shots/drill_arm)
+ShiningLaserShotUpdate,0x56f410,pool 0x10 type 11: weapon 12, the Shining Laser (game/shots/shining_laser)
+ShiningLaserBeamUpdate,0x55fa10,pool 0xa0 global type 8: the laser's charge / beam / fade (game/shots/shining_laser)
+LaserWallSparkUpdate,0x560b70,pool 0xa0 global type 9: the laser's wall spark (game/shots/shining_laser)
+EnemyShotUpdate,0x5c52f0,pool 0x40 type 9: the enemy shot (the ST3A sky ships', the ST28 guns'; game/enemy_shot)
+MissileTrailUpdate,0x5636b0,static type 6: a missile trail (game/missile_trail)
+BlastUpdate,0x563b10,static type 7: a blast ring (game/explosions)
+ScriptedMessageUpdate,0x426950,pool e0 type 0x1d: the scripted message (game/message_triggers)
+SmokeColumnUpdate,0x569870,static type 0x14: a smoke column (a fire put out, the player's orbit status; game/smoke_column)
+TreasureChestUpdate,0x4743c0,Maybe_TreasureChestUpdate (treasure chest: event mode 4 -> item get, content flag)
+WaveTileUpdate,0x425d00,pool e0 type 1 (ST20): a VRAM tile scrolled by a sine of the frame (row 0x88beb8; game/vram_moves)
+FlipBookTilesUpdate,0x425b90,pool e0 type 1 (ST00): 6 flip-book VRAM tiles (rows 0x88be88; game/vram_moves)
+StripScrollUpdate,0x426180,pool e0 type 0x1a (ST4C): a scrolling 16 x 64 texture strip (VRAM image moves; game/vram_moves)
+LavaFlowUpdate,0x425eb0,pool e0 type 0x1a (ST27 sub 8): the fire ruin's flowing lava texture (VRAM image moves, stops with flag 0x683; game/vram_moves)
+CrusherShotUpdate,0x56c6a0,pool 0x10 type 2: weapon 3, the crusher (game/shots/crusher)
+BusterCannonShotUpdate,0x56cad0,pool 0x10 type 3: weapon 4, the buster cannon (game/shots/buster_cannon)
+HyperShellShotUpdate,0x56d1b0,pool 0x10 type 4: weapon 5, the hyper shell (game/shots/hyper_shell)
+HomingMissileShotUpdate,0x56da70,pool 0x10 type 5: weapon 6, the homing missile (game/shots/homing_missile)
+GroundCrawlerShotUpdate,0x56df60,pool 0x10 type 6: weapon 7, the ground crawler (game/shots/ground_crawler)
+VacuumArmShotUpdate,0x56e630,pool 0x10 type 7: weapon 8, the vacuum arm (game/shots/vacuum_arm)
+ReflectorShotUpdate,0x56e730,pool 0x10 type 8: weapon 9, the reflector (game/shots/reflector)
+MachineGunShotUpdate,0x56f8e0,pool 0x10 type 12: weapon 13, the machine gun (game/shots/machine_gun)
+SpreadBusterShotUpdate,0x56ff30,pool 0x10 type 13: weapon 14, the spread buster (game/shots/spread_buster)
+HunterSeekerShotUpdate,0x570e50,pool 0x10 type 15: weapon 16, the hunter seeker (game/shots/hunter_seeker)
+SuctionUpdate,0x55df40,pool 0xa0 global type 4: the vacuum arm's suction (game/suction_effect)
+MachineGunMuzzleUpdate,0x560df0,pool 0xa0 global type 10: the machine gun's muzzle flash (game/shots/machine_gun)
+MachineGunImpactUpdate,0x5616e0,pool 0xa0 global type 11: the machine gun's impact (game/shots/machine_gun)
+TitleModelUpdate,0x42a830,the title screen's model (pool 0x20 type 0, table 0x88c3fc; game/title_model)
+LensFlareUpdate,0x4392a0,ST1C/ST54 pool a0 stage type 0x19: sun lens flare (var 0) + rings/discs/rays/tint/sprite vars 1-6 (dc::emit 0xf4/0xf0/0x2c, otQuadG4; var 5 TILE not drawn; game/lens_flare)
+SandFlowUpdate,0x4262e0,pool e0 type 0x1a (ST48 sub 1 / ST5B): the sand flowing into the pit (VRAM image moves, game/vram_moves)
+TravelIconUpdate,0x5ad1c0,ST01 static type 0x33: the travel map's icons (game/travel)
+MessageTriggerUpdate,0x4263f0,pool e0 type 0x1b: a message trigger (game/message_triggers)
+BlizzardLayerUpdate,0x431af0,pool a0 stage type 9 (ST02 / ST03 / ST10 / ST11 / ST1D / ST49): the scrolling sky / blizzard layer (drawn by game/weather_draw; game/blizzard_layer)
+SkyArcUpdate,0x4174f0,ST00/ST20 pool e0 type 2: screen-space sky arc, subtractive + additive G4 passes (dc::otQuadG4; game/sky_arc)
+FloatingDeviceUpdate,0x4f2c40,pool 0x20 type 0x6f (ST0F / ST4F / ST50 / ST51): the floating device (game/floating_device)
+LightGlowUpdate,0x437fa0,pool a0 stage type 0x13: a light column's glow / its motes (game/light_column)
+LightColumnUpdate,0x598460,static stage type 0x11: a light column (game/light_column)
+RoomFlagClutAnimationsUpdate,0x425140,pool e0 type 0x15: the room-flag CLUT animations (game/clut_animation)
+GuardianReaverbotUpdate,0x455480,pool 0x20 stage type 7 (ST0F sub 12 / ST51): the guardian reaverbot (game/guardian_reaverbot)
+GlowTrailUpdate,0x4309b0,pool a0 stage type 6: a glow riding an actor / its trail (game/glow_trails)
+ShockwaveUpdate,0x5c3ae0,pool 0x40 stage type 3: a ground shockwave (game/shockwave)
+ShockRingUpdate,0x42ec70,pool a0 stage type 3: a shockwave's ring (game/shockwave)
+SparkEmitterUpdate,0x592050,static stage type 3: a spark / smoke emitter (game/spark_emitter)
+ReaverbotWalkerUpdate,0x451c00,pool 0x20 stage type 5: the walking reaverbot (game/reaverbot_walker)
+FieldReaverbotUpdate,0x450310,pool 0x20 stage type 5 sub 0 (ST0D/0E/10/1D/22/2F): the field reaverbot (game/field_reaverbot)
+FieldHoverbotUpdate,0x44bea0,pool 0x20 stage type 3 sub 0 (ST0E/10/22): the field hoverbot (game/field_hoverbot)
+ReaverbotTurretUpdate,0x458400,pool 0x20 stage type 8: the reaverbot turret (game/reaverbot_turret)
+TurretBulletUpdate,0x5c3ee0,pool 0x40 stage type 4: the turret's homing bullet (game/turret_bullet)
+LobbedShotUpdate,0x5c4a90,pool 0x40 stage type 7: a lobbed shot / bomb (game/lobbed_shot)
+ChargeGlowUpdate,0x42ef70,pool a0 stage type 4: the turret's charge glow (game/charge_glow)
+SparkRingsUpdate,0x433750,pool a0 stage type 0xd: spark rings (game/spark_rings)
+SnowReaverbotUpdate,0x4a2a50,pool 0x20 (ST1D / ST2D / ST4F): the snow reaverbot (game/snow_reaverbot)
+BirdbotSoldierUpdate,0x493a60,pool 0x20 type 0x2d (ST15..ST17, ST30 / ST31): the Birdbot soldier (game/birdbot_soldier)
+BirdbotDownUpdate,0x492330,pool 0x20 type 0x2d sub 0: the knocked-down Birdbot (game/birdbot_down)
+WalkerShotUpdate,0x5c6950,pool 0x40 stage type 0x10: the Birdbot soldier's shot (game/walker_shot)
+TankShellUpdate,0x5c6cb0,pool 0x40 stage type 0x11 (ST15 / ST16, ST46): the tank shell (game/tank_shell)
+
+# content/calbania: the area's actor classes (their update: the class tables' entries)
+SpawnerSt1fUpdate,0x41ef20,ST1F e0 type 0xa: story-8 fight (flags 0x580..0x586, 0x599)
+SpawnerSt21Update,0x41f850,ST21 e0 type 0xa: story-8 records, two RNG-placed type-6 actors
+SpawnerSt22Update,0x41f940,ST22 e0 type 0xa: story-8 records
+AlarmFlashUpdate,0x428de0,ST31 pool e0 type 0x2a: the base's alarm, siren + red flash (content/calbania/base_alarm; picture alarmFlashDraw)
+EscapeTimerUpdate,0x4270a0,ST30 pool e0 type 0x22: the escape timer 0xa5a6c8 on screen (content/calbania/escape_timer; picture escapeTimerDraw)
+TronBossUpdate,0x46d7e0,ST25 sub 6: Tron Bonne's tank, the boss after script 0x1b (content/calbania/tron_boss)
+St24RouteNpcUpdate,0x4440f0,ST24 talking route-walker NPC (sibling of 0x441950: route / stationary / talk / face the player; content/calbania/st24_npc)
+AppoDahFightUpdate,0x4c1b30,pool 0x20 ST1F type 0x43 sub 0: Appo / Dah in the fight outside Glyde's base (content/calbania/appo_dah_b)
+Script1dAppoDahUpdate,0x4c5f90,pool 0x20 ST1F type 0x43 sub 1: Appo / Dah of script 0x1d (content/calbania/appo_dah_b)
+Script1fAppoDahUpdate,0x4c6ae0,pool 0x20 ST1F type 0x43 sub 3: Appo / Dah of script 0x1f (content/calbania/appo_dah_b)
+AppoDahBombUpdate,0x5c8220,pool 0x40 ST1F stage type 0x15: the bomb Appo / Dah throw (content/calbania/appo_dah_b)
+AppoDahPuppetUpdate,0x446720,pool 0x20 ST20 type 0 sub 1: Appo / Dah as puppets of scripts 0x10 / 0x11 (content/calbania/calbania_cast)
+SittingPuppetUpdate,0x446b90,pool 0x20 ST20 type 0 sub 2: the sitting puppets of script 0x11 (content/calbania/calbania_cast)
+TownBirdUpdate,0x45d970,pool 0x20 type 0xa sub 0 (ST20 and others): the town birds -- wander, flee, lifted / thrown (content/calbania/calbania_cast)
+TownStandingCastUpdate,0x45f010,pool 0x20 ST20 type 0xa sub 1: a standing cast member (content/calbania/calbania_cast)
+AppoDahGuideUpdate,0x4c4980,pool 0x20 type 0x43 sub 0 (ST21 / ST22, story 8): Appo / Dah guiding through the fields (content/calbania/appo_dah_a)
+AppoDahGatePuppetUpdate,0x4c6650,pool 0x20 type 0x43 sub 2 (ST1F): Appo / Dah puppets of scripts 0x1e / 0x1f (content/calbania/appo_dah_a)
+St24StructureUpdate,0x49d110,ST24 type 0x30 story structure (animated stand-on solid; content/calbania/st24_structure)
+TalkingNpcUpdate,0x449620,standing NPC you talk to (pool 0x20, ST24 type 1; content/calbania/talking_npc)
+TalkingNpcSt17Update,0x4499a0,standing NPC you talk to (pool 0x20, ST17 type 1: the twin of 0x449620 with the hints from the stage bank; content/calbania/talking_npc)
+CarriedNpcUpdate,0x4f2ee0,pool 0x20 type 0x71 (ST30 sub 2 variant 0x81: the one carried out in the escape; content/calbania/carried_npc)
+St1fBirdbotTankUpdate,0x4bd080,pool 0x20 type 0x40 sub 0 (ST1F): the Birdbot tank -- turret head, keeps distance, bursts of pool 0x40 type 9, slope tilt, rideable (content/calbania/st1f_birdbot_tank)
+QuizCastUpdate,0x4e1700,ST32 pool 0x20 types 0x58/0x5f/0x82: quiz host / contestants, talk event, quiz cues +0xc, head look, hit list, collision queues (content/calbania/st32_quiz)
+LurePieceUpdate,0x596e60,static ST21 / ST22: bouncing liftable / throwable lure piece (content/calbania/st21_props)
+St25RisingModelUpdate,0x5957d0,static ST25: script-driven rise / bob / sink with dust (content/calbania/st21_props)
+BurrowerUpdate,0x457480,pool 0x20 type 8 (ST22): the burrower -- rises, walks at / around, throws, flinches, sinks, explodes + drops (content/calbania/st22_burrower)
+Script69CastUpdate,0x49bea0,ST1F pool 0x20 type 0x2f sub 0: script 0x69 cast (record 0x8acd70), texture-track cues (content/calbania/ch3_script_cast)
+Script20AppoDahUpdate,0x4c6fe0,ST1F pool 0x20 type 0x43 sub 4: script 0x20 Appo / Dah (records 0x8a3940..0x8a397c), walk in + talk (content/calbania/ch3_script_cast)
+Script3cCastUpdate,0x4e2da0,ST46 pool 0x20 type 0x5b sub 0: script 0x3c cast (record 0x8a7498) (content/calbania/ch3_script_cast)
+St22FireShotUpdate,0x5c2a60,pool 0x40 ST22 stage type 1: fire projectiles, variants 0-4 (content/calbania/st22_fire_shots)
+GlydeBaseTurretUpdate,0x4e0f50,pool 0x20 type 0x57 (ST30 sub 2): the wall turrets of Glyde's base (content/calbania/glyde_base_turret)
+GlydeBaseGunUpdate,0x4c0350,pool 0x20 type 0x41 (ST30 sub 1) / 0x65: the gun emplacement -- lobbed shells and shots (content/calbania/glyde_base_gun)
+GlydeBaseTankUpdate,0x4bedc0,pool 0x20 type 0x40 sub 1 (ST30 sub 2): Glyde's tanks; the last one -> flag 0x22 + the key (content/calbania/glyde_base_tank)
+GlydeBaseBomberUpdate,0x4967d0,pool 0x20 type 0x2d sub 3 (ST30): the bomb-carrying Birdbots of the base's waves (content/calbania/glyde_base_bombers)
+CellSceneBirdbotUpdate,0x4971c0,pool 0x20 type 0x2d sub 2 (ST31): the Birdbots of scripts 0x23 / 0x24 (content/calbania/glyde_base_scene_birdbots)
+GlydeBaseSceneBirdbotUpdate,0x497590,pool 0x20 type 0x2d sub 2 (ST30): the Birdbots of the base's scripted scenes (content/calbania/glyde_base_scene_birdbots)
+GlydeBaseKeyUpdate,0x5b26d0,ST30 static type 0x42: the base's key items (flags 0x3e5..0x3e7; content/calbania/glyde_base_key)
+
+# content/forbidden_island: the area's actor classes (their update: the class tables' entries)
+St1cRisingPropUpdate,0x48a910,ST1C pool 0x20 type 0x27: a prop of script 0x13 that rises, sparks and bobs (content/forbidden_island/st1c_cast)
+St1cFaceFigureUpdate,0x478120,ST1C pool 0x20 type 0x16: a figure of script 0x13 (content/forbidden_island/st1c_cast)
+St1cMeshFlipFigureUpdate,0x47d160,ST1C pool 0x20 type 0x1a: a figure of script 0x13 (content/forbidden_island/st1c_cast)
+St3eSpeakerUpdate,0x445660,pool 0x20 type 0: a speaker of the ST3E talks (content/forbidden_island/st3e_reports)
+St49FlutterUpdate,0x49dd70,ST49 type 0x30: the Flutter of the landing on the Forbidden Island (content/forbidden_island/st49_landing)
+St49DropshipUpdate,0x4f23a0,ST49 type 0x6d: the dropship of script 0x18 (content/forbidden_island/st49_dropship)
+ParkedDropshipUpdate,0x492270,ST10 type 0x2c: the dropship parked on the Forbidden Island (content/forbidden_island/island_visit)
+IslandDecorationUpdate,0x4acbe0,ST10 type 0x37: sub 1's two-part decoration (content/forbidden_island/island_visit)
+HiddenReaverbotUpdate,0x427440,ST1D pool e0 type 0x24: a reaverbot hidden in the snow (content/forbidden_island/island_visit)
+ReaverbotPackUpdate,0x424d10,ST1D pool e0 type 0x11: the timed reaverbot pack (content/forbidden_island/island_visit)
+CellBlockerUpdate,0x5a37c0,ST10 static type 0x1d: sub 1's cell-blocking statics (content/forbidden_island/island_visit)
+St11FighterUpdate,0x4b3b10,pool 0x20 type 0x3b sub 0 (ST11 sub 0, story 1): script 0x2a fight actor -- approach / circle hops / leap / knockback, gauge 0x415d30, death explosion + drops (content/forbidden_island/st11_boss)
+St1cCuedFigureUpdate,0x4802e0,ST1C pool 0x20 type 0x1d: script 0x13 cast, content/forbidden_island/st1c_cast
+St1cWalkingFigureUpdate,0x480c10,ST1C pool 0x20 type 0x1e: script 0x13 cast, content/forbidden_island/st1c_cast
+St1cPosingFigureUpdate,0x482880,ST1C pool 0x20 type 0x21: script 0x13 cast, content/forbidden_island/st1c_cast
+St1cFidgetingFigureUpdate,0x48ba20,ST1C pool 0x20 type 0x28: script 0x13 cast, content/forbidden_island/st1c_cast
+St1cHoppingFlyerUpdate,0x49af90,ST1C pool 0x20 type 0x2f: script 0x13 cast, content/forbidden_island/st1c_cast
+St1cVanishingWalkerUpdate,0x4b5f00,ST1C pool 0x20 type 0x3c: script 0x13 cast, content/forbidden_island/st1c_cast
+St1cFlyerUpdate,0x4bc020,ST1C pool 0x20 type 0x3f: script 0x13 cast (flight), content/forbidden_island/st1c_cast
+St1cGroundedHopperUpdate,0x4e2230,ST1C pool 0x20 type 0x59: script 0x13 cast, content/forbidden_island/st1c_cast
+St1cFallingFigureUpdate,0x4e25f0,ST1C pool 0x20 type 0x5a: script 0x13 cast, content/forbidden_island/st1c_cast
+St1cGlowingFigureUpdate,0x4e3a80,ST1C pool 0x20 type 0x5d: script 0x13 cast + effect a0/0x19 sub 3, content/forbidden_island/st1c_cast
+St1cHopperUpdate,0x4eef30,ST1C pool 0x20 type 0x68: script 0x13 cast, content/forbidden_island/st1c_cast
+St1cIdleFigureUpdate,0x4f1550,ST1C pool 0x20 type 0x6b: script 0x13 cast, content/forbidden_island/st1c_cast
+St10RollerUpdate,0x48c160,pool 0x20 ST10 sub 0: two-form enemy (wobbling roller, morphs when hit into a chaser that dies + drops; content/forbidden_island/st10_cls)
+St1dCrystalUpdate,0x590260,ST1D static type 1: the crystal (variant 0) and its pedestal (1, use -> flag 0x681), content/forbidden_island/elephant_boss
+ElephantCutsceneUpdate,0x4a9770,ST1D pool 0x20 type 0x34 sub 3: the elephant of script 0x28 (content/forbidden_island/elephant_boss)
+ElephantBossUpdate,0x4a4fd0,ST1D pool 0x20 type 0x34 sub 2: the elephant boss (content/forbidden_island/elephant_boss)
+St1dRockUpdate,0x5a51c0,ST1D static type 0x20 sub 0: a falling / thrown rock (content/forbidden_island/elephant_boss)
+St1dPillarUpdate,0x5a5530,ST1D static type 0x20 sub 1: an arena pillar (content/forbidden_island/elephant_boss)
+St1dBoulderTrailUpdate,0x5a5910,ST1D static type 0x20 sub 2: a boulder's trail (content/forbidden_island/elephant_boss)
+St1dExitLightUpdate,0x5aa060,ST1D static type 0x28: the arena's exit light (content/forbidden_island/elephant_boss)
+St1dBoulderUpdate,0x5c7780,ST1D pool 0x40 type 0x14: the boss's boulder (sub 0) / shock ring (sub 1), content/forbidden_island/elephant_boss
+St1dDustRingUpdate,0x4372b0,ST1D effect type 0x11: a boulder's dust ring (content/forbidden_island/elephant_boss)
+Script2aArrivalCastUpdate,0x4b57b0,ST11 pool 0x20 type 0x3b sub 1: script 0x2a cast, jump + walk off (content/forbidden_island/st11_script2a)
+St3eFloatingModelUpdate,0x5b16b0,static ST3E: floating bobbing model (content/forbidden_island/st3e_reports)
+St49StillModelUpdate,0x5b2960,static ST49: still model (content/forbidden_island/st49_landing)
+St1cShipUpdate,0x591270,static ST1C: the bobbing ship of script 0x13 (smoke / flare, 0xa5a900; content/forbidden_island/st1c_cast)
+St1cStillModelUpdate,0x5b25d0,static ST1C: still model publishing 0xa5a920 (content/forbidden_island/st1c_cast)
+St1cSecondStillModelUpdate,0x5b5d70,static ST1C: still model publishing 0xa5a924 (content/forbidden_island/st1c_cast)
+St49DropshipCargoUpdate,0x4f2ae0,pool 0x20 type 0x6e (ST49): the cargo hanging under the dropship (content/forbidden_island/st49_dropship)
+St49DropshipCableUpdate,0x439060,pool 0xa0 ST49 stage type 0x17: the dropship cable LINE_G2 to its cargo (content/forbidden_island/st49_dropship)
+RockBurstUpdate,0x41aa10,ST1D pool e0 type 9: rock burst spawner (4 type-0x20 statics + 8 hit sparks; content/forbidden_island/st1d_rock_burst)
+
+# content/intro: the area's actor classes (their update: the class tables' entries)
+St4aEventTriggerUpdate,0x4223c0,ST4A e0 type 0xa: message / event triggers (13 variants; content/intro/st4a_event_triggers)
+St02PropUpdate,0x48a0f0,ST02 pool 0x20 type 0x27: attract script 3, content/intro/st02_attract_cast
+St02DriftingStaticUpdate,0x59d000,ST02 static type 0x1a: attract script 3, content/intro/st02_attract_cast
+St02RollUpdate,0x475c80,ST02 pool 0x20 type 0x16: attract script 3 cast, content/intro/st02_attract_cast
+St02BarrelUpdate,0x47bf40,ST02 pool 0x20 type 0x1a: attract script 3 cast, content/intro/st02_attract_cast
+St02PlacedStaticUpdate,0x59ada0,ST02 static type 0x14: attract script 3, content/intro/st02_attract_cast
+St02WatcherUpdate,0x47f800,ST02 pool 0x20 type 0x1d: attract, content/intro/st02_attract_cast
+St02TalkerUpdate,0x480580,ST02 pool 0x20 type 0x1e: attract, content/intro/st02_attract_cast
+St02FaceUpdate,0x481da0,ST02 pool 0x20 type 0x21: attract, content/intro/st02_attract_cast
+St02SpeakerUpdate,0x48aef0,ST02 pool 0x20 type 0x28: attract, content/intro/st02_attract_cast
+St02ScreenUpdate,0x4b5c40,ST02 pool 0x20 type 0x3c: attract, content/intro/st02_attract_cast
+St03PieceCarrierUpdate,0x47eb30,ST03 pool 0x20 type 0x1c: attract, content/intro/st03_attract_cast
+St03WalkerUpdate,0x481100,ST03 pool 0x20 type 0x1f: attract, content/intro/st03_attract_cast
+St03FlutterUpdate,0x49d8c0,ST03 pool 0x20 type 0x30: attract, content/intro/st03_attract_cast
+St03PlacedModelUpdate,0x58d9c0,ST03 static type 1: attract, content/intro/st03_attract_cast
+AttractVramTileUpdate,0x418550,pool e0 type 5: VRAM tile animation: attract, content/intro/attract_effects
+St00FigureUpdate,0x449cc0,pool 0x20 type 2 (ST00): the display figures (head tracking, random / pad-cycled animations, blinking; content/intro/st00_figures)
+St02StillModelUpdate,0x5ad6f0,ST02 static type 0x34: attract, content/intro/st02_attract_cast
+AttractLightningUpdate,0x59aea0,static type 0x15: lightning bolts: attract, content/intro/attract_effects
+St02SceneryUpdate,0x59b630,ST02 static type 0x16: attract, content/intro/st02_attract_cast
+AttractRingFlashUpdate,0x4236a0,pool e0 type 0xe: ring / flash: attract, content/intro/attract_effects
+St03StillModelUpdate,0x5ad760,ST03 static type 0x34: attract, content/intro/st03_attract_cast
+St03SceneryUpdate,0x59b690,ST03 static type 0x16: attract, content/intro/st03_attract_cast
+St03RollUpdate,0x476f80,ST03 pool 0x20 type 0x16: attract, content/intro/st03_attract_cast
+St03BarrelUpdate,0x47c790,ST03 pool 0x20 type 0x1a: attract, content/intro/st03_attract_cast
+St03WatcherUpdate,0x47fa80,ST03 pool 0x20 type 0x1d: attract, content/intro/st03_attract_cast
+St03CraftBodyUpdate,0x499650,ST03 pool 0x20 type 0x2f: attract, content/intro/st03_attract_cast
+St03LightsUpdate,0x4da1e0,ST03 pool 0x20 type 0x4e: attract, content/intro/st03_attract_cast
+St02BlinkerUpdate,0x4848c0,ST02 pool 0x20 type 0x23: attract, content/intro/st02_attract_cast
+St02StanderUpdate,0x488f60,ST02 pool 0x20 type 0x25: attract, content/intro/st02_attract_cast
+St03BlinkerUpdate,0x484c30,ST03 pool 0x20 type 0x23: attract, content/intro/st03_attract_cast
+St03StanderUpdate,0x4890f0,ST03 pool 0x20 type 0x25: attract, content/intro/st03_attract_cast
+St03PartBlinkerUpdate,0x499310,ST03 pool 0x20 type 0x2e: attract, content/intro/st03_attract_cast
+St03TalkerUpdate,0x480a70,ST03 pool 0x20 type 0x1e: attract, content/intro/st03_attract_cast
+St03FaceUpdate,0x482210,ST03 pool 0x20 type 0x21: attract, content/intro/st03_attract_cast
+St03SpeakerUpdate,0x48b390,ST03 pool 0x20 type 0x28: attract, content/intro/st03_attract_cast
+St03ScreenUpdate,0x4b5df0,ST03 pool 0x20 type 0x3c: attract, content/intro/st03_attract_cast
+St03CraftUpdate,0x4baec0,ST03 pool 0x20 type 0x3f: attract, content/intro/st03_attract_cast
+FireUpdate,0x5ae490,ST1E static type 0x36: a fire to put out (content/intro/flutter_fire)
+BurningDataUpdate,0x4e8530,ST1E pool 0x20 type 0x63: Data in the kitchen (content/intro/burning_data)
+ResultSceneDataUpdate,0x4ea1d0,ST1E pool 0x20 type 0x63 sub 1: Data in the mission's result (content/intro/burning_data)
+WallBlastUpdate,0x5aed50,ST1E static type 0x36 sub 1: the fire bursting from the wall (content/intro/flutter_fire)
+FlameUpdate,0x5b0f20,ST1E static type 0x3e: the flames of a fire (content/intro/flutter_fire)
+FireEffectUpdate,0x437520,ST1E effect type 0x12: the fire mission's effects (content/intro/flutter_fire)
+FallingPieceUpdate,0x5cbf00,ST3A pool 0x40 type 0x21: a falling piece of script 6 (content/intro/crash_landing)
+SkyShipUpdate,0x595570,ST3A static type 6: a ship in the sky (content/intro/crash_landing)
+CloudRingUpdate,0x598b00,ST3A static type 0x12: the clouds (content/intro/crash_landing)
+PiecesDropperUpdate,0x5b39a0,ST3A static type 0x46: the falling pieces' dropper (content/intro/crash_landing)
+BoneRiderUpdate,0x5b3ae0,ST3A static type 0x47: rides its parent's bone (content/intro/crash_landing)
+CrashFlashUpdate,0x431120,ST3A effect type 7: a flash (content/intro/crash_landing)
+OpeningFlutterUpdate,0x49dab0,ST39 type 0x30: the Flutter of the opening (content/intro/opening_cast)
+OpeningCrewUpdate,0x4e9ae0,ST39 type 0x63: the crew of the opening (content/intro/opening_cast)
+ScriptAnimatedUpdate,0x4cd370,ST39 type 0x47: the script's animation (content/intro/opening_cast)
+OpeningTalkerUpdate,0x4af7e0,ST39 type 0x39: the talking character (content/intro/opening_cast)
+OpeningEffectUpdate,0x435960,ST39 / ST3A effect type 0xf: flames, streaks, puffs (content/intro/opening_effects; drawn by content/intro/opening_effects_draw)
+CrashPropUpdate,0x48a2f0,ST3A pool 0x20: the props of script 6 (content/intro/crash_landing_cast)
+CrashPieceUpdate,0x59d100,ST3A pool 0x60: the Flutter's falling pieces (content/intro/crash_landing_cast)
+CrashRollUpdate,0x4776e0,ST3A pool 0x20 type 0x16: Roll (content/intro/crash_landing_cast)
+CrashBarrelUpdate,0x47cd40,ST3A pool 0x20 type 0x1a: Barrel (content/intro/crash_landing_cast)
+CrashSecondBodyUpdate,0x49a690,ST3A pool 0x20 type 0x2f: a craft's second body (content/intro/crash_landing_cast)
+CrashTalkerUpdate,0x4b0e20,ST3A pool 0x20 type 0x39 (content/intro/crash_landing_cast)
+CrashCraftUpdate,0x4bb750,ST3A pool 0x20 type 0x3f: the flying craft (content/intro/crash_landing_cast)
+CrashJetUpdate,0x4faa20,ST3A pool 0x20 type 0x74: the jets (content/intro/crash_landing_cast)
+CrashWatcherUpdate,0x480120,ST3A pool 0x20 type 0x1d (content/intro/crash_landing_cast)
+CrashFaceUpdate,0x4823c0,ST3A pool 0x20 type 0x21 (content/intro/crash_landing_cast)
+CrashSpeakerUpdate,0x48b530,ST3A pool 0x20 type 0x28 (content/intro/crash_landing_cast)
+Script68CastUpdate,0x44b940,ST39 pool 0x20 type 2 sub 0: script 0x68 cast, texture tracks, anim 1 at block +0x1c == 0x81 (content/intro/st39_script68)
+St03TiltedModelUpdate,0x5a7af0,static ST03: a tilted still model (content/intro/st03_props)
+
+# content/late_game: the area's actor classes (their update: the class tables' entries)
+SpawnerSt45Update,0x422260,ST45 e0 type 0xa: flag 0x176 -> fades 0x1a / 0xa, classes 0x494 freed, flag 0x174
+RaceActorUpdate,0x427b90,ST59/5A/5B pool e0 type 0x29: the time-trial race (v0 controller, v1 speed gauge, v2 3-2-1-GO, v3 floor-cell watcher; HUD sprites not drawn; content/late_game/st59)
+EyeTrailUpdate,0x5b8000,ST4B static type 0x52 sub 0: the boss's eye glow trail (OT ribbon; freed by the boss's eye flags; content/late_game/st4b_fx)
+VolleyShotUpdate,0x5d0cb0,ST4B pool 0x40 type 0x30: the boss's volley shot (capsule hit, 0x2c/0xf0 draw commands; content/late_game/st4b_fx)
+ScriptFallingPieceUpdate,0x595e80,ST4B static type 6 sub 2: the script-driven falling piece (= 0x595d80 states 3..5; content/late_game/st4b_fx)
+Script59FaceRowCastUpdate,0x478a90,ST4B pool 0x20 type 0x16: a cast member of script 0x59 (walks in, face rows 0x4fb5d0; content/late_game/st4b)
+Script59WalkInCastUpdate,0x44b5c0,ST4B pool 0x20 type 2: a cast member of script 0x59 (cast 0x8aa3d0; content/late_game/st4b)
+St4bFlyingBossUpdate,0x4b8d90,ST4B pool 0x20 type 0x3f sub 1: the boss (dives, strafes, drop rain, shot bursts; ground phase at 1/4 HP; flags 0x680 / 0x681; content/late_game/st4b)
+St4bCirclingPieceUpdate,0x595d80,ST4B static type 6: a circling flyer / script-driven piece (content/late_game/st4b)
+St4bSpinningPieceUpdate,0x595420,ST4B static type 6 sub 1: a spinning flyer with a hit entry (content/late_game/st4b)
+BossFallingRockUpdate,0x50ee90,ST5C pool 0x20 type 0x86: the boss's falling rocks, attack 9 (content/late_game/st5c_fx)
+BallChargeUpdate,0x5bb6e0,ST5C static type 0x5b: attack 10's charge rays (draw records + OT G4; content/late_game/st5c_fx)
+BeamChargeUpdate,0x5be190,ST5C static type 0x60: attack 7's charge rays (draw records + OT G4; content/late_game/st5c_fx)
+BossBladeUpdate,0x5c16b0,ST5C static type 0x66: the boss's blades, attack 6 (draw records + OT G4; content/late_game/st5c_fx)
+StompShotUpdate,0x5d16d0,ST5C pool 0x40 type 0x32: the stomp's shots (content/late_game/st5c_fx)
+ChargeBallUpdate,0x5d1a10,ST5C pool 0x40 type 0x33: attack 10's ball (content/late_game/st5c_fx)
+St5cBossUpdate,0x50b9c0,ST5C pool 0x20 type 0x83 sub 0: the boss (record 0x8cd8c0; flag 0x680 on death; content/late_game/st5c)
+BossIntroCastUpdate,0x50d4a0,ST5C pool 0x20 type 0x83 sub 1: script 0x75's cast 0x8ae5a0 (fade-in, sparks; content/late_game/st5c)
+BossAfterImageUpdate,0x50d3d0,ST5C pool 0x20 type 0x83 sub 2: the boss's after-image (content/late_game/st5c)
+BossDefeatCastUpdate,0x50dae0,ST5C pool 0x20 type 0x83 sub 3: script 0x6d's cast 0x8ad590 (lift / drop; content/late_game/st5c)
+SparkBurstUpdate,0x5bfcf0,ST5C static type 0x64: spark bursts (draw commands; content/late_game/st5c)
+StageDustEffectUpdate,0x43ff80,ST5C pool 0xa0 type 0x24: variant 2 dust puffs of script 0x6d (content/late_game/st5c)
+BeamImpactUpdate,0x5bf360,ST5C static type 0x61: the beam's impact (0xf4 records; content/late_game/st5c_fx3)
+ScreenShockRingUpdate,0x42e360,pool 0xa0 type 2: frame-buffer shock rings + spawner of the ball's explosion (warp not drawn; content/late_game/st5c_fx3)
+ElectricSparkUpdate,0x418660,pool 0xe0 type 6: the explosion's electric spark (OT G4; content/late_game/st5c_fx3)
+BossBeamUpdate,0x5cf370,ST5C pool 0x40 type 0x2b: attack 7's beam (head + 24 segments; content/late_game/st5c_fx2)
+BallVisualsUpdate,0x5bd320,ST5C static type 0x5e: attack 10's ball visuals (0xf4 records, OT G3 rays; content/late_game/st5c_fx2)
+BallExplosionUpdate,0x5c3690,ST5C pool 0x40 type 2: the ball's explosion (0xf0 records; content/late_game/st5c_fx2)
+ElysiumBossUpdate,0x507280,pool 0x20 type 0x7d sub 0 (ST4C): the Elysium boss -- fade/teleport, rays+homing shots, beam, orbit shots+slam, bolt volley; gauge 0x415d30; death flag 0x681 (content/late_game/st4c_boss)
+ElysiumOrbitShotUpdate,0x5ccc40,ST4C pool 0x40 type 0x25: boss orbiting shot, then homes (shootable) (content/late_game/st4c_boss)
+ElysiumHomingShotUpdate,0x5ce6b0,ST4C pool 0x40 type 0x27: boss homing shot from its hands (content/late_game/st4c_boss)
+ElysiumBoltUpdate,0x5cfb40,ST4C pool 0x40 type 0x2c: boss bolt (capsule; light column 0x11 v2 + blast on impact) (content/late_game/st4c_boss)
+ElysiumBeamUpdate,0x5d0060,ST4C pool 0x40 type 0x2d: boss beam at bone 8 (draw cmds 0xf8) (content/late_game/st4c_boss)
+ElysiumSparksUpdate,0x5b8cf0,ST4C static type 0x54: 16 rising sparks (draw cmds 0xf0) (content/late_game/st4c_boss)
+ElysiumChargeUpdate,0x5b9010,ST4C static type 0x55: boss charge (v0 glow 0xf4 + disc, v1 rays OT G4) (content/late_game/st4c_boss)
+ElysiumSparklesUpdate,0x5ba240,ST4C static type 0x57: sparkles around boss bone 8 (content/late_game/st4c_boss)
+ElysiumFlashUpdate,0x43a2a0,pool 0xa0 type 0x1a (ST4C): teleport flash, 0xc0 additive G4 pairs/tick (content/late_game/st4c_boss)
+ElysiumMoteUpdate,0x43ac70,pool 0xa0 type 0x1d (ST4C): rising mote (draw cmds 0xf0) (content/late_game/st4c_boss)
+ElysiumFogUpdate,0x427640,pool e0 type 0x26 (ST4C): fog darkens while the boss attacks, then fades back (content/late_game/st4c_boss)
+Script60FacedTalkerUpdate,0x45c840,ST53 pool 0x20 type 9 sub 0: script 0x60 cast (content/late_game/st53_story)
+Script61FacedTalkerUpdate,0x45cbf0,ST53 pool 0x20 type 9 sub 1: script 0x61 cast (content/late_game/st53_story)
+Script60FadingFigureUpdate,0x488a90,ST53 pool 0x20 type 0x24: script 0x60 cast, bone fade + spark rings (content/late_game/st53_story)
+Script61StandingFigureUpdate,0x4991a0,ST53 pool 0x20 type 0x2d: script 0x61 cast (content/late_game/st53_story)
+Script60WalkerUpdate,0x4b35d0,ST53 pool 0x20 type 0x3a: script 0x60 cast, walks / yaw ramp (content/late_game/st53_story)
+Script60MaskedTalkerUpdate,0x4f0ed0,ST53 pool 0x20 type 0x69 sub 0: script 0x60 cast (content/late_game/st53_story)
+Script61MaskedTalkerUpdate,0x4f1220,ST53 pool 0x20 type 0x69 sub 1: script 0x61 cast (content/late_game/st53_story)
+Script60LeadTalkerUpdate,0x4f57d0,ST53 pool 0x20 type 0x72 sub 0: script 0x60 cast (content/late_game/st53_story)
+Script61LeadTalkerUpdate,0x4f5f70,ST53 pool 0x20 type 0x72 sub 1: script 0x61 cast (content/late_game/st53_story)
+Script60ExtraAUpdate,0x503a80,ST53 pool 0x20 type 0x7a: script 0x60 extra (no-op steps) (content/late_game/st53_story)
+Script60ExtraBUpdate,0x506bc0,ST53 pool 0x20 type 0x7b: script 0x60 extra (no-op steps) (content/late_game/st53_story)
+ElysiumIntroCastUpdate,0x5086c0,ST4C pool 0x20 type 0x7d sub 1: boss intro cast (script 0x6b; variant 0x508800, teleport ring 0x43adb0 v2) (content/late_game/st4c_story)
+ElysiumDefeatCastUpdate,0x508cd0,ST4C pool 0x20 type 0x7d sub 2: defeated boss of script 0x6c (sparks 0x22, trails 0x5f, bursts 0x63, motes 0x65, e0 0xf pillars, blast, bone fade) (content/late_game/st4c_story)
+BoneTrailUpdate,0x5bda80,ST4C static type 0x5f: 16-point bone trail (ribbon 0x5bdd00 not drawn) (content/late_game/st4c_story)
+RayBurstUpdate,0x5bf8a0,ST4C static type 0x63: ray burst (LINE_G2, dc::otLineG2) (content/late_game/st4c_story)
+SwirlingMotesUpdate,0x5c0d20,ST4C static type 0x65: swirling motes (draw cmds 0xf0 / 0x2c) (content/late_game/st4c_story)
+AnimatedSpriteEffectUpdate,0x43fc70,ST4C pool a0 type 0x22: animated sprite following its pool-0x20 parent (draw cmd 0x2c) (content/late_game/st4c_story)
+StillSpriteEffectUpdate,0x43fe30,ST4C pool a0 type 0x23: still sprite (draw cmd 0x2c) (content/late_game/st4c_story)
+EndingTalkerAUpdate,0x44b0b0,ST52 pool 0x20 type 2: script 0x3f cast (content/late_game/end_cast)
+EndingTalkerBUpdate,0x4787d0,ST52 pool 0x20 type 0x16: script 0x3f cast (content/late_game/end_cast)
+EndingMouthTalkerUpdate,0x47d8c0,ST52 pool 0x20 type 0x1a: script 0x3f cast, talking mouth (content/late_game/end_cast)
+EndingWalkerUpdate,0x49b4c0,ST52 pool 0x20 type 0x2f: script 0x3f cast (content/late_game/end_cast)
+EndingGroupCastUpdate,0x4d5230,ST52 pool 0x20 type 0x4c: script 0x3f cast, variants 0-2 (content/late_game/end_cast)
+EndingGlowCastUpdate,0x4ef2a0,ST52 pool 0x20 type 0x68: script 0x3f cast + glow ring, variants 0-1 (content/late_game/end_cast)
+FinaleCastAUpdate,0x49c270,ST5C pool 0x20 type 0x2f: script 0x75 cast, scene states 0-5 (content/late_game/end_cast)
+FinaleCastBUpdate,0x4f0050,ST5C pool 0x20 type 0x68: script 0x75 cast, scene states 0-5 (content/late_game/end_cast)
+BobbingPropUpdate,0x50b750,ST52/ST1F pool 0x20 types 0x71/0x75: bobbing prop (content/late_game/end_cast)
+EndingEffectUpdate,0x43d030,pool 0xa0 type 0x21: ring band / glow disc / swirl / bone sparkles / trail / puff, variants 0-5 (content/late_game/end_cast)
+Script59CuedTalkerAUpdate,0x45c570,ST4B pool 0x20 type 9: script 0x59 cast, cue animations + face rows 0x4fb5d0, variants 0-1 (content/late_game/late_cast)
+Script59LateStepperUpdate,0x4660d0,ST4B pool 0x20 type 0xb: script 0x59 cast, animation steps from tick 0x53b (content/late_game/late_cast)
+Script59SceneTalkerUpdate,0x49ba80,ST4B pool 0x20 type 0x2f: script 0x59 cast, animations / rows by scene (content/late_game/late_cast)
+Script59FlyerUpdate,0x4bc280,ST4B pool 0x20 type 0x3f sub 0: script 0x59 flyer (waypoints 0x894910, puffs, type-0x1d effects), variants 0-1 (content/late_game/late_cast)
+Script59IdleOrStepperUpdate,0x4dadc0,ST4B pool 0x20 type 0x50: script 0x59 cast, variants 0-1 (content/late_game/late_cast)
+Script59SceneWalkerUpdate,0x4efe50,ST4B pool 0x20 type 0x68: script 0x59 cast, animations by scene / tick (content/late_game/late_cast)
+Script59CuedTalkerBUpdate,0x4f43f0,ST4B pool 0x20 type 0x72: script 0x59 cast, cue animations + face rows, variants 0-1 (content/late_game/late_cast)
+Script59LateTalkerUpdate,0x4fb3e0,ST4B pool 0x20 type 0x75: script 0x59 cast, face rows (content/late_game/late_cast)
+StageEffectFromVariant2Update,0x43c110,ST4B pool 0xa0 type 0x20: script 0x59 effects (0x43bff0 variants + 2; content/late_game/late_cast)
+Script6fActionTalkerUpdate,0x44bac0,ST54 pool 0x20 type 2: script 0x6f cast slot 1, actions 1-7 (content/late_game/late_cast)
+Script6fHoldingTalkerUpdate,0x45d4f0,ST54 pool 0x20 type 9: script 0x6f cast slot 0, actions 1-7 (content/late_game/late_cast)
+Script6fPacerUpdate,0x4661f0,ST54 pool 0x20 type 0xb: script 0x6f walker, actions 0-2 by +0xc (content/late_game/late_cast)
+Script6fRowTalkerUpdate,0x478ea0,ST54 pool 0x20 type 0x16: script 0x6f cast slot 3, actions 0-2 (content/late_game/late_cast)
+Script6fMouthTalkerUpdate,0x47e0a0,ST54 pool 0x20 type 0x1a: script 0x6f talking cast slot 2 + bone sparks (content/late_game/late_cast)
+Script6fCirclerUpdate,0x4ea6e0,ST54 pool 0x20 type 0x63: script 0x6f cast slot 2 (circles, walks to 0x896568), actions 0-5 (content/late_game/late_cast)
+Script6fSparkTalkerUpdate,0x4f6b70,ST54 pool 0x20 type 0x72: script 0x6f cast slot 1, actions 0-2 + bone sparks (content/late_game/late_cast)
+TeleporterEffectUpdate,0x43adb0,ST40 pool a0 stage type 0x1e: teleporter pad panel (sub 0) / teleport ring (sub 2) / rising sparks (sub 3, LINE_G2) (dc::otQuadG4 / otLineG2; content/late_game/st40_fx)
+EffectMoverUpdate,0x50e190,pool 0x20 type 0x85 (ST54): effect-spawning mover (sub 0 rings of type-3 effects, sub 1 type-0x67 emitters / sparks / blast; content/late_game/st54_cast)
+St45BreathPuffUpdate,0x5c4820,pool 0x40 type 5 (ST45): the breath puff of the area boss 0x4c78e0 (content/late_game/st45_boss)
+St45SpitBlobUpdate,0x5ca060,pool 0x40 type 0x1a (ST45): the spit blob of the area boss 0x4c78e0 (content/late_game/st45_boss)
+St45MouthShotUpdate,0x5c62d0,pool 0x40 type 0xf (ST45): the mouth shot of the area boss 0x4c78e0 and its splash (content/late_game/st45_boss)
+St45ShockWaveUpdate,0x5b0230,pool 0x60 type 0x3c sub 0 (ST45): the shock wave of the area boss 0x4c78e0 (content/late_game/st45_boss)
+St45BossUpdate,0x4c78e0,pool 0x20 type 0x45 (ST45 sub 1): the area boss; its death sets flag 0x176 (content/late_game/st45_boss)
+Script62TalkerAUpdate,0x45d240,ST53 pool 0x20 type 9 sub 2: script 0x62's cast (content/late_game/ch4_story)
+Script62TalkerBUpdate,0x4f66b0,ST53 pool 0x20 type 0x72 sub 2: script 0x62's cast (content/late_game/ch4_story)
+BrakingTrainUpdate,0x5b6a60,stage static 0x5b6a60: a model solid of script 0x62 (content/late_game/ch4_story)
+RisingSmokeColumnUpdate,0x5a9680,stage static type 0x26: a smoke column of 8 puffs (draw commands, content/late_game/ch4_story)
+BossRetreatCastUpdate,0x4bc9c0,ST4B pool 0x20 type 0x3f sub 2: script 0x5a cast, step-driven, pool-0x40 type-0x30 sparks (content/late_game/st4b_scripts)
+BossEscapeCastUpdate,0x4bce70,ST4B pool 0x20 type 0x3f sub 3: script 0x5b cast, static type-3 trail every 4th frame (content/late_game/st4b_scripts)
+StillFigureCastUpdate,0x48ade0,ST4B pool 0x20 type 0x27 sub 0: script 0x5b still cast (content/late_game/st4b_scripts)
+SwingingModelUpdate,0x5b7e90,static ST54: swinging model (content/late_game/st54_props)
+TakeoffArcUpdate,0x50dfc0,pool 0x20 type 0x72 sub 1 (ST54): the take-off arc (content/late_game/st54_takeoff)
+RollerUpdate,0x5ad7b0,ST43 static type 7: spawner child (rises in, wanders / turns to the player / rolls over, liftable: carried / thrown / dropped, hits, dies with a blast + drops; content/late_game/st43_roller)
+PuffEmitterUpdate,0x5c2040,ST54 static: the puff emitter (18 smoke / dust billboards, faded by a script cue; content/late_game/st54_puffs)
+
+# content/manda: the area's actor classes (their update: the class tables' entries)
+St25TronUpdate,0x45af20,ST25 sub 5: Tron at the gate, the cast of script 0x1b (content/manda/st25_tron_scenes)
+St25TankLandingUpdate,0x471520,ST25 sub 6: the tank as it lands, the cast of script 0x1b (content/manda/st25_tron_scenes)
+St25TankWreckUpdate,0x471990,ST25 sub 6 type 0x17: the tank wreck of script 0x1c (content/manda/st25_tron_scenes)
+St25Script1cFigureUpdate,0x45bce0,ST25 pool 0x20 type 9 sub 1: the figure of script 0x1c (record 0x8a303c): hops off, sparks, drives (content/manda/st25_tron_scenes)
+St24GateGuardianUpdate,0x487d50,ST24 pool 0x20 type 0x24 sub 0: the guardian at the ruin gate of script 0x14 (record 0x8a1e2c), fades (content/manda/st24_ruin_gate)
+MandaRuinGroundedFigureUpdate,0x487c80,pool 0x20 type 0x24 sub 2 (ST12): a grounded figure, its animation asked from outside (content/manda/manda_ruin_scripts)
+MandaRuinBurningWreckUpdate,0x491ce0,pool 0x20 type 0x2b sub 2 (ST14): the burning wreck of script 0xe -- random blasts, static 0x11 (content/manda/manda_ruin_scripts)
+MandaRuinKeyItemUpdate,0x5b12c0,static type 0x40: a key item on its pedestal (ST14 sub 4 after script 0xe, content/manda/manda_ruin_scripts)
+SpawnerSt12Update,0x41b990,ST12 e0 type 0xa: groups 0 / 2..5, type-3 respawns (ids 1..3), type-0x1b emitters, type-0x2a drops
+SpawnerSt13Update,0x41c070,ST13 e0 type 0xa: hopper groups (all variants 0..5)
+SpawnerSt14Update,0x41c910,ST14 e0 type 0xa: script group 1, type-3 respawns (ids 8 / 9)
+SpawnerSt55Update,0x422d60,ST55 e0 type 0xa: the licence exam timer (picture od::hud::examTimerDraw)
+MandaGuardianUpdate,0x484e00,ST13 sub 1 / ST12 sub 5: the Manda ruin guardians (pool 0x20 type 0x24, content/manda/manda_guardian)
+MandaCastGuardianUpdate,0x486d00,ST13 sub 1: the guardian of script 9 (pool 0x20 type 0x24 sub 1, content/manda/manda_guardian)
+MandaCast2GuardianUpdate,0x4875e0,ST12 sub 5: the guardian of scripts 0xb / 0xc (pool 0x20 type 0x24 sub 1, content/manda/manda_guardian)
+MandaOpenedChestUpdate,0x475ae0,ST12 sub 5: the opened chest of script 0xb (pool 0x20 type 0x15 sub 1, content/manda/manda_guardian)
+MandaBladeUpdate,0x59bee0,ST12 sub 5: the arena's spinning blades (static type 0x17 sub 1, content/manda/manda_guardian)
+MandaFallingBladeUpdate,0x59c800,ST12 sub 5: the blade falling in script 0xb (static type 0x17 sub 2, content/manda/manda_guardian)
+MandaOutroGuardianUpdate,0x487250,ST13 sub 1: the guardian of script 10 (pool 0x20 type 0x24 sub 2, content/manda/manda_guardian)
+MandaHopperUpdate,0x49e160,ST13: the guardian's hoppers (pool 0x20 type 0x31 sub 0, content/manda/manda_guardian)
+HoppingDroneUpdate,0x49f660,ST13: the hopping drone (pool 0x20 type 0x31 sub 1, content/manda/hopping_drone)
+MandaShotUpdate,0x5c5fb0,ST13 pool 0x40 type 0xe: the guardian's shot (content/manda/manda_guardian)
+ShotTrailUpdate,0x424800,pool 0xe0 global type 0x10: a shot's trail segment (content/manda/manda_guardian)
+HitMuteUpdate,0x425aa0,pool 0xe0 global type 0x18: hit classes muted for a while (content/manda/manda_guardian)
+MandaCloudUpdate,0x4331a0,ST13 effect type 0xc: the guardian's spin cloud (content/manda/manda_guardian)
+St14GuardianUpdate,0x48fb90,ST14 sub 4: the Manda ruin guardian, the boss after script 0x1a (content/manda/manda_boss)
+St14RisingPuppetUpdate,0x4886d0,ST14 sub 4: script 0x1a's rising puppet (content/manda/manda_boss)
+St14DroppingPuppetUpdate,0x492050,ST14 sub 4: script 0x1a's guardian dropping in (type 0x2b sub 1, content/manda/manda_boss)
+St14ControllerUpdate,0x423170,ST14 pool e0 type 0xc: the Manda guardian fight's controller (content/manda/manda_boss)
+St14BeamUpdate,0x5aad40,ST14 static type 0x2c: the Manda guardian's beam (content/manda/manda_boss)
+St14DebrisUpdate,0x5c7020,ST14 pool 0x40 type 0x12: the Manda guardian's homing debris (content/manda/manda_boss)
+St14FloaterUpdate,0x4b83e0,ST14 pool 0x20 type 0x3e: the floating target of the Manda guardian's beam (content/manda/manda_boss)
+HoverReaverbotUpdate,0x44d320,pool 0x20 type 3 (ST14): the hovering reaverbot (drifts around home, dives at the player, returns; liftable / throwable; falls + explodes; content/manda/st14_enemy)
+St13GunTurretUpdate,0x4892c0,pool 0x20 type 0x26 (ST13): the gun turret (aims at the player, fires bursts of pool-0x40 type-0xd shots, staggers, sparks + dies; content/manda/st12_14)
+DropInWalkerUpdate,0x47e430,pool 0x20 type 0x1b (ST12): the walker that drops in (walks until blocked, falls bouncing off walls, dies blinking + drops; content/manda/st12_14)
+TumblingBlockUpdate,0x59a7a0,ST12 static type 0x13: the tumbling block (flag-started slides + rocking, dust puffs; content/manda/st12_14)
+RollingBoulderUpdate,0x59c9b0,ST14 static type 0x18: the rolling boulder (back and forth between two points, camera shake on walls; content/manda/st12_14)
+ExamTumblerUpdate,0x47a600,pool 0x20 type 0x19 (ST55 / ST12..14): the shelled reaverbot that flips over (content/manda/exam_enemies_a)
+ExamShieldGunnerUpdate,0x44e4c0,pool 0x20 type 4 (ST55 / ST12..14): the shield-bearing gunner reaverbot (content/manda/exam_enemies_a)
+ExamGunnerShotUpdate,0x5cc220,pool 0x40 ST55 stage type 0x22: the shield gunner's shot (content/manda/exam_enemies_a)
+ExamShieldUpdate,0x592fa0,ST55 static type 5 sub 0: the shield knocked off the gunner (content/manda/exam_enemies_a)
+ExamHopperUpdate,0x48e750,pool 0x20 type 0x2a (ST55 / ST12..14): the small liftable reaverbot (content/manda/exam_enemies_a)
+ExamDroneUpdate,0x5aa920,ST55 pool 0x60 type 0x2b: the exam drone released by the hatches (content/manda/exam_enemies_b)
+ExamAmbushUpdate,0x426df0,ST55 pool e0 type 0x21: the type-0x67 ambush records woken by the player (content/manda/exam_enemies_b)
+ExamMineUpdate,0x592580,ST55 pool 0x60 type 4: the floating mine (content/manda/exam_enemies_b)
+ExamDiggerUpdate,0x4dd9d0,ST55 pool 0x20 type 0x53: the burrowing digger (content/manda/exam_enemies_b)
+ExamAmbushFlyerUpdate,0x4ed1a0,ST55 pool 0x20 type 0x67 (0): the ambush flyer of 0x426df0 (content/manda/exam_enemies_b)
+HomingMarkerUpdate,0x55f350,pool 0xa0 type 6 (ST55 / Nino): the ring marker at the homing point (content/manda/exam_enemies_b)
+ExamHatchUpdate,0x4da900,ST55 pool 0x20 type 0x4f: the drone hatch (content/manda/exam_enemies_b)
+MandaBurrowerUpdate,0x482f50,pool 0x20 type 0x22 sub 0 (ST12/13/14): the burrowing Manda-ruin reaverbot (v0 crawl/leap/bounce, v1 guard firing pool 0x40 type 0), liftable/throwable (content/manda/manda_ruin_burrower)
+MandaPlatformUpdate,0x59b710,static ST12 / ST13: moving platform (companion type 0x17, rider 0x22) / spark wheel (variant & 4) (content/manda/manda_ruin_props)
+MandaGateUpdate,0x5aa580,static ST12: script 1 / 4 gates and lifts (content/manda/manda_ruin_props)
+MandaDebrisPieceUpdate,0x5b1c10,static ST14: spinning debris piece (content/manda/manda_ruin_props)
+WallBreakBurstUpdate,0x41a500,ST13 pool e0 type 9: wall-break burst (debris + explosion statics, segment variant 2, 0x2c rings; content/manda/st13_wall_break)
+
+# content/nino: the area's actor classes (their update: the class tables' entries)
+SpawnerSt15Update,0x41ca90,ST15 e0 type 0xa: pool-0x60 type-0x1b waves, flags 0x680 / 0x681 / 0x28
+SpawnerSt16Update,0x41d320,ST16 e0 type 0xa: type-0x49 respawns, pool-0x60 type-0x25 blocks, timers 0x10..0x14
+SpawnerSt17Update,0x41dd70,ST17 e0 type 0xa: type-0x2d walkers on routes, grid-cell flags 0x32..0x34
+SpawnerSt18Update,0x41e7e0,ST18 e0 type 0xa: type-0x2d / pool-0x60 type-0x1b, repair gauge (picture od::hud::ninoGaugeDraw)
+SpawnerSt36Update,0x4213e0,ST36 e0 type 0xa: room records, pool-0x60 type-0x48 countdown, script group 4
+SpawnerSt37Update,0x421670,ST37 e0 type 0xa: room records, type-0x48 bursts / countdown, push-back trap
+SpawnerSt38Update,0x421bb0,ST38 e0 type 0xa: room records, type-0x48 countdown (flag 0x92)
+CutsceneGunshipUpdate,0x5a2cc0,ST18 static type 0x1b sub 2: the scripted gunship of the ST18 cutscenes (content/nino/st18_gunships)
+ShipFightGunshipUpdate,0x59e630,ST18 static type 0x1b sub 0: the gunships of the ship fight (content/nino/st18_gunships)
+St18StillModelUpdate,0x58ffa0,ST18 static type 1 sub 0: a still solid model, rooms 0 / 1 (content/nino/st18_props)
+St18SunUpdate,0x417250,ST18 pool e0 type 1: the sun and its lens flares (content/nino/st18_props)
+St18SquarePropUpdate,0x5abb70,ST18 static type 0x2d subs 1 / 3: a still model (after script 0x37; content/nino/st18_props)
+GlydeShipArrivalUpdate,0x5a1dc0,ST30 sub 2 static type 0x1b during script 0x25: Glyde's ship arriving (content/nino/glyde_ship_arrival)
+MissionGunshipUpdate,0x59d310,ST15 static type 0x1b sub 0: the mission gunships (content/nino/mission_gunships)
+MissionTargetUpdate,0x5ab8b0,ST15 / ST16 static type 0x2d: the mission targets (content/nino/mission_targets)
+CarrierBoatUpdate,0x5a5ea0,ST17 static type 0x21: the mission's carrier boat (content/nino/carrier_boat)
+SquareGunshipUpdate,0x59f880,ST18 static type 0x1b sub 1: the gunship after script 0x37 (shot down -> flag 0x2b; content/nino/square_gunship)
+GlydeBaseGunshipUpdate,0x5a07b0,ST30 static type 0x1b sub 3: the gunships of the wave over Glyde's base (the 8th down -> flag 0x20 + the key; content/nino/mission_gunships)
+St17GateUpdate,0x5abe60,ST17 static type 0x2f: the gate its lever opens (content/nino/bars_and_gate)
+St17LeverUpdate,0x58f820,ST17 static type 1: the gate's lever (variant 1, content/nino/bars_and_gate)
+St16BarUpdate,0x58f040,ST16 static type 1: the bars you hang from (variant 3 = the mission lever, flag 0x27; content/nino/bars_and_gate)
+LavaPlumeUpdate,0x5abc30,the lava plume (pool 0x60 type 0x2e: 8 rising puffs, the mission targets' smoke states; content/nino/mission_targets)
+GroupMemberUpdate,0x4b6280,pool 0x20 type 0x3d (ST15 / ST16 sub 0): group member that walks the node graph, sprays at the variant's points (pool-0x40 type 0x13), carries the group's boxes / rides the leader, knock-back on hits, lifted / carried / thrown, runs off when hp is out (content/nino/st15_cls)
+St19MachineUpdate,0x4e7d20,pool 0x20 (ST19): the scripted machinery (drops / slides / rises on script cues, opens with bursts; content/nino/st19)
+BoxWalkerUpdate,0x4accc0,pool 0x20 type 0x38 (ST31 sub 0): the grid walkers of Glyde's box room (content/nino/glyde_box_walkers)
+WalkerBombUpdate,0x5c8420,pool 0x40 ST31 stage type 0x16: the walkers' rolling bomb (content/nino/glyde_box_walkers)
+RepairMachineUpdate,0x4e41c0,pool 0x20 type 0x5e sub 0 (ST18 story 9): the machine Roll repairs in Glyde's last attack (content/nino/repair_machine)
+MachinePartUpdate,0x4e4930,pool 0x20 type 0x5e sub 1 (ST18 sub 2): the machine parts (variant 1 sinks with a static type 0x3d; content/nino/repair_machine)
+RepairRollUpdate,0x4e67c0,pool 0x20 type 0x60 sub 0 (ST18 story 9): Roll at the machine (content/nino/repair_machine)
+MissileShipUpdate,0x5af3d0,ST18 stage static type 0x38: Glyde's ship launching the missiles (content/nino/glyde_missiles)
+GlydeMissileUpdate,0x5a7b30,ST18 stage static type 0x24: Glyde's missile, caught and thrown back (content/nino/glyde_missiles)
+FlyPointUpdate,0x426820,pool 0xe0 type 0x1c: a point flying to a target leaving a0 type-0 actors; at the end a static type 7 + flag +0xe (end-of-mission scripts; content/nino/fly_point)
+ScreenRippleUpdate,0x438750,pool 0xa0 type 0x16 (0x52b180, variant 0; variants 1 / 2 rings / ray star): a growing screen ripple (frame-buffer warp not drawn; content/nino/screen_ripple)
+RuinGuardianUpdate,0x4b1180,pool 0x20 type 0x3a sub 0 (ST35 subs 5 / 0): the ruin's guardian, death -> flag 0x94 / 0x95 (content/nino/ruin_guardian)
+GuardianWakesUpdate,0x4b2a00,pool 0x20 type 0x3a sub 1 (ST35): the guardian in script 0x15 (content/nino/guardian_cast)
+GuardianBeatenUpdate,0x4b2ba0,pool 0x20 type 0x3a sub 2 (ST35): the guardian in script 0x16 (content/nino/guardian_cast)
+GuardianDropsInUpdate,0x4b2d00,pool 0x20 type 0x3a sub 3 (ST35): the guardian dropping in, script 0x17 (content/nino/guardian_cast)
+GuardianDissolvesUpdate,0x4b2f50,pool 0x20 type 0x3a sub 4 (ST35): the guardian dissolving, script 0x19 (OT star; content/nino/guardian_cast)
+FadingCastUpdate,0x488350,pool 0x20 type 0x24 sub 1 (ST35): script 0x19's cast fading in / out (content/nino/guardian_cast)
+PedestalItemUpdate,0x5b1450,pool 0x60 type 0x40 (ST35 sub 5): the item on its pedestal, use -> flag +0xe (content/nino/pedestal_item)
+GuardianBeamUpdate,0x5b9910,pool 0x60 type 0x56: a beam (draw commands + OT quads; content/nino/ruin_guardian)
+GuardianOrbUpdate,0x5cd240,pool 0x40 type 0x26 (ST35): the guardian's orbs / mines (draw commands; content/nino/ruin_guardian)
+WaterSplashUpdate,0x5b3c40,pool 0x60 type 0x48: a water splash / bubble burst (FUN_0057b990 / 0x57ba60 / 0x426d10; content/nino/water)
+PlatformBossUpdate,0x500b50,pool 0x20 type 0x79 (ST38 sub 11): the flying platform boss (content/nino/platform_boss)
+BossSparkUpdate,0x5bab10,pool 0x60 type 0x5a (ST38): the boss's spark effects / shot spawners (draw commands; content/nino/platform_boss)
+LightningBoltUpdate,0x423f40,pool 0xe0 type 0xf (ST38): a lightning bolt on its parent (OT quads; content/nino/platform_boss)
+AimedShotUpdate,0x5c2830,pool 0x40 stage type 0 (ST38): the aimed shot, draw command 0x2c (content/nino/platform_boss)
+HomingOrbUpdate,0x5d0770,pool 0x40 stage type 0x2f (ST38): the homing orb, draw command 0xf0 (content/nino/platform_boss)
+FleeingReaverbotUpdate,0x4c1180,pool 0x20 type 0x42 (ST36 / ST38): the small reaverbot that flees and pops up when hit (content/nino/fleeing_reaverbot)
+FloorSwitchUpdate,0x590ba0,ST36 static type 1: the floor switch (variant 0) and its gates (variants 1 / 2) (content/nino/floor_switch)
+BladeTrapUpdate,0x5b2ba0,static type 0x45 (ST36..ST38): the patrolling blade trap (content/nino/blade_trap)
+GlowBlobUpdate,0x5cbc60,pool 0x40 stage type 0x20 (ST36 / ST38 / ST50): a falling glow blob, draw command 0x2c (content/nino/ruin_effects)
+RuinFlashUpdate,0x431820,pool 0xa0 stage type 8: a flash, billboards / rings (draw commands; content/nino/ruin_effects)
+RuinVariantEffectUpdate,0x431e90,pool 0xa0 stage type 0xa: per-variant effect, variants 0..7 (content/nino/ruin_effects)
+GaugeReaverbotUpdate,0x4fb670,pool 0x20 type 0x76 sub 0 (ST37 / ST44 / ST50): the gauge reaverbot of ST37 sub 6 (content/nino/gauge_reaverbots)
+FloatingMineUpdate,0x4fd180,pool 0x20 type 0x76 sub 1: the floating mine the gauge reaverbot lays (content/nino/gauge_reaverbots)
+GaugeCastUpdate,0x4fd600,pool 0x20 type 0x76 sub 2 (ST37): script 0x5f's cast (content/nino/gauge_reaverbots)
+TorpedoSwimmerUpdate,0x4fda00,pool 0x20 type 0x77 sub 0 (ST37 / ST38 / ST50): the swimming reaverbot, torpedoes (content/nino/ruin_swimmers)
+LungingSwimmerUpdate,0x4fec40,pool 0x20 type 0x77 sub 1 (ST37 / ST38): the small lunging swimmer (content/nino/ruin_swimmers)
+PressurePlateUpdate,0x590cd0,ST37 static type 1: the pressure plate (flags 0x96 / 0x97) (content/nino/floor_switch)
+TorpedoUpdate,0x5cac60,pool 0x40 stage type 0x1e: the swimming reaverbot's torpedo, draw command 0xf0 (content/nino/ruin_swimmers)
+HomingShotUpdate,0x5cc490,pool 0x40 stage type 0x23: the gauge reaverbot's homing shot, draw command 0x2c (content/nino/homing_shot)
+WaterBubbleControllerUpdate,0x426cc0,pool 0xe0 type 0x20 (ST36..ST38 / ST50): the underwater player's bubbles (content/nino/water)
+MachinePartPropUpdate,0x44a700,pool 0x20 type 2 sub 0 (ST18, from 0x4e4930): the prop riding a machine part, script-timed animation (content/nino/repair_machine)
+St17TalkerUpdate,0x4f07b0,pool 0x20 ST17 type 0x69: script 0x39 cast puppet (records 0x8a6a9c / 0x8a6ab0; content/nino/glyde_attack_talkers)
+St18TalkerUpdate,0x4f0a50,pool 0x20 ST18 type 0x69: scripts 0x3a / 0x3b cast puppet, variants 0..2 (content/nino/glyde_attack_talkers)
+ActorGlowUpdate,0x4370b0,pool 0xa0 stage type 0x10: a glow sprite on an actor (the missile's flare; content/nino/glyde_missiles)
+GlydeFlyInShipUpdate,0x4df510,pool 0x20 type 0x54 (ST17 script 0x39): Glyde's ship flying in, cutscene cast (content/nino/glyde_ship_cast)
+GlydeHoverShipUpdate,0x4df6a0,pool 0x20 type 0x54 (ST18 scripts 0x3a / 0x3b): Glyde's ship, still / effects / blasts / destroyed / hover (content/nino/glyde_ship_cast)
+Script39BirdbotUpdate,0x498860,pool 0x20 type 0x2d sub 2 (ST17): the Birdbots of script 0x39, Glyde's attack on Nino (content/nino/glyde_attack_cast)
+Script3bBirdbotUpdate,0x498bf0,pool 0x20 type 0x2d sub 3 (ST18): the Birdbots of script 0x3b, Glyde's attack on Nino (content/nino/glyde_attack_cast)
+Script39DescenderUpdate,0x4e34f0,pool 0x20 type 0x5c (ST17): script 0x39 cast member, Glyde's attack on Nino (content/nino/glyde_attack_cast)
+Script39BlinkerUpdate,0x4e30f0,pool 0x20 type 0x5b (ST17): script 0x39 cast member, Glyde's attack on Nino (content/nino/glyde_attack_cast)
+Script39RiserUpdate,0x44acc0,pool 0x20 type 2 (ST17, 0x44acc0): script 0x39 cast member, Glyde's attack on Nino (content/nino/glyde_attack_cast)
+St18NpcUpdate,0x443aa0,pool 0x20 type 0 (variant 6, ST18 story 9 / 0xa): a standing NPC that talks (content/nino/st18_npc)
+St1aMoverUpdate,0x590100,ST1A moving platform (turning / sliding + bobbing, stand-on solid; content/nino/st1a_movers)
+CritterUpdate,0x4a0f70,pool 0x20 type 0x32 sub 0 (ST15/16): the harmless critter -- hits cost the balance 0xa6d1c0, liftable/throwable, leaves off screen (content/nino/field_enemies)
+BoxCarrierUpdate,0x4d1700,pool 0x20 type 0x49 sub 0 (ST16, spawner 0x41d320): the box carrier -- two Birdbots, fetches/throws type-0x25 boxes, grabs/throws the player (content/nino/field_enemies)
+St15StillModelUpdate,0x58ef40,static ST15: still model (content/nino/st15_props)
+PatrolDroneUpdate,0x5a2620,static ST15: patrol drone circling 0x8cebc0, crash on flag 0x690 (content/nino/st15_props)
+St19CutsceneDroneUpdate,0x5a2060,static ST19: cutscene drone (climb / script block) (content/nino/st15_props)
+HoverMachineUpdate,0x5a3910,static ST17: hovering machine (3 capsules, fires, rocking, explosion) (content/nino/st15_props)
+St19TargetUpdate,0x5af870,static ST19: still solid / hittable target (content/nino/st15_props)
+HoverTargetUpdate,0x49d1d0,pool 0x20 type 0x30 sub 1 (ST17): the hovering target -- capsules, smoke, falls (id 0xd) (content/nino/ch2_field_cast)
+HoverDrifterUpdate,0x49de80,pool 0x20 type 0x30 sub 0 (ST46): the hovering drifter (variants 0..2) (content/nino/ch2_field_cast)
+CarrierCrashUpdate,0x4d2e80,pool 0x20 type 0x49 sub 1 (ST16): the crashing carrier -- drifts until flag 0x690, crashes (content/nino/ch2_field_cast)
+ScriptedWalkerUpdate,0x4ea500,pool 0x20 type 0x63 sub 0 (ST46): the scripted walker (content/nino/ch2_field_cast)
+TakeOffCastUpdate,0x44a470,ST46 pool 0x20 type 2 sub 0: script 0x31 cast (record 0x8a5cec), texture-track cues + type 0x47 child (content/nino/ch2_script_cast)
+Script32CastUpdate,0x497be0,ST19 pool 0x20 type 0x2d sub 0: script 0x32 cast (records 0x8a5fe8..0x8a6038), mouth flaps (content/nino/ch2_script_cast)
+Script37CastUpdate,0x498160,ST18 pool 0x20 type 0x2d sub 2: script 0x37 cast (records 0x8a6778..), mouth flaps, variant 5 lying + smoke (content/nino/ch2_script_cast)
+Script37FlashUpdate,0x4304d0,pool 0xa0 ST18 stage type 5: script 0x37 flash, 0xf0 discs + G4 spikes (content/nino/ch2_script_cast)
+St15SprayUpdate,0x5c7420,pool 0x40 type 0x13 (ST15 / ST16): the spray of 0x4b6280 (three puffs, hit-list entries, 0x2c billboards; content/nino/st15_spray)
+MissionTankUpdate,0x4a1c40,pool 0x20 type 0x33 (ST15 / ST16 missions): the tanks (content/nino/mission_tank)
+St16CraneUpdate,0x4c7400,pool 0x20 type 0x44 (ST16 mission): the crane bringing a box (content/nino/st16_crane)
+St18BomberBirdbotUpdate,0x495af0,pool 0x20 type 0x2d sub 1 (ST18 mission): the bomber Birdbots (content/nino/st18_bomber_birdbots)
+
+# content/saul_kada: the area's actor classes (their update: the class tables' entries)
+SpawnerSt26Update,0x420ac0,ST26 e0 type 0xa: encounter groups by variant (flags 0x3ed / 0x56), type 0x45
+SpawnerSt27Update,0x420e80,ST27 e0 type 0xa: encounter groups by variant (flags 0x43..0x45 / 0x56)
+SpawnerSt28Update,0x421030,ST28 e0 type 0xa: encounter group 0
+SpawnerSt2bUpdate,0x421070,ST2B e0 type 0xa: grid cell (0x48, 0x40) -> flag 0x58a, pool-0x60 type 7, group 1
+SpawnerSt34Update,0x421210,ST34 e0 type 0xa: encounter groups by variant (flags 0x45 / 0x56)
+SpawnerSt3bUpdate,0x421e40,ST3B e0 type 0xa: type-0x1c emitter / breakable block (grid segment 9)
+LavaVentsUpdate,0x4251e0,Maybe_LavaVentsUpdate (pool e0 type 0x16: ST27 / 28 / 34 lava floor burn + plumes, content/saul_kada/lava_vents)
+HoppingReaverbotUpdate,0x4eadf0,Saul Kada hopping Reaverbot (pool 0x20 type 0x64: hops/chases/jump-attacks, liftable+throwable, content/saul_kada/hopping_reaverbot)
+SandBurrowerUpdate,0x4a9eb0,Saul Kada burrowing sand enemy (pool 0x20 type 0x35: ST27/ST34, buried ambusher -- surfaces, paces between two home points, leaps / charges / spits shots, burrows home, content/saul_kada/sand_burrower)
+TwoFormReaverbotUpdate,0x48d640,Saul Kada two-form enemy (pool 0x20 type 0x29: rises, beat/stand by variant, turns into the wandering form B on hit, content/saul_kada/two_form_reaverbot)
+TonguesUpdate,0x42dde0,pool 0xa0: a pair of flame / spark tongues thrown outward (OT F3 via dc::otTriG3; content/saul_kada/flame_tongues)
+SmokePuffUpdate,0x5c5650,ST48 pool 0x40 type 0xb: a rising puff of smoke (two fading billboards, hit-list entry; content/saul_kada/smoke_puff)
+MinerUpdate,0x4452d0,ST2B pool 0x20 type 0: the trapped miner (idles, faces the player, calls for help until flag 0x583; content/saul_kada/trapped_miner)
+PirateServbotUpdate,0x45f240,pool 0x20 type 0xb sub 0 (ST29 / 2A / 2B / 3B / 3C / 48): the Servbots on foot of the Saul Kada pirate attack (run around the player, knocked down, liftable / throwable; content/saul_kada/pirate_servbots)
+BombServbotUpdate,0x464270,pool 0x20 type 0xb sub 1 (ST2A): the bomb-lobbing Servbot, pops out a sub-0 Servbot when beaten (content/saul_kada/pirate_servbots)
+PirateTankUpdate,0x46a290,pool 0x20 type 0xd (ST29 / ST3B): the Saul Kada pirates' tank (drives around the player, tracking turret, lobbed shells / machine-gun bursts, rideable; a Servbot jumps out when destroyed; content/saul_kada/pirate_tank)
+RuinFlyerUpdate,0x4edff0,ST34 pool 0x20 type 0x67 sub 1: the ruin flyer (patrol / hover shots / dive / home; content/saul_kada/st34_ruin_flyer)
+RuinSentryUpdate,0x474710,pool 0x20 type 0x15 sub 1 (ST34 sub 3, story 12+): the Saul Kada ruin's dormant reaverbot (woken by use / object state; marches, lob shots, drop throw; staggers; explodes with drops; content/saul_kada/st34_ruin_sentry)
+GunnerHelperUpdate,0x4617a0,ST28 pool 0x20 type 0xb sub 1: the fire-ruin gunner boss's two helpers (idle beside it, lobbed shot throws, attack when the beam catches the player, knocked out / liftable / throwable; content/saul_kada/st28_gunner_helpers)
+GunnerBombUpdate,0x5c92d0,ST28 pool 0x40 type 0x18: the fire-ruin gunner boss's bomb (flight, then 13 flame billboards, 0x2c draw commands + hit entries; content/saul_kada/st28_gunner_bomb)
+GunnerBeamUpdate,0x5c9770,ST28 pool 0x40 type 0x19: the fire-ruin gunner boss's beam (variant 0 aiming ray of 0xf0 dots, 1 homing shot + caught effect; content/saul_kada/st28_gunner_beam)
+GuardShotUpdate,0x5ca4f0,ST28 pool 0x40 type 0x1b: the fire-ruin guard's lobbed second shot (content/saul_kada/st28_guard_shot)
+GunnerBossUpdate,0x4daf40,ST28 pool 0x20 type 0x51 sub 0: the fire ruin's boss (advance / retreat home / shot volley / spray / beam / bombs; content/saul_kada/st28_gunner_boss)
+St28GuardUpdate,0x4f1870,ST28 pool 0x20 type 0x6c sub 0: the fire ruin's guard (watches, shoots, charges within 0x708 of home; content/saul_kada/st28_guard)
+ThrownPropUpdate,0x5b2170,ST28 static type 0x40 sub 1: the object thrown by cast 0x4d1040 variant 2 (+0xbc carrier; emitters + dust, content/saul_kada/st28_cast_props)
+DroppedPropUpdate,0x5b1ef0,ST28 static type 0x40 sub 2: the object dropped by cast 0x4d14b0 (+0xc4 carrier; hop, two bounces, spin, content/saul_kada/st28_cast_props)
+PropHolderUpdate,0x4d0b80,pool 0x20 type 0x48 sub 1 (ST28, story 13): holds a static type 0x40 sub 0 at bone 3 (content/saul_kada/fire_ruin_cutscene_cast)
+EntranceCastUpdate,0x4d0d90,pool 0x20 type 0x48 sub 2 (ST27, scripts 0x40 / 0x41): cue-timed turns / walk (content/saul_kada/fire_ruin_cutscene_cast)
+DepthsCastUpdate,0x4d1040,pool 0x20 type 0x48 sub 2 (ST28, scripts 0x44 / 0x47): cue-timed walk / turns / rise (content/saul_kada/fire_ruin_cutscene_cast)
+PropDropperUpdate,0x4d14b0,pool 0x20 type 0x48 sub 3 (ST28, script 0x46): sparks + static at bones, rises, dust (content/saul_kada/fire_ruin_cutscene_cast)
+SlidingDoorUpdate,0x5ba660,static ST41 / ST42 type 0x58: sliding door pair over a grid cell (lock flags 0x8d0c1c, sounds 0xba / 0xbd; content/saul_kada/st41_sliding_door)
+EnemyGeneratorUpdate,0x46d210,pool 0x20 type 0x10 (ST41 / ST42): enemy generator (releases type 5 v4 while < 3 alive; HP, explosion, drops; content/saul_kada/st41_enemy_generator)
+PirateShotUpdate,0x5d0f40,pool 0x40 type 0x31 (ST41 / ST42): projectile (v0 falling bomb, v1 / v2 homing shots; 0x2c billboards; content/saul_kada/st41_pirate_shot)
+SolidRingUpdate,0x5acaa0,static ST41 / ST42 type 0x31: solid 4-piece ring (v0 spawns 1..3; content/saul_kada/st41_ring)
+CrumblingPlatformUpdate,0x5a4c60,static ST41 / ST42 type 0x1f sub 1: crumbling platform after flag 0x155 (3 falling pieces; content/saul_kada/st41_crumbling_platform)
+ScriptWalkerUpdate,0x4b2650,pool 0x20 type 0x3a (ST24): a cast member walking through its script's steps (content/saul_kada/st24_script_walker)
+SpinBladeUpdate,0x481980,pool 0x20 type 0x20 (ST13): a spinning blade / fan (spins up, stops when hit, restarts; hit capsules; content/saul_kada/st13_spin_blade)
+HeadNpcUpdate,0x445840,pool 0x20 type 0 sub 1 (ST40): a standing NPC whose head turns toward the player / a point (content/saul_kada/st40_head_npc)
+TalkerUpdate,0x47dd10,pool 0x20 type 0x1a (ST4B): a talking cast member of script 0x59 (sequence-timed animations, mouth flaps; content/saul_kada/st4b_cast)
+TimedCastUpdate,0x4fb0e0,pool 0x20 type 0x75 (ST52): a cast member timed by the script's sequence tick (face tracks, turns and walks; content/saul_kada/st52_cast)
+RaceBonusUpdate,0x5bf630,static ST59 / 5A / 5B type 0x62: a floating time-bonus pickup of the race (freezes the clock 0x3c ticks, sound 0x30b; content/saul_kada/race_bonus)
+HeldItemUpdate,0x5b23d0,static ST4B type 0x40: the item Megaman holds (variant 0 placed at his hand each tick; content/saul_kada/st4b_cast)
+St32PlateUpdate,0x590b80,ST32 statics: plates (sink under the player, move by +0xc, floor switches -> flags 0x96 / 0x97; content/saul_kada/st2b_props)
+St20PropUpdate,0x5904d0,static ST20 type 1: props (variant 0 solid, rings when hit (sound 0xc7), 1 spins, 2 swings; content/saul_kada/st20_props)
+StandingCastUpdate,0x4e2c40,pool 0x20 type 0x5a (ST52): a standing cast member with face tracks (content/saul_kada/st52_cast)
+SteeredPropUpdate,0x5af6d0,static ST2F / ST58 type 0x39: a prop steered toward target yaw / pitch (+0xbc / +0xbe), colour +0xc..+0xe (content/saul_kada/steered_prop)
+BobberUpdate,0x5b1760,static ST4C type 0x40: a bobbing, spinning object with a hit capsule (content/saul_kada/st4c_bobber)
+GateLineUpdate,0x427500,pool e0 type 0x2a (ST41 / ST42): a gate line of 6 posts (static 0x56 v2); crossing it within 0x200 sets flag 0x155, sound 0x2bf (content/saul_kada/st41_gate_line)
+IcePlayerMarkerUpdate,0x425b10,pool e0 type 1 (ST2D / 2E / 2F): marks the player (+0xbd = 1, FUN_00571ee0) on the stage / on type-0x1f statics (content/saul_kada/ice_floor_marker)
+SpinPropUpdate,0x58d950,static ST00 type 1: a prop (variant 2 +0 |= 0x40, variant 4 spins; content/saul_kada/st00_spin_prop)
+ParticleBurstUpdate,0x5b5a00,static type 0x4c sub 0 (ST27 / 28 / 34 / 42 / 55): a burst of 10 particles, the ruin flyers' shot (0xf0 discs + hit entry; content/saul_kada/particle_burst)
+ScrollGlowUpdate,0x4391b0,pool 0xa0 (ST27 sub 2, story 14): a glowing billboard with a scrolling texture (0x2c draw command; content/saul_kada/st27_scroll_glow)
+GuardianUpdate,0x4ccb70,pool 0x20 type 0x45 (ST33 sub 0, story 13): the ruin's guardian figures (stomp + shake, glowing eyes, animation chains; content/saul_kada/st33_guardian)
+BonScriptCastUpdate,0x4dd1e0,pool 0x20 type 0x51 sub 2 (ST27, story 13): a cast member of scripts 0x40 / 0x41 (cue-driven turns / animation chains; content/saul_kada/fire_ruin_bon_cast)
+ValveUpdate,0x5af970,static ST27 type 0x3b (story 13): the fire ruin's lava valve (regenerating HP through a hit fraction, shakes on the script's cue, sinks when destroyed; content/saul_kada/st27_lava_valve)
+PitCreatureMoverUpdate,0x426b20,pool e0 type 0x1f (ST28, story 13): moves its static type 0x40 sub 3 between random points away from the player (content/saul_kada/lava_pit)
+ServbotScriptCastUpdate,0x465b20,pool 0x20 type 0xb sub 2 (ST28 sub 5, story 13): a cast member of the fire-ruin scripts (cues, head turn, face pages / blinks; content/saul_kada/fire_ruin_servbot_cast)
+RespawnerUpdate,0x5a9d80,static ST27 type 0x27 (story 13): the room's enemy respawner (spawn within 0xc1c, despawn beyond; content/saul_kada/st27_respawner)
+BonRetreatCastUpdate,0x4dd5f0,pool 0x20 type 0x51 (ST28 sub 5, story 13): a cast member of script 0x42 (content/saul_kada/fire_ruin_bon_cast)
+TalkPropUpdate,0x5b7de0,static ST3C type 0x50 variant 1 (story 13): a solid prop that talks when used (message 0x6f; content/saul_kada/st3c_talk_prop)
+StatuePartUpdate,0x5b7890,static ST3C type 0x50: the hit part riding 0x4fa800's bone 0 (hits, HP, flag 0x68, blast; content/saul_kada/st3c_statue)
+PirateCastUpdate,0x466f00,pool 0x20 type 0xc (ST3C sub 2): the pirates of the base's cutscenes (cues of the script block, face pages, smoke; content/saul_kada/st3c_pirate_cast)
+FlameWallUpdate,0x5a3330,static ST3B type 0x1c: a burning flame wall (timed, stacked hit capsules; OT polygons not drawn; content/saul_kada/st3b_flame_wall)
+BreakableUpdate,0x590f30,static ST3B type 1: a breakable crate of the pirate base (HP, blast when destroyed, solid; content/saul_kada/st3b_crate)
+PirateCarrierUpdate,0x5b4000,static ST3B type 0x49 (story 12): the scripted carrier holding the player through the base's cutscene (cue 0xa725a0+3; smoke / sparks, bursts and frees itself), variant != 0 a talk prop (msg 0x28) (content/saul_kada/st3b_pirate_carrier)
+BombTurretUpdate,0x472100,ST3B pool 0x20 type 0x12 sub 0: the pirate base's bomb turret (sweeps, tracks the player, lobs 3-bomb volleys; content/saul_kada/st3b_bomb_turret)
+FallingRockUpdate,0x5afde0,static ST33 type 0x3b sub 1: the falling rocks of the guardian boss 0x4c78e0 (stomp rain / quake; shatters into 4, sound 0x14a; content/saul_kada/st33_falling_rock)
+KeyItemUpdate,0x5b1cd0,static ST33 type 0x40: the key item of script 0x2f; touched -> item-get event msg 0x1e + flag 0x3ed (door locks off; content/saul_kada/st33_key_script)
+KeyScriptFigureUpdate,0x4ccf50,pool 0x20 type 0x45 sub 2 (ST33): script 0x2f's guardian (content/saul_kada/st33_key_script)
+TronPartnerUpdate,0x4cf850,pool 0x20 type 0x48 sub 1 (ST27 sub 8): Tron, picks / leaps to / carries / throws Reaverbots into the lava (content/saul_kada/st27_tron)
+BonPartnerUpdate,0x4dc340,pool 0x20 type 0x51 sub 1 (ST27 sub 8): Bon Bonne, picks / carries / throws Reaverbots into the lava (content/saul_kada/st27_bon)
+LavaBossUpdate,0x4cd440,pool 0x20 type 0x48 sub 0 (ST28 sub 0, story 13/14): the fire ruin's lava boss -- walk/charge/stomp, fire bombs (0x40 type 0x17), lobbed shells (0x40 type 0x1c), liftable/throwable, lava sinks it, boss gauge, death flags 0x55/0x53 (content/saul_kada/st28_lava_boss)
+FireBombUpdate,0x5c86e0,ST28 pool 0x40 type 0x17: the lava boss's fire bomb (v0 homing + liftable, v1 invisible centre of two orbiting v2 bombs; blast on death, the boss may throw again) (content/saul_kada/st28_fire_bomb)
+BossShellUpdate,0x5ca770,ST28 pool 0x40 type 0x1c: the lava boss's lobbed shell (ballistic, blast on contact) (content/saul_kada/st28_boss_shell)
+BombRibbonUpdate,0x4383d0,ST28 pool 0xa0 type 0x15: the flame ribbon between the two orbiting bombs (two OT FT4 quads, dc::otQuadFT4) (content/saul_kada/st28_bomb_ribbon)
+FlyerShellUpdate,0x4ec580,ST27 / ST34 pool 0x20 type 0x67 sub 0: dormant ruin enemy (drops when the player is within 0x700 or hit, circles, lobs pool-0x40 type-5 shots; liftable / throwable; dying releases the 0x4edff0 flyer + sparks; content/saul_kada/st34_flyer_shell)
+FadingFigureUpdate,0x4df230,ST27 pool 0x20 type 0x53 sub 1: room-script model (0x8a5618) that waits 0x1e ticks and fades in (colour / blend +0xeb, animation 5 -> 0; content/saul_kada/ruin_fading_figure)
+LightRingUpdate,0x4382f0,pool 0xa0 type 0x14 (ST26 / 27 / 34 / 40 / 41 / 42): a rising 0xf0 ring record, 8 ticks (dc::emit; content/saul_kada/ruin_light_ring)
+PatrolGuardUpdate,0x4b4b00,ST26 pool 0x20 type 0x3b sub 1: patrolling guard (home lane +0x160, chase, wall turn, gives way to neighbours, knock-back, blast + drops; content/saul_kada/st26_patrol_guard)
+CarrierPodUpdate,0x5b6be0,static ST41 / ST42 type 0x4f: the carrier 0x506d10 pod (fall, sway, lunge with 0xf0 glow, back to the carrier bone; hit entry; content/saul_kada/st41_carrier_pod)
+LavaValveMissionUpdate,0x425560,pool e0 type 0x17 (ST27 sub 8, story 13): the lava-valve mission controller -- spawns the valve, Tron / Bon fighting classes, up to 6 Reaverbots; valve down -> flag 0x4c (content/saul_kada/st27_mission)
+WindowGiantUpdate,0x4cb980,pool 0x20 type 0x45 sub 2 (ST26 sub 5, story 13): the giant seen through the window -- walks, strikes the wall (cell 0x44/0x3c,0x40 variant 1, debris, flags 0x62/0x63), hit list on its bones (content/saul_kada/window_giant)
+StatueMinionUpdate,0x4ff7d0,ST3C pool 0x20 type 0x78: the gold-statue fight's minions (rise from the floor, chase / charge / leap at the player, bounce off walls; dies into a blast + a Servbot variant 3; content/saul_kada/st3c_minion)
+MinionSpawnerUpdate,0x427740,ST3C pool 0xe0 type 0x27: spawns up to 3 pool-0x20 ST3C type 0x78 (0x4ff7d0) near the player on a timer (content/saul_kada/st3c_minion_spawner)
+GoldPieceUpdate,0x5b8440,static ST3C type 0x53: sub 0 the boss's thrown gold, sub 1 the electric ring + lightning of a thrown piece (dc::otQuadG4 / otLineG2; content/saul_kada/st3c_gold_piece)
+GoldShockwaveUpdate,0x5bcc10,static ST3C type 0x5d: sub 0 the dust / shock spawner (variants 0..2), subs 1 / 2 the growing shock-wave models (content/saul_kada/st3c_gold_shockwave)
+BossShotUpdate,0x5cb200,ST3C pool 0x40 type 0x1f: sub 0 attack 3's homing projectile, sub 1 phase one's thrown pieces (content/saul_kada/st3c_boss_shot)
+GoldStatueBossUpdate,0x4f6e60,ST3C pool 0x20 type 0x73 sub 0: Teisel's gold-statue boss (story 12, ST3C sub 2; two phases, sets flag 0x6f at its end; content/saul_kada/st3c_gold_boss)
+SparklerUpdate,0x427a70,ST3C pool 0xe0 type 0x28: sparkles (pool 0xa0 global type 3) at the player below a height (content/saul_kada/st3c_sparkler)
+HoverGunnerUpdate,0x50a5a0,pool 0x20 type 0x7d (ST41 sub 12 / ST42 subs 7, 10): enemy that aims / closes in on the player, 3 attack routines spawning pool-0x40 type-0x31 shots, rise / fall-land routines, dies + drops (content/saul_kada/st41_hover_gunner)
+PodCarrierUpdate,0x506d10,pool 0x20 type 0x7c (ST41): the pod carrier (bobs, drops up to 4 pods when the player is near, dies + drops; content/saul_kada/st41_carrier)
+ChargerUpdate,0x4538c0,pool 0x20 type 6 sub 0 (ST48): the charger of the Saul Kada pirate attack (spins / boosts with two jets / charges the player, hops, skids, wall bounces, knocked over by heavy hits, dies in blasts + drops; content/saul_kada/st48_charger)
+PirateBaseCastUpdate,0x4f4740,ST3C pool 0x20 type 0x72 sub 0: a cast member of the pirate-base script (block 0xa725a0 cues 1..4; variant 1 drops spark emitters at bones 3 / 6; content/saul_kada/pirate_base_cast)
+ScriptStatueUpdate,0x4fa800,ST3C pool 0x20 type 0x73 variant 1: a cast member of script 0x5d (follows the block's cue byte; content/saul_kada/st3c_statue)
+BombCritterUpdate,0x472870,ST48 pool 0x20 type 0x13: a hovering bomb critter (pops out of the ground, follows the player, fuse + blast; liftable / throwable; content/saul_kada/bomb_critter)
+CannonBossUpdate,0x473320,ST2B pool 0x20 type 0x14 sub 0: the Saul Kada mine boss turret (aimed / lob cannon, boss gauge; content/saul_kada/st2b_cannon_boss)
+CannonShellUpdate,0x5c4d60,ST2B pool 0x40 type 8: the boss turret's cannon shell (content/saul_kada/st2b_cannon_shell)
+PirateGunTurretUpdate,0x46bad0,Maybe_PirateTurretUpdate (pool 0x20 type 0xf: ST29 / ST2B gun turret, aims / fires pool-0x40 type 9, a Kobun jumps out when destroyed; content/saul_kada/gun_turret)
+DroppedItemUpdate,0x596670,ST2B / ST3B static type 8: a dropped item (tossed / floating; touched -> flag +0xc, message s8 +0xf; content/saul_kada/dropped_item)
+SlideBlockUpdate,0x597310,ST2A static type 0xc: the block sliding in line with the player, breakable (content/saul_kada/st2a_slide_block)
+St2bPropUpdate,0x5906a0,ST2B static type 1: pots (lift / throw / break), plates, floor switches of flags 0x96 / 0x97 (content/saul_kada/st2b_props)
+St3cPropUpdate,0x591160,ST3C static type 1: a placed model (content/saul_kada/st3c_props)
+PitControllerUpdate,0x426a40,Maybe_LavaPitControllerUpdate (pool e0 type 0x1e: ST28 sub 3 flames + the creature's spots, content/saul_kada/lava_pit)
+PitFlameUpdate,0x5b29b0,Maybe_LavaPitFlameUpdate (pool 0x60 type 0x44: ST28 sub 3 flame, draw command 0x2e, content/saul_kada/lava_pit)
+PitCreatureUpdate,0x5b18c0,Maybe_LavaPitCreatureUpdate (pool 0x60 type 0x40 sub 3: ST28 sub 3 surfacing creature, event 0x28 + flag 0x56 when hit, content/saul_kada/lava_pit)
+SandTrapUpdate,0x4e75d0,Maybe_SandTrapUpdate (pool 0x20 type 0x61: ST27 / 34 / 40..42 grabs the player, drains HP, mash to escape; content/saul_kada/sand_trap)
+QuicksandUpdate,0x427290,Maybe_QuicksandUpdate (pool e0 type 0x23: ST48 sub 1 / ST5B sand pit pull + sprays, content/saul_kada/quicksand)
+FlyerUpdate,0x46c640,pool 0x20 type 0x10 sub 0 (ST28): the flyer -- appears behind the player, bobs, stunned drops pickups / a type-5 reaverbot, explodes (content/saul_kada/st28_flyer)
+OwnerGlowUpdate,0x598150,static ST3B: spinning additive glow bound to its owner (content/saul_kada/st3b_glow)
+St3cRisingModelUpdate,0x596170,static ST3C: rising / bobbing or sinking model (content/saul_kada/st3c_rising_model)
+St48GunshipUpdate,0x593190,ST48 static type 6 sub 0 / type 3 sub 1: the field-encounter gunships (content/saul_kada/st48_gunship)
+GreyFigureUpdate,0x46b990,pool 0x20 type 0xd sub 1 (ST3B): still grey model, hp 1 (content/saul_kada/st3b_grey_figure)
+GateFigureUpdate,0x448ae0,ST3B pool 0x20 type 0 sub 1: script 0x5c cast (record 0x8ab634), cue animations, follows script actor 0 (content/saul_kada/st3b_script5c_cast)
+GateDebrisUpdate,0x43aa30,pool 0xa0 ST3B stage type 0x1c: script 0x5c gate debris FT4 (content/saul_kada/st3b_script5c_cast)
+St33StripScrollUpdate,0x426020,ST33 pool e0 type 0x1a: 16x64 VRAM strip scroller (0x630,0x180)->(0x630,0x140) (vramMove; content/saul_kada/st33_strip_scroll)
+
+# content/subruins: the area's actor classes (their update: the class tables' entries)
+RuinBlocksUpdate,0x5a41a0,static type 0x1f sub 0 (ST2D / 2E / 2F / 58): crumbling platforms, hit-breakable blocks / walls, object-state blocks, their debris (content/subruins/ruin_blocks)
+FallingShotUpdate,0x5c5d20,ST2F / ST58 pool 0x40 type 0xd: the blob boss's falling shot (0x28 billboard, gravity, spark burst; content/subruins/blob_boss_shots)
+LobbedBlobUpdate,0x5caa00,ST2F / ST58 pool 0x40 type 0x1d: the blob boss's lobbed blob / spray (model variant 0, lands, flattens + sinks; content/subruins/blob_boss_shots)
+BlobBossUpdate,0x4d6b40,pool 0x20 type 0x4d (ST2F sub 7 / ST58 sub 1): the blob boss -- scaling body + steered prop (static 0x39), fight / tutorial messages 0x30..0x38 (content/subruins/blob_boss)
+PickupEaterUpdate,0x4ab6f0,pool 0x20 (ST2D / ST2E / ST4F): the pickup eater -- loops around a drifting centre, shies from the player, runs to and eats the pickups; hit reactions, liftable / throwable, dies with a burst + drops (content/subruins/pickup_eater)
+LeapingCritterUpdate,0x4dff50,pool 0x20 (ST2D sub 1 / ST2E sub 1 / ST4F sub 7): the leaping critter -- wanders / leaps at the player / follows a path, liftable + throwable, dies + drops or times out (content/subruins/leaping_critter)
+St4eGroupSpawnerUpdate,0x4227a0,ST4E pool e0 type 0xa: the sub-ruin's group spawner (content/subruins/subruin_spawners)
+St50GroupSpawnerUpdate,0x422cb0,ST50 pool e0 type 0xa: the sub-ruin's group spawner (content/subruins/subruin_spawners)
+SubruinLineTriggerUpdate,0x424fb0,pool e0 type 0x13: the encounter line trigger (content/subruins/subruin_spawners)
+SubruinDropSpawnerUpdate,0x424e10,pool e0 type 0x12: the drop spawner (content/subruins/subruin_spawners)
+
+# content/yosyonke: the area's actor classes (their update: the class tables' entries)
+HangarDropshipUpdate,0x4f29e0,ST07 sub 1 type 0x6d: the dropship in the Flutter's hangar (content/yosyonke/st07_hangar_dropship)
+EncounterSwitchUpdate,0x41b830,ST0E e0 type 0xa: field-encounter formation / screen flag 2 by the player's x (content/yosyonke/st0e_spawner)
+StageEffectUpdate,0x43bff0,pool 0xa0 stage type 0x1f (ST0A / ST0B / ST0C / ST47): cosmetic effect, 9 variants by +6 (0x2c billboards, 0xf0 rings, OT G4 star, OT G3 glows, full-screen tile; content/yosyonke/st0a_fx)
+BossVehicleUpdate,0x501d70,ST0E pool 0x20 type 0x7a: the boss vehicle (spawns the turret 0x7b; content/yosyonke/st0e_boss_vehicle)
+BossTurretUpdate,0x503bd0,ST0E pool 0x20 type 0x7b: the boss turret (arms / cannons / beam / core; content/yosyonke/st0e_turret)
+TurretBombUpdate,0x5cc850,ST0E pool 0x40 stage type 0x24: the turret lobbed bomb (content/yosyonke/st0e_turret)
+TurretShotUpdate,0x5d0430,ST0E pool 0x40 stage type 0x2e: the turret cannon shot (content/yosyonke/st0e_turret)
+BeamGlowUpdate,0x43a760,ST0E pool 0xa0 stage type 0x1b: glow billboard (variant 1 = the beam glow; content/yosyonke/st0e_turret)
+VehicleFireballUpdate,0x5bc3f0,ST0E pool 0x60 stage type 0x5c: the vehicle homing fireball (content/yosyonke/st0e_boss_vehicle)
+DefendedVehicleUpdate,0x5b5e70,ST0E static type 0x4e: the defended vehicle (keeps its gap behind the boss vehicle, signals the turret, target gauge, flags 0x584 / 0x6f0; content/yosyonke/st0e_defended_vehicle)
+CarrierCrateUpdate,0x5a8150,ST0E static type 0x24: the carrier crate dropped by the boss vehicle (holds a Servbot, liftable / throwable at the vehicle weak point; content/yosyonke/st0e_carrier_crate)
+CrateServbotUpdate,0x464a30,ST0E pool 0x20 type 0xb sub 0: the crate Servbot (variant 0 inside, 1 jumps out; content/yosyonke/st0e_servbots)
+RiderServbotUpdate,0x464dc0,ST0E pool 0x20 type 0xb sub 1: the Servbots riding the boss vehicle, lobbing bombs 0x24 at the defended vehicle (content/yosyonke/st0e_servbots)
+FlungServbotUpdate,0x492f20,ST0E pool 0x20 type 0x2d: the Servbot flung out of a broken turret part (variant 0x41; runs around, liftable / throwable; content/yosyonke/st0e_servbots)
+PushBlockUpdate,0x5b5010,ST09 static type 0x4b sub 0: an object moved by hits (slides / hops back, falls off edges, solid at rest; its variant-1 copy follows it; content/yosyonke/st09_push_block)
+KickBallUpdate,0x5b4a50,ST09 static: the kick ball of the goal game (kicks cost zenny, goals pay + message; content/yosyonke/st09_kick_ball)
+RollUpdate,0x445b00,ST08 / ST09 pool 0x20 type 0 sub 1: Roll following the player (content/yosyonke/roll_follower)
+ShedRollUpdate,0x443330,ST08 pool 0x20 type 0 sub 2: Roll waiting at Joe's lab (content/yosyonke/roll_follower)
+FieldRollUpdate,0x4e4c20,ST0D pool 0x20 type 0x60: Roll following in the field (hit points, lift, the tracks; content/yosyonke/roll_follower)
+FlutterRollUpdate,0x4e6dc0,ST04 sub 0 type 0x60: Roll in the Flutter (content/yosyonke/flutter_cabin)
+CabinAnimatedUpdate,0x4cd290,ST04 pool 0x20 type 0x47: the animation by +0xc (content/yosyonke/flutter_cabin)
+CabinModelUpdate,0x58dba0,ST04 static type 1: a placed model (content/yosyonke/flutter_cabin)
+CabinNpcUpdate,0x4e7290,ST04 pool 0x20 type 0x60: an NPC turning its head (content/yosyonke/flutter_cabin)
+JunkShopCastUpdate,0x447aa0,ST0A pool 0x20 type 0 sub 1: the junk-shop scene cast (script 0x4d, content/yosyonke/town_story_cast)
+RollRunsOffUpdate,0x448320,ST09 pool 0x20 type 0 sub 2: Roll running off (script 0x4e, content/yosyonke/town_story_cast)
+JoesLabCastUpdate,0x448520,ST08 sub 1 pool 0x20 type 0 sub 3: Joe's-lab scene cast (script 0x4f, content/yosyonke/town_story_cast)
+JunkShopPropUpdate,0x5915b0,ST0A static type 1 sub 1 (variant 0 slides in during script 0x4d, content/yosyonke/town_story_cast)
+ShyCritterUpdate,0x509830,ST0D pool 0x20 type 0x7e: a shy critter (wanders, flees, knocked away; content/yosyonke/st0d_critter)
+RollSpawnerST0DUpdate,0x41b440,ST0D pool e0 type 0xa: the tracks' cell, Roll by the entrance, region flags (content/yosyonke/roll_spawners)
+AbandonedMineRollUpdate,0x4e6110,ST0F pool 0x20 type 0x60: Roll at the ruin's entrance (path walk, talk; content/yosyonke/abandoned_mine_roll)
+RollSpawnerST08Update,0x41af40,ST08 pool e0 type 0xa: Roll's spawner by the entrance and the story flags (content/yosyonke/roll_spawners)
+RollSpawnerST09Update,0x41b1d0,ST09 pool e0 type 0xa: Roll's spawner of the ST09 introduction (content/yosyonke/roll_spawners)
+St47PersonUpdate,0x4474e0,ST47 pool 0x20 type 0 sub 1: script 0x12's cast (content/yosyonke/town_story_cast)
+St08PropUpdate,0x58dff0,ST08 static type 1 (variant 4: a prop you talk to, message 0x5f; content/yosyonke/town_props)
+St09PropUpdate,0x58e0e0,ST09 static type 1 (variant 5: a prop you talk to, message 0x13; 0 breakable, 1 kicked / thrown, 4 a solid; content/yosyonke/town_props)
+PosedFigureUpdate,0x481000,ST05 / ST06 pool 0x20: a posed figure (bind, idle, animation; content/yosyonke/st05_st06_props)
+TownTalkPropUpdate,0x58dbc0,ST05 / ST06 statics: talk props (use -> message [0x8cd99c + variant]) and the hanging bar (variant 2) (content/yosyonke/st05_st06_props)
+DecorationUpdate,0x58ddf0,ST05 / ST06 statics: swaying / spinning decorations by variant (content/yosyonke/st05_st06_props)
+St09BystanderUpdate,0x448e40,ST09 pool 0x20 type 0 sub 3: script 0x72 bystander (content/yosyonke/town_side_scripts)
+St47VisitorUpdate,0x449270,ST47 pool 0x20 type 0 sub 2: script 0x73 cast, variants 0x4494a0 / 0x449530 (content/yosyonke/town_side_scripts)
+St47FlyerUpdate,0x5ba960,ST47 pool 0x60 type 0x59: script 0x73 flyer (content/yosyonke/town_side_scripts)
+StillModelUpdate,0x5b6a20,static ST09: still model by +6 (content/yosyonke/st09_props)
+WeaponModelUpdate,0x4ec4f0,pool 0x20 type 0x65 (ST04/ST19): the spinning weapon model (content/yosyonke/weapon_model)
+DebugBeamUpdate,0x5cebe0,pool 0x40 ST0E stage type 0x28: pad-steered debug beam (content/yosyonke/st0e_debug_beam)
+AbandonedMineRelicUpdate,0x4dfc70,ST0F pool 0x20 type 0x55: the relic of the hall (sub 11; content/yosyonke/abandoned_mine_relic)
+BladeBarrierUpdate,0x5ac270,static type 0x30 (ST2D): spinning blade barrier -- hub / 4 blade segments (hp, respawn) / player blocker by quadrant / debris (content/yosyonke/ice_ruin_blade_barrier)
+ShrinkBlockUpdate,0x4dd770,pool 0x20 type 0x52 (ST2D / ST2E): a solid block with a scrolling texture (variant 0 gone by flag, others shrink away; content/yosyonke/ice_ruin_shrink_block)
+FlagBarrierUpdate,0x5aa770,static ST2D / ST2E type 0x2a: a semi-transparent barrier (solid) with a guard pool-0x20 type 5, gone by flag +0xe (content/yosyonke/ice_ruin_flag_barrier)
+AppearingBlockUpdate,0x5a5020,static ST2F type 0x1f sub 2: a hidden block appearing by flag 0x8ced90[variant] (cell switched, fades in; content/yosyonke/ice_ruin_appearing_block)
+BurrowingShooterUpdate,0x479130,ST2F pool 0x20 type 0x17: the burrowing shooter (pops up, hops, fires 0x5c5980, liftable; content/yosyonke/ice_ruin_burrowing_shooter)
+ChargedShotUpdate,0x5c5980,ST2F pool 0x40 type 0xc: 0x479130's charged shot (0xf0 rings / 0x2c billboard; content/yosyonke/ice_ruin_burrowing_shooter)
+SceneCritterUpdate,0x4d46f0,ST2F pool 0x20 type 0x4a sub 1: script 0x49's critter (idle / hop / leap on cue; content/yosyonke/ice_ruin_critters)
+CatchableCritterUpdate,0x4d3240,ST2F pool 0x20 type 0x4a sub 0: the catchable critter (lift / carry / talk -> flags 0x3f1..0x3f3; content/yosyonke/ice_ruin_critters)
+HerdedCreatureUpdate,0x4a7b70,ST2F pool 0x20 type 0x34 sub 5: the herded creature (pens 0x275..0x277; content/yosyonke/ice_ruin_herded_creature)
+BubbleTrailUpdate,0x5c2560,static ST2F stage type 0x68: the torpedo 0x5cac60 bubble trail (content/yosyonke/ice_ruin_bubble_trail)
+
+# game/weather_draw: the drawing routines a weather quad comes from (besides its class)
+SnowParticleDraw,0x591c10,a snow particle's sprite (run for every particle the snow's move loop drew)
+
+# game/exit_transitions: the routines its dispatch switches on (step / cue / room handler routines)
+ExitLeavesOpenStep,0x42b4e0
+ExitLeavesHoldWalkOutStep,0x42b8b0
+ExitLeavesCloseStep,0x42b8f0
+ExitWalkOffStep,0x42d550
+ExitDoorActorSinkStep,0x42d7d0
+ExitDoorPushStep,0x42abc0
+ExitLeafFollowsHandStep,0x42abe0
+ExitLeafSwingsOnStep,0x42ac00
+ExitHingedWalkThroughStep,0x53d9f0
+ExitDoubleWalkThroughStep,0x42b020
+PassageTransition,0x42bd40,TransitionKind::Passage
+WalkOffTransition,0x42d260,TransitionKind::WalkOff
+DoorActorTransition,0x42d5a0,TransitionKind::DoorActor
+HingedDoorTransition,0x42a8a0,TransitionKind::HingedDoor
+DoubleDoorTransition,0x42ac40,TransitionKind::DoubleDoor
+SlidingPairTransition,0x42b0d0,TransitionKind::SlidingPair
+FrozenTransition,0x42b930,TransitionKind::Frozen
+LadderTransition,0x42c650,TransitionKind::Ladder
+PitTransition,0x42c4b0,TransitionKind::Pit
+PushedOutTransition,0x42c990,TransitionKind::PushedOut
+TeleporterTransition,0x42cb50,TransitionKind::Teleporter
+
+# content/calbania/calbania_rooms: the routines its dispatch switches on (step / cue / room handler routines)
+St25RoomHelper,0x581af0,ST25: Pokte's list
+St24RoomHelper,0x581810,ST24: Pokte's list; story 3 sub 0 before the first visit: a cell switched; the doors unlocked
+St1FRoomHelper,0x580ce0,ST1F (the square): Calbania's list by the story with the cell (0x40, 0x3b) to 1 / 0 and (0x3b,
+St20RoomHelper,0x5812f0,ST20 (Calbania's town): Calbania's list by the story, two doors unlocked
+St23RoomHelper,0x581650,ST23: Calbania's list by the story; sub 0: the cell (0x40, 0x49) to variant 0 before story 0x11
+St30RoomHelper,0x5852f0,ST30 (Glyde's base): no room list; sub 0's map flag; with its boxes open six cells to variant 1
+St31RoomHelper,0x585f20,ST31 (Glyde's base, inside): no room list; its room scripts' counters cleared
+St32RoomHelper,0x586490,ST32: Pokte's list; the quiz's block marked empty
+St21RoomCase,0x581550,ST21 (the stage case): only the door test (game/transition)
+St22RoomCase,0x5815b0,ST22 (the stage case): step 0: the door locked, step 1; 1: one of the keys -> unlocked, step 2
+St24Story3Sub0RoomHandler,0x5818f0,ST24 story 3 sub 0: the first visit: one actor of the records and script 0x56; later the six
+
+# content/calbania/st32_rooms: the routines its dispatch switches on (step / cue / room handler routines)
+St32RoomHandler,0x586530,step 0: unless story 4 without flag 0x581, the three contestants tracked into the stage block
+
+# content/forbidden_island/elephant_boss: the routines its dispatch switches on (step / cue / room handler routines)
+ElephantCrystalInit,0x590290
+ElephantCrystalFloat,0x590330
+ElephantCrystalInitPlaced,0x5903c0
+ElephantPedestalUse,0x590490
+ElephantScriptCrystalReactsStep,0x524d00
+ElephantScriptFloorGivesWayStep,0x524de0
+ElephantScriptArenaStep,0x524fa0
+ElephantScriptElephantWakesStep,0x5252e0
+ElephantScriptStep5,0x525670,script 0x29's only step
+
+# content/forbidden_island/island_rooms: the routines its dispatch switches on (step / cue / room handler routines)
+St1DRoomHelper,0x5803a0,ST1D: the island's list by the story; sub 0: three cells switched to variant 0
+St10RoomHelper,0x57dd60,ST10: the island's list by the story; from story 1, sub 0 only: the cells (0x44, 0x25) /
+St11RoomHelper,0x57e100,ST11: the island's list by the story
+St3DRoomHelper,0x5889b0,ST3D: no room list; the room flags and a door cleared; by sub: 0 the door lock 1 before story 0x11
+St3ERoomHelper,0x588d00,ST3E: no room list; the room flags of subs 4 / 5; the music channels dipped in sub 2, else
+St3FRoomHelper,0x589030,ST3F: no room list, the door lock 0 cleared
+St3DRoomHandler,0x588af0,stories 0..1 sub 4 / 2..4 sub 0
+St3DStory5OnSub0RoomHandler,0x588b80,stories 5.. sub 0
+St3DStory5OnSub0RoomHandlerB,0x588c10,stories 5.. sub 0
+St3DStory5OnSub0RoomHandlerC,0x588ca0,stories 5.. sub 0
+St3DRoomHandlerA,0x588b20,stories 0..1 sub 5 / 2..4 sub 1
+St3DStory5OnSub1RoomHandler,0x588bb0,stories 5.. sub 1
+St3DStory5OnSub1RoomHandlerB,0x588c40,stories 5.. sub 1
+St3DStory5OnSub1RoomHandlerC,0x588cd0,stories 5.. sub 1
+St3DRoomHandlerB,0x588b50,stories 0..1 sub 7 / 2..4 sub 3
+St3DStory5ToASub3RoomHandler,0x588be0,stories 5..0xa sub 3
+St3DStoryBToDSub2RoomHandler,0x588c70,stories 0xb..0xd sub 2
+St3FSub1RoomHandler,0x589100,sub 1
+St3FStory2OnSub3RoomHandler,0x589130,sub 3 (stories 2..)
+St3FStoryBToDSub1RoomHandler,0x589160,stories 0xb..0xd sub 1
+St3FStoryETo10Sub1RoomHandler,0x589190,stories 0xe..0x10 sub 1
+St3FStory11OnSub1RoomHandler,0x5891c0,stories 0x11.. sub 1
+St3FRoomHandler,0x5890d0
+St3ESub0RoomHandler,0x588de0,sub 0: story 2 after its event and before the talk -> script 0x64 (the step stays 0), else on
+St3ESub1RoomHandler,0x588e30,sub 1
+St3ESub2RoomHandler,0x588e60,sub 2: below story 0x11 the visitors of the story (from 5, 0xb, 0xe), once
+St3ESub3RoomHandler,0x588ec0,sub 3: story 2 before its event
+St3ESub4RoomHandler,0x588f00,sub 4: story 0xb..0xd
+St3ESub5RoomHandler,0x588f30,sub 5: story 2..4 / 5..0xa
+St3ESub6RoomHandler,0x588f80,sub 6, every tick (no step): the story's talk -- story 2 before its event, 4 / 0xa / 0xd with a
+St1DStory1Sub1RoomHandler,0x5805f0,story 1 sub 1: step 0 spawns the cast (and its flags); 1: the elephant's chapter done -> 2, else
+St1DStory1Sub2RoomHandler,0x580690,story 1 sub 2 (the elephant's arena): step 0 -> 1; 1: the boss down -> the exit light (the room's
+St49RoomCase,0x58aec0
+
+# content/forbidden_island/island_visit: the routines its dispatch switches on (step / cue / room handler routines)
+St10FirstLandingRoomHandler,0x57dec0
+St10FirstDecorationsRoomHandler,0x57dfb0
+St10LaterLandingRoomHandler,0x57e000
+St10LaterDecorationsRoomHandler,0x57e060
+St11FirstVisitRoomHandler,0x57e180
+IslandVisitRecordsRoomHandler,0x57e310,every tick (no state test in the exe)
+St1DFirstVisitRoomHandler,0x5804b0
+IslandVisitStory2Sub2RoomHandler,0x5806e0,story 2.. sub 2
+
+# content/forbidden_island/st11_script2a: the routines its dispatch switches on (step / cue / room handler routines)
+St11Script2aWalkInStep,0x525890
+St11Script2aFlashesStep,0x525970
+St11Script2aLooksStep,0x525aa0
+
+# content/forbidden_island/st1c_cast: the routines its dispatch switches on (step / cue / room handler routines)
+St1cFaceFigureCue1,0x4782e0
+St1cFaceFigureCue2,0x478400
+St1cFaceFigureCue3,0x478460
+St1cFaceFigureCue4,0x4784c0
+St1cFaceFigureCue5,0x478550,walks (z -0x33) until tick 0x78 and key 0x14, then stops (animation 0x10)
+St1cFaceFigureCue6,0x4785d0
+St1cFaceFigureCue7,0x478650
+St1cFaceFigureCue8,0x4786b0
+St1cMeshFlipFigureCue1,0x47d300
+St1cMeshFlipFigureCue2,0x47d380
+St1cMeshFlipFigureCue3,0x47d3c0
+St1cMeshFlipFigureCue4,0x47d420
+St1cMeshFlipFigureCue5,0x47d480
+St1cMeshFlipFigureCue6,0x47d630
+St1cMeshFlipFigureCue7,0x47d6b0
+St1cCuedFigureCue1,0x480440
+St1cCuedFigureCue2,0x480470
+St1cCuedFigureCue3,0x4804c0
+St1cWalkingFigureCue1,0x480dc0
+St1cWalkingFigureCue2,0x480e20
+St1cWalkingFigureCue3,0x480e80
+St1cWalkingFigureCue4,0x480ee0,walks (z -0x31)
+St1cPosingFigureCue1,0x482a70
+St1cPosingFigureCue2,0x482ab0
+St1cPosingFigureCue3,0x482af0
+St1cPosingFigureCue4,0x482b70,jump table 0x482c1c / 0x482c30
+St1cPosingFigureCue5,0x482ce0
+St1cPosingFigureCue6,0x482d40
+St1cPosingFigureCue7,0x482df0
+St1cPosingFigureCue8,0x482e50
+St1cRisingPropCue1,0x48aa70,rises: speed z -0xc0, sparks every other frame
+St1cRisingPropCue2,0x48aac0,pitched 0x100, moves -0x10 along its own z, sparks every fourth frame
+St1cRisingPropCue3,0x48ab10,thrown up (0x380, -4 a tick), then it bobs on the sine table
+St1cRisingPropCue4,0x48abe0,bobs from here (phase 0, the base its height)
+St1cFidgetingFigureCue1,0x48bc10
+St1cFidgetingFigureCue2,0x48bc90
+St1cFidgetingFigureFidgetCue,0x48bd20
+St1cFidgetingFigureCue4,0x48be50
+St1cFidgetingFigureCue5,0x48bef0
+St1cFidgetingFigureCue6,0x48bfe0
+St1cHoppingFlyerCue1,0x49b140
+St1cHoppingFlyerCue2,0x49b190
+St1cHoppingFlyerCue3,0x49b230,the hop: animation 7 (z -0x100), at its end animation 8, up; at 0x3c stopped, hidden
+St1cHoppingFlyerCue4,0x49b310
+St1cVanishingWalkerCue1,0x4b60a0
+St1cVanishingWalkerCue2,0x4b60e0
+St1cVanishingWalkerCue3,0x4b6160
+St1cVanishingWalkerCue4,0x4b61a0,walks (z -0x31)
+St1cGroundedHopperCue1,0x4e23e0
+St1cGroundedHopperCue2,0x4e2430
+St1cGroundedHopperCue3,0x4e24a0
+St1cFallingFigureCue1,0x4e27b0
+St1cFallingFigureCue2,0x4e27f0
+St1cFallingFigureCue3,0x4e2810,falls (y +0xc0 << 12 a tick) to the ground: animation 9, at its end 10
+St1cFallingFigureCue4,0x4e28c0,no keys
+St1cFallingFigureCue5,0x4e28f0
+St1cFallingFigureCue6,0x4e2990
+St1cFallingFigureCue7,0x4e29d0
+St1cFallingFigureCue8,0x4e2a90
+St1cFallingFigureCue9,0x4e2a10
+St1cFallingFigureCue10,0x4e2ad0
+St1cGlowingFigureCue1,0x4e3c40
+St1cGlowingFigureCue2,0x4e3c90
+St1cGlowingFigureCue3,0x4e3ce0,rises (velocity y << 12 a tick)
+St1cGlowingFigureCue4,0x4e3d50
+St1cGlowingFigureCue5,0x4e3dc0
+St1cGlowingFigureCue6,0x4e3e40
+St1cGlowingFigureCue7,0x4e3ec0
+St1cGlowingFigureCue8,0x4e3f40
+St1cGlowingFigureCue9,0x4e3fd0
+St1cGlowingFigureCue10,0x4e4060
+St1cHopperCue1,0x4ef0c0
+St1cHopperCue2,0x4ef100
+St1cHopperShortHopCue,0x4ef150
+St1cIdleFigureCue1,0x4f16f0
+St1cIdleFigureCue2,0x4f1720
+St1cIdleFigureCue3,0x4f1750
+St1cIdleFigureCue4,0x4f1780
+St1cIdleFigureCue5,0x4f17b0,animation 0 at tick 0 (the cursors are not cleared)
+St1cShipCue1,0x591370,turns slowly
+St1cShipCue2,0x5913b0,turns, slowing from 0x78
+St1cShipCue3,0x591420,the flare at 0x78; from 0x3c it turns the other way, faster, smoking
+St1cShipCue4,0x5914b0,turning fast, low, smoking every tick
+
+# content/forbidden_island/st1c_script13: the routines its dispatch switches on (step / cue / room handler routines)
+St1cScript13OpeningCuesStep,0x51be40
+St1cScript13OpeningWaitStep,0x51bef0
+St1cScript13LookUpStep,0x51bf50
+St1cScript13FadeToRoom5Step,0x51bfc0
+St1cScript13LongFadeInStep,0x51c040
+St1cScript13Step6,0x51c0a0
+St1cScript13Step7,0x51c0e0
+St1cScript13SecondVoiceStep,0x51c130
+St1cScript13PausedPoseStep,0x51c240
+St1cScript13FastFadeOutStep,0x51c2a0
+St1cScript13GlowStep,0x51c310
+St1cScript13SecondCastStep,0x51c3f0
+St1cScript13Step13,0x51c4a0
+St1cScript13Step14,0x51c4e0
+St1cScript13Step15,0x51c520
+St1cScript13Step16,0x51c560
+St1cScript13Step17,0x51c5b0
+St1cScript13Step18,0x51c600
+St1cScript13Step19,0x51c640
+St1cScript13HiddenCue,0x51c690
+St1cScript13Step21,0x51c700
+St1cScript13Step22,0x51c750
+St1cScript13Step23,0x51c7a0
+St1cScript13GroundPoseStep,0x51c800
+St1cScript13TwoPosesStep,0x51c890
+St1cScript13ThirdVoiceStep,0x51c960
+St1cScript13FadeInToRoom4Step,0x51ca40
+St1cScript13ThirdCastStep,0x51cab0
+St1cScript13EffectEndsStep,0x51cb50
+St1cScript13Step30,0x51cba0
+St1cScript13Step31,0x51cbe0
+St1cScript13Step32,0x51cc20
+St1cScript13Step33,0x51cc60
+St1cScript13Step34,0x51cca0
+St1cScript13Step35,0x51cce0
+St1cScript13EffectAgainStep,0x51cd30
+St1cScript13Step37,0x51cd80
+St1cScript13Step38,0x51cdc0
+St1cScript13Step39,0x51ce00
+St1cScript13Step40,0x51ce40
+St1cScript13Step41,0x51ce90
+St1cScript13Step42,0x51ced0
+St1cScript13FinalFadeStep,0x51cf10
+
+# content/forbidden_island/st3e_reports: the routines its dispatch switches on (step / cue / room handler routines)
+St3eReport64WalkInStep,0x538730
+St3eReport64Step2,0x538800
+St3eReport64Step3,0x538860
+St3eReport64Step4,0x5388c0
+St3eReport64Step5,0x538920
+St3eReport64Step6,0x5389b0
+St3eReport64Step7,0x538a40
+St3eReport64Step8,0x538ab0
+St3eReport64Step9,0x538b40
+St3eReport64Step10,0x538ba0
+
+# content/forbidden_island/st49_landing: the routines its dispatch switches on (step / cue / room handler routines)
+St49LandingOpeningStep,0x51e010
+St49LandingDescentVoiceStep,0x51e0c0
+St49LandingHatchOpensStep,0x51e180
+St49LandingDroppedStep,0x51e2e0
+St49LandingFarBelowStep,0x51e310
+St49LandingRideStep,0x51e390
+St49LandingLandedStep,0x51e4c0
+St49LandingReturnVoiceStep,0x51e550
+St49LandingReturnHatchStep,0x51e5d0
+St49LandingReturnFadeStep,0x51e7d0
+St49LandingReturnLandedStep,0x51e880
+
+# content/intro/crash_landing_script: the routines its dispatch switches on (step / cue / room handler routines)
+CrashLandingBackdropOffStep,0x5168a0
+CrashLandingStep2,0x5169b0
+CrashLandingStep3,0x516940
+CrashLandingAlarmStep,0x516a20
+CrashLandingAlarmOffStep,0x516b20
+CrashLandingStreaksStep,0x516b50
+CrashLandingShakeStep,0x516cd0
+CrashLandingFlutterStreaksStep,0x516d90
+CrashLandingEscapeStep,0x516f50
+CrashLandingDebrisStep,0x5171c0
+CrashLandingBurnStep,0x517420
+CrashLandingWaitStep,0x517790
+CrashLandingClearStep,0x517820
+CrashLandingSecondFileStep,0x517840
+CrashLandingWalkStep,0x5179a0
+
+# content/intro/mission_result: the routines its dispatch switches on (step / cue / room handler routines)
+MissionResultFadeOutStep,0x51a0d0
+MissionResultStep2,0x51a130
+MissionResultSuccessWarpStep,0x51a2b0
+MissionResultStep4,0x51a500
+
+# content/intro/opening_script: the routines its dispatch switches on (step / cue / room handler routines)
+OpeningSeaStep,0x515420
+OpeningCrewStep,0x5154b0
+OpeningSkyStep,0x515630
+OpeningShakeStep,0x515660
+OpeningBackStep,0x515870
+OpeningReturnStep,0x5159a0
+OpeningLongTalkStep,0x515a50
+OpeningChoiceStep,0x515e40
+OpeningAfterChoiceStep,0x516010
+OpeningWalkOffStep,0x516230
+
+# content/intro/st02_attract_script: the routines its dispatch switches on (step / cue / room handler routines)
+AttractScript3CoverStep,0x512bb0
+AttractScript3FadeInStep,0x512c70
+AttractScript3ToRoom1Step,0x512c90
+AttractScript3SwitchCastStep,0x512cf0
+AttractScript3ToRoom2Step,0x512d30
+AttractScript3SceneryStep,0x512e90
+AttractScript3SweepSceneryStep,0x512eb0
+AttractScript3Step8,0x512ed0
+AttractScript3Step9,0x512f00
+AttractScript3Step10,0x512f40
+AttractScript3Step11,0x512f70
+AttractScript3SecondFileStep,0x512fb0
+AttractScript3SecondCastStep,0x5130b0
+AttractScript3FadingQuadStep,0x513110
+AttractScript3FlippingQuadStep,0x513130
+AttractScript3ThirdFileStep,0x513150
+AttractScript3LastRingsStep,0x513200
+AttractScript3FinalRingsStep,0x513240
+AttractScript3ScrollStep,0x513270
+
+# content/intro/st03_attract_script: the routines its dispatch switches on (step / cue / room handler routines)
+AttractScript4EngineStep,0x5138d0
+AttractScript4FirstFileStep,0x5139b0
+AttractScript4TexturesStep,0x513a70
+AttractScript4WarpAfterStep,0x513ae0
+AttractScript4ChapterStep,0x513b50
+AttractScript4SecondFileStep,0x513ca0
+AttractScript4SceneryKindsStep,0x513e10
+AttractScript4ShowActorStep,0x514060
+AttractScript4SlowSceneryStep,0x5140a0
+AttractScript4SweepShowStep,0x514190
+AttractScript4ChipsStep,0x5141d0
+AttractScript4SparklesStep,0x5143e0
+AttractScript4ThirdFileStep,0x514430
+AttractScript4DipVoiceStep,0x514580
+AttractScript4RingWarpStep,0x514640
+AttractScript4FourthFileStep,0x5146f0
+AttractScript4Step17,0x5147e0
+AttractScript4Step18,0x514850
+AttractScript4Step19,0x514920
+AttractScript4LastFileStep,0x5149e0
+AttractScript4LastBankStep,0x514bb0
+AttractScript4Step22,0x514bf0
+AttractScript4FadeOutStep,0x514c60
+
+# content/late_game/ch4_story: the routines its dispatch switches on (step / cue / room handler routines)
+Ch4ArrivalStep1,0x53a1d0
+Ch4ArrivalStep2,0x53a260
+Ch4ArrivalStep3,0x53a2c0
+Ch4ArrivalStep4,0x53a340
+Ch4ArrivalStep5,0x53a3b0
+Ch4ArrivalStep6,0x53a410
+Ch4RidingStep1,0x537dc0,the warp to ST53 sub 0
+Ch4RidingStep2,0x537e90,the column of blasts, the voices, the banner
+St40Sub0RoomHandler,0x5897f0,ST40 sub 0: 0: pads 0x8cc710 x 4 + e0 0x8cc6e4 x 2, the music dipped unless flag 0x2f6 without
+St53StoryFSub1RoomHandler,0x58c100,ST53 sub 1 at story 0xf: step 0: without flag 0x5a1 that flag + script 0x61, else without flag
+St52RoomRoutine,0x58c060,ST52 (the stage's own room function, the room-script tick's case 0x52): sub 0, step 0 -> script
+St40Sub1RoomHandler,0x5898a0,ST40 sub 1 (script 0x69's arrival): 0: music dipped -> 1 (same tick); 1: without flag 0x150 that
+St43Sub0RoomHandler,0x58a5c0,ST43 sub 0: 0 -> 1 with the countdown 0x14; 1: it counts down, at 0 -> 2 and (once, flag 0x5a0)
+St43Sub2RoomHandler,0x58a640,ST43 sub 2: 0 -> 1, without flag 0x170 the door lock 0x710 + records 0x8ccbb0 x 5 (4 statics
+St45Sub1RoomHandler,0x58a880,ST45 sub 1: 0 -> 1, without flag 0x174 the door lock 0x710 + the script slot's group 0 (the
+St40Sub2RoomHandler,0x589930,ST40 sub 2: pads 0x8cc694 x 3 (the room's actors 1..3: still / animated / animated) + e0 0x8cc6d0,
+St17Sub0RoomHandler,0x57f4d0,ST17 sub 0: once 0x710 cleared, records 0x8c7468 x 2 + 0x8c75d8 x 1, the handler's word 1
+St19Sub0RoomHandler,0x57fe80,ST19 sub 0: once 0x710 / 0x713 / 0x715 cleared, 0x711 / 0x712 / 0x714 set, the lock light at
+St19Sub1RoomHandler,0x57fee0,ST19 sub 1: once, with flag 0x3da: 0x710 cleared, the 4 cells (0x40 / 0x3f, 0x40 / 0x3f) to their
+St1BSub1RoomHandler,0x580100,ST1B sub 1: the digger's licence exam (the handler's step)
+St1BSub2RoomHandler,0x580340,ST1B sub 2: once records 0x8c7ea8 x 2 (0x710 cleared)
+St55RoomRoutine,0x58c1f0,ST55 (the stage's own room function, the room-script tick's case 0x55): the licence exam
+
+# content/late_game/end_scripts: the routines its dispatch switches on (step / cue / room handler routines)
+EndScript75Step1,0x53eaa0,the cast 0x8ae5a0, Megaman (anim 0x91) waits; then driven forward (anim 0x92 by the floor
+EndScript75Step2,0x53edc0,Megaman placed (0, 0, 0x34) yaw 0, anim 0x93; 0xdc ticks of shake / vibration (the last one
+EndScript75Step3,0x53eee0,0xf0: the voice faded; once idle: next
+EndDefeatStep1,0x53b1d0,the bank swap, the cast 0x8ad590, Megaman at (0x80, 0, 0x208); debris at fixed ticks, a dust
+EndDefeatStep2,0x53b500,Megaman at (0x80, 0, 0x97) driven by the walk (anims 0x83 / 0x84), then anims 0x85..0x87 + face
+EndDefeatStep3,0x53b6a0
+EndDefeatStep4,0x53b6f0
+EndDefeatStep5,0x53b720,the cast 1 / 2 placed (x -0x38 / -0x70, z -0x60), Megaman moved at 0 / 0x3d4
+EndDefeatStep6,0x53b810
+EndDefeatStep7,0x53b860
+EndDefeatStep8,0x53b880
+EndDefeatStep9,0x53b8d0,anims 0x8c / 0x8d + face keys; 0x15e: fade 0x1c; then -> the wrap-up
+EndReturnStep1,0x52bee0,the message window 0 at 0x1c8, closed at 0x244; 0x4ce: fade 0x12; -> ST52 sub 1
+EndReturnStep2,0x52c110,the VRAM flip-book from 0x1f4; 0xb00: fade 0x14; -> ST52 sub 2 at (0, -0x78, 0)
+EndReturnStep3,0x52c380,Megaman (0, -0x78, 0): 0xdc the casts 0x8a7a20 / 0x8a7a34, anims 0x80..0x82; 0x316 hidden;
+EndReturnStep4,0x52c530,the cast 4 placed at 0x26c; 0x960: fade 0x14; -> ST52 sub 2 at (0x80, -0x78, 0xdc)
+EndReturnStep5,0x52c7a0,Megaman at (0x80, -0x78, 0xdc) anim 0x83, the casts 0x8a7a20 / 0x8a7a34 (+ 0x8a7994 / 0x8a7a5c /
+EndReturnStep6,0x52cbb0,the bank swap, Megaman anim 0x89 sub 0xd; anims 0x8a / 0x8b + face keys, the cast 12 / 13
+EndTakeoffStep1,0x53c5c0
+EndTakeoffStep2,0x53c5f0,the cast 0's phase 1 / 2 with the attachments 0 / 1, 2 / 4, 3; past 0xc8 fade 0x11; -> ST54 sub
+EndTakeoffStep3,0x53c860,the voice 4; once it plays: next, the cast 1's phase 1
+EndTakeoffStep4,0x53c8b0
+EndTakeoffStep5,0x53c900,0x28: sound 1; the casts 5 / 4 / 1 by tick; from 0x14e: next with the cast 1..3 placed
+EndTakeoffStep6,0x53c9d0
+EndTakeoffStep7,0x53ca20,the casts 2 / 3 by tick; past 0x16d: the voice idle, fade 0x11, -> ST54 sub 2 (fades 0xff / 0x12),
+EndTakeoffStep8,0x53cba0,the voice 5; once it plays: next
+EndTakeoffStep9,0x53cbe0
+EndTakeoffStep10,0x53cc10
+EndTakeoffStep11,0x53cc80
+EndTakeoffStep12,0x53cd50
+EndTakeoffStep13,0x53cda0
+EndTakeoffStep14,0x53ce70
+EndTakeoffStep15,0x53ced0,before 0x96 the grey ramps up by 2 to 0x80; then fade 0x12 and next. Every tick the sprite 0xb
+
+# content/late_game/late_rooms: the routines its dispatch switches on (step / cue / room handler routines)
+St40RoomHelper,0x5891f0,ST40: no room list; the switches' locks and the room flags cleared; by sub the switches, the
+St59RoomHelper,0x58c9f0,ST59 / ST5A / ST5B: no room list; the courses' flags
+St54RoomCase,0x58c160,ST54 (the stage case): step 0: its first flag -> script 0x6f (the step kept), else on; step 1: its
+St56RoomCase,0x58c8f0,ST56 (the stage case): its record once
+St57RoomCase,0x58c930,ST57 (the stage case): script 0x6e once (no door test)
+
+# content/late_game/st4b_st4c_rooms: the routines its dispatch switches on (step / cue / room handler routines)
+St4bScript59Step1,0x534000,the walk in (the prop turning)
+St4bScript59Step2,0x5340d0,the walk in again, the poses, then sub 1
+St4bScript59Step3,0x534220,the cast's actors 3..5 released at 0x50, then sub 0
+St4bScript59Step4,0x534290
+St4bScript59Step5,0x5342e0
+St4bScript59Step6,0x534310,the quake: the shake dies down by 0x40 every 4 ticks
+St4bScript59Step7,0x5343f0
+St4bScript59Step8,0x534410
+St4bScript59Step9,0x534460
+St4bScript59Step10,0x5344a0,the collapse: trails, billboards and smoke, then the blast, a DAT load and sub 4
+St4bScript59Step11,0x534770
+St4bScript59Step12,0x534800,the cast's actor 2 counted down at five ticks
+St4bScript59Step13,0x5348e0
+St4bScript59Step14,0x534960
+St4bScript59Step15,0x534a70
+St4bScript59Step16,0x534aa0
+St4bScript59Step17,0x534b80
+St4bScript59Step18,0x534bd0
+St4bScript59Step19,0x534c00
+St4bScript59Step20,0x534c70,the face keys, then the DAT load and sub 4 (the end without its own load)
+St4bScript59Step21,0x534da0
+St4bScript59Step22,0x534e00,the walk to the boss
+St4bScript59Step23,0x534f00,the stage's debris by tick (the point (0x68, -0x6c8, 0x935))
+St4bScript59Step24,0x535010
+St4bScript59Step25,0x5350f0
+St4bScript59Step26,0x5351d0,the sparks, the cast's actor 3 fading in, the fade, actor 1 placed
+St4bScript59Step27,0x535410
+St4bScript59Step28,0x535490
+St4BSub0RoomHandler,0x58b300,sub 0: script 0x59, once
+St4BSub5RoomHandler,0x58b320,sub 5: flag 0x680 -> script 0x5a (step 1); then flag 0x681 -> script 0x5b (step 2)
+St4CSub3RoomHandler,0x58b3a0,sub 3: records 0x8cd5c0 x 5, flag 0x711 until flag 0x177; the door: north of z -0x400 the
+St4CSub4RoomHandler,0x58b480,sub 4: flags 0x680 / 0x681 cleared; flag 0x680 (no event) -> script 0x6b; then flag 0x681 ->
+
+# content/late_game/st4c_story: the routines its dispatch switches on (step / cue / room handler routines)
+St4cIntroStep1,0x53a790,step 0
+St4cIntroStep2,0x53a840,step 1
+St4cIntroStep3,0x53a860,step 2: voice 1 after the current one fades (from tick 0x28, not before tick 0x78)
+St4cIntroStep4,0x53a9a0,step 3
+St4cIntroStep5,0x53a9f0,step 4: fade 0x12 at tick 0x280, then the wrap-up
+St4cOutroStep1,0x53ad00,step 0: the defeated boss for 1000 ticks
+St4cOutroStep2,0x53ad80,step 1: the flash (8 ticks from 0xf5), a shake at 0xfa, the rumble from 0x10e; 400 ticks
+
+# content/late_game/st53_story: the routines its dispatch switches on (step / cue / room handler routines)
+St53CastStep1,0x45c9c0
+St53CastStep2,0x45cb30
+St53CastStep3,0x45cd80
+St53CastStep4,0x45ced0
+St53CastStep5,0x488bf0
+St53CastStep6,0x488c90
+St53CastStep7,0x488d10
+St53CastStep8,0x4992f0
+St53CastStep9,0x4b3730
+St53CastStep10,0x4b3770
+St53CastStep11,0x4b3950
+St53CastStep12,0x4b3aa0
+St53CastStep13,0x4b3ae0
+St53CastStep14,0x4f1050
+St53CastStep15,0x4f13a0
+St53CastStep16,0x4f5950
+St53CastStep17,0x4f5dd0
+St53CastStep18,0x4f6100
+St53CastStep19,0x4f6530
+St53SnowTrackStep1,0x5374b0
+St53SnowTrackStep2,0x5375d0
+St53SnowTrackStep3,0x537640
+St53RideStep1,0x537890
+St53RideStep2,0x537900
+St53RideStep3,0x5379e0
+
+# content/manda/manda_rooms: the routines its dispatch switches on (step / cue / room handler routines)
+St12RoomHelper,0x57e320,ST12: no room list; sub 0's map flag
+St13RoomHelper,0x57e910,ST13: no room list; sub 2 / sub 6 with their passage opened: two cells switched each
+MandaEntranceHallRoomHandler,0x57e380
+MandaSecondDoorRoomHandler,0x57e5c0
+MandaGuardianHallRoomHandler,0x57e630
+St12Sub0RoomHandler,0x57e6f0,sub 0: also the platform up
+St12Sub4RoomHandler,0x57e870,sub 4
+St12Sub5RoomHandler,0x57e8c0,sub 5
+St13Sub0RoomHandler,0x57ec30,sub 0: the exit open every tick; the door test
+St13Sub1RoomHandler,0x57ec60,sub 1
+St13RoomHandler,0x57ea80
+St13RoomHandlerA,0x57eb30
+St13RoomHandlerB,0x57ebb0,ST13 story 4 subs 2 / 6: their passage's flag once the breakable segment of its cell (column
+St14Story4Sub2RoomHandler,0x57ed00,ST14 story 4 sub 2: once: the exit open, the third music channel restored
+St14Story4Sub3RoomHandler,0x57ed30,ST14 story 4 sub 3: once: the exit open, the third channel dipped, the guardian's record until it
+St13RoomHandlerC,0x57ed80
+
+# content/manda/manda_ruin_scripts: the routines its dispatch switches on (step / cue / room handler routines)
+MandaScript9FirstHallWalkInStep,0x518f40
+MandaScript9FirstHallSoundStep,0x5190c0
+MandaScript9FirstHallLookStep,0x5190f0
+MandaScript9FirstHallPoseStep,0x519130
+MandaScript9FirstHallEndStep,0x519160
+MandaScriptAAfterGuardianSoundStep,0x5193e0
+MandaScriptABlockStep,0x519440
+MandaScriptAAfterGuardianWalkStep,0x519450
+MandaScriptAFreeAndLoadStep,0x5194f0
+MandaScriptBSecondGuardianTurnStep,0x519770
+MandaScriptBSecondGuardianBladeStep,0x519890
+MandaScriptBSecondGuardianPlaceStep,0x5199a0
+MandaScriptBSecondGuardianFadeStep,0x5199f0
+MandaScriptCAfterSecondSoundStep,0x519c60
+MandaScriptCAfterSecondWalkStep,0x519ca0
+MandaScriptCFreeAndLoadStep,0x519d30
+MandaScript1aLastHallVoiceStep,0x51ee70
+MandaScript1aStep2,0x51ef50
+MandaScript1aStep3,0x51ef70
+MandaScript1aLastHallWalkStep,0x51ef90
+MandaScript1aLastHallEndStep,0x51f060
+MandaScriptEGuardianWreckStep,0x51a850
+MandaScriptEGuardianJumpStep,0x51a8a0
+MandaScriptFTerminalWalkStep,0x51abe0
+MandaScriptFPlatformRisesStep,0x51ad80
+MandaScriptFPlatformSparksStep,0x51add0
+MandaScriptFBackToTerminalStep,0x51adf0
+MandaScriptFPlatformUpStep,0x51ae80
+
+# content/manda/pokte_rooms: the routines its dispatch switches on (step / cue / room handler routines)
+St25Story3Sub5RoomHandler,0x581b70,ST25 story 3 sub 5: once (its flag) script 0x1b, Tron at the gate
+PokteTankFightRoomHandler,0x581bb0
+PokteAfterTronRoomHandler,0x581dc0
+PokteRecordRoomHandlerA,0x582150
+PokteRecordRoomHandlerB,0x582190
+PokteRecordRoomHandlerC,0x5821d0
+St25Story4OnSub1To4RoomHandler,0x582210,ST25 story 4.. subs 1..4 (the houses' insides): from story 5 or after the ruin gate one villager
+PokteVillagersRoomHandler,0x581950
+St24Story4Sub1RoomHandler,0x5819f0,ST24 story 4 sub 1: back from the ruin gate -> script 0x14 once
+St24Story4Sub2RoomHandler,0x581a40,ST24 story 4 sub 2 (the ruin gate): its actor; until the cutscene the gate's exit (its id 1)
+St24Story4OnSub5RoomHandler,0x581ac0,ST24 sub 5 (story 4..): its actor, once per visit
+
+# content/manda/st24_ruin_gate: the routines its dispatch switches on (step / cue / room handler routines)
+St24GateStep1,0x51d380
+St24GateStep2,0x51d3b0
+
+# content/manda/st25_tron_scenes: the routines its dispatch switches on (step / cue / room handler routines)
+St25TronSceneGateOpensStep,0x51f400
+St25TronSceneRunInStep,0x51f470
+St25TronSceneSlowDownStep,0x51f4f0
+St25TronSceneAtGateStep,0x51f5f0
+St25TronSceneStep5,0x51f690
+St25TronSceneFirstWordsStep,0x51f710
+St25TronSceneStep7,0x51f870
+St25TronSceneSecondWordsStep,0x51f8f0
+St25TronSceneLongTalkStep,0x51f990
+St25TronSceneStep10,0x51fba0
+St25TronSceneAnswerStep,0x51fc20
+St25TronSceneListenStep,0x51fda0
+St25TronSceneTronTalksStep,0x51fdf0
+St25TronSceneLastWordsStep,0x51fe30
+St25TronSceneEndStep,0x520020
+St25TronSceneWreckStep,0x5203a0
+St25TronSceneTurnAndWalkStep,0x520420
+St25TronSceneWalkToTronStep,0x5204e0
+St25TronSceneTronBeatenStep,0x5206d0
+St25TronSceneTronLeavesStep,0x5208e0
+St25TronSceneVillagersTalkStep,0x520a30
+St25TronSceneTurnToVillageStep,0x520ba0
+St25TronSceneFacesStopStep,0x520c50
+St25TronTronCue1Cue,0x45b090
+St25TronTronCue2Cue,0x45b580
+St25TronTronCue3Cue,0x45b720
+St25TronTronCue4Cue,0x45b9e0
+St25TronTronCue5Cue,0x45bc60
+St25TankTankDropCue,0x471690
+St25TankTankStandsCue,0x4718f0
+St25TankTankOnGroundCue,0x471950
+
+# content/nino/ch2_rooms: the routines its dispatch switches on (step / cue / room handler routines)
+St46Story5To9Sub0RoomHandler,0x58a940,ST46 sub 0, stories 5..9: once (flag 0x24) the story + 1 (exe 0x512800) and script 0x31
+St46Story5To9Sub3RoomHandler,0x58a970,ST46 sub 3, stories 5..9: the player's hit points 0; step 0 -> script 0x3c (not ported), step 1
+St17Story6Sub0RoomHandler,0x57f2b0,ST17 sub 0, story 6
+St19Story6Sub0RoomHandler,0x57fba0,sub 0, story 6: once records 0x8c7b18 / 0x8c7b2c / 0x8c7b40, the locks 0x711..0x713 set (0x710 /
+St19RoomHandler,0x57fd10,subs 1 (stories 6..8) / 5: step 0 -> 1 (2 with flag 0x25; 0x710 cleared); 1: flags 0x580 + 0x581,
+St19Story6Sub3RoomHandler,0x57fda0,sub 3, story 6: without flag 0x25 -> flag 0x25 + script 0x32 once
+St19Story7To9Sub0RoomHandler,0x57fde0,sub 0, stories 7..9: once 0x710 / 0x713..0x715 cleared, 0x711 / 0x712 set, the third lock's light
+St18RoomHandler,0x57f620
+St18Story7OnSub0RoomHandler,0x57f7b0,ST18 sub 0, stories 7..: once the floor's 4 cells to variant 0, 0x710 cleared, record 0x8c77a0 x 1
+St17RoomHandler,0x57f3b0,ST17 sub 0 at stories 7 / 8 (sub 3 at story 6): once 0x710 cleared, records 0x8c7468 x 2 +
+St19Story7OnSub5RoomHandler,0x57fe40,ST19 sub 5, stories 7..: once 0x710 cleared (step 1); flag 0x38 -> flag 0x39
+St18Story6Sub2RoomHandler,0x57f780,ST18 sub 2, story 6: once 0x710 cleared, records 0x8c7778 x 2, step 1
+St1BStory6Sub2RoomHandler,0x580270,sub 2, story 6 (the arrival from script 0x32): once records 0x8c7ea8 x 2 (0x710 cleared); then
+St1BStory6Sub3RoomHandler,0x580300,sub 3, story 6: once 0x710 cleared, with flag 0x39 record 0x8c7ed0
+
+# content/nino/nino_rooms: the routines its dispatch switches on (step / cue / room handler routines)
+St17RoomHelper,0x57f200,ST17: the island's list; after story 6 sub 0: the cell (0x3c, 0x3e) to variant 2
+St36RoomHelper,0x586c90,ST36: no room list, then the cells / sound (st36_rooms)
+St37RoomHelper,0x586fe0,ST37: likewise (st37_rooms)
+St38RoomHelper,0x587770,ST38 (the Nino ruin's lowest floor): no room list; sub 5 with its cell opened: the cell (0x41,
+St35RoomHelper,0x586900,ST35 (the Nino ruin): no room list; sub 0's map flag; the doors unlocked
+
+# content/nino/st15_st16_rooms: the routines its dispatch switches on (step / cue / room handler routines)
+St15RoomHandler,0x57eeb0,Start: the mission flag; Opening: the mission opening (message 0x10); Running: the win (flag 0x28,
+St16RoomHandler,0x57f040,Start: the mission flag, the opening's step cleared; Opening: the mission opening (message 0x13);
+
+# content/nino/st35_rooms: the routines its dispatch switches on (step / cue / room handler routines)
+St35RoomHandler,0x5869c0
+St35Sub1RoomHandler,0x586aa0,sub 1: step 0 -> 1 once the first guardian is beaten
+St35Sub3RoomHandler,0x586ac0,sub 3: once, before the guardian woke, the record 0x8cb1c8 (pool 0x20 type 1)
+St35Sub4RoomHandler,0x586af0,sub 4: once, without both keys the lock 0x711
+St35RoomHandlerA,0x586b30
+
+# content/nino/st35_scripts: the routines its dispatch switches on (step / cue / room handler routines)
+St35WakesVoiceStep,0x51d550
+St35WakesStep2,0x51d5a0
+St35WakesStep3,0x51d620
+St35WakesStep4,0x51d660
+St35WakesStep5,0x51d6d0
+St35WakesStep6,0x51d710
+St35BeatenVoiceStep,0x51d8c0
+St35BeatenStep2,0x51d910
+St35BeatenStep3,0x51d980
+St35BeatenStep4,0x51d9b0
+St35DropsInStep1,0x51db50
+St35DropsInStep2,0x51dbf0
+St35DropsInStep3,0x51dd20
+St35DropsInStep4,0x51dd50
+St35DissolvesVoiceStep,0x51ea50
+St35DissolvesStep2,0x51eaa0
+St35DissolvesStep3,0x51eb10
+St35DissolvesStep4,0x51ebc0
+St35DissolvesStep5,0x51ec00
+
+# content/nino/st36_rooms: the routines its dispatch switches on (step / cue / room handler routines)
+St36RoomHandler,0x5878b0,ST36 / ST37 / ST38 sub 1: step 0 -> the zone-slot group 0, step 1
+St36Sub2RoomHandler,0x586e40,ST36 sub 2: step 0 -> the zone-slot group 1, step 1
+St36Sub4RoomHandler,0x586e60,ST36 sub 4: flag 0x9a once the floor cell (0x3b, 0x3c) is open; step 0 -> the group 3 when
+St36Sub4RoomHandlerB,0x586f40,flooded, else 2. Sub 10: the same with flag 0x9b, the cell (0x3f, 0x3f), the groups 8 / 7
+St36Sub5RoomHandler,0x586f00,ST36 sub 5: step 0 -> the group 6 when flooded, else 5
+
+# content/nino/st37_rooms: the routines its dispatch switches on (step / cue / room handler routines)
+St37StoryASub2RoomHandler,0x5871e0,sub 2, story 10: the group 1 (9 drained); the two hints by the player's z
+St37StoryASub4RoomHandler,0x587300,sub 4, story 10: the group 2; the far hint marked seen unless drained
+St37Sub5RoomHandler,0x587340,sub 5: the group 3
+St37RoomHandler,0x5873c0
+St37Sub9RoomHandler,0x587500,sub 9: the group 6
+St37StoryASub13RoomHandler,0x587580,sub 13, story 10: the group 7 (0xa drained); the near hint by the player's x
+St37StoryBOnSub2RoomHandler,0x587600,sub 2, stories 11..: the group 1 (9 drained)
+St37StoryBOnSub4RoomHandler,0x5876b0,sub 4, stories 11..
+St37Sub8RoomHandler,0x5876d0,sub 8: the group 5 (0xb drained)
+St37StoryBOnSub13RoomHandler,0x587710,sub 13, stories 11..: the group 7 (0xa drained)
+St37Sub14RoomHandler,0x587750,sub 14
+
+# content/nino/st37_scripts: the routines its dispatch switches on (step / cue / room handler routines)
+St37OpeningStep1,0x5371a0,the player walks in
+St37OpeningStep2,0x537150
+St37OpeningStep3,0x537210
+St37OpeningStep4,0x537180
+St37OpeningStep5,0x537240
+
+# content/nino/st38_rooms: the routines its dispatch switches on (step / cue / room handler routines)
+St38Sub2RoomHandler,0x5878d0,sub 2: once: drained -> the group 9; else the group 1 + records 0x8cb548 x 4 (type 0x42)
+St38Sub3RoomHandler,0x587920,sub 3: once: the group 2 (drained) / 3
+St38Sub6RoomHandler,0x587a00,sub 6: once: the group 6 (drained) / 7
+St38Sub5RoomHandler,0x587960,sub 5: every tick: the cell (0x41, 0x3e) broken open -> flag 0x9f; once: the group 4 / 5
+St38Sub7RoomHandler,0x587a40,sub 7: once: not drained -> records 0x8cb548 x 4
+St38Sub8RoomHandler,0x587a70,sub 8: once: the group 8; not drained -> records 0x8cb598 x 8
+St38RoomHandler,0x587ab0,subs 10 / 12: 0: step 2, or 1 when the boss music latch was set (cleared); 1: the music faded
+St38Sub11RoomHandler,0x587b00,sub 11 (the boss room): 0: not drained -> records 0x8cb638 x 0x11 (the boss + 16 type 0x42), the
+
+# content/saul_kada/fire_ruin_rooms: the routines its dispatch switches on (step / cue / room handler routines)
+St26RoomHandler,0x582380
+St26RoomHandlerA,0x582420
+St26RoomHandlerB,0x5824b0
+St26Sub6RoomHandler,0x5825e0,sub 6: its record unless flag 0x56
+St27Sub0RoomHandler,0x5828c0,sub 0: with flag 0x56 or without 0x52 its records (by the player's side)
+St27Sub1RoomHandler,0x582930,sub 1
+St27Sub7RoomHandler,0x582bb0,sub 7
+St27RoomHandler,0x582970
+St27RoomHandlerA,0x582a40
+St27RoomHandlerB,0x582bf0
+St28RoomHandler,0x583080
+St28Sub2RoomHandler,0x583350,sub 2
+St28RoomHandlerA,0x583390
+St28RoomHandlerB,0x583460
+St28RoomHandlerC,0x5834f0
+St26Sub2RoomHandler,0x582630,ST26 sub 2
+St26Sub3RoomHandler,0x582650,ST26 sub 3
+St27Sub0RoomHandlerA,0x582e10,ST27 sub 0
+St27Sub2RoomHandler,0x582e60,ST27 sub 2
+St27Sub8RoomHandler,0x582ea0,ST27 sub 8
+St28Sub0RoomHandler,0x5835a0,ST28 sub 0: the fight's flags cleared
+St33RoomHandler,0x5865e0
+St34Sub5RoomHandler,0x5868c0,ST34 sub 5
+
+# content/saul_kada/pirate_base_rooms: the routines its dispatch switches on (step / cue / room handler routines)
+St3BRoomHandler,0x587cb0
+St3BRoomHandlerA,0x588270
+St3CSub1RoomHandler,0x5885f0,sub 1: flags 0x710 / 0x711 cleared, 0x712 until the key 0x3ec, its records
+St3CRoomHandler,0x588660
+St3CRoomHandlerA,0x588810
+St3CSub2RoomHandler,0x588930,sub 2
+St3CSub3RoomHandler,0x588960,sub 3
+St3CSub0RoomHandler,0x588990,sub 0
+
+# content/saul_kada/saul_kada_rooms: the routines its dispatch switches on (step / cue / room handler routines)
+St41RoomHelper,0x589d30,ST41 / ST42: no room list, the script slot's group of the sub-room (exe 0x5e66b0), 16 doors
+St42RoomHelper,0x58a150,unlocked
+St26RoomHelper,0x582250,ST26: no room list; sub 0's map flag; sub 5 opens its two passages' cells
+St27RoomHelper,0x582670,ST27: no room list; sub 8 with its floor fallen opens five cells (the exe opens two of them
+St28RoomHelper,0x582ff0,ST28: no room list; outside sub 0 the field encounters suspended (exe 0x5e6870)
+St29RoomHelper,0x5836a0,ST29: the island's list by the story; sub 1 after story 0xc opens the cell (0x40, 0x49)
+St3CRoomHelper,0x5883e0,ST3C: the island's list by the story; sub 3: the cell (0x40, 0x40), variant 1 before story 0xd,
+St48RoomHelper,0x58ac70,ST48: the island's list by the story; sub 0: the gate cell (0x45, 0x3c), shut (0) at story 0xc
+St44RoomHelper,0x58a6c0,ST44: no room list; the loads' flags cleared
+
+# content/saul_kada/saul_kada_town_rooms: the routines its dispatch switches on (step / cue / room handler routines)
+St29RoomHandler,0x583790
+St29RoomHandlerA,0x583830
+St29RoomHandlerB,0x5839e0,story 12 sub 2 / later sub 0
+St29RoomHandlerC,0x583a20,story 12 sub 3 / later sub 1
+St2ARoomHandler,0x583ad0
+St2ARoomHandlerA,0x583b60
+St2ARoomHandlerB,0x583e70
+St2BStoryCSub0RoomHandler,0x583f40,story 12 sub 0
+St2BRoomHandler,0x583f70
+St2BRoomHandlerA,0x584310,story 12 subs 2 / 3
+St2CStoryCSub0RoomHandler,0x584470,story 12 sub 0
+St48RoomHandler,0x58ade0
+St48StoryCSub1RoomHandler,0x58ae60,story 12 sub 1 (the sand pit): its encounters back
+St48RoomHandlerA,0x58ae90,story 12 sub 3 / later sub 1
+
+# content/saul_kada/st41_st44_rooms: the routines its dispatch switches on (step / cue / room handler routines)
+St41Sub0RoomHandler,0x589dd0,sub 0: the door; 0x14 ticks after entry, once (flag 0x590), the message 0x28
+St41Sub1RoomHandler,0x589e50,sub 1: the same after 0xa ticks (flag 0x591, message 0x29)
+St41Sub2RoomHandler,0x589ed0,sub 2: the door; the player past x 0x600 -> once (flag 0x592) the message 0x2a
+St41Sub3RoomHandler,0x589f30,sub 3: the door; the guards 0x8cc9a8 x 3 until flag 0x682 (flag 0x680 gates the spawn)
+St41Sub5RoomHandler,0x589fe0,sub 5: the door; the guards 0x8cc940 x 3 until flag 0x680
+St41Sub7RoomHandler,0x58a090,sub 7: the door; on entry the lock 0x713 = !flag 0x153
+St41Sub12RoomHandler,0x58a0e0,sub 12: the door; the pair 0x8cc980; the room actors 1 / 2 both down -> done, the door unlocked
+St42Sub1RoomHandler,0x58a1f0,sub 1: the door; the guards 0x8cca48 x 2 until flag 0x680
+St42Sub4RoomHandler,0x58a290,sub 4: the door; the guards 0x8ccab0 x 4 until flag 0x681
+St42Sub6RoomHandler,0x58a340,sub 6: the door; on entry, without flag 0x59d, flag 0x684
+St42Sub7RoomHandler,0x58a390,sub 7: the door; the pair 0x8cca88; both down -> (the step stays 1) flag 0x59d, flags 0x684 / 0x711
+St42Sub8RoomHandler,0x58a420,sub 8: the door; every tick the lock 0x714 = !flag 0x153
+St42Sub10RoomHandler,0x58a470,sub 10: the door; the pair 0x8ccb50; both down -> the door unlocked
+St42Sub14RoomHandler,0x58a4e0,sub 14: the door; with flag 0x3e1 and without 0x683 the guards 0x8ccb00 x 4 until flag 0x683
+St44Sub2RoomHandler,0x58a740,sub 2: the door; first time (no flag 0x172): flags 0x155 / 0x710, the script slot's group 0 and the
+
+# content/subruins/st58_rooms: the routines its dispatch switches on (step / cue / room handler routines)
+St58Sub1RoomHandler,0x58c970,sub 1: the door; step 0 -> 1: shut (its lock flag and record) until its flag; the flag clears
+
+# content/subruins/subruin_rooms: the routines its dispatch switches on (step / cue / room handler routines)
+St4DRoomHelper,0x58b520,ST4D: sub 0 -> its visit flag
+St4FRoomHelper,0x58b980,ST4F: sub 0 -> its visit flag
+St50RoomHelper,0x58bb90,ST50: sub 0 -> its visit flag; records 0x8cd778 x 2 (pool 0xa0 type 0xa, pool 0xe0 type 0x20)
+St4ERoomHelper,0x58b850,ST4E: sub 4 with its cell's flag -> the cell to variant 1; sub 0 -> its visit flag
+
+# content/yosyonke/abandoned_mine_exit: the routines its dispatch switches on (step / cue / room handler routines)
+AbandonedMineExitTalkStep,0x51b9e0
+
+# content/yosyonke/abandoned_mine_rooms: the routines its dispatch switches on (step / cue / room handler routines)
+St0FStory0Sub1RoomHandler,0x57da90,ST0F story 0 sub 1: Roll by the lift; the player from x 0xc00 -> the ride (script 0x50)
+St0FStory0Sub8RoomHandler,0x57d9a0,ST0F story 0 sub 8: the switch already set -> group 8 at once; else wait for it with no event
+St0FStory0Sub10RoomHandler,0x57da00,ST0F story 0 sub 10: the music back (exe 0x5d58a0)
+St0FStory0Sub11RoomHandler,0x57db80,ST0F story 0 sub 11: the music dipped; script 0x51 the first time, later the device / glow / relic;
+St0FStory0Sub12RoomHandler,0x57dc40,ST0F story 0 sub 12: script 0x52 the first time (the doors locked); its guardian's hit points
+St0FStory1Sub0RoomHandler,0x57dd00,ST0F story 1 sub 0: the ruin's doors unlocked once
+St0FStory1Sub11RoomHandler,0x57dd30,ST0F story 1 sub 11: the music channels dipped once
+
+# content/yosyonke/abandoned_mine_scripts: the routines its dispatch switches on (step / cue / room handler routines)
+AbandonedMineLiftArrivalStep,0x531b00
+AbandonedMineTurnToRollStep,0x531c30
+AbandonedMineRollTalkStep,0x531cc0
+AbandonedMineTurnToLiftStep,0x531e60
+AbandonedMineWalkOntoLiftStep,0x531f00
+AbandonedMineLiftRideStep,0x531fc0
+AbandonedMineHallWalkInStep,0x532210
+AbandonedMineHallLookStep,0x532240
+AbandonedMineHallWalkOnStep,0x532310
+AbandonedMineHallTalkStep,0x532340
+AbandonedMineGuardianWakeStep,0x532700
+AbandonedMineGuardianGoneStep,0x532990
+AbandonedMineBackInHallWalkStep,0x532b70
+AbandonedMineBackInHallTurnStep,0x532bd0
+AbandonedMineDeviceMessageStep,0x532c70
+AbandonedMineDeviceApproachStep,0x532cd0
+AbandonedMineDeviceTalkStep,0x532d30
+
+# content/yosyonke/arrival: the routines its dispatch switches on (step / cue / room handler routines)
+ArrivalCabinStep1,0x5304c0
+ArrivalCabinDelayedMessageStep,0x530510
+ArrivalCabinStep3,0x530580
+
+# content/yosyonke/ice_ruin_room_helpers: the routines its dispatch switches on (step / cue / room handler routines)
+St2DRoomHelper,0x5844d0,ST2D / ST2E: the script slot spawns the group of the sub-room and the flag (exe 0x5e66b0), then
+St2FRoomHelper,0x584900,no room list
+St2FRoomHelperA,0x584b70,ST2F: the field encounters suspended in its sub-rooms of 0 (exe 0x5e6870), else resumed; the
+
+# content/yosyonke/ice_ruin_rooms: the routines its dispatch switches on (step / cue / room handler routines)
+St2DSub0RoomHandler,0x584550,sub 0: the door first; the hints of the entrance
+St2DSub2RoomHandler,0x584660,sub 2: the door first; before the ruin is cleared, standing on an actor -> its hint once
+St2DSub5RoomHandler,0x5846c0,sub 5
+St2DSub6RoomHandler,0x584780,sub 6: the door first
+St2DSub7RoomHandler,0x5848a0,sub 7: the door first; before the ruin is cleared its hint once
+St2ESub2RoomHandler,0x584970,sub 2: the door first; before the ruin is cleared: its hint once; on the floor (y 0) another once
+St2ESub3RoomHandler,0x584a00,sub 3: the door first; before the ruin is cleared its hint once
+St2ESub7RoomHandler,0x584b10,sub 7: the door first; before the ruin is cleared its hint once
+St2FSub0RoomHandler,0x584bf0,sub 0: the door first; its hint once
+St2FSub1RoomHandler,0x584c40,sub 1
+St2FSub5RoomHandler,0x584ec0,sub 5: the door first; once the music back and, up to story 0x10 before the reward, its record
+St2FSub6RoomHandler,0x584f30,sub 6: the door first
+St2FSub7RoomHandler,0x5850b0,sub 7: the door first
+St2FSub8RoomHandler,0x585200,sub 8: the door first
+
+# content/yosyonke/st47_rooms: the routines its dispatch switches on (step / cue / room handler routines)
+St47RoomHandler,0x58aa20
+St47RoomHandlerI,0x58aa50
+St47RoomHandlerJ,0x58ab20
+St47RoomHandlerA,0x58aa80
+St47RoomHandlerB,0x581800
+St47RoomHandlerC,0x58aab0
+
+# content/yosyonke/town_room_cases: the routines its dispatch switches on (step / cue / room handler routines)
+St05RoomHandler,0x57c0d0
+St05RoomHandlerA,0x57c140
+St05RoomHandlerB,0x57c180
+St05RoomHandlerC,0x57c290
+St06RoomHandler,0x57c390
+St06RoomHandlerA,0x57c3e0
+St06RoomHandlerB,0x57c520
+St06RoomHandlerC,0x57c5a0
+St0AStory0Sub3RoomHandler,0x57ce00,story 0 sub 3: the record 0x8c58d8, once
+St0ARoomHandlerE,0x57cf80,story 1 sub 8 / later sub 3: the same
+St0ARoomHandlerF,0x57cfb0,story 1 sub 9 / later sub 4: the records 0x8c58f0 x 1 + 0x8c5948 x 3, once
+St0BRoomHandler,0x57d050
+St0BStory0To1Sub0RoomHandler,0x57d0d0,story 0..1 sub 0: the record 0x8c5bd0, once
+St0BStory0To1Sub1RoomHandler,0x57d100,story 0..1 sub 1: the records 0x8c5bf8 x 3 + 0x8c5c38 x 6 once; the office (exe 0x57d220)
+St0BRoomHandlerA,0x57d170,story 0..1 sub 3 / 2..0xf sub 1: the same
+St0BRoomHandlerB,0x57d140,story 0..1 sub 2 / 2..0xf sub 0: the records 0x8c5bd0 x 2, once
+St0BRoomHandlerC,0x57d1b0,sub 4 / 2..0xf sub 2 / 0x10.. sub 0: the same
+St0BRoomHandlerD,0x57d1e0,sub 5 / 2..0xf sub 3 / 0x10.. sub 1: the records 0x8c5bf8 x 3 + 0x8c5cb0 x 7 once; the office
+St0CStory0To1Sub0RoomHandler,0x57d450,story 0..1 sub 0: the record 0x8c5f88, once
+St0CRoomHandler,0x57d4e0,story 0..1 sub 3 / later sub 0: the same
+St0CStory0To1Sub1RoomHandler,0x57d480,story 0..1 sub 1: the records 0x8c5fa0 x 2 + 0x8c5ff0 x 3, once
+St0CRoomHandlerA,0x57d510,story 0..1 sub 4 / later sub 1: the same
+St0CStory0To1Sub2RoomHandler,0x57d4b0,story 0..1 sub 2: the records 0x8c5fc8 x 1 + 0x8c6030 x 3, once
+St0CRoomHandlerB,0x57d540,story 0..1 sub 5 / later sub 2: the records 0x8c5fc8 x 2 + 0x8c6030 x 3, once
+St47RoomHandlerD,0x58ab50,story 0 sub 7 / 1 sub 4 / 2..0xe sub 1: the record 0x8ccd60, once
+St47RoomHandlerE,0x58ab80,story 0 sub 8 / 1 sub 5 / 2..0xe sub 2: the records 0x8ccd78 x 3, once
+St47RoomHandlerF,0x58abb0,story 1 sub 4 / 2..0xe sub 3 / 0xf.. sub 0: the record 0x8ccd48 + the records 0x8ccdb8 x 3, once
+St47RoomHandlerG,0x58abe0,story 1 sub 5 / 2..0xe sub 4 / 0xf.. sub 1: the record 0x8ccd60, once
+St47RoomHandlerH,0x58ac10
+
+# content/yosyonke/town_rooms: the routines its dispatch switches on (step / cue / room handler routines)
+St0CRoomHelper,0x57d3f0,ST0C: the handler word cleared, the town's list
+St0DRoomHelper,0x57d570,ST0D
+St05RoomHelper,0x57c070,ST05: no room list (the handler word cleared after it); sub 1 with its patch flag: the VRAM copy
+St0BRoomHelper,0x57cfe0,ST0B: the town's list; sub 1 from story 0x10 opens the cell (0x3f, 0x40)
+St0ERoomHelper,0x57d690,ST0E: sub 2 no room list, else the town's list; sub 1 from story 0x10 opens the cell (0x29, 0x45)
+St08RoomHelper,0x57c6d0,ST08: two doors unlocked, the town's list; sub 1 from story 1 one cell switched
+St09RoomHelper,0x57c950,ST09: two doors unlocked, the town's list; past story 0xe (exe 0x57cb40) the repaired bridge
+St0ARoomHelper,0x57cc90,ST0A (the junk shop): the town's list; the shop bell unless sub 0 at story 0
+St04RoomHelper,0x57bbc0,ST04 / ST06: no room list, the doors unlocked
+St04RoomHelperA,0x5d6a80,ST04: the Flutter's door
+St07RoomHelper,0x57c5e0,ST07 (the Flutter's hangar): no room list (the handler word cleared first), the doors unlocked
+St47RoomHelper,0x58a9a0,ST47 (where the first ruin's device leads): the town's list, two doors unlocked
+St0ARoomHandler,0x57ce30
+St0ARoomHandlerG,0x57cef0
+St0ARoomHandlerA,0x57ce60
+St0ARoomHandlerH,0x57cda0
+St0ARoomHandlerB,0x57ce90
+St0ARoomHandlerI,0x57cdd0
+St0ARoomHandlerC,0x57cf20
+St0ARoomHandlerD,0x57cf50
+St0AStory1Sub3RoomHandler,0x57cec0,story 1 sub 3
+St08Story1Sub0RoomHandler,0x57c8f0,story 1 sub 0: the Flutter and its cast
+St08Story1Sub1RoomHandler,0x57c920,story 1 sub 1
+St04Story0Sub0RoomHandler,0x57c7a0,story 0 sub 0 (after the crash landing): the Flutter and, the first time, script 0x55 (it comes
+St04Story0Sub0RoomHandlerA,0x57bdc0,story 0 sub 0: the first arrival: its flags, script 0x4c; later visits run exe 0x57be10's other
+St04RoomHandler,0x57bfa0,subs 0 / 3, stories 1..: exe 0x57be10
+St04RoomHandlerA,0x57bfd0
+St04Story2OnSub1RoomHandler,0x57bfe0,sub 1 (stories 2..): the guests' flags by the tool kit tier
+St04Sub1RoomHandler,0x57bfb0,sub 1: the door lock while the Flutter is docked at the island 1
+St07Sub1RoomHandler,0x57c650,sub 1: from story 1 on, once per visit, the dropship (record 0x8c51e8: pool 0x20 type 0x6d at (0,
+St09Story0Sub0RoomHandler,0x57c9d0,story 0 sub 0: after the junk shop the walkers and, once, script 0x4e; the door lock
+St09Story1Sub0RoomHandler,0x57ca40,story 1 sub 0: the walkers, the door lock
+St09RoomHandler,0x57ca70
+St09RoomHandlerA,0x57cb10
+St09RoomHandlerB,0x57caa0
+St09RoomHandlerC,0x57cad0,the walkers, once script 0x72
+
+# content/yosyonke/town_side_scripts: the routines its dispatch switches on (step / cue / room handler routines)
+TownExamDoorsStep1,0x524950
+TownExamDoorsWalkOutStep,0x524970
+TownSt06VoiceStep1,0x53d140
+TownSt06VoiceStep2,0x53d190
+TownSt06VoiceStep3,0x53d200
+TownBystanderStep1,0x53d540
+TownBystanderStep2,0x53d570
+TownBystanderStep3,0x53d5d0
+TownBystanderStep4,0x53d610
+TownVisitorStep1,0x53d970
+TownVisitorStep2,0x53d990
+TownVisitorStep3,0x53d9b0
+TownVisitorStep4,0x53daa0
+TownVisitorStep5,0x53db50
+TownVisitorStep6,0x53dc70
+TownVisitorStep7,0x53dcd0
+TownVisitorStep8,0x53dd00
+
+# content/yosyonke/town_story: the routines its dispatch switches on (step / cue / room handler routines)
+TownChapterRollGreetsStep,0x530790
+TownChapterClerkTalksStep,0x530800
+TownChapterDoorKnockStep,0x5308e0
+TownChapterTurnToDoorStep,0x5309e0
+TownChapterWalkToCounterStep,0x530bb0
+TownChapterRollExplainsStep,0x530d00
+TownChapterShopTalkStep,0x530d70
+TownChapterRollLeavesStep,0x530ed0
+TownChapterWatchRollLeaveStep,0x531180
+TownChapterLookAroundLabStep,0x5314f0
+TownChapterWalkIntoLabStep,0x531570
+TownChapterLabMessageStep,0x5316f0
+TownChapterLabReplyStep,0x531750
+TownChapterLabFarewellStep,0x5317b0
+JoesLabRoomHandler,0x57c820
+JunkShopRoomHandler,0x57cd40
+St0DStory0Sub0RoomHandler,0x57d5d0,ST0D story 0 sub 0: the walker 0x8c62d8
+TrainAttackRoomHandler,0x57d760
+St0DStoryFOnSub0RoomHandler,0x57d600,ST0D stories 0xf.. (sub 0 from 0xf, then later subs): the walker 0x8c62ec x 1
+St0DWalkersRoomHandler,0x57d630,... 0x8c62ec x 2
+St0DWalkerRoomHandler,0x57d660,... 0x8c6314 x 1
+RuinEntranceRoomHandler,0x57da20
+
+# game/encounter: its routines (the steps it writes / dispatches, callbacks, handlers)
+EncounterSlotsSetup,0x50f280,the encounter slots' setup (the stage setup's call with the encounter kinds)
+
+# game/room_scripts: its routines (the steps it writes / dispatches, callbacks, handlers)
+EmptyRoomHandler,0x5d4f30,a room handler that is a bare return
+
+# game/stage_setup: its routines (the steps it writes / dispatches, callbacks, handlers)
+NoRoomListHelper,0x57bb70,the room helper of a stage with no room list (the room-script handler word kept)
+NoRoomListClearHelper,0x57eca0,the room helper of a stage with no room list (the word cleared)
+UvAnimationListSetup,0x5f5bd0,the room's UV-animation list set up (a helper column's entry, not a helper)
+StoryFlagTestCall,0x510e50,a story flag tested (a helper column's entry, not a helper)
+StoryFlagClearCall,0x510e30,a story flag cleared (a helper column's entry, not a helper)
+
+# game/stage_state: its routines (the steps it writes / dispatches, callbacks, handlers)
+TownRoomCallback,0x54ed50,the towns' room callback
+
+# game/story: its routines (the steps it writes / dispatches, callbacks, handlers)
+ShopMenuCallback,0x5d1e30,the shop stages' menu (script 8's stage callback)
+
+# content/calbania/base_explosion_script: its routines (the steps it writes / dispatches, callbacks, handlers)
+BaseExplosionScriptStepBlowUp,0x524250
+
+# content/calbania/calbania_departure_script: its routines (the steps it writes / dispatches, callbacks, handlers)
+CalbaniaDepartureScriptStepPlace,0x539c70
+CalbaniaDepartureScriptStepTurn,0x539cf0
+CalbaniaDepartureScriptStepBoard,0x539d10
+CalbaniaDepartureScriptStepRise,0x539d90
+CalbaniaDepartureScriptStepFlyOff,0x539f10
+
+# content/calbania/calbania_rooms: its routines (the steps it writes / dispatches, callbacks, handlers)
+CalbaniaRoomsPokteRoomCallback,0x550740
+CalbaniaRoomsSquareRoomCallback,0x54ab10
+CalbaniaRoomsSquareSecondCallback,0x54ae30
+
+# content/calbania/calbania_story_rooms: its routines (the steps it writes / dispatches, callbacks, handlers)
+CalbaniaStoryRoomsDockFirst,0x581770
+CalbaniaStoryRoomsDockLater,0x5817d0
+CalbaniaStoryRoomsTownStory8,0x5813b0
+CalbaniaStoryRoomsTownStory9,0x581440
+CalbaniaStoryRoomsTownMiddle,0x5814b0
+CalbaniaStoryRoomsTownLate,0x5814f0
+CalbaniaStoryRoomsSquareDefence,0x580ec0
+CalbaniaStoryRoomsSquareDeparture,0x581270
+CalbaniaStoryRoomsSquareAfterBase,0x581230
+
+# content/calbania/calbania_town_scripts: its routines (the steps it writes / dispatches, callbacks, handlers)
+CalbaniaTownScriptsFirstVisitStepHello,0x51b290
+CalbaniaTownScriptsFirstVisitStepTalk,0x51b2e0
+CalbaniaTownScriptsFirstVisitStepWait,0x51b340
+CalbaniaTownScriptsStepFirstLine,0x51b560
+CalbaniaTownScriptsStepSecondLine,0x51b650
+CalbaniaTownScriptsStepThirdLine,0x51b6a0
+CalbaniaTownScriptsStepFourthLine,0x51b780
+CalbaniaTownScriptsStepLastLine,0x51b7d0
+
+# content/calbania/glyde_base_rooms: its routines (the steps it writes / dispatches, callbacks, handlers)
+GlydeBaseRoomsEntrance,0x585df0
+GlydeBaseRoomsSub0,0x5854c0
+GlydeBaseRoomsSub1,0x585670
+GlydeBaseRoomsGate,0x585890
+GlydeBaseRoomsBoxRoom,0x585f80
+GlydeBaseRoomsCell,0x586220
+
+# content/calbania/glyde_base_scripts: its routines (the steps it writes / dispatches, callbacks, handlers)
+GlydeBaseScriptsStepCastWalksIn,0x522330
+GlydeBaseScriptsStepCastTalks,0x522360
+GlydeBaseScriptsStepPlayerAnswers,0x5223d0
+GlydeBaseScriptsStepCastLeaves,0x522430
+GlydeBaseScriptsStepTowerFalls,0x522730
+GlydeBaseScriptsStepGuardsCue,0x522e30
+GlydeBaseScriptsStepWalkOut,0x522ed0
+GlydeBaseScriptsStepThanks,0x523180
+GlydeBaseScriptsStepAlarmNear,0x523460
+GlydeBaseScriptsStepAlarm,0x523490
+GlydeBaseScriptsStepRunOff,0x523550
+GlydeBaseScriptsStepWalkIn,0x523870
+GlydeBaseScriptsStepHeard,0x5238a0
+GlydeBaseScriptsStepInside,0x5239f0
+GlydeBaseScriptsStepFound,0x523b30
+GlydeBaseScriptsStepTalk,0x523bf0
+
+# content/calbania/island_blown_script: its routines (the steps it writes / dispatches, callbacks, handlers)
+IslandBlownScriptStepWarp,0x52b670
+IslandBlownScriptStepBlasts,0x52b6e0
+
+# content/calbania/nino_return_rooms: its routines (the steps it writes / dispatches, callbacks, handlers)
+NinoReturnRoomsReturn,0x57f3f0
+NinoReturnRoomsShore,0x57f7e0
+NinoReturnRoomsAttack,0x57f810
+NinoReturnRoomsMachine,0x57f8f0
+
+# content/calbania/nino_return_scripts: its routines (the steps it writes / dispatches, callbacks, handlers)
+NinoReturnScriptsStepToShore,0x529ee0
+NinoReturnScriptsStepArrive,0x529f40
+NinoReturnScriptsStepFaceSea,0x52a0b0
+NinoReturnScriptsStepWalkAway,0x52a0e0
+NinoReturnScriptsStepRun,0x52a540
+NinoReturnScriptsStepSink,0x52a680
+NinoReturnScriptsStepHide,0x52a830
+NinoReturnScriptsStepFlyPoints,0x52a8a0
+NinoReturnScriptsStepLand,0x52aa50
+NinoReturnScriptsStepWatch,0x52ae50
+NinoReturnScriptsStepSurface,0x52aed0
+NinoReturnScriptsStepLook,0x52af40
+NinoReturnScriptsStepClear,0x52afb0
+NinoReturnScriptsStepRipples,0x52afc0
+NinoReturnScriptsStepDive,0x52b1c0
+NinoReturnScriptsStepRise,0x52b220
+NinoReturnScriptsStepBack,0x52b280
+NinoReturnScriptsStepLast,0x52b2f0
+
+# content/calbania/square_defence_scripts: its routines (the steps it writes / dispatches, callbacks, handlers)
+SquareDefenceScriptsStepArrive,0x520e60
+SquareDefenceScriptsStepTalk,0x520f40
+SquareDefenceScriptsStepListen,0x5210a0
+SquareDefenceScriptsStepAnswer,0x5210f0
+SquareDefenceScriptsStepLast,0x5211c0
+SquareDefenceScriptsStepGather,0x521540
+SquareDefenceScriptsStepWalk,0x5215c0
+SquareDefenceScriptsStepCross,0x521620
+SquareDefenceScriptsStepWatch,0x521a10
+SquareDefenceScriptsStepPause,0x521a70
+SquareDefenceScriptsStepReply,0x521a90
+SquareDefenceScriptsStepHold,0x521b30
+SquareDefenceScriptsStepEnd,0x521b50
+SquareDefenceScriptsStepRunUp,0x521fc0
+SquareDefenceScriptsStepThrow,0x522040
+SquareDefenceScriptsStepFly,0x5220b0
+SquareDefenceScriptsStepLand,0x5220e0
+
+# content/forbidden_island/island_rooms: its routines (the steps it writes / dispatches, callbacks, handlers)
+IslandRoomsSt3eRoomCallback,0x5545c0
+
+# content/intro/st4a_rooms: its routines (the steps it writes / dispatches, callbacks, handlers)
+St4aRoomsStartRoomHandler,0x58af30
+St4aRoomsUnlockHandler,0x58b160
+St4aRoomsSecondFightHandler,0x58b0e0
+St4aRoomsLessonHandler,0x58b1a0
+St4aRoomsZoneFightHandler,0x58b210
+
+# content/late_game/ch4_story: its routines (the steps it writes / dispatches, callbacks, handlers)
+Ch4StoryExamEntrance,0x58c2a0
+
+# content/late_game/late_rooms: its routines (the steps it writes / dispatches, callbacks, handlers)
+LateRoomsSt40SoundHelper,0x5d3d40
+
+# content/late_game/st4b_scripts: its routines (the steps it writes / dispatches, callbacks, handlers)
+St4bScriptsRetreatVoice,0x535a40
+St4bScriptsRetreatRoll,0x535ae0
+St4bScriptsEscapeVoice,0x535db0
+St4bScriptsEscapeLook,0x535e50
+St4bScriptsEscapeBlasts,0x535e90
+
+# content/late_game/st54_clear_screen: its routines (the steps it writes / dispatches, callbacks, handlers)
+St54ClearScreenShowTime,0x53f130
+St54ClearScreenSaveMenu,0x548f20
+
+# content/nino/ch2_scripts: its routines (the steps it writes / dispatches, callbacks, handlers)
+Ch2ScriptsTakeOffStart,0x527a60
+Ch2ScriptsTakeOffFly,0x527ae0
+Ch2ScriptsTakeOffEngines,0x527b40
+Ch2ScriptsTakeOffPuffs,0x527c20
+Ch2ScriptsLandingStand,0x52bb50
+Ch2ScriptsLandingWalk,0x52bb70
+Ch2ScriptsLandingLeave,0x52bc10
+Ch2ScriptsGateBank,0x527ef0
+Ch2ScriptsGateSkippable,0x527f90
+Ch2ScriptsGateWarp,0x527fa0
+Ch2ScriptsGateFade,0x528000
+Ch2ScriptsCraneCast,0x5285a0
+Ch2ScriptsCraneFace,0x528600
+Ch2ScriptsCraneEnd,0x528620
+Ch2ScriptsCannonTalk,0x528a60
+Ch2ScriptsCannonTurn,0x528c50
+Ch2ScriptsCannonLeave,0x528cd0
+Ch2ScriptsShipsQuiet,0x529070
+Ch2ScriptsShipsTalk,0x5290a0
+Ch2ScriptsFightVoice,0x5294f0
+Ch2ScriptsFightCast,0x5295e0
+Ch2ScriptsFightBurst,0x5296b0
+Ch2ScriptsFightLoad,0x529850
+Ch2ScriptsGunshipFade,0x529aa0
+
+# content/nino/nino_rooms: its routines (the steps it writes / dispatches, callbacks, handlers)
+NinoRoomsSt18RoomCallback,0x54f190
+
+# content/nino/st16_script33: its routines (the steps it writes / dispatches, callbacks, handlers)
+St16Script33GripStep,0x528260
+
+# content/saul_kada/fire_ruin_depths_scripts: its routines (the steps it writes / dispatches, callbacks, handlers)
+FireRuinDepthsScriptsEdgeWalkBack,0x52ec90
+FireRuinDepthsScriptsEdgeStagger,0x52edb0
+FireRuinDepthsScriptsEdgeStepBack,0x52edf0
+FireRuinDepthsScriptsEdgeTurn,0x52eec0
+FireRuinDepthsScriptsEdgeCountdown,0x52ef10
+FireRuinDepthsScriptsReturnWalkBack,0x52f170
+FireRuinDepthsScriptsReturnStop,0x52f290
+FireRuinDepthsScriptsReturnFaces,0x52f2d0
+FireRuinDepthsScriptsBeatenSignal,0x52f570
+FireRuinDepthsScriptsBeatenWalk,0x52f590
+FireRuinDepthsScriptsBeatenSkip,0x52f5c0
+FireRuinDepthsScriptsLeaveWait,0x52f870
+FireRuinDepthsScriptsLeavePose,0x52f8b0
+
+# content/saul_kada/fire_ruin_entrance_scripts: its routines (the steps it writes / dispatches, callbacks, handlers)
+FireRuinEntranceScriptsEntranceWalkIn,0x52d160
+FireRuinEntranceScriptsEntranceFaces,0x52d2b0
+FireRuinEntranceScriptsEntranceEmbers,0x52d300
+FireRuinEntranceScriptsEntranceTalk,0x52d360
+FireRuinEntranceScriptsEntranceStepUp,0x52d490
+FireRuinEntranceScriptsEntranceMouth,0x52d520
+FireRuinEntranceScriptsGateShake,0x52d920
+FireRuinEntranceScriptsGateOpen,0x52da60
+FireRuinEntranceScriptsGatePlaceA,0x52db70
+FireRuinEntranceScriptsGateLook,0x52dbc0
+FireRuinEntranceScriptsGatePlaceB,0x52dc10
+FireRuinEntranceScriptsGateTalk,0x52dc50
+FireRuinEntranceScriptsDepthsWalkIn,0x52e030
+FireRuinEntranceScriptsDepthsPause,0x52e210
+FireRuinEntranceScriptsDepthsBlink,0x52e240
+FireRuinEntranceScriptsRubbleFall,0x52e640
+FireRuinEntranceScriptsRubbleWalkIn,0x52e760
+FireRuinEntranceScriptsRubbleFaces,0x52e8e0
+FireRuinEntranceScriptsRubbleCast,0x52e910
+FireRuinEntranceScriptsRubblePlace,0x52e980
+
+# content/saul_kada/fire_ruin_visit_scripts: its routines (the steps it writes / dispatches, callbacks, handlers)
+FireRuinVisitScriptsEveWait,0x5271e0
+FireRuinVisitScriptsEveTalk,0x527230
+FireRuinVisitScriptsVisitPadLook,0x526da0
+FireRuinVisitScriptsVisitPlace,0x526dd0
+FireRuinVisitScriptsVisitDrive,0x526e00
+
+# content/saul_kada/pirate_base_scripts: its routines (the steps it writes / dispatches, callbacks, handlers)
+PirateBaseScriptsGateLook,0x5361e0
+PirateBaseScriptsGateTurn,0x536220
+PirateBaseScriptsGateSweep,0x536250
+PirateBaseScriptsGateBreak,0x536270
+PirateBaseScriptsGateGuards,0x5363f0
+PirateBaseScriptsArrivalLoad,0x536900
+PirateBaseScriptsArrivalReset,0x5369c0
+PirateBaseScriptsArrivalWalk,0x5369e0
+PirateBaseScriptsArrivalPlace,0x536af0
+PirateBaseScriptsArrivalReact,0x536b10
+PirateBaseScriptsVictoryFade,0x536ea0
+
+# content/saul_kada/saul_kada_rooms: its routines (the steps it writes / dispatches, callbacks, handlers)
+SaulKadaRoomsLavaGlowRoutine,0x5dbd30
+SaulKadaRoomsSt48RearmHelper,0x5e67f0
+
+# content/saul_kada/st33_key_script: its routines (the steps it writes / dispatches, callbacks, handlers)
+St33KeyScriptFallStep,0x5276d0
+St33KeyScriptTurnStep,0x527710
+St33KeyScriptDropStep,0x527730
+St33KeyScriptPlaceStep,0x5277d0
+
+# content/yosyonke/dev_room: its routines (the steps it writes / dispatches, callbacks, handlers)
+DevRoomRollStep0,0x546160
+DevRoomRollMenuStep,0x543cd0
+DevRoomNinoStep0,0x5488a0
+DevRoomNinoMenuStep,0x5461b0
+DevRoomRollDevRoomCallback,0x545e60
+DevRoomNinoDevRoomCallback,0x548650
+
+# content/yosyonke/ice_ruin_scripts: its routines (the steps it writes / dispatches, callbacks, handlers)
+IceRuinScriptsWalkStep,0x52fcb0
+IceRuinScriptsCueStep,0x52fd80
+IceRuinScriptsTutorialStep,0x52ff30
+IceRuinScriptsTutorialSceneStep,0x530280
+
+# game/stage_setup: the stage / room setup functions, the room helpers and the callbacks the setups write
+St00StageSetup,0x5d6320,the stage setup of ST00 (exe table 0x8d3808)
+St01StageSetup,0x5d6490,the stage setup of ST01 (exe table 0x8d3808)
+St02StageSetup,0x5d65e0,the stage setup of ST02 (exe table 0x8d3808)
+St03StageSetup,0x5d6740,the stage setup of ST03 (exe table 0x8d3808)
+St04StageSetup,0x5d6900,the stage setup of ST04 (exe table 0x8d3808)
+St05StageSetup,0x5d6b80,the stage setup of ST05 (exe table 0x8d3808)
+St06StageSetup,0x5d6cf0,the stage setup of ST06 (exe table 0x8d3808)
+St07StageSetup,0x5d6e60,the stage setup of ST07 (exe table 0x8d3808)
+St08StageSetup,0x5d6fd0,the stage setup of ST08 (exe table 0x8d3808)
+St09StageSetup,0x5d71a0,the stage setup of ST09 (exe table 0x8d3808)
+St0AStageSetup,0x5d7320,the stage setup of ST0A (exe table 0x8d3808)
+St0BStageSetup,0x5d74c0,the stage setup of ST0B (exe table 0x8d3808)
+St0CStageSetup,0x5d7670,the stage setup of ST0C (exe table 0x8d3808)
+St0DStageSetup,0x5d77e0,the stage setup of ST0D (exe table 0x8d3808)
+St0EStageSetup,0x5d7960,the stage setup of ST0E (exe table 0x8d3808)
+St0FStageSetup,0x5d7b30,the stage setup of ST0F (exe table 0x8d3808)
+St10StageSetup,0x5d7cb0,the stage setup of ST10 (exe table 0x8d3808)
+St11StageSetup,0x5d7eb0,the stage setup of ST11 (exe table 0x8d3808)
+St12StageSetup,0x5d80b0,the stage setup of ST12 (exe table 0x8d3808)
+St13StageSetup,0x5d8230,the stage setup of ST13 (exe table 0x8d3808)
+St14StageSetup,0x5d83b0,the stage setup of ST14 (exe table 0x8d3808)
+St15StageSetup,0x5d8540,the stage setup of ST15 (exe table 0x8d3808)
+St16StageSetup,0x5d8710,the stage setup of ST16 (exe table 0x8d3808)
+St17StageSetup,0x5d88e0,the stage setup of ST17 (exe table 0x8d3808)
+St18StageSetup,0x5d8b00,the stage setup of ST18 (exe table 0x8d3808)
+St19StageSetup,0x5d8d70,the stage setup of ST19 (exe table 0x8d3808)
+St1AStageSetup,0x5d8f90,the stage setup of ST1A (exe table 0x8d3808)
+St1BStageSetup,0x5d9140,the stage setup of ST1B (exe table 0x8d3808)
+St1CStageSetup,0x5d92f0,the stage setup of ST1C (exe table 0x8d3808)
+St1DStageSetup,0x5d9460,the stage setup of ST1D (exe table 0x8d3808)
+St1EStageSetup,0x5d9670,the stage setup of ST1E (exe table 0x8d3808)
+St1FStageSetup,0x5d97e0,the stage setup of ST1F (exe table 0x8d3808)
+St20StageSetup,0x5d9a20,the stage setup of ST20 (exe table 0x8d3808)
+St21StageSetup,0x5d9ba0,the stage setup of ST21 (exe table 0x8d3808)
+St22StageSetup,0x5d9d50,the stage setup of ST22 (exe table 0x8d3808)
+St23StageSetup,0x5d9f00,the stage setup of ST23 (exe table 0x8d3808)
+St24StageSetup,0x5da0b0,the stage setup of ST24 (exe table 0x8d3808)
+St25StageSetup,0x5da2b0,the stage setup of ST25 (exe table 0x8d3808)
+St26StageSetup,0x5da470,the stage setup of ST26 (exe table 0x8d3808)
+St27StageSetup,0x5da5f0,the stage setup of ST27 (exe table 0x8d3808)
+St28StageSetup,0x5da790,the stage setup of ST28 (exe table 0x8d3808)
+St29StageSetup,0x5da930,the stage setup of ST29 (exe table 0x8d3808)
+St2AStageSetup,0x5dab40,the stage setup of ST2A (exe table 0x8d3808)
+St2BStageSetup,0x5dad10,the stage setup of ST2B (exe table 0x8d3808)
+St2CStageSetup,0x5daef0,the stage setup of ST2C (exe table 0x8d3808)
+St2DStageSetup,0x5db070,the stage setup of ST2D (exe table 0x8d3808)
+St2EStageSetup,0x5db200,the stage setup of ST2E (exe table 0x8d3808)
+St2FStageSetup,0x5db390,the stage setup of ST2F (exe table 0x8d3808)
+St30StageSetup,0x5db540,the stage setup of ST30 (exe table 0x8d3808)
+St31StageSetup,0x5db6d0,the stage setup of ST31 (exe table 0x8d3808)
+St32StageSetup,0x5db860,the stage setup of ST32 (exe table 0x8d3808)
+St33StageSetup,0x5db9d0,the stage setup of ST33 (exe table 0x8d3808)
+St34StageSetup,0x5dbb80,the stage setup of ST34 (exe table 0x8d3808)
+St35StageSetup,0x5dbf80,the stage setup of ST35 (exe table 0x8d3808)
+St36StageSetup,0x5dc110,the stage setup of ST36 (exe table 0x8d3808)
+St37StageSetup,0x5dc2c0,the stage setup of ST37 (exe table 0x8d3808)
+St38StageSetup,0x5dc470,the stage setup of ST38 (exe table 0x8d3808)
+St39StageSetup,0x5dc620,the stage setup of ST39 (exe table 0x8d3808)
+St3AStageSetup,0x5dc790,the stage setup of ST3A (exe table 0x8d3808)
+St3BStageSetup,0x5dc900,the stage setup of ST3B (exe table 0x8d3808)
+St3CStageSetup,0x5dcae0,the stage setup of ST3C (exe table 0x8d3808)
+St3DStageSetup,0x5dccb0,the stage setup of ST3D (exe table 0x8d3808)
+St3EStageSetup,0x5dce50,the stage setup of ST3E (exe table 0x8d3808)
+St3FStageSetup,0x5dd0c0,the stage setup of ST3F (exe table 0x8d3808)
+St40StageSetup,0x5dd260,the stage setup of ST40 (exe table 0x8d3808)
+St41StageSetup,0x5dd430,the stage setup of ST41 (exe table 0x8d3808)
+St42StageSetup,0x5dd5b0,the stage setup of ST42 (exe table 0x8d3808)
+St43StageSetup,0x5dd730,the stage setup of ST43 (exe table 0x8d3808)
+St44StageSetup,0x5dd8b0,the stage setup of ST44 (exe table 0x8d3808)
+St45StageSetup,0x5dda30,the stage setup of ST45 (exe table 0x8d3808)
+St46StageSetup,0x5ddbb0,the stage setup of ST46 (exe table 0x8d3808)
+St47StageSetup,0x5ddd10,the stage setup of ST47 (exe table 0x8d3808)
+St48StageSetup,0x5ddea0,the stage setup of ST48 (exe table 0x8d3808)
+St49StageSetup,0x5de040,the stage setup of ST49 (exe table 0x8d3808)
+St4AStageSetup,0x5de1b0,the stage setup of ST4A (exe table 0x8d3808)
+St4BStageSetup,0x5de340,the stage setup of ST4B (exe table 0x8d3808)
+St4CStageSetup,0x5de500,the stage setup of ST4C (exe table 0x8d3808)
+St4DStageSetup,0x5de680,the stage setup of ST4D (exe table 0x8d3808)
+St4EStageSetup,0x5de8a0,the stage setup of ST4E (exe table 0x8d3808)
+St4FStageSetup,0x5deac0,the stage setup of ST4F (exe table 0x8d3808)
+St50StageSetup,0x5ded00,the stage setup of ST50 (exe table 0x8d3808)
+St51StageSetup,0x5def60,the stage setup of ST51 (exe table 0x8d3808)
+St52StageSetup,0x5df0e0,the stage setup of ST52 (exe table 0x8d3808)
+St53StageSetup,0x5df260,the stage setup of ST53 (exe table 0x8d3808)
+St54StageSetup,0x5df3d0,the stage setup of ST54 (exe table 0x8d3808)
+St55StageSetup,0x5df540,the stage setup of ST55 (exe table 0x8d3808)
+St56StageSetup,0x5df6c0,the stage setup of ST56 (exe table 0x8d3808)
+St57StageSetup,0x5df830,the stage setup of ST57 (exe table 0x8d3808)
+St58StageSetup,0x5df990,the stage setup of ST58 (exe table 0x8d3808)
+St59StageSetup,0x5dfb10,the stage setup of ST59 (exe table 0x8d3808)
+St5AStageSetup,0x5dfc80,the stage setup of ST5A (exe table 0x8d3808)
+St5BStageSetup,0x5dfdf0,the stage setup of ST5B (exe table 0x8d3808)
+St5CStageSetup,0x5dff60,the stage setup of ST5C (exe table 0x8d3808)
+St00RoomSetup,0x5d63b0,the room setup of ST00 (exe table 0x8d397c)
+St01RoomSetup,0x5d6520,the room setup of ST01 (exe table 0x8d397c)
+St02RoomSetup,0x5d6680,the room setup of ST02 (exe table 0x8d397c)
+St03RoomSetup,0x5d6820,the room setup of ST03 (exe table 0x8d397c)
+St04RoomSetup,0x5d69b0,the room setup of ST04 (exe table 0x8d397c)
+St05RoomSetup,0x5d6c20,the room setup of ST05 (exe table 0x8d397c)
+St06RoomSetup,0x5d6d90,the room setup of ST06 (exe table 0x8d397c)
+St07RoomSetup,0x5d6f00,the room setup of ST07 (exe table 0x8d397c)
+St08RoomSetup,0x5d70b0,the room setup of ST08 (exe table 0x8d397c)
+St09RoomSetup,0x5d7250,the room setup of ST09 (exe table 0x8d397c)
+St0ARoomSetup,0x5d73d0,the room setup of ST0A (exe table 0x8d397c)
+St0BRoomSetup,0x5d7580,the room setup of ST0B (exe table 0x8d397c)
+St0CRoomSetup,0x5d7710,the room setup of ST0C (exe table 0x8d397c)
+St0DRoomSetup,0x5d7890,the room setup of ST0D (exe table 0x8d397c)
+St0ERoomSetup,0x5d7a60,the room setup of ST0E (exe table 0x8d397c)
+St0FRoomSetup,0x5d7be0,the room setup of ST0F (exe table 0x8d397c)
+St10RoomSetup,0x5d7dc0,the room setup of ST10 (exe table 0x8d397c)
+St11RoomSetup,0x5d7fc0,the room setup of ST11 (exe table 0x8d397c)
+St12RoomSetup,0x5d8160,the room setup of ST12 (exe table 0x8d397c)
+St13RoomSetup,0x5d82e0,the room setup of ST13 (exe table 0x8d397c)
+St14RoomSetup,0x5d8470,the room setup of ST14 (exe table 0x8d397c)
+St15RoomSetup,0x5d8640,the room setup of ST15 (exe table 0x8d397c)
+St16RoomSetup,0x5d8810,the room setup of ST16 (exe table 0x8d397c)
+St17RoomSetup,0x5d8a00,the room setup of ST17 (exe table 0x8d397c)
+St18RoomSetup,0x5d8c30,the room setup of ST18 (exe table 0x8d397c)
+St19RoomSetup,0x5d8ec0,the room setup of ST19 (exe table 0x8d397c)
+St1ARoomSetup,0x5d9070,the room setup of ST1A (exe table 0x8d397c)
+St1BRoomSetup,0x5d9220,the room setup of ST1B (exe table 0x8d397c)
+St1CRoomSetup,0x5d9390,the room setup of ST1C (exe table 0x8d397c)
+St1DRoomSetup,0x5d9570,the room setup of ST1D (exe table 0x8d397c)
+St1ERoomSetup,0x5d9710,the room setup of ST1E (exe table 0x8d397c)
+St1FRoomSetup,0x5d9910,the room setup of ST1F (exe table 0x8d397c)
+St20RoomSetup,0x5d9ab0,the room setup of ST20 (exe table 0x8d397c)
+St21RoomSetup,0x5d9c80,the room setup of ST21 (exe table 0x8d397c)
+St22RoomSetup,0x5d9e30,the room setup of ST22 (exe table 0x8d397c)
+St23RoomSetup,0x5d9fe0,the room setup of ST23 (exe table 0x8d397c)
+St24RoomSetup,0x5da170,the room setup of ST24 (exe table 0x8d397c)
+St25RoomSetup,0x5da380,the room setup of ST25 (exe table 0x8d397c)
+St26RoomSetup,0x5da520,the room setup of ST26 (exe table 0x8d397c)
+St27RoomSetup,0x5da6a0,the room setup of ST27 (exe table 0x8d397c)
+St28RoomSetup,0x5da850,the room setup of ST28 (exe table 0x8d397c)
+St29RoomSetup,0x5daa40,the room setup of ST29 (exe table 0x8d397c)
+St2ARoomSetup,0x5dac20,the room setup of ST2A (exe table 0x8d397c)
+St2BRoomSetup,0x5dadf0,the room setup of ST2B (exe table 0x8d397c)
+St2CRoomSetup,0x5dafa0,the room setup of ST2C (exe table 0x8d397c)
+St2DRoomSetup,0x5db130,the room setup of ST2D (exe table 0x8d397c)
+St2ERoomSetup,0x5db2c0,the room setup of ST2E (exe table 0x8d397c)
+St2FRoomSetup,0x5db470,the room setup of ST2F (exe table 0x8d397c)
+St30RoomSetup,0x5db600,the room setup of ST30 (exe table 0x8d397c)
+St31RoomSetup,0x5db790,the room setup of ST31 (exe table 0x8d397c)
+St32RoomSetup,0x5db900,the room setup of ST32 (exe table 0x8d397c)
+St33RoomSetup,0x5dbab0,the room setup of ST33 (exe table 0x8d397c)
+St34RoomSetup,0x5dbc40,the room setup of ST34 (exe table 0x8d397c)
+St35RoomSetup,0x5dc040,the room setup of ST35 (exe table 0x8d397c)
+St36RoomSetup,0x5dc1f0,the room setup of ST36 (exe table 0x8d397c)
+St37RoomSetup,0x5dc3a0,the room setup of ST37 (exe table 0x8d397c)
+St38RoomSetup,0x5dc550,the room setup of ST38 (exe table 0x8d397c)
+St39RoomSetup,0x5dc6c0,the room setup of ST39 (exe table 0x8d397c)
+St3ARoomSetup,0x5dc830,the room setup of ST3A (exe table 0x8d397c)
+St3BRoomSetup,0x5dca00,the room setup of ST3B (exe table 0x8d397c)
+St3CRoomSetup,0x5dcbc0,the room setup of ST3C (exe table 0x8d397c)
+St3DRoomSetup,0x5dcd60,the room setup of ST3D (exe table 0x8d397c)
+St3ERoomSetup,0x5dcf00,the room setup of ST3E (exe table 0x8d397c)
+St3FRoomSetup,0x5dd170,the room setup of ST3F (exe table 0x8d397c)
+St40RoomSetup,0x5dd330,the room setup of ST40 (exe table 0x8d397c)
+St41RoomSetup,0x5dd4e0,the room setup of ST41 (exe table 0x8d397c)
+St42RoomSetup,0x5dd660,the room setup of ST42 (exe table 0x8d397c)
+St43RoomSetup,0x5dd7e0,the room setup of ST43 (exe table 0x8d397c)
+St44RoomSetup,0x5dd960,the room setup of ST44 (exe table 0x8d397c)
+St45RoomSetup,0x5ddae0,the room setup of ST45 (exe table 0x8d397c)
+St46RoomSetup,0x5ddc40,the room setup of ST46 (exe table 0x8d397c)
+St47RoomSetup,0x5dddd0,the room setup of ST47 (exe table 0x8d397c)
+St48RoomSetup,0x5ddf60,the room setup of ST48 (exe table 0x8d397c)
+St49RoomSetup,0x5de0e0,the room setup of ST49 (exe table 0x8d397c)
+St4ARoomSetup,0x5de260,the room setup of ST4A (exe table 0x8d397c)
+St4BRoomSetup,0x5de420,the room setup of ST4B (exe table 0x8d397c)
+St4CRoomSetup,0x5de5b0,the room setup of ST4C (exe table 0x8d397c)
+St4DRoomSetup,0x5de7d0,the room setup of ST4D (exe table 0x8d397c)
+St4ERoomSetup,0x5de9f0,the room setup of ST4E (exe table 0x8d397c)
+St4FRoomSetup,0x5dec30,the room setup of ST4F (exe table 0x8d397c)
+St50RoomSetup,0x5dee90,the room setup of ST50 (exe table 0x8d397c)
+St51RoomSetup,0x5df010,the room setup of ST51 (exe table 0x8d397c)
+St52RoomSetup,0x5df190,the room setup of ST52 (exe table 0x8d397c)
+St53RoomSetup,0x5df300,the room setup of ST53 (exe table 0x8d397c)
+St54RoomSetup,0x5df470,the room setup of ST54 (exe table 0x8d397c)
+St55RoomSetup,0x5df5f0,the room setup of ST55 (exe table 0x8d397c)
+St56RoomSetup,0x5df760,the room setup of ST56 (exe table 0x8d397c)
+St57RoomSetup,0x5df8c0,the room setup of ST57 (exe table 0x8d397c)
+St58RoomSetup,0x5dfa40,the room setup of ST58 (exe table 0x8d397c)
+St59RoomSetup,0x5dfbb0,the room setup of ST59 (exe table 0x8d397c)
+St5ARoomSetup,0x5dfd20,the room setup of ST5A (exe table 0x8d397c)
+St5BRoomSetup,0x5dfe90,the room setup of ST5B (exe table 0x8d397c)
+St5CRoomSetup,0x5e0010,the room setup of ST5C (exe table 0x8d397c)
+St15RoomHelper,0x57ee90,the room helper of ST15 (its room setup calls it)
+St16RoomHelper,0x57f020,the room helper of ST16 (its room setup calls it)
+St18RoomHelper,0x57f5c0,the room helper of ST18 (its room setup calls it)
+St19RoomHelper,0x57fb10,the room helper of ST19 (its room setup calls it)
+St1ARoomHelper,0x580020,the room helper of ST1A (its room setup calls it)
+St1BRoomHelper,0x580080,the room helper of ST1B (its room setup calls it)
+St21RoomHelper,0x581510,the room helper of ST21 (its room setup calls it)
+St22RoomHelper,0x581570,the room helper of ST22 (its room setup calls it)
+St2ARoomHelper,0x583a60,the room helper of ST2A (its room setup calls it)
+St2BRoomHelper,0x583ec0,the room helper of ST2B (its room setup calls it)
+St2CRoomHelper,0x5843f0,the room helper of ST2C (its room setup calls it)
+St3BRoomHelper,0x587c30,the room helper of ST3B (its room setup calls it)
+St04SecondRoomCallback,0x554080,the callback the stage setup of ST04 sets (0xa72230)
+St08SecondRoomCallback,0x54e9b0,the callback the stage setup of ST08 sets (0xa72230)
+St0DRoomCallback,0x54e6d0,the callback the stage setup of ST0D sets (0xa72584)
+St0FSecondRoomCallback,0x550230,the callback the stage setup of ST0F sets (0xa72230)
+St0FRoomCallback,0x54fd10,the callback the stage setup of ST0F sets (0xa72584)
+St10RoomCallback,0x54c440,the callback the stage setup of ST10 sets (0xa72584)
+St10SecondRoomCallback,0x54c740,the callback the stage setup of ST10 sets (0xa72230)
+St12SecondRoomCallback,0x54bb20,the callback the stage setup of ST12 sets (0xa72230)
+St12RoomCallback,0x54b230,the callback the stage setup of ST12 sets (0xa72584)
+St15SecondRoomCallback,0x54f490,the callback the stage setup of ST15 sets (0xa72230)
+St24SecondRoomCallback,0x5509d0,the callback the stage setup of ST24 sets (0xa72230)
+St26SecondRoomCallback,0x54d1b0,the callback the stage setup of ST26 sets (0xa72230)
+St26RoomCallback,0x54caf0,the callback the stage setup of ST26 sets (0xa72584)
+St29SecondRoomCallback,0x553c70,the callback the stage setup of ST29 sets (0xa72230)
+St2DSecondRoomCallback,0x54df80,the callback the stage setup of ST2D sets (0xa72230)
+St2DRoomCallback,0x54d940,the callback the stage setup of ST2D sets (0xa72584)
+St35SecondRoomCallback,0x553280,the callback the stage setup of ST35 sets (0xa72230)
+St35RoomCallback,0x552c20,the callback the stage setup of ST35 sets (0xa72584)
+St3DSecondRoomCallback,0x5548c0,the callback the stage setup of ST3D sets (0xa72230)
+St40RoomCallback,0x554d20,the callback the stage setup of ST40 sets (0xa72584)
+St40SecondRoomCallback,0x5551a0,the callback the stage setup of ST40 sets (0xa72230)
+St41SecondRoomCallback,0x555c90,the callback the stage setup of ST41 sets (0xa72230)
+St41RoomCallback,0x555670,the callback the stage setup of ST41 sets (0xa72584)
+St43SecondRoomCallback,0x556b20,the callback the stage setup of ST43 sets (0xa72230)
+St43RoomCallback,0x556360,the callback the stage setup of ST43 sets (0xa72584)
+St48RoomCallback,0x5539e0,the callback the stage setup of ST48 sets (0xa72584)
+St4ASecondRoomCallback,0x5512f0,the callback the stage setup of ST4A sets (0xa72230)
+St4ARoomCallback,0x550d50,the callback the stage setup of ST4A sets (0xa72584)
+St4FSecondRoomCallback,0x552750,the callback the stage setup of ST4F sets (0xa72230)
+St4FRoomCallback,0x552290,the callback the stage setup of ST4F sets (0xa72584)
+St51SecondRoomCallback,0x551d90,the callback the stage setup of ST51 sets (0xa72230)
+St51RoomCallback,0x551890,the callback the stage setup of ST51 sets (0xa72584)
+St59RoomCallback,0x557110,the callback the stage setup of ST59 sets (0xa72584)
+StageMusicCall,0x5d3cf0,the stage setup's music call (its two arguments; game/stage_music)
+
+# content/late_game/ch4_story: the ST40 room handlers by sub-room (table 0x8cc648) and the ST55 exam rooms
+St40RoomHandlerSub3,0x589990,ST40 sub 3: the teleporter pads (panel 3 still), extra records, the music restored
+St40RoomHandlerSub4,0x5899f0,ST40 sub 4: the teleporter pads, the music dipped
+St40RoomHandlerSub5,0x589a40,ST40 sub 5: the teleporter pads (panel 0 still), extra records, the music restored
+St40RoomHandlerSub6,0x589aa0,ST40 sub 6: the teleporter pads, the music dipped
+St40RoomHandlerSub7,0x589af0,ST40 sub 7: the teleporter pads (panel 0 still), extra records, the music restored
+St40RoomHandlerSub8,0x589b50,ST40 sub 8: the teleporter pads, the music dipped
+St40RoomHandlerSub9,0x589ba0,ST40 sub 9: the teleporter pads, the music dipped
+St40RoomHandlerSub10,0x589bf0,ST40 sub 10: the teleporter pads, the music dipped
+St40RoomHandlerSub11,0x589c40,ST40 sub 11: the teleporter pads, the music dipped
+St40RoomHandlerSub12,0x589c90,ST40 sub 12: the teleporter pads, the music dipped
+St40RoomHandlerSub13,0x589ce0,ST40 sub 13: the teleporter pads, the music dipped
+ExamRoom1Handler,0x58c380,the licence exam's room 1 (groups 0 / 7)
+ExamRoom2Handler,0x58c490,the licence exam's room 2 (groups 2 / 8)
+ExamRoom3Handler,0x58c550,the licence exam's room 3 (groups 3 / 9)
+ExamRoom4Handler,0x58c610,the licence exam's room 4 (groups 4 / 0xa)
+ExamRoom5Handler,0x58c6c0,the licence exam's room 5 (groups 5 / 0xb)
+ExamRoom6Handler,0x58c780,the licence exam's room 6 (groups 6 / 0xc)
+
+# content/forbidden_island/st3e_reports: the ruin key reports' steps (scripts 0x65 / 0x66 / 0x67)
+St3eReport65WalkInStep,0x538dc0
+St3eReport65SecondSpeakerStep,0x538e90
+St3eReport65FirstSpeakerStep,0x538f00
+St3eReport65LastStep,0x538f70
+St3eReport66WalkInStep,0x5391a0
+St3eReport66SecondSpeakerStep,0x539270
+St3eReport66FirstSpeakerStep,0x5392e0
+St3eReport66LastStep,0x539350
+St3eReport67WalkInStep,0x539580
+St3eReport67SecondSpeakerStep,0x539650
+St3eReport67FirstSpeakerStep,0x5396c0
+St3eReport67LastStep,0x539730
+
+# the routines content code names by hand (cues, steps, handlers, the callers a gap names)
+St28LavaBossLanding,0x4ce300,the ST28 lava boss's landing (a gap's message names it)
+St28LavaBossFall,0x4ce780,the ST28 lava boss's fall (a gap's message names it)
+CabinLaterVisitsHandler,0x57be10,ST04 story 0 sub 0's later visits (not ported: a gap's message names it)
+St1cFlyerFlightCue,0x4bc180,the ST1C flyer's flight cue
+EndStaffRollStep,0x53be40,script 0x6e's one step (the staff roll)
+St53StoryFRoomHandler,0x58c0c0,ST53 sub 0 at story 0xf (table 0x8cd800): script 0x60 once
+St32QuizStep,0x525e00,script 0x2b's one step (the quiz)

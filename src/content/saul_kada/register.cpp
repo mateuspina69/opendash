@@ -1,0 +1,227 @@
+// The actor classes of content/saul_kada in the class registry (game/content_registry), registered by
+// content/registry.cpp. Moved from the registry table of game/actors.cpp (same entries, same order).
+#include "content/registry.hpp"
+
+#include "content/saul_kada/enemy_spawners.hpp"
+
+#include "content/saul_kada/ruin_fading_figure.hpp"
+#include "content/saul_kada/ruin_light_ring.hpp"
+#include "content/saul_kada/st26_patrol_guard.hpp"
+#include "content/saul_kada/st34_flyer_shell.hpp"
+#include "content/saul_kada/st41_carrier_pod.hpp"
+#include "content/saul_kada/quicksand.hpp"
+#include "content/saul_kada/sand_trap.hpp"
+#include "content/saul_kada/st2b_props.hpp"
+#include "content/saul_kada/st3c_props.hpp"
+#include "content/saul_kada/dropped_item.hpp"
+#include "content/saul_kada/st2a_slide_block.hpp"
+#include "content/saul_kada/gun_turret.hpp"
+#include "content/saul_kada/trapped_miner.hpp"
+#include "content/saul_kada/smoke_puff.hpp"
+#include "content/saul_kada/flame_tongues.hpp"
+#include "content/saul_kada/st33_guardian.hpp"
+#include "content/saul_kada/st27_scroll_glow.hpp"
+#include "content/saul_kada/particle_burst.hpp"
+#include "content/saul_kada/st00_spin_prop.hpp"
+#include "content/saul_kada/st41_gate_line.hpp"
+#include "content/saul_kada/st4c_bobber.hpp"
+#include "content/saul_kada/steered_prop.hpp"
+#include "content/saul_kada/st52_cast.hpp"
+#include "content/saul_kada/st4b_cast.hpp"
+#include "content/saul_kada/race_bonus.hpp"
+#include "content/saul_kada/st40_head_npc.hpp"
+#include "content/saul_kada/st20_props.hpp"
+#include "content/saul_kada/st3c_talk_prop.hpp"
+#include "content/saul_kada/st3c_statue.hpp"
+#include "content/saul_kada/st3b_crate.hpp"
+#include "content/saul_kada/st3b_flame_wall.hpp"
+#include "content/saul_kada/st3c_pirate_cast.hpp"
+#include "content/saul_kada/fire_ruin_bon_cast.hpp"
+#include "content/saul_kada/fire_ruin_servbot_cast.hpp"
+#include "content/saul_kada/st27_respawner.hpp"
+#include "content/saul_kada/st27_lava_valve.hpp"
+#include "content/saul_kada/lava_pit.hpp"
+#include "content/saul_kada/st13_spin_blade.hpp"
+#include "content/saul_kada/st24_script_walker.hpp"
+#include "content/saul_kada/pirate_base_cast.hpp"
+#include "content/saul_kada/st2b_cannon_boss.hpp"
+#include "content/saul_kada/st2b_cannon_shell.hpp"
+#include "content/saul_kada/ice_floor_marker.hpp"
+#include "content/saul_kada/st3b_pirate_carrier.hpp"
+#include "content/saul_kada/two_form_reaverbot.hpp"
+#include "content/saul_kada/fire_ruin_cutscene_cast.hpp"
+#include "content/saul_kada/st48_charger.hpp"
+#include "content/saul_kada/bomb_critter.hpp"
+#include "content/saul_kada/sand_burrower.hpp"
+#include "content/saul_kada/hopping_reaverbot.hpp"
+#include "content/saul_kada/lava_vents.hpp"
+#include "content/saul_kada/pirate_servbots.hpp"
+#include "content/saul_kada/st34_ruin_sentry.hpp"
+#include "content/saul_kada/st34_ruin_flyer.hpp"
+#include "content/saul_kada/st28_guard.hpp"
+#include "content/saul_kada/st28_gunner_boss.hpp"
+#include "content/saul_kada/st28_gunner_beam.hpp"
+#include "content/saul_kada/st28_gunner_bomb.hpp"
+#include "content/saul_kada/st28_gunner_helpers.hpp"
+#include "content/saul_kada/st28_guard_shot.hpp"
+#include "content/saul_kada/st28_cast_props.hpp"
+#include "content/saul_kada/pirate_tank.hpp"
+#include "content/saul_kada/st3b_bomb_turret.hpp"
+#include "content/saul_kada/window_giant.hpp"
+#include "content/saul_kada/st27_bon.hpp"
+#include "content/saul_kada/st27_mission.hpp"
+#include "content/saul_kada/st27_tron.hpp"
+#include "content/saul_kada/st28_bomb_ribbon.hpp"
+#include "content/saul_kada/st28_boss_shell.hpp"
+#include "content/saul_kada/st28_fire_bomb.hpp"
+#include "content/saul_kada/st28_lava_boss.hpp"
+#include "content/saul_kada/st28_flyer.hpp"
+#include "content/saul_kada/st33_falling_rock.hpp"
+#include "content/saul_kada/st33_key_script.hpp"
+#include "content/saul_kada/st33_strip_scroll.hpp"
+#include "content/saul_kada/st3b_grey_figure.hpp"
+#include "content/saul_kada/st3b_glow.hpp"
+#include "content/saul_kada/st3c_rising_model.hpp"
+#include "content/saul_kada/st3b_script5c_cast.hpp"
+#include "content/saul_kada/st3c_gold_boss.hpp"
+#include "content/saul_kada/st3c_sparkler.hpp"
+#include "content/saul_kada/st3c_boss_shot.hpp"
+#include "content/saul_kada/st3c_gold_piece.hpp"
+#include "content/saul_kada/st3c_gold_shockwave.hpp"
+#include "content/saul_kada/st3c_minion_spawner.hpp"
+#include "content/saul_kada/st3c_minion.hpp"
+#include "content/saul_kada/st41_crumbling_platform.hpp"
+#include "content/saul_kada/st41_enemy_generator.hpp"
+#include "content/saul_kada/st41_pirate_shot.hpp"
+#include "content/saul_kada/st41_ring.hpp"
+#include "content/saul_kada/st41_sliding_door.hpp"
+#include "content/saul_kada/st41_hover_gunner.hpp"
+#include "content/saul_kada/st41_carrier.hpp"
+#include "content/saul_kada/st48_gunship.hpp"
+
+namespace od::content {
+
+using namespace od::port;
+
+void registerSaulKadaClasses(ContentRegistry& r) {
+    r.addClasses({
+        // the pool-e0 type-0xa enemy spawners of the area's stages
+        {RoutineId::SpawnerSt26Update, &spawnerSt26Update},
+        {RoutineId::SpawnerSt27Update, &spawnerSt27Update},
+        {RoutineId::SpawnerSt28Update, &spawnerSt28Update},
+        {RoutineId::SpawnerSt2bUpdate, &spawnerSt2bUpdate},
+        {RoutineId::SpawnerSt34Update, &spawnerSt34Update},
+        {RoutineId::SpawnerSt3bUpdate, &spawnerSt3bUpdate},
+        {RoutineId::LavaVentsUpdate, &lavaVentsUpdate},
+        {RoutineId::HoppingReaverbotUpdate, &hoppingReaverbotUpdate},
+        {RoutineId::SandBurrowerUpdate, &sandBurrowerUpdate},
+        {RoutineId::TwoFormReaverbotUpdate, &twoFormReaverbotUpdate},
+        {RoutineId::TonguesUpdate, &tonguesUpdate},
+        {RoutineId::SmokePuffUpdate, &smokePuffUpdate},
+        {RoutineId::MinerUpdate, &minerUpdate},
+        {RoutineId::PirateServbotUpdate, &pirateServbotUpdate},
+        {RoutineId::BombServbotUpdate, &bombServbotUpdate},
+        {RoutineId::PirateTankUpdate, &pirateTankUpdate},
+        {RoutineId::RuinFlyerUpdate, &ruinFlyerUpdate},
+        {RoutineId::RuinSentryUpdate, &ruinSentryUpdate},
+        {RoutineId::GunnerHelperUpdate, &gunnerHelperUpdate},
+        {RoutineId::GunnerBombUpdate, &gunnerBombUpdate},
+        {RoutineId::GunnerBeamUpdate, &gunnerBeamUpdate},
+        {RoutineId::GuardShotUpdate, &guardShotUpdate},
+        {RoutineId::GunnerBossUpdate, &gunnerBossUpdate},
+        {RoutineId::St28GuardUpdate, &st28GuardUpdate},
+        {RoutineId::ThrownPropUpdate, &thrownPropUpdate},
+        {RoutineId::DroppedPropUpdate, &droppedPropUpdate},
+        {RoutineId::PropHolderUpdate, &propHolderUpdate},
+        {RoutineId::EntranceCastUpdate, &entranceCastUpdate},
+        {RoutineId::DepthsCastUpdate, &depthsCastUpdate},
+        {RoutineId::PropDropperUpdate, &propDropperUpdate},
+        {RoutineId::SlidingDoorUpdate, &slidingDoorUpdate},
+        {RoutineId::EnemyGeneratorUpdate, &enemyGeneratorUpdate},
+        {RoutineId::PirateShotUpdate, &pirateShotUpdate},
+        {RoutineId::SolidRingUpdate, &solidRingUpdate},
+        {RoutineId::CrumblingPlatformUpdate, &crumblingPlatformUpdate},
+        {RoutineId::ScriptWalkerUpdate, &scriptWalkerUpdate},
+        {RoutineId::SpinBladeUpdate, &spinBladeUpdate},
+        {RoutineId::HeadNpcUpdate, &headNpcUpdate},
+        {RoutineId::TalkerUpdate, &talkerUpdate},
+        {RoutineId::TimedCastUpdate, &timedCastUpdate},
+        {RoutineId::RaceBonusUpdate, &raceBonusUpdate},
+        {RoutineId::HeldItemUpdate, &heldItemUpdate},
+        {RoutineId::St32PlateUpdate, &st32PlateUpdate},
+        {RoutineId::St20PropUpdate, &st20PropUpdate},
+        {RoutineId::StandingCastUpdate, &standingCastUpdate},
+        {RoutineId::SteeredPropUpdate, &steeredPropUpdate},
+        {RoutineId::BobberUpdate, &bobberUpdate},
+        {RoutineId::GateLineUpdate, &gateLineUpdate},
+        {RoutineId::IcePlayerMarkerUpdate, &icePlayerMarkerUpdate},
+        {RoutineId::SpinPropUpdate, &spinPropUpdate},
+        {RoutineId::ParticleBurstUpdate, &particleBurstUpdate},
+        {RoutineId::ScrollGlowUpdate, &scrollGlowUpdate},
+        {RoutineId::GuardianUpdate, &guardianUpdate},
+        {RoutineId::BonScriptCastUpdate, &bonScriptCastUpdate},
+        {RoutineId::ValveUpdate, &valveUpdate},
+        {RoutineId::PitCreatureMoverUpdate, &pitCreatureMoverUpdate},
+        {RoutineId::ServbotScriptCastUpdate, &servbotScriptCastUpdate},
+        {RoutineId::RespawnerUpdate, &respawnerUpdate},
+        {RoutineId::BonRetreatCastUpdate, &bonRetreatCastUpdate},
+        {RoutineId::TalkPropUpdate, &talkPropUpdate},
+        {RoutineId::StatuePartUpdate, &statuePartUpdate},
+        {RoutineId::PirateCastUpdate, &pirateCastUpdate},
+        {RoutineId::FlameWallUpdate, &flameWallUpdate},
+        {RoutineId::BreakableUpdate, &breakableUpdate},
+        {RoutineId::PirateCarrierUpdate, &pirateCarrierUpdate},
+        {RoutineId::BombTurretUpdate, &bombTurretUpdate},
+        {RoutineId::FallingRockUpdate, &fallingRockUpdate},
+        {RoutineId::KeyItemUpdate, &keyItemUpdate},
+        {RoutineId::KeyScriptFigureUpdate, &keyScriptFigureUpdate},
+        {RoutineId::TronPartnerUpdate, &tronPartnerUpdate},
+        {RoutineId::BonPartnerUpdate, &bonPartnerUpdate},
+        {RoutineId::LavaBossUpdate, &lavaBossUpdate},
+        {RoutineId::FireBombUpdate, &fireBombUpdate},
+        {RoutineId::BossShellUpdate, &bossShellUpdate},
+        {RoutineId::BombRibbonUpdate, &bombRibbonUpdate},
+        {RoutineId::FlyerShellUpdate, &flyerShellUpdate},
+        {RoutineId::FadingFigureUpdate, &fadingFigureUpdate},
+        {RoutineId::LightRingUpdate, &lightRingUpdate},
+        {RoutineId::PatrolGuardUpdate, &patrolGuardUpdate},
+        {RoutineId::CarrierPodUpdate, &carrierPodUpdate},
+        {RoutineId::LavaValveMissionUpdate, &lavaValveMissionUpdate},
+        {RoutineId::WindowGiantUpdate, &windowGiantUpdate},
+        {RoutineId::StatueMinionUpdate, &statueMinionUpdate},
+        {RoutineId::MinionSpawnerUpdate, &minionSpawnerUpdate},
+        {RoutineId::GoldPieceUpdate, &goldPieceUpdate},
+        {RoutineId::GoldShockwaveUpdate, &goldShockwaveUpdate},
+        {RoutineId::BossShotUpdate, &bossShotUpdate},
+        {RoutineId::GoldStatueBossUpdate, &goldStatueBossUpdate},
+        {RoutineId::SparklerUpdate, &sparklerUpdate},
+        {RoutineId::HoverGunnerUpdate, &hoverGunnerUpdate},
+        {RoutineId::PodCarrierUpdate, &podCarrierUpdate},
+        {RoutineId::ChargerUpdate, &chargerUpdate},
+        {RoutineId::PirateBaseCastUpdate, &pirateBaseCastUpdate},
+        {RoutineId::ScriptStatueUpdate, &scriptStatueUpdate},
+        {RoutineId::BombCritterUpdate, &bombCritterUpdate},
+        {RoutineId::CannonBossUpdate, &cannonBossUpdate},
+        {RoutineId::CannonShellUpdate, &cannonShellUpdate},
+        {RoutineId::PirateGunTurretUpdate, &pirateGunTurretUpdate},
+        {RoutineId::DroppedItemUpdate, &droppedItemUpdate},
+        {RoutineId::SlideBlockUpdate, &slideBlockUpdate},
+        {RoutineId::St2bPropUpdate, &st2bPropUpdate},
+        {RoutineId::St3cPropUpdate, &st3cPropUpdate},
+        {RoutineId::PitControllerUpdate, &pitControllerUpdate},
+        {RoutineId::PitFlameUpdate, &pitFlameUpdate},
+        {RoutineId::PitCreatureUpdate, &pitCreatureUpdate},
+        {RoutineId::SandTrapUpdate, &sandTrapUpdate},
+        {RoutineId::QuicksandUpdate, &quicksandUpdate},
+        {RoutineId::FlyerUpdate, &flyerUpdate},
+        {RoutineId::OwnerGlowUpdate, &ownerGlowUpdate},
+        {RoutineId::St3cRisingModelUpdate, &st3cRisingModelUpdate},
+        {RoutineId::St48GunshipUpdate, &st48GunshipUpdate},
+        {RoutineId::GreyFigureUpdate, &greyFigureUpdate},
+        {RoutineId::GateFigureUpdate, &gateFigureUpdate},
+        {RoutineId::GateDebrisUpdate, &gateDebrisUpdate},
+        {RoutineId::St33StripScrollUpdate, &st33StripScrollUpdate},
+    });
+}
+
+} // namespace od::content
