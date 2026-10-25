@@ -276,7 +276,15 @@ int App::init() {
             const char* base = SDL_GetBasePath();
             cfg.langDir = std::filesystem::path(base ? base : "").parent_path().parent_path().parent_path() / "lang"; // build/<config>/ -> opendash/lang
         }
-        data = std::make_unique<od::PcDataSource>(cfg.datDir, cfg.exePath);
+        if (!cfg.disc.empty()) // the PS1 disc image: the English pack (engine/lang_pack), the data with data=disc
+            playerView.disc = std::make_shared<const od::DiscImage>(cfg.disc);
+        if (cfg.data == "disc") {
+            if (!playerView.disc) throw std::runtime_error("data=disc needs the disc image (disc= in opendash.ini)");
+            data = std::make_unique<od::Ps1DataSource>(playerView.disc);
+            SDL_Log("data: the PS1 disc %s", cfg.disc.string().c_str());
+        } else {
+            data = std::make_unique<od::PcDataSource>(cfg.datDir, cfg.exePath);
+        }
         od::bindDataSource(data.get());
         { // netplay and the ghost mirror (app/netplay): the session runs between game ticks only
             if (mirrorArg && ghostLookArg) mirrorArg->look = ghostLookArg;
@@ -297,13 +305,6 @@ int App::init() {
         playerView.logSkateCam = !playScript.empty();
         playerView.audioInit(cfg, audioArg && (!scripted || audioDeviceArg)); // scripted runs: silent (no device)
         playerView.langDir = cfg.langDir;
-        if (!cfg.disc.empty()) { // the PS1 disc image: the English pack (engine/lang_pack)
-            try {
-                playerView.disc = std::make_shared<const od::DiscImage>(cfg.disc);
-            } catch (const std::exception& e) {
-                SDL_Log("disc %s: %s", cfg.disc.string().c_str(), e.what());
-            }
-        }
         playerView.restoredVoices = cfg.restoredVoices;
         playerView.setLanguage(od::lang::parseLanguage(langArg.empty() ? cfg.lang : langArg));
         {

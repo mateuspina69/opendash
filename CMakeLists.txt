@@ -189,6 +189,13 @@ target_link_libraries(test_tables PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,odconten
 target_include_directories(test_tables PRIVATE tests)
 add_test(NAME test_tables COMMAND test_tables ${OPENDASH_EXE} ${OPENDASH_DAT_DIR})
 
+# the PS1 data source reads every table it has as the PC source does (the whole libraries: their handles register)
+add_executable(test_ps1_source tests/test_ps1_source.cpp)
+target_link_libraries(test_ps1_source PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,odcontent>"
+    "$<LINK_LIBRARY:WHOLE_ARCHIVE,odgame>" "$<LINK_LIBRARY:WHOLE_ARCHIVE,odengine>")
+target_include_directories(test_ps1_source PRIVATE tests)
+add_test(NAME test_ps1_source COMMAND test_ps1_source ${OPENDASH_EXE} ${OPENDASH_DAT_DIR} ${OPENDASH_DISC_CUE})
+
 add_executable(test_lang_pack tests/test_lang_pack.cpp)
 target_link_libraries(test_lang_pack PRIVATE odengine)
 target_include_directories(test_lang_pack PRIVATE tests)

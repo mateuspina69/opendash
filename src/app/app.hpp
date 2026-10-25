@@ -35,6 +35,7 @@
 #include "app/ui/vector_ui.hpp"
 #include "engine/config.hpp"
 #include "engine/pc_data_source.hpp"
+#include "engine/ps1_data_source.hpp"
 #include "render/renderer.hpp"
 #include "render/ui_canvas.hpp"
 
@@ -170,7 +171,7 @@ struct App {
     od::Config cfg;
     // the game's data (DAT/ and dash2.exe read as files: engine/pc_data_source), bound for the whole run (before
     // playerView: it outlives everything that reads it)
-    std::unique_ptr<od::PcDataSource> data;
+    std::unique_ptr<od::DataSource> data; // the PC install's (engine/pc_data_source) or the disc's (ps1_data_source)
     PlayerView playerView;
     GhostView ghosts; // the ghost players (posed after the tick loop, drawn next to the player)
     Netplay netplay;  // the session and the ghosts' sources (app/netplay)
