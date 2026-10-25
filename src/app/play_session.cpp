@@ -185,6 +185,10 @@ void PlayerView::applyVoiceDirs() {
         dirs.push_back(dir / "snd");
     }
     mixer->setVoiceDirs(std::move(dirs));
+    if (pack && dir.empty()) // the disc's voices (engine/lang_pack): the clips of its XA files
+        mixer->setVoiceSource([p = pack](const std::string& f, uint32_t t) { return p->voiceTrack(f, t); });
+    else
+        mixer->setVoiceSource(nullptr);
 }
 
 void PlayerView::setLanguage(od::lang::Language l) {

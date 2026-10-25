@@ -1,11 +1,14 @@
 #include "engine/lang_pack.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <map>
+#include <mutex>
 #include <stdexcept>
 
 #include "engine/dat.hpp"
 #include "engine/game_file.hpp"
+#include "engine/lang.hpp"
 #include "engine/vram.hpp"
 
 namespace od::lang {
@@ -25,6 +28,7 @@ public:
         return readFile(dir_ / name);
     }
     std::filesystem::path folder() const override { return dir_; }
+    std::vector<uint8_t> voiceTrack(const std::string&, uint32_t) const override { return {}; } // the folder's snd/
 
 private:
     std::filesystem::path dir_;
@@ -148,7 +152,63 @@ public:
     }
     std::filesystem::path folder() const override { return {}; }
 
+    std::vector<uint8_t> voiceTrack(const std::string& file, uint32_t track) const override {
+        // "xa02_37.dat" -> XA/ST02_37.XA (a stage's), "xacom_18.dat" -> XA/COM_18.XA
+        if (file.size() < 7 || (file[0] | 0x20) != 'x' || (file[1] | 0x20) != 'a') return {};
+        std::string stem = file.substr(2, file.find('.') - 2);
+        for (char& c : stem) c = char(std::toupper(uint8_t(c)));
+        const DiscFile* xa = disc_->find("XA/" + std::string(std::isdigit(uint8_t(stem[0])) ? "ST" : "") + stem + ".XA");
+        if (!xa) return {};
+        const std::vector<Clip>* clips;
+        {
+            std::lock_guard lock(clipLock_);
+            auto it = clips_.find(xa->path);
+            if (it == clips_.end()) it = clips_.emplace(xa->path, splitClips(*xa)).first;
+            clips = &it->second;
+        }
+        if (track >= clips->size()) return {};
+        const Clip& c = (*clips)[track];
+        // "ODXA" u8 coding, 3 pad, u32 sectors, then each sector's 18 sound groups
+        std::vector<uint8_t> out = {'O', 'D', 'X', 'A', c.coding, 0, 0, 0};
+        for (int k = 0; k < 4; ++k) out.push_back(uint8_t(c.sectors.size() >> (8 * k)));
+        out.reserve(out.size() + c.sectors.size() * kXaSectorBytes);
+        for (const uint32_t lba : c.sectors) {
+            const RawSector s = disc_->rawSector(lba);
+            out.insert(out.end(), s.begin() + 24, s.begin() + 24 + kXaSectorBytes);
+        }
+        return out;
+    }
+
 private:
+    struct Clip {
+        uint8_t channel = 0, coding = 0;
+        std::vector<uint32_t> sectors; // LBAs
+    };
+    // the audio sectors (submode bit 2) per channel (subheader +1), a clip ending at a sector with the EOF bit (0x80)
+    std::vector<Clip> splitClips(const DiscFile& f) const {
+        std::map<uint8_t, Clip> open;
+        std::vector<std::pair<uint32_t, Clip>> done; // by first sector
+        for (uint32_t i = 0; i < f.sectors(); ++i) {
+            const RawSector s = disc_->rawSector(f.lba + i);
+            const uint8_t ch = s[17], sm = s[18], ci = s[19];
+            if (!(sm & 0x04)) continue;
+            auto it = open.find(ch);
+            if (it == open.end()) it = open.emplace(ch, Clip{ch, ci, {}}).first;
+            it->second.sectors.push_back(f.lba + i);
+            if (sm & 0x80) {
+                done.emplace_back(it->second.sectors.front(), std::move(it->second));
+                open.erase(it);
+            }
+        }
+        for (auto& [ch, c] : open) done.emplace_back(c.sectors.front(), std::move(c));
+        std::sort(done.begin(), done.end(), [](const auto& a, const auto& b) {
+            return a.second.channel != b.second.channel ? a.second.channel < b.second.channel : a.first < b.first;
+        });
+        std::vector<Clip> out;
+        for (auto& [first, c] : done) out.push_back(std::move(c));
+        return out;
+    }
+
     // "msg/ST09.bin" -> "DAT/ST09.BIN" ("" for any other name)
     static std::string messageFile(const std::string& name) {
         if (name.rfind("msg/", 0) != 0 || name.size() < 9 || name.compare(name.size() - 4, 4, ".bin") != 0) return {};
@@ -174,6 +234,8 @@ private:
     std::vector<uint8_t> exe_;
     uint32_t textAddr_ = 0;
     std::map<std::string, std::vector<uint8_t>> files_;
+    mutable std::mutex clipLock_;
+    mutable std::map<std::string, std::vector<Clip>> clips_; // per XA file, made on its first voice
 };
 
 } // namespace

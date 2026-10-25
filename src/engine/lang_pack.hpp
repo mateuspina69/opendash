@@ -5,7 +5,9 @@
 //     image of COMMON/INIT.BIN), the glyph widths and the width limit (SLUS_011.40), the text and button CLUTs (the
 //     CLUT ids in SLUS_011.40, their colours in INIT.BIN's VRAM), the PS1 copies of the banks the PC keeps in dash2.exe
 //     (item names, menus, the shops, the memory card screens: SLUS_011.40, SUBSCN.BIN, DEMO.BIN and the stage
-//     overlays). The art, the SFX banks and the voices are not read from the disc yet: the disc source has none.
+//     overlays), the voices (the clips of XA/*.XA: per channel, up to the sector that ends the clip, in (channel,
+//     first sector) order = the PC voice file's track order). The art and the SFX banks are not read from the disc
+//     yet: the disc source has none.
 #pragma once
 
 #include <cstdint>
@@ -29,6 +31,9 @@ public:
     virtual std::vector<uint8_t> file(const std::string& name) const = 0;
     // the folder of the pack's streamed / per-file data (snd/, snd_restored/, art/, sfx/); "" for a source without one
     virtual std::filesystem::path folder() const = 0;
+    // voice track `track` of the PC voice file `file` ("xa02_37.dat") as an ODXA track (engine/lang parseXaTrack),
+    // for a source without a folder (the disc: the clips of XA/ST02_37.XA); empty when there is none. Thread safe.
+    virtual std::vector<uint8_t> voiceTrack(const std::string& file, uint32_t track) const = 0;
 };
 
 std::unique_ptr<LangPack> folderPack(std::filesystem::path dir);

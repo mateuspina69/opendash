@@ -4,6 +4,7 @@
 #include <memory>
 
 #include "check.hpp"
+#include "engine/dat.hpp"
 #include "engine/lang_pack.hpp"
 
 namespace fs = std::filesystem;
@@ -38,6 +39,23 @@ int main(int argc, char** argv) {
     CHECK(!fromDisc->has("msg/NOSUCH.bin"));
     CHECK(!fromDisc->has("art/TITLE.bin")); // not read from the disc yet
     CHECK(fromDisc->folder().empty());
-    std::printf("%d message banks, %d exe banks, font, widths, CLUTs identical\n", banks, exeBanks);
+    // the voices: snd/<file> is u32 offsets[n + 1], track i = [o[i], o[i + 1])
+    int voiceFiles = 0, voiceTracks = 0;
+    for (const auto& e : fs::directory_iterator(fs::path(argv[2]) / "snd")) {
+        const std::string file = e.path().filename().string();
+        const auto pc = od::readFile(e.path());
+        const uint32_t n = od::rd32(pc.data()) / 4 - 1;
+        for (uint32_t i = 0; i < n; ++i) {
+            const uint32_t a = od::rd32(pc.data() + 4 * i), b = od::rd32(pc.data() + 4 * i + 4);
+            if (fromDisc->voiceTrack(file, i) != std::vector<uint8_t>(pc.begin() + a, pc.begin() + b))
+                std::fprintf(stderr, "%s track %u differs\n", file.c_str(), i), ++g_failures;
+            ++voiceTracks;
+        }
+        CHECK(fromDisc->voiceTrack(file, n).empty()); // no track past the file's
+        ++voiceFiles;
+    }
+    CHECK(voiceFiles == 14);
+    std::printf("%d message banks, %d exe banks, font, widths, CLUTs, %d voice tracks of %d files identical\n", banks,
+                exeBanks, voiceTracks, voiceFiles);
     return testResult("test_lang_pack");
 }

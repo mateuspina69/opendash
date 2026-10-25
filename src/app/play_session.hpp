@@ -86,7 +86,7 @@ struct PlayerView {
     // the PS1 disc image (opendash.ini disc=): the English pack is read off it (engine/lang_pack), the other packs
     // from their folders in langDir
     std::shared_ptr<const od::DiscImage> disc;
-    std::unique_ptr<od::lang::LangPack> pack; // the language's pack (nullptr: Japanese)
+    std::shared_ptr<const od::lang::LangPack> pack; // the language's pack (nullptr: Japanese; shared with the mixer)
     std::unique_ptr<od::lang::LangPack> makePack(od::lang::Language l) const; // nullptr when there is none
     bool packOffered(od::lang::Language l) const; // the language can be chosen (Japanese, or its pack exists)
     // the pack OpenDash's Latin labels (the language row) are drawn with: PT-BR's (EN's glyphs + the accents), else EN's

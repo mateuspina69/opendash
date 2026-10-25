@@ -431,15 +431,24 @@ void Mixer::setVoiceDirs(std::vector<std::filesystem::path> dirs) {
     voiceDirs_ = std::move(dirs);
 }
 
-// the language pack's voice dirs in order (same pack layout), then the game's snd/
+void Mixer::setVoiceSource(VoiceSource source) {
+    std::lock_guard<std::mutex> g(lock_);
+    voiceSource_ = std::move(source);
+}
+
+// the language pack's voice source, its voice dirs in order (same pack layout), then the game's snd/
 std::vector<uint8_t> Mixer::readVoiceTrack(const std::string& file, uint32_t track) {
     std::string lower = file;
     for (char& c : lower) c = char(std::tolower(static_cast<unsigned char>(c)));
     std::vector<std::filesystem::path> voiceDirs;
+    VoiceSource source;
     {
         std::lock_guard<std::mutex> g(lock_);
         voiceDirs = voiceDirs_;
+        source = voiceSource_;
     }
+    if (source)
+        if (std::vector<uint8_t> t = source(lower, track); !t.empty()) return t;
     std::ifstream f;
     for (const auto& d : voiceDirs)
         if (!f.is_open()) f.open(d / lower, std::ios::binary);
