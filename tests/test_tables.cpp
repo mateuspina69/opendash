@@ -3,6 +3,7 @@
 // TableFamily's tables load for every index the source has (the stages, every stage's rooms: its ST##.DAT's grids).
 #include <array>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <set>
 
@@ -10,11 +11,14 @@
 #include "content/registry.hpp"
 #include "data_source_binding.hpp"
 #include "engine/dat.hpp"
+#include "engine/exe_coverage.hpp"
 #include "engine/data_source.hpp"
 #include "engine/room.hpp"
 
 int main(int argc, char** argv) {
     if (argc < 3) return 2;
+    // OPENDASH_EXE_COVERAGE=PATH: the exe bytes every loader reads (engine/exe_coverage), as the app records them
+    if (const char* cov = std::getenv("OPENDASH_EXE_COVERAGE")) od::exe_coverage::enable(cov);
     od::content::registerAll();
     const od::DataSource& source = od::bindTestDataSource(argv[1]);
     std::array<int, od::kStageCount> rooms{}; // the sub-rooms of each stage (its ST##.DAT's grids)
