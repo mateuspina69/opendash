@@ -3,6 +3,7 @@
 // every pointee's bytes equal but at the pointer words (the PS1 source's routine values / data handles), the same
 // routines resolved in the same order, the same pointees followed (argv: dash2.exe, the PC dat/, the disc's cue).
 #include <cstdio>
+#include <functional>
 #include <memory>
 #include <set>
 
@@ -160,33 +161,49 @@ int main(int argc, char** argv) {
         std::printf("%zu room parameter records on the disc: %zu the PC's\n", rooms, same);
         CHECK(rooms > 0 && same == rooms && ps1.hasTable({od::TableId::RoomParams, od::roomIndex(9, 0)}));
     }
-    { // the tables the game reads by address: their bytes the PC's but at the pointer words, which are null on both or
-      // name the same routine (a function pointer) or are a PS1 data pointer where the PC has one
-        size_t n = 0, same = 0;
+    { // the tables the game reads by address, and the ones their data pointers lead to: their bytes the PC's but at the
+      // pointer words, which are null on both or name the same routine (a function pointer) or point at the same bytes
+        size_t n = 0, same = 0, followed = 0;
+        std::set<uint32_t> seen;
+        // a pointee (followed): the bytes up to its first difference, its first word at least (its PS1 table can run
+        // past the PC object it is: the PC keeps other data there)
+        std::function<bool(uint32_t, uint32_t, uint32_t, const std::string&, bool)> sameAt =
+            [&](uint32_t at, uint32_t ps1At, uint32_t bytes, const std::string& what, bool pointee) {
+                const od::TableReader a = pc.stateData(at, bytes), b = ps1.stateData(ps1At, bytes);
+                bool ok = a.size() == bytes && b.size() == bytes;
+                const uint32_t align = (4 - (at & 3)) & 3; // the first 4-aligned word's offset
+                for (uint32_t o = 0; ok && o < bytes; ++o) {
+                    if (a.u8(o) == b.u8(o)) continue;
+                    const uint32_t w = o - ((o - align) & 3);
+                    ok = o >= align && w + 4 <= bytes && ps1Pointer(b.u32(w));
+                    if (!ok && pointee && o >= std::min<uint32_t>(bytes, 4)) {
+                        bytes = o < align ? o : w;
+                        ok = true;
+                        break;
+                    }
+                    if (!ok) std::fprintf(stderr, "%s: byte %u: %02x / %02x\n", what.c_str(), o, a.u8(o), b.u8(o));
+                }
+                for (uint32_t w = align; ok && w + 4 <= bytes; w += 4) {
+                    const uint32_t pw = a.u32(w), sw = b.u32(w);
+                    if (pw == sw || !ps1Pointer(sw)) continue;
+                    if ((sw & 0xffff0000u) == od::Ps1DataSource::kRoutineTag) {
+                        ok = pc.stateRoutine(pw).id() == ps1.stateRoutine(sw).id();
+                    } else if (pw == 0) {
+                        ok = false;
+                    } else if (const uint32_t m = ps1.tableBytesFrom(sw); m && seen.insert(sw).second) {
+                        ++followed;
+                        ok = sameAt(pw, sw, m, what + "->" + std::to_string(w), true);
+                    }
+                    if (!ok) std::fprintf(stderr, "%s: word %u: %08x / %08x\n", what.c_str(), w, pw, sw);
+                }
+                return ok;
+            };
         for (const auto& t : od::Ps1DataSource::addressTables()) {
             ++n;
             const od::TableKey key{t.id, 0};
-            const uint32_t at = pc.stateAddress(key);
-            const od::TableReader a = pc.stateData(at, t.bytes), b = ps1.stateData(ps1.stateAddress(key), t.bytes);
-            bool ok = a.size() == t.bytes && b.size() == t.bytes;
-            const uint32_t align = (4 - (at & 3)) & 3; // the first 4-aligned word's offset
-            for (uint32_t o = 0; ok && o < t.bytes; ++o) {
-                if (a.u8(o) == b.u8(o)) continue;
-                const uint32_t w = o - ((o - align) & 3);
-                ok = o >= align && w + 4 <= t.bytes && ps1Pointer(b.u32(w));
-                if (!ok) std::fprintf(stderr, "  byte %u: %02x / %02x\n", o, a.u8(o), b.u8(o));
-            }
-            for (uint32_t w = align; ok && w + 4 <= t.bytes; w += 4) {
-                const uint32_t pw = a.u32(w), sw = b.u32(w);
-                if (pw == sw || !ps1Pointer(sw)) continue;
-                if ((sw & 0xffff0000u) == od::Ps1DataSource::kRoutineTag) ok = pc.stateRoutine(pw).id() == ps1.stateRoutine(sw).id();
-                else ok = pw != 0;
-                if (!ok) std::fprintf(stderr, "  word %u: %08x / %08x\n", w, pw, sw);
-            }
-            if (ok) ++same;
-            else std::fprintf(stderr, "%s: not the PC's\n", od::describe(key).c_str());
+            if (sameAt(pc.stateAddress(key), ps1.stateAddress(key), t.bytes, od::describe(key), false)) ++same;
         }
-        std::printf("%zu tables read by address on the disc: %zu read as the PC's\n", n, same);
+        std::printf("%zu tables read by address on the disc (%zu followed): %zu read as the PC's\n", n, followed, same);
         CHECK(n > 0 && same == n);
     }
     std::printf("%zu tables on the disc: %zu read as the PC's\n", tables, equal);

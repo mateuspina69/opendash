@@ -41,17 +41,21 @@ struct TableRoutineSlot {
 #include "engine/table_slots.inc"
 
 struct Ps1Label {
-    TableId id;
     const char* file;
     uint32_t address;
     uint32_t bytes;
 };
 using SlotKind = Ps1DataSource::SlotKind;
 struct Ps1LabelSlot {
-    TableId id;
+    uint32_t label; // kPs1Labels index
     uint32_t offset;
     SlotKind kind;
     RoutineId routine; // a function's (None: no C++ routine)
+    uint32_t state;    // a state pointer's: the engine's address of that state
+};
+struct Ps1LabelTable {
+    TableId id;
+    uint32_t label; // kPs1Labels index
 };
 #include "engine/ps1_labels.inc"
 
@@ -89,16 +93,21 @@ Ps1DataSource::Ps1DataSource(std::shared_ptr<const DiscImage> disc) : disc_(std:
     for (const TableRegion& r : kTableRegions) dataSlots_[{{r.id, r.index}, r.parent}].push_back({r.offset, r.region});
     for (const TableRoutineSlot& s : kTableRoutineSlots)
         routineSlots_[{{s.id, s.index}, s.region}].push_back({s.offset, s.routine});
-    std::map<TableId, std::vector<Label::Slot>> labelSlots;
-    for (const Ps1LabelSlot& s : kPs1LabelSlots) labelSlots[s.id].push_back({s.offset, s.kind, s.routine});
-    for (const Ps1Label& l : kPs1Labels) {
-        tables_.emplace(TableKey{l.id, 0}, Located{size_t(-1), l.file, l.address, false});
+    std::vector<std::vector<Label::Slot>> labelSlots(std::size(kPs1Labels));
+    for (const Ps1LabelSlot& s : kPs1LabelSlots) labelSlots[s.label].push_back({s.offset, s.kind, s.routine, s.state});
+    for (size_t i = 0; i < std::size(kPs1Labels); ++i) {
+        const Ps1Label& l = kPs1Labels[i];
         // two PC tables on one PS1 table (the PC keeps a copy per use): the longer extent, the slots of both
         Label& at = labels_[l.file][l.address];
+        at.common = at.bytes ? std::min(at.common, l.bytes) : l.bytes;
         at.bytes = std::max(at.bytes, l.bytes);
-        for (const Label::Slot& slot : labelSlots[l.id])
+        for (const Label::Slot& slot : labelSlots[i])
             if (std::none_of(at.slots.begin(), at.slots.end(), [&](const Label::Slot& x) { return x.offset == slot.offset; }))
                 at.slots.push_back(slot);
+    }
+    for (const Ps1LabelTable& t : kPs1LabelTables) {
+        const Ps1Label& l = kPs1Labels[t.label];
+        tables_.emplace(TableKey{t.id, 0}, Located{size_t(-1), l.file, l.address, false});
     }
     makeTables();
 }
@@ -250,6 +259,9 @@ TableReader Ps1DataSource::regionBytes(size_t part, uint32_t address, uint32_t n
                 case SlotKind::Ram: // the engine's address of that PS1 RAM (engine/file_data LoadedFileData)
                     if (v != 0) put32(b, at - address, (v & 0x1fffffffu) + LoadedFileData::kPsxBase);
                     break;
+                case SlotKind::State: // the engine's address of that state (game/loaded_data: the game's built data)
+                    if (v != 0) put32(b, at - address, slot.state);
+                    break;
                 }
             }
         }
@@ -338,8 +350,30 @@ RoutineRef Ps1DataSource::routineOf(uint32_t pointer) const {
 
 std::vector<Ps1DataSource::AddressTable> Ps1DataSource::addressTables() {
     std::vector<AddressTable> out;
-    for (const Ps1Label& l : kPs1Labels) out.push_back({l.id, l.bytes});
+    for (const Ps1LabelTable& t : kPs1LabelTables) out.push_back({t.id, kPs1Labels[t.label].bytes});
     return out;
+}
+
+uint32_t Ps1DataSource::tableBytesFrom(uint32_t pointer) const {
+    if (pointer < kVirtualBase || pointer >= kRoutineTag) return 0;
+    size_t part;
+    {
+        std::lock_guard lock(lock_);
+        auto it = partByVbase_.upper_bound(pointer);
+        if (it == partByVbase_.begin()) return 0;
+        part = std::prev(it)->second;
+    }
+    const Part& pt = parts_[part];
+    const uint32_t address = pt.base + (pointer - pt.vbase);
+    const auto f = labels_.find(pt.file);
+    if (f == labels_.end()) return 0;
+    auto it = f->second.upper_bound(address);
+    while (it != f->second.begin()) {
+        --it;
+        if (address - it->first > kMaxLabelBytes) break;
+        if (address < it->first + it->second.common) return it->first + it->second.common - address;
+    }
+    return 0;
 }
 
 uint32_t Ps1DataSource::routineStateValue(RoutineId id) const {

@@ -34,8 +34,9 @@ public:
     static constexpr uint32_t kRoutineTag = 0x40000000u;  // | RoutineId
     static constexpr uint32_t kVirtualBase = 0x10000000u; // the data address space [kVirtualBase, kRoutineTag)
     // a pointer slot of a table the game reads by address: to a function (this source's routine value), to data (this
-    // source's address of it), into the loaded files' memory (the engine's address of that PS1 RAM)
-    enum class SlotKind : uint8_t { Function, Data, Ram };
+    // source's address of it), into the loaded files' memory (the engine's address of that PS1 RAM), to the state the
+    // game builds (the engine's address of it)
+    enum class SlotKind : uint8_t { Function, Data, Ram, State };
 
     // throws std::runtime_error when the disc is not the USA release
     explicit Ps1DataSource(std::shared_ptr<const DiscImage> disc);
@@ -54,6 +55,9 @@ public:
         uint32_t bytes;
     };
     static std::vector<AddressTable> addressTables();
+    // the bytes from a pointer of this source to the end of the address-read table it lies in (0: none; a PS1 table the
+    // PC keeps several copies of: the bytes all of them have)
+    uint32_t tableBytesFrom(uint32_t pointer) const;
 
 protected:
     TableReader pointee(uint32_t pointer, uint32_t n) const override;
@@ -110,8 +114,10 @@ private:
             uint32_t offset;
             SlotKind kind;
             RoutineId routine; // a function's (None: no C++ routine)
+            uint32_t state;    // a state pointer's: the engine's address of that state
         };
-        uint32_t bytes = 0;
+        uint32_t bytes = 0;  // the longest of the PC tables placed here (the slots cover it)
+        uint32_t common = 0; // the shortest: the bytes all of them have
         std::vector<Slot> slots;
     };
     static constexpr uint32_t kMaxLabelBytes = 0x1000;
