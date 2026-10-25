@@ -54,9 +54,9 @@ void MenuVram::rebuild() {
     for (auto& [n, f] : l) applyDat(n, std::move(f));
 }
 
-void MenuVram::setArtDir(const std::filesystem::path& dir) {
-    if (dir == artDir) return;
-    artDir = dir;
+void MenuVram::setArtPack(std::shared_ptr<const od::lang::LangPack> pack) {
+    if (pack == artPack) return;
+    artPack = std::move(pack);
     auto l = std::move(loaded);
     vram = fieldBase ? *fieldBase : od::Vram{};
     titlePs1 = false;
@@ -65,12 +65,11 @@ void MenuVram::setArtDir(const std::filesystem::path& dir) {
 }
 
 void MenuVram::packArt(const std::string& name) {
-    if (artDir.empty()) return;
-    const auto path = artDir / (std::filesystem::path(name).stem().string() + ".bin");
-    std::error_code ec;
-    if (!std::filesystem::exists(path, ec)) return;
+    if (!artPack) return;
+    const std::string path = "art/" + std::filesystem::path(name).stem().string() + ".bin";
+    if (!artPack->has(path)) return;
     try {
-        const auto b = od::readFile(path);
+        const auto b = artPack->file(path);
         if (b.size() >= 8 && std::memcmp(b.data(), "ODVR", 4) == 0) { // raw VRAM rects {u16 x, y, w, h, w * h u16}
             uint32_t n = 0;
             std::memcpy(&n, b.data() + 4, 4);
@@ -109,12 +108,12 @@ void MenuVram::packArt(const std::string& name) {
             o += size_t(w) * h;
         }
     } catch (const std::exception& e) {
-        SDL_Log("menu art %s: %s", path.string().c_str(), e.what());
+        SDL_Log("menu art %s (%s): %s", path.c_str(), artPack->id().c_str(), e.what());
     }
 }
 
 void MenuVram::art() {
-    if (!artDir.empty()) return;
+    if (artPack) return;
     if (font.empty() && !fontDat.empty()) {
         try {
             const od::GameFile init = od::dataSource().gameFile(fontDat);

@@ -37,7 +37,8 @@ int main(int argc, char** argv) {
     }
     CHECK(exeBanks == 27);
     CHECK(!fromDisc->has("msg/NOSUCH.bin"));
-    CHECK(!fromDisc->has("art/TITLE.bin")); // not read from the disc yet
+    CHECK(fromDisc->has("art/TITLE.bin") && fromDisc->file("art/TITLE.bin") == fromFolder->file("art/TITLE.bin"));
+    CHECK(!fromDisc->has("art/GAME.bin")); // not read from the disc yet
     CHECK(fromDisc->folder().empty());
     // the voices: snd/<file> is u32 offsets[n + 1], track i = [o[i], o[i + 1])
     int voiceFiles = 0, voiceTracks = 0;

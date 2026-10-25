@@ -1,6 +1,7 @@
 #include "engine/lang_pack.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <map>
 #include <mutex>
@@ -63,6 +64,12 @@ constexpr ExeBank kExeBanks[] = {
     {"places", "SLUS_011.40", 0x5d598, 29},        {"load_menu", "COMMON/DEMO.BIN", 0x419c, 8},
     {"save_menu", "DAT/ST04T.BIN", 0x9400, 9},     {"dev_room", "DAT/ST04T.BIN", 0xb5e4, 75},
 };
+// The PS1 title's pictures (COMMON/TITLE.BIN), drawn with the PS1 overlay's geometry: the menu / difficulty pages,
+// their CLUT rows, the logo (four strips of 60 lines) and its CLUT
+constexpr std::array<std::array<int16_t, 4>, 11> kTitleRects = {{{640, 0, 64, 256}, {704, 0, 64, 256}, {768, 0, 64, 256},
+    {0, 496, 48, 1}, {0, 497, 32, 1}, {0, 498, 96, 1}, {640, 256, 272, 60}, {640, 316, 272, 60}, {640, 376, 272, 60},
+    {640, 436, 272, 60}, {0, 503, 256, 1}}};
+
 constexpr const char* kShopPricesFile = "DAT/ST0AT.BIN";
 constexpr uint32_t kShopPrices = 0xa894;
 // The PC reuses the system bank's message 0xb (the PS1's "No MEMORY CARD detected!") for "no save data", the bytes of
@@ -135,6 +142,26 @@ public:
                 throw std::runtime_error("language pack (disc): the shop prices are not at " + std::string(kShopPricesFile));
         }
         files_["exe/shop_prices.bin"].assign(shop.begin() + kShopPrices, shop.begin() + kShopPrices + 7 * 12);
+
+        // art/TITLE.bin: b"ODVR", u32 count, {u16 x, y, w, h, w * h u16} (the rects over TITLE.DAT's)
+        const GameFile title = ps1GameFile("TITLE.DAT", disc_->file("COMMON/TITLE.BIN"));
+        std::vector<uint8_t> art = {'O', 'D', 'V', 'R'};
+        for (int k = 0; k < 4; ++k) art.push_back(uint8_t(kTitleRects.size() >> (8 * k)));
+        for (const auto& r : kTitleRects) {
+            const VramRect* found = nullptr;
+            for (const FilePart& p : title.parts)
+                for (const VramRect& v : p.rects)
+                    if (v.x == r[0] && v.y == r[1] && v.w == r[2] && v.h == r[3]) found = &v;
+            if (!found || found->pixels.size() != size_t(r[2]) * size_t(r[3]) * 2)
+                throw std::runtime_error("language pack (disc): COMMON/TITLE.BIN has no rect " + std::to_string(r[0]) +
+                                         "," + std::to_string(r[1]));
+            for (const int16_t v : r) {
+                art.push_back(uint8_t(v));
+                art.push_back(uint8_t(uint16_t(v) >> 8));
+            }
+            art.insert(art.end(), found->pixels.begin(), found->pixels.end());
+        }
+        files_["art/TITLE.bin"] = std::move(art);
     }
 
     std::string id() const override { return id_; }

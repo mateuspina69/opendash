@@ -65,4 +65,6 @@ dash2.exe (item names / descriptions, the sub-screen texts, the options, the equ
 the load / save menus, Roll's development room) sit at fixed offsets of `SLUS_011.40`, `COMMON/SUBSCN.BIN`,
 `COMMON/DEMO.BIN`, `DAT/ST0AT.BIN` and `DAT/ST04T.BIN`, with the shop's 7 price strings. The voices are the clips
 of `XA/*.XA` (the audio sectors per channel up to the one with the EOF bit, in (channel, first sector) order: the
-PC voice file's track order; 424 tracks in 14 files). Not read from the disc yet: the art, the SFX banks.
+PC voice file's track order; 424 tracks in 14 files). The title's pictures are 11 VRAM rects of
+`COMMON/TITLE.BIN`. Not read from the disc yet: the sub-screen's art (PS1 cells of `GAME.BIN` / `SUBSCN.BIN` composed
+with the PC's key boxes, tabs and labels) and the SFX banks.

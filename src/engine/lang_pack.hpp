@@ -6,8 +6,9 @@
 //     CLUT ids in SLUS_011.40, their colours in INIT.BIN's VRAM), the PS1 copies of the banks the PC keeps in dash2.exe
 //     (item names, menus, the shops, the memory card screens: SLUS_011.40, SUBSCN.BIN, DEMO.BIN and the stage
 //     overlays), the voices (the clips of XA/*.XA: per channel, up to the sector that ends the clip, in (channel,
-//     first sector) order = the PC voice file's track order). The art and the SFX banks are not read from the disc
-//     yet: the disc source has none.
+//     first sector) order = the PC voice file's track order), the title's pictures (art/TITLE.bin, COMMON/TITLE.BIN's
+//     rects). Not read from the disc yet: the sub-screen's art (art/GAME.bin, art/SUBSCN0x.bin: PS1 cells composed with
+//     the PC's key boxes) and the SFX banks.
 #pragma once
 
 #include <cstdint>

@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include "engine/lang_pack.hpp"
 #include "engine/vram.hpp"
 
 namespace od::app {
@@ -20,7 +21,7 @@ struct MenuVram {
     bool ready = false;
     std::vector<std::array<int, 4>> dirty;
     std::vector<std::pair<std::string, od::GameFile>> loaded; // the files applied, in order (rebuild)
-    std::filesystem::path artDir; // the language pack's art, "" = Japanese
+    std::shared_ptr<const od::lang::LangPack> artPack; // the language pack (its art/), nullptr = Japanese
     bool titlePs1 = false;        // the pack's TITLE art is in VRAM: the title draws with the PS1 overlay's geometry
     void reset();
     // a DAT's VRAM segments, then the language pack's art for it (over the PC's Japanese pictures)
@@ -33,8 +34,9 @@ struct MenuVram {
     void setFieldBase(const od::Vram& field);
     void rebuild();
     // the language changed: the DATs again with the new pack's art
-    void setArtDir(const std::filesystem::path& dir);
-    // <pack>/art/<stem>.bin: b"ODAR", u32 count, {u16 tpage, u, v, w, h, w * h 4-bit indices}
+    void setArtPack(std::shared_ptr<const od::lang::LangPack> pack);
+    // the pack's art/<stem>.bin: b"ODAR", u32 count, {u16 tpage, u, v, w, h, w * h 4-bit indices}, or b"ODVR", u32
+    // count, {u16 x, y, w, h, w * h u16} VRAM rects
     void packArt(const std::string& name);
     // OpenDash's art (game/menu_art) for Japanese (the packs bring their own): the language row's caption (tpage 7
     // (0xc0, 0xe0)) in the PC font: げんご
