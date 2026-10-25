@@ -55,6 +55,7 @@ struct Ps1LabelSlot {
 };
 struct Ps1LabelTable {
     TableId id;
+    uint32_t index; // the table's (a stage's ...; 0: one of its own)
     uint32_t label; // kPs1Labels index
     bool own;       // the PS1's own: its bytes not the PC's (its slots the PS1 words that point)
 };
@@ -109,7 +110,7 @@ Ps1DataSource::Ps1DataSource(std::shared_ptr<const DiscImage> disc) : disc_(std:
     }
     for (const Ps1LabelTable& t : kPs1LabelTables) {
         const Ps1Label& l = kPs1Labels[t.label];
-        tables_.emplace(TableKey{t.id, 0}, Located{size_t(-1), l.file, l.address, false});
+        tables_.emplace(TableKey{t.id, t.index}, Located{size_t(-1), l.file, l.address, false});
     }
     makeTables();
 }
@@ -352,7 +353,7 @@ RoutineRef Ps1DataSource::routineOf(uint32_t pointer) const {
 
 std::vector<Ps1DataSource::AddressTable> Ps1DataSource::addressTables() {
     std::vector<AddressTable> out;
-    for (const Ps1LabelTable& t : kPs1LabelTables) out.push_back({t.id, kPs1Labels[t.label].bytes, t.own});
+    for (const Ps1LabelTable& t : kPs1LabelTables) out.push_back({{t.id, t.index}, kPs1Labels[t.label].bytes, t.own});
     return out;
 }
 

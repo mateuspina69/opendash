@@ -99,7 +99,7 @@ bool madeTable(od::TableId id) {
     for (const od::Ps1ExeBank& b : od::ps1ExeBanks())
         if (b.table == id) return true;
     for (const auto& t : od::Ps1DataSource::addressTables())
-        if (t.id == id) return true;
+        if (t.key.id == id) return true;
     return false;
 }
 
@@ -200,7 +200,7 @@ int main(int argc, char** argv) {
             };
         size_t own = 0;
         for (const auto& t : od::Ps1DataSource::addressTables()) {
-            const od::TableKey key{t.id, 0};
+            const od::TableKey key = t.key;
             if (t.own) { // the PS1's own: it reads (no PC bytes to match)
                 own += ps1.stateData(ps1.stateAddress(key), t.bytes).size() == t.bytes;
                 continue;

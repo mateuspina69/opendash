@@ -51,7 +51,7 @@ public:
 
     // the tables the game reads by address this source has (ps1_labels.inc): the table, its bytes equal to the PC's
     struct AddressTable {
-        TableId id;
+        TableKey key;
         uint32_t bytes;
         bool own; // the PS1's own: its bytes not the PC's (the PC port changed it)
     };
