@@ -174,6 +174,9 @@ struct App {
     PlayerView playerView;
     GhostView ghosts; // the ghost players (posed after the tick loop, drawn next to the player)
     Netplay netplay;  // the session and the ghosts' sources (app/netplay)
+    bool netTravelling = false; // a client loading the host's room (the only reload a connected client takes)
+    int netPlaceSteps = 0;      // a client after the host's room: sim steps left to place it beside the host
+    bool netRefusedLogged = false;
     bool classicControls = false; // F1: the original tank controls + the game's follow camera
     std::vector<StageInfo> stages;
     RoomMesh current;
@@ -279,6 +282,10 @@ struct App {
 
     // ---- app/debug_ui.cpp
     void drawDebugMenu();
+    void drawNetOverlay(); // the host waiting for the clients' script (app/netplay_world)
+    // a client following the host's room (app/netplay_world's Travel): the room loaded, play entered again when the
+    // host's change happened in play
+    void followHost(const TravelOrder& t);
 };
 
 } // namespace od::app

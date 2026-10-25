@@ -42,6 +42,8 @@ public:
     // (the looks' slices belong to the upload they were made for)
     void appendDynamic(std::vector<od::DynamicObject>& dyn, uint32_t roomGeneration) const;
     std::string status(int slot) const; // "shown" or the hide reason
+    // the state a slot shows when it was shown at the last update (its room and loaded data the local ones), else null
+    const od::port::RemotePlayerState* shownState(int slot) const;
     const GhostLooks& looks() const { return looks_; }
 
 private:

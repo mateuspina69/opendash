@@ -6,7 +6,8 @@
 # normalised as git stores them), tracked or untracked, committed or not. The same sources give the same id in any
 # clone or repository, whatever its history.
 #   cmake -DGIT=<git> -DSRC=<source dir> -DOUT=<file.cpp> -P build_id.cmake
-set(kNetPaths src/game src/content src/engine src/net src/app/netplay.cpp src/app/netplay.hpp)
+set(kNetPaths src/game src/content src/engine src/net src/app/netplay.cpp src/app/netplay.hpp
+    src/app/netplay_world.cpp src/app/netplay_world.hpp src/app/netplay_world_codec.cpp src/app/netplay_world_codec.hpp)
 
 execute_process(COMMAND "${GIT}" -C "${SRC}" ls-files --cached --others --exclude-standard --deduplicate -- ${kNetPaths}
                 OUTPUT_VARIABLE listed OUTPUT_STRIP_TRAILING_WHITESPACE RESULT_VARIABLE rc)

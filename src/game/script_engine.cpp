@@ -22,6 +22,7 @@
 #include "game/spawn.hpp"
 #include "game/stage_state.hpp"
 #include "game/story.hpp"
+#include "game/net_world.hpp"
 #include "game/transition.hpp"
 
 namespace od::port {
@@ -60,6 +61,8 @@ void scriptStart(uint8_t id) {
     ScriptState& s = scriptState();
     Player& p = player();
     if (p.hitPoints < 0 || (s.flags & kScriptRunning)) return;
+    const NetWorldHooks& net = netWorldHooks();
+    if (net.scriptGate && !net.scriptGate(id)) return; // netplay client: the host starts the shared scripts
     s.flags = kScriptRunning;
     s.id = id;
     s.stepSub = 0;
@@ -78,6 +81,7 @@ void scriptStart(uint8_t id) {
     p.immunity = kImmuneHeld;
     p.runFlags |= kActorRun | kActorShown;
     soundSetListener(ListenerRef::cameraEye(), ListenerRef::cameraAngles(), kListenerOnCamera);
+    if (net.scriptStarted) net.scriptStarted(id);
 }
 
 void scriptRun(uint8_t id) {

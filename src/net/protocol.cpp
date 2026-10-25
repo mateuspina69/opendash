@@ -58,6 +58,8 @@ void writeBody(ByteWriter& w, const Message& m) {
             } else if constexpr (std::is_same_v<T, Bye>) {
             } else if constexpr (std::is_same_v<T, Ack>) {
                 w.u32(v.next);
+            } else if constexpr (std::is_same_v<T, Event>) {
+                w.blob(v.payload);
             } else {
                 static_assert(kAlways<T>, "a message type without a layout");
             }
@@ -122,6 +124,7 @@ std::optional<Message> readBody(MessageType t, ByteReader& r) {
     case MessageType::Pong: m = Pong{r.u64()}; break;
     case MessageType::Bye: m = Bye{}; break;
     case MessageType::Ack: m = Ack{r.u32()}; break;
+    case MessageType::Event: m = Event{r.blob()}; break;
     default: return std::nullopt;
     }
     if (!r.done()) return std::nullopt;
@@ -137,7 +140,8 @@ bool isReliable(MessageType t) {
     case MessageType::Refuse:
     case MessageType::PeerJoined:
     case MessageType::PeerLeft:
-    case MessageType::Bye: return true;
+    case MessageType::Bye:
+    case MessageType::Event: return true;
     default: return false;
     }
 }

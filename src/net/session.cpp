@@ -187,6 +187,28 @@ void Session::sendPlayerState(uint64_t nowNs, uint32_t tick, std::span<const uin
 std::vector<ReceivedState> Session::takePlayerStates() { return std::exchange(states_, {}); }
 std::vector<PeerEvent> Session::takePeerEvents() { return std::exchange(events_, {}); }
 
+void Session::sendWorldState(uint64_t nowNs, uint32_t tick, std::span<const uint8_t> payload) {
+    if (config_.role != Role::Host) return;
+    const std::vector<uint8_t> bytes =
+        encode(WorldState{++worldSequence_, tick, std::vector<uint8_t>(payload.begin(), payload.end())});
+    for (auto& [e, c] : clients_)
+        if (c.accepted) transmit(nowNs, e, bytes);
+}
+
+std::vector<ReceivedWorld> Session::takeWorldStates() { return std::exchange(worlds_, {}); }
+
+void Session::sendEvent(uint64_t nowNs, uint8_t to, std::span<const uint8_t> payload) {
+    const Event ev{std::vector<uint8_t>(payload.begin(), payload.end())};
+    if (config_.role == Role::Host) {
+        for (auto& [e, c] : clients_)
+            if (c.accepted && (to == kAllPlayers || c.info.playerId == to)) sendReliable(nowNs, c.link, ev);
+    } else if (connection_ == Connection::Connected) {
+        sendReliable(nowNs, hostLink_, ev);
+    }
+}
+
+std::vector<ReceivedEvent> Session::takeEvents() { return std::exchange(gameEvents_, {}); }
+
 // ---- host ----------------------------------------------------------------------------------------------------------
 
 void Session::hostReceive(uint64_t nowNs, const Endpoint& from, Decoded d) {
@@ -234,7 +256,7 @@ void Session::hostReceive(uint64_t nowNs, const Endpoint& from, Decoded d) {
             if (other.accepted && e != from) transmit(nowNs, e, bytes);
         return;
     }
-    // WorldState is the host's own message (co-op milestones): a client sending one is ignored
+    // WorldState is the host's own message: a client sending one is ignored
     handleLinkMessage(nowNs, c.link, d.message);
 }
 
@@ -243,6 +265,8 @@ void Session::hostDeliver(uint64_t nowNs, Client& c, const Message& m) {
         if (!c.accepted) hostWelcomeOrRefuse(nowNs, c, *h);
     } else if (std::holds_alternative<Bye>(m)) {
         hostDrop(nowNs, c.link.endpoint);
+    } else if (const Event* ev = std::get_if<Event>(&m)) {
+        if (c.accepted) gameEvents_.push_back({c.info.playerId, ev->payload}); // the host's to act on, never forwarded
     }
     // Welcome / Refuse / PeerJoined / PeerLeft are the host's own messages: from a client they are ignored
 }
@@ -325,6 +349,9 @@ void Session::clientLost(uint64_t nowNs, const char* why) {
     for (const auto& [id, p] : players_) events_.push_back({PeerEvent::Kind::Left, p});
     players_.clear();
     stats_.clear();
+    anyWorld_ = false; // a host that comes back counts its steps anew
+    worlds_.clear();
+    gameEvents_.clear();
     localId_ = kHostPlayerId;
     text_ = std::string(why) + "; joining " + config_.host.text() + " again";
     clientStart(nowNs);
@@ -346,7 +373,15 @@ void Session::clientReceive(uint64_t nowNs, const Endpoint& from, Decoded d) {
         if (connection_ == Connection::Connected && s->playerId != localId_) acceptState(nowNs, *s);
         return;
     }
-    // WorldState: the host's shared world of the co-op milestones; this milestone's host never sends it
+    if (const WorldState* w = std::get_if<WorldState>(&d.message)) {
+        // the parts of one step share its tick: an older step is dropped, every part of the newest kept
+        if (connection_ != Connection::Connected) return;
+        if (anyWorld_ && int32_t(w->tick - lastWorldTick_) < 0) return;
+        anyWorld_ = true;
+        lastWorldTick_ = w->tick;
+        worlds_.push_back({w->tick, w->payload});
+        return;
+    }
     handleLinkMessage(nowNs, hostLink_, d.message);
 }
 
@@ -376,6 +411,8 @@ void Session::clientDeliver(uint64_t nowNs, const Message& m) {
         }
     } else if (std::holds_alternative<Bye>(m)) {
         clientLost(nowNs, "the host left");
+    } else if (const Event* ev = std::get_if<Event>(&m)) {
+        if (connection_ == Connection::Connected) gameEvents_.push_back({kHostPlayerId, ev->payload});
     }
 }
 

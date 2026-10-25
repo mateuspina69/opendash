@@ -24,6 +24,9 @@ void App::drawDebugMenu() {
             if (!loadError.empty()) ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "%s", loadError.c_str());
             ImGui::TextDisabled("PgUp/PgDn estagio   [ ] sub-sala");
             ImGui::Separator();
+            const bool locked = netplay.isClient() && netplay.world().active(); // the host's room (app/netplay_world)
+            if (locked) ImGui::TextDisabled("só o host muda o cenário");
+            ImGui::BeginDisabled(locked);
             ImGui::BeginChild("stages", ImVec2(120, 0), ImGuiChildFlags_Borders);
             for (const auto& si : stages) {
                 char label[32];
@@ -44,6 +47,7 @@ void App::drawDebugMenu() {
             ImGui::Separator();
             ImGui::TextDisabled("cam %.0f %.0f %.0f", cam.eye[0], cam.eye[1], cam.eye[2]);
             ImGui::EndChild();
+            ImGui::EndDisabled();
             ImGui::EndTabItem();
         }
         if (ImGui::BeginTabItem("Jogo")) {
@@ -336,6 +340,32 @@ void App::drawDebugMenu() {
                 }
                 ImGui::EndTable();
             }
+            ImGui::SeparatorText("Combate"); // the host's (app/netplay_world): a client shows them
+            {
+                const bool client = netplay.isClient() && netplay.world().active();
+                NetCombatSettings c = netplay.world().combat();
+                ImGui::BeginDisabled(client);
+                const bool ff = ImGui::Checkbox("fogo amigo", &c.friendlyFire);
+                const bool scale = ImGui::SliderInt("dano entre jogadores %", &c.scale, 25, 100);
+                ImGui::EndDisabled();
+                if (client) ImGui::TextDisabled("definido pelo host");
+                if (!client && (ff || scale)) {
+                    netplay.world().setCombat(c);
+                    if (ff) od::saveConfigValue("net_friendly_fire", c.friendlyFire ? "1" : "0");
+                    if (scale) od::saveConfigValue("net_ff_scale", std::to_string(c.scale));
+                }
+            }
+            if (netplay.world().active()) {
+                ImGui::SeparatorText("Mundo");
+                const NetWorld::Stats ws = netplay.world().stats();
+                ImGui::Text("%s: %d atores  golpes %d enviados, %d aplicados, %d descartados",
+                            netplay.world().host() ? "host" : "cliente", ws.puppets, ws.claimsSent, ws.claimsApplied,
+                            ws.claimsDropped);
+                if (netplay.world().holdTicks())
+                    ImGui::TextColored(ImVec4(1, 0.8f, 0.3f, 1), "aguardando %s", netplay.world().waitingFor().c_str());
+            } else if (netplay.hostGone()) {
+                ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "host saiu");
+            }
             ImGui::SeparatorText("fantasmas");
             for (int slot = 0; slot < od::ghost::kMaxGhosts; ++slot) {
                 const std::string source = netplay.slotSource(slot);
@@ -347,6 +377,16 @@ void App::drawDebugMenu() {
         ImGui::EndTabBar();
     }
     ImGui::End();
+}
+
+void App::drawNetOverlay() {
+    if (!netplay.world().holdTicks()) return;
+    char text[256];
+    std::snprintf(text, sizeof text, "aguardando %s", netplay.world().waitingFor().c_str());
+    const ImVec2 size = ImGui::CalcTextSize(text);
+    const ImVec2 view = ImGui::GetIO().DisplaySize;
+    ImGui::GetForegroundDrawList()->AddText(ImVec2((view.x - size.x) * 0.5f, 24.0f), IM_COL32(255, 220, 120, 255),
+                                            text);
 }
 
 } // namespace od::app

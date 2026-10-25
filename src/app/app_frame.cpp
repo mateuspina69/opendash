@@ -43,6 +43,8 @@
 #include "game/fade_state.hpp"
 #include "game/game_state.hpp"
 #include "game/message_state.hpp"
+#include "game/net_puppets.hpp"
+#include "game/net_world.hpp"
 #include "game/room_scripts.hpp"
 #include "game/script_state.hpp"
 #include "game/story_flags.hpp"
@@ -154,6 +156,7 @@ void App::simStep(int gameFrames) {
     if ((input.held & kStart) && !playerView.play && !titleScreen.active && !titleScreen.inGame) running = false;
     paceFrames = gameFrames; // the title task / the game loop (paced by the exe's pacer, app/game_pacer)
     bool netStepped = false; // netplay's step ran this sim step (after the tick loop in play)
+    if (const auto t = netplay.world().takeTravel()) followHost(*t); // netplay client: the host's room
     if (titleScreen.active) { // the main task / title task: logical buttons -> PS1 pad bits
         static constexpr std::pair<uint32_t, uint16_t> kPs1t[] = {
             {kUp, 0x10}, {kRight, 0x20}, {kDown, 0x40}, {kLeft, 0x80}, {kCross, 0x4000}, {kSquare, 0x8000},
@@ -216,7 +219,10 @@ void App::simStep(int gameFrames) {
             ly = float(((ps1 & 0x40) != 0) - ((ps1 & 0x10) != 0));
         }
         static uint64_t paceTicks = 0, paceSteps = 0; // logic ticks per sim step, logged every 150 steps
-        if (titleScreen.inGame) { // a run the title started: the game's pace (app/game_pacer)
+        const bool held = netplay.world().holdTicks(); // netplay host: a client still in the shared script
+        if (held) {
+            // no tick: the world waits as it is (the frame still draws, the session still runs)
+        } else if (titleScreen.inGame) { // a run the title started: the game's pace (app/game_pacer)
             for (int f = paceFrames; f > 0 && playerView.play; --f, ++paceTicks)
             {
                 if (godArg) od::port::player().hitPoints = od::port::player().maxHitPoints;
@@ -256,6 +262,18 @@ void App::simStep(int gameFrames) {
         // local ones only read; a new look's slices go straight to the renderer (no room rebuild)
         netplay.step(SDL_GetTicksNS(), ghosts); // send, receive, the slots from their buffers
         netStepped = true;
+        if (netPlaceSteps > 0) { // netplay client: beside the host once its ghost shows in this room
+            --netPlaceSteps;
+            const int slot = netplay.slotOf(od::net::kHostPlayerId);
+            if (const od::port::RemotePlayerState* h = slot >= 0 ? ghosts.shownState(slot) : nullptr) {
+                od::port::Player& pl = od::port::player();
+                pl.pos.x = h->snapshot.pos[0] + (0x80 << 16);
+                pl.pos.y = h->snapshot.pos[1];
+                pl.pos.z = h->snapshot.pos[2];
+                pl.prevPos = pl.pos;
+                netPlaceSteps = 0;
+            }
+        }
         const SliceSink sink{[&](const std::vector<uint8_t>& rgba, int count) { return renderer->appendSlices(rgba, count); },
                              [&](int slice, const std::vector<uint8_t>& rgba) { renderer->updateSlice(slice, rgba); }};
         ghosts.update({g_roomVramGen, current.sliceCount, &g_roomVram, current.shift},
@@ -264,7 +282,27 @@ void App::simStep(int gameFrames) {
         playscriptLog(); // --playscript trace / timeline / end (app/playthrough)
     }
     if (!netStepped) netplay.step(SDL_GetTicksNS(), ghosts); // outside play the session still runs (no ghost drawn)
+    if (netplay.takeHostLost()) { // netplay client: the host is gone -- this room again with its own actors
+        const bool wasPlaying = playerView.play;
+        if (od::port::playerDown()) netplay.world().respawnHere(); // no hold any more: up before the room is kept
+        reload(stage, sub);
+        if (wasPlaying) playerView.enterPlay(current);
+        od::port::puppetsForget();
+    }
     ++simTicks;
+}
+
+void App::followHost(const TravelOrder& t) {
+    const bool wasPlaying = playerView.play;
+    netplay.world().leavingRoom();
+    netTravelling = true;
+    reload(t.stage, t.sub); // out of play first, the character kept (as a jump from F1)
+    netTravelling = false;
+    if (t.transition && wasPlaying) { // the host changed room in play: in play again, beside it
+        playerView.enterPlay(current);
+        netPlaceSteps = 150;
+    }
+    netplay.world().arrived(SDL_GetTicksNS());
 }
 
 void App::updateCamera() {

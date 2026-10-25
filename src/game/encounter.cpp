@@ -16,6 +16,7 @@
 #include "game/distances.hpp"
 #include "game/event_state.hpp"
 #include "game/matrix.hpp"
+#include "game/net_world.hpp"
 #include "game/player/player_state.hpp"
 #include "game/port_gap.hpp"
 #include "game/projection.hpp"
@@ -890,6 +891,7 @@ void encounterSlotsEnterRoom(uint8_t room) {
 
 void encounterTick(const PlayerEnv& env) {
     (void)env;
+    if (netWorldHooks().mirror) return; // netplay client: the host's encounters spawn the enemies it shows
     EncounterState& e = encounterState();
     if (scriptState().flags == 0 && eventState().active == 0) {
         for (size_t k = 0; k < e.slots.size(); ++k) {

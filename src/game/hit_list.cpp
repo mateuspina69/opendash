@@ -3,6 +3,7 @@
 #include "game/hit_list.hpp"
 
 #include <stdexcept>
+#include <vector>
 
 #include "engine/data_source.hpp"
 #include "game/actor_pools.hpp"
@@ -11,10 +12,16 @@
 #include "game/distances.hpp"
 #include "game/fixed_point.hpp"
 #include "game/lock_on_targets.hpp"
+#include "game/net_puppets.hpp"
 
 namespace od::port {
 
 namespace {
+
+// netplay: the hits queued for the next pass, the remote bodies and their boxes
+std::vector<ExternalHit> gExternalHits;
+std::vector<RemoteBody> gRemoteBodies;
+std::vector<HitBox> gRemoteBoxes;
 
 // the group pair table 0x919f2c (exe data)
 const DataTable<ScalarTable<uint8_t, 8>> hitGroupTable{TableId::HitGroupPairs};
@@ -193,6 +200,7 @@ void submit(const int16_t pos[3], HitBoxHead& box, HitBox* contactBox, uint32_t 
     s.hitCount = n + 1;
     auto&& e = s.hitList[n];
     writeEntry(e, pos, box, contactBox, ownerShape & kHitOwnerMask, uint16_t(ownerShape), attack);
+    noteHitEntry(uint8_t(ownerShape >> kHitSlotShift), pos, nullptr, 0, 0, ownerShape, attack); // netplay
 }
 
 void submitCapsule(const int16_t a[3], uint16_t ra, const int16_t b[3], uint16_t rb, HitBoxHead& box,
@@ -207,6 +215,7 @@ void submitCapsule(const int16_t a[3], uint16_t ra, const int16_t b[3], uint16_t
                    attack);
     }
     s.hitCount = n + 2;
+    noteHitEntry(uint8_t(ownerShape >> kHitSlotShift), a, b, ra, rb, ownerShape, attack); // netplay
 }
 
 } // namespace
@@ -229,12 +238,63 @@ void hitListSubmitCapsule(const int16_t a[3], uint16_t ra, const int16_t b[3], u
     submitCapsule(a, ra, b, rb, box, &box, ownerShape, attack);
 }
 
+void hitListQueueExternal(const ExternalHit& hit) { gExternalHits.push_back(hit); }
+
+void hitListSetRemoteBodies(std::vector<RemoteBody> bodies) {
+    gRemoteBodies = std::move(bodies);
+    gRemoteBoxes.assign(gRemoteBodies.size(), HitBox{});
+}
+
+const HitBox& hitListRemoteBodyBox(size_t index) { return gRemoteBoxes.at(index); }
+
+namespace {
+
+// the queued external hits on their targets' entries among the first n (after the pairs: the boxes' results kept)
+void applyExternalHits(uint32_t n) {
+    ActorSystemState& s = actorSystem();
+    for (const ExternalHit& h : gExternalHits) {
+        for (uint32_t i = 0; i < n; ++i) {
+            const HitEntry& e = s.hitList[i];
+            if ((e.owner >> kHitSlotShift) != h.targetSlot) continue;
+            HitEntry attacker;
+            attacker.pos.x = h.contact[0];
+            attacker.pos.y = h.contact[1];
+            attacker.pos.z = h.contact[2];
+            attacker.attack = h.attack;
+            attacker.owner = hitOwner(0xff) | hitGroup(kHitGroupPlayerAttacks);
+            attacker.previousX = h.contact[0];
+            attacker.previousZ = h.contact[2];
+            const Sphere at = sphereOf(attacker);
+            applyHit(e, attacker, contactOf(e), 0, at, at, 0);
+            break;
+        }
+    }
+    gExternalHits.clear();
+}
+
+} // namespace
+
 void hitListPass() {
     ActorSystemState& s = actorSystem();
+    for (size_t k = 0; k < gRemoteBodies.size(); ++k) {
+        const RemoteBody& b = gRemoteBodies[k];
+        HitBox& box = gRemoteBoxes[k];
+        box.result = 0;
+        box.previousX = b.pos[0];
+        box.previousZ = b.pos[2];
+        hitListSubmit(b.pos, box,
+                      hitOwner(b.slot) | hitGroup(kHitGroupBodies) | kHitNoLockOn | kHitContactPoint |
+                          hitRadius(b.radius),
+                      b.attack);
+    }
     const uint32_t n = s.hitCount;
     s.hitCount = 0;
     selectLockOnTargets(n, kHitGroupsAll);
-    if (n < 2) return;
+    if (n < 2) {
+        applyExternalHits(n);
+        noteHitPassEnded();
+        return;
+    }
     for (uint32_t i = 0; i < n - 1;) {
         const HitEntry& ei = s.hitList[i];
         const uint32_t step = (uint16_t(ei.shape()) & kHitCapsuleMask) ? 2 : 1;
@@ -246,6 +306,8 @@ void hitListPass() {
         }
         i += step;
     }
+    applyExternalHits(n);
+    noteHitPassEnded();
 }
 
 } // namespace od::port

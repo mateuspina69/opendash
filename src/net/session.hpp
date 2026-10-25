@@ -24,6 +24,9 @@ namespace od::net {
 
 enum class Role : uint8_t { Host, Client };
 
+// Session::sendEvent's `to`: every accepted client (host)
+constexpr uint8_t kAllPlayers = 0xff;
+
 // a peer silent this long is gone (the host drops the client; a client starts over with a new Hello)
 constexpr uint64_t kPeerTimeoutNs = 5'000'000'000ull;
 
@@ -43,6 +46,19 @@ struct SessionConfig {
 struct ReceivedState {
     uint8_t playerId = 0;
     uint32_t sequence = 0, tick = 0;
+    std::vector<uint8_t> payload;
+};
+
+// a step of the host's world (client): every WorldState whose tick is not older than the newest delivered (the
+// parts of one step share its tick)
+struct ReceivedWorld {
+    uint32_t tick = 0;
+    std::vector<uint8_t> payload;
+};
+
+// a game event (reliable, in order per sender): host: from a client's id; client: from the host
+struct ReceivedEvent {
+    uint8_t from = 0;
     std::vector<uint8_t> payload;
 };
 
@@ -92,6 +108,15 @@ public:
     std::vector<ReceivedState> takePlayerStates();
     // joins and leaves since the last call
     std::vector<PeerEvent> takePeerEvents();
+    // host: the shared world's step to every accepted client (a client sends none)
+    void sendWorldState(uint64_t nowNs, uint32_t tick, std::span<const uint8_t> payload);
+    // client: the world steps received since the last call
+    std::vector<ReceivedWorld> takeWorldStates();
+    // a game event: host: to the client `to` or kAllPlayers; client: to the host (`to` ignored). Reliable; the host
+    // forwards none
+    void sendEvent(uint64_t nowNs, uint8_t to, std::span<const uint8_t> payload);
+    // the game events received since the last call
+    std::vector<ReceivedEvent> takeEvents();
     SessionStatus status(uint64_t nowNs) const;
 
 private:
@@ -153,6 +178,9 @@ private:
     std::string text_;
     uint8_t localId_ = kHostPlayerId;
     uint32_t stateSequence_ = 0;
+    uint32_t worldSequence_ = 0; // host
+    bool anyWorld_ = false;      // client: a WorldState delivered
+    uint32_t lastWorldTick_ = 0; // ... the newest one's tick
     uint64_t nonceState_;
     std::map<Endpoint, Client> clients_; // host
     Link hostLink_;                      // client
@@ -161,6 +189,8 @@ private:
     std::map<uint8_t, StateStats> stats_;
     std::vector<ReceivedState> states_;
     std::vector<PeerEvent> events_;
+    std::vector<ReceivedWorld> worlds_;
+    std::vector<ReceivedEvent> gameEvents_;
     uint64_t lastNowNs_ = 0;
 };
 
