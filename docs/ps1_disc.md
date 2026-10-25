@@ -53,3 +53,12 @@ address), which hold 99% of the exe ranges located so far.
 * Text and fonts change language: the disc gives the USA script in the PS1 font, not the PC's JP text.
 * Sound needs decoders the PC never had: SPU ADPCM for the VAB SFX, a sequence player for the music, XA ADPCM for
   the streams.
+
+## Text
+
+The English text comes off the disc whole (engine/lang_pack, held to a pack folder by test_lang_pack): the message
+banks are the 0x12 blocks of `DAT/<STEM>.BIN` (102 banks, same stems and message ids as the PC's type-6 banks), the
+font is the 256x256 4bpp page of `COMMON/INIT.BIN`'s first block, the glyph widths are 256 bytes at `SLUS_011.40` RAM
+0x8006b90c with the width limit in the immediate of `sltiu` at 0x80049b10, and the text / button CLUTs are the u16
+CLUT ids at 0x80078c0c / 0x8006b988 read from INIT.BIN's VRAM. Not read from the disc yet: the exe banks (item
+names, menus), the art, the SFX banks, the voices.
