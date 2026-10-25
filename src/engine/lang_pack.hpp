@@ -3,8 +3,9 @@
 //   * a pack folder (<root>/<code>/);
 //   * the USA PS1 disc image itself: the message banks (the 0x12 block of DAT/<STEM>.BIN), the font page (the first
 //     image of COMMON/INIT.BIN), the glyph widths and the width limit (SLUS_011.40), the text and button CLUTs (the
-//     CLUT ids in SLUS_011.40, their colours in INIT.BIN's VRAM). The exe banks, the art, the SFX banks and the voices
-//     are not read from the disc yet: the disc source has none of them.
+//     CLUT ids in SLUS_011.40, their colours in INIT.BIN's VRAM), the PS1 copies of the banks the PC keeps in dash2.exe
+//     (item names, menus, the shops, the memory card screens: SLUS_011.40, SUBSCN.BIN, DEMO.BIN and the stage
+//     overlays). The art, the SFX banks and the voices are not read from the disc yet: the disc source has none.
 #pragma once
 
 #include <cstdint>

@@ -26,9 +26,18 @@ int main(int argc, char** argv) {
         ++banks;
     }
     CHECK(banks > 0);
+    int exeBanks = 0;
+    for (const auto& e : fs::directory_iterator(fs::path(argv[2]) / "exe")) {
+        const std::string name = "exe/" + e.path().filename().string();
+        CHECK(fromDisc->has(name));
+        if (fromDisc->has(name) && fromDisc->file(name) != fromFolder->file(name))
+            std::fprintf(stderr, "%s differs\n", name.c_str()), ++g_failures;
+        ++exeBanks;
+    }
+    CHECK(exeBanks == 27);
     CHECK(!fromDisc->has("msg/NOSUCH.bin"));
-    CHECK(!fromDisc->has("exe/item_names.bin")); // not read from the disc yet
+    CHECK(!fromDisc->has("art/TITLE.bin")); // not read from the disc yet
     CHECK(fromDisc->folder().empty());
-    std::printf("%d message banks, font, widths, CLUTs identical\n", banks);
+    std::printf("%d message banks, %d exe banks, font, widths, CLUTs identical\n", banks, exeBanks);
     return testResult("test_lang_pack");
 }

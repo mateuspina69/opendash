@@ -60,5 +60,8 @@ The English text comes off the disc whole (engine/lang_pack, held to a pack fold
 banks are the 0x12 blocks of `DAT/<STEM>.BIN` (102 banks, same stems and message ids as the PC's type-6 banks), the
 font is the 256x256 4bpp page of `COMMON/INIT.BIN`'s first block, the glyph widths are 256 bytes at `SLUS_011.40` RAM
 0x8006b90c with the width limit in the immediate of `sltiu` at 0x80049b10, and the text / button CLUTs are the u16
-CLUT ids at 0x80078c0c / 0x8006b988 read from INIT.BIN's VRAM. Not read from the disc yet: the exe banks (item
-names, menus), the art, the SFX banks, the voices.
+CLUT ids at 0x80078c0c / 0x8006b988 read from INIT.BIN's VRAM. The PS1 copies of the 26 banks the PC keeps in
+dash2.exe (item names / descriptions, the sub-screen texts, the options, the equipment, the shop, the save places,
+the load / save menus, Roll's development room) sit at fixed offsets of `SLUS_011.40`, `COMMON/SUBSCN.BIN`,
+`COMMON/DEMO.BIN`, `DAT/ST0AT.BIN` and `DAT/ST04T.BIN`, with the shop's 7 price strings. Not read from the disc yet:
+the art, the SFX banks, the voices.
