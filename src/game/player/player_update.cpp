@@ -533,18 +533,15 @@ void playerRestore() {
     for (size_t i = 0; i < p.statusTicks.size(); ++i) p.statusTicks[i] = 0;
 }
 
-void playerRespawn() {
+void playerRespawn(const int32_t pos[3], int16_t yaw) {
     playerRestore();
     Player& p = player();
-    const TransitionRequest& r = transitionRequest();
-    const int32_t at[3] = {wholeToFixed16(r.destination.x), wholeToFixed16(r.destination.y),
-                           wholeToFixed16(r.destination.z)};
-    p.pos.x = at[0];
-    p.pos.y = at[1];
-    p.pos.z = at[2];
+    p.pos.x = pos[0];
+    p.pos.y = pos[1];
+    p.pos.z = pos[2];
     p.prevPos = p.pos;
-    p.rotation.y = r.destination.yaw;
-    p.prevRotation.y = r.destination.yaw;
+    p.rotation.y = yaw;
+    p.prevRotation.y = yaw;
     p.airborne = 0;
     p.wasAirborne = 0;
     p.enterState(PlayerState::Init);

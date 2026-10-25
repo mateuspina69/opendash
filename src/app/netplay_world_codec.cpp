@@ -49,10 +49,19 @@ void writePuppet(ByteWriter& w, const WorldPuppet& p) {
     w.u8(s.shownParts);
     w.u16(s.tint);
     writeShorts(w, s.scale);
-    w.u16(s.hitShape);
-    writeShorts(w, s.hitPos);
-    w.u32(s.hitOwnerFlags);
-    w.u32(s.hitAttack);
+    w.u8(s.hitCount);
+    for (int k = 0; k < s.hitCount; ++k) {
+        const od::port::PuppetHitEntry& e = s.hits[k];
+        w.boolean(e.capsule);
+        writeShorts(w, e.a);
+        if (e.capsule) {
+            writeShorts(w, e.b);
+            w.u16(e.ra);
+            w.u16(e.rb);
+        }
+        w.u32(e.ownerShape);
+        w.u32(e.attack);
+    }
 }
 WorldPuppet readPuppet(ByteReader& r) {
     WorldPuppet p;
@@ -73,18 +82,32 @@ WorldPuppet readPuppet(ByteReader& r) {
     s.shownParts = r.u8();
     s.tint = r.u16();
     readShorts(r, s.scale);
-    s.hitShape = r.u16();
-    readShorts(r, s.hitPos);
-    s.hitOwnerFlags = r.u32();
-    s.hitAttack = r.u32();
+    s.hitCount = r.u8();
+    if (s.hitCount > od::port::kPuppetHitEntries) r.fail();
+    for (int k = 0; k < s.hitCount && r.ok(); ++k) {
+        od::port::PuppetHitEntry& e = s.hits[k];
+        e.capsule = r.boolean();
+        readShorts(r, e.a);
+        if (e.capsule) {
+            readShorts(r, e.b);
+            e.ra = r.u16();
+            e.rb = r.u16();
+        }
+        e.ownerShape = r.u32();
+        e.attack = r.u32();
+    }
     if (s.pool != 0x20 && s.pool != 0x40) r.fail();
     return p;
 }
 
 constexpr size_t kPartHeader = 3 + 8 + 4 + 1 + 1 + 1; // room, fingerprint, tick, part, parts, count
+// the most a puppet takes: every hit entry a capsule
 size_t puppetBytes() {
+    WorldPuppet p;
+    p.state.hitCount = od::port::kPuppetHitEntries;
+    for (od::port::PuppetHitEntry& e : p.state.hits) e.capsule = true;
     ByteWriter w;
-    writePuppet(w, WorldPuppet{});
+    writePuppet(w, p);
     return w.bytes().size();
 }
 

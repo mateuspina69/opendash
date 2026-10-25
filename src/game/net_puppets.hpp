@@ -20,6 +20,16 @@ struct ActorHeader;
 struct PlayerEnv;
 enum class ActorPool : uint8_t;
 
+// one hit entry of a shared actor's tick: a sphere (a, its shape's radius) or a capsule (a / ra, b / rb)
+struct PuppetHitEntry {
+    bool capsule = false;
+    int16_t a[3] = {}, b[3] = {};
+    uint16_t ra = 0, rb = 0;     // a capsule's radii
+    uint32_t ownerShape = 0;     // the owner word and the shape without the slot byte
+    uint32_t attack = 0;
+};
+constexpr int kPuppetHitEntries = 4; // per actor and tick (the Guardian: its body and two fists)
+
 // one shared actor's state (host -> client)
 struct PuppetState {
     uint8_t hostSlot = 0;   // the host's slot id (pool class + index)
@@ -34,14 +44,16 @@ struct PuppetState {
     uint8_t anim = 0, keyIndex = 0, shownParts = 0; // animated only
     uint16_t tint = 0;
     int16_t scale[3] = {};
-    uint16_t hitShape = 0;      // its hit entry this tick (0 radius: none): the shape bits (radius, level, contact)
-    int16_t hitPos[3] = {};
-    uint32_t hitOwnerFlags = 0; // the entry's owner word without the slot byte
-    uint32_t hitAttack = 0;
+    uint8_t hitCount = 0;       // its hit entries of the last tick
+    PuppetHitEntry hits[kPuppetHitEntries];
 };
 
-// game/hit_list's submit: an entry of `slot` this tick (the shared entries teach their class)
-void noteHitEntry(uint8_t slot, const int16_t pos[3], uint32_t ownerShape, uint32_t attack);
+// game/hit_list's submits: an entry of `slot` this tick, a sphere (b null) or a capsule (the shared entries teach their
+// class)
+void noteHitEntry(uint8_t slot, const int16_t a[3], const int16_t b[3], uint16_t ra, uint16_t rb, uint32_t ownerShape,
+                  uint32_t attack);
+// every puppet forgotten without a free (a new room's init has reused their slots)
+void puppetsForget();
 // game/hit_list's pass, at its end: the tick's entries are the last tick's
 void noteHitPassEnded();
 // a class learned as shared (not the cutscene cast)

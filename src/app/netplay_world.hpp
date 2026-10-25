@@ -46,6 +46,12 @@ public:
     // host: a client joined (the settings and the room sent to it) / left
     void peerJoined(uint8_t id);
     void peerLeft(uint8_t id);
+    // client: before the app loads the host's room (every puppet freed) / after (the slots the room's init reused
+    // forgotten, the events held for that room applied)
+    void leavingRoom();
+    void arrived(uint64_t nowNs);
+    // the player respawned here (the room's entry point; the host leaving)
+    void respawnHere();
 
     // the combat settings: host (or netplay off): set and sent; client: the host's
     void setCombat(const NetCombatSettings& c);
@@ -54,7 +60,7 @@ public:
     void hostTravelled(int stage, int sub, bool transition);
     // client: a room the host loaded, for the app to load
     std::optional<TravelOrder> takeTravel();
-    // host: its ticks held (a client still in the shared script)
+    // host: its ticks held (a client still in a shared script)
     bool holdTicks() const { return !waiting_.empty(); }
     std::string waitingFor() const;
 
@@ -80,7 +86,9 @@ private:
         uint8_t generation = 0;
         uint32_t actor = 0;    // 0: not spawned (the pool was full)
         uint64_t lastNs = 0;   // its last state
+        uint32_t lastTick = 0; // ... the host tick of that state
     };
+    using ScriptWait = std::pair<uint8_t, uint8_t>; // {script, client}
 
     void send(uint8_t to, NetEvent e);
     void hostApply(uint64_t nowNs, uint8_t from, const NetEvent& e);
@@ -90,6 +98,8 @@ private:
     HitClaim claimFromHere(uint32_t tick) const; // the shooter's own data of a claim
     void claim(const HitClaim& c);               // host: applied here; client: sent
     void installHooks();
+    void sharedScriptEnded(); // host: the clients it was sent to and that have not finished it are waited for
+    void clientStartScript(uint8_t id);
 
     bool active_ = false, host_ = false;
     uint8_t localId_ = 0;
@@ -101,13 +111,13 @@ private:
     // host
     std::array<SlotTrack, 256> tracks_{};
     std::vector<WorldPuppet> capture_;   // the last tick's, sent with the next step
-    bool captured_ = false;
     std::set<uint8_t> clients_;          // the accepted clients
     std::map<uint8_t, uint64_t> respawnAt_; // player id -> when (0: at the next step's time + 3 s)
     std::optional<TravelOrder> room_;    // the host's current room
     int sharedScript_ = -1;              // the shared script running (-1: none)
-    std::set<uint8_t> scriptDone_;       // the clients that finished it
-    std::set<uint8_t> waiting_;          // the clients the host waits for
+    std::set<uint8_t> scriptSentTo_;     // the clients it was sent to
+    std::set<ScriptWait> scriptDone_;    // the clients that finished a script
+    std::set<ScriptWait> waiting_;       // the clients the host waits for, by script
     uint64_t holdSinceNs_ = 0;
     bool holdStarting_ = false;
     std::map<uint8_t, std::string> names_;
@@ -117,7 +127,18 @@ private:
     std::set<std::pair<uint8_t, uint8_t>> noSlotLogged_;
     int allowScript_ = -1;               // the host's script being started
     int hostScript_ = -1;                // the host's script running here (its end: ScriptDone)
+    std::vector<uint8_t> queuedScripts_; // the host's scripts that came while one ran here (started after it)
     std::optional<TravelOrder> travel_;
+    bool travelling_ = false;            // a Travel taken, the room not loaded yet
+    std::vector<NetEvent> heldEvents_;   // events for the room the client goes to (applied once it is there)
+    uint32_t partTick_ = 0;              // the world step being received
+    int partsSeen_ = 0;
+    uint64_t lastWorldNs_ = 0;           // the last world step received
+    // both: where the player entered its room (the respawn point)
+    od::port::GhostRoom entryRoom_;
+    bool entryValid_ = false;
+    int32_t entryPos_[3] = {};
+    int16_t entryYaw_ = 0;
     // both: the stand-in bodies' players, by body index
     std::vector<uint8_t> bodyPlayers_;
 };

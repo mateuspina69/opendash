@@ -43,6 +43,8 @@
 #include "game/fade_state.hpp"
 #include "game/game_state.hpp"
 #include "game/message_state.hpp"
+#include "game/net_puppets.hpp"
+#include "game/net_world.hpp"
 #include "game/room_scripts.hpp"
 #include "game/script_state.hpp"
 #include "game/story_flags.hpp"
@@ -282,14 +284,17 @@ void App::simStep(int gameFrames) {
     if (!netStepped) netplay.step(SDL_GetTicksNS(), ghosts); // outside play the session still runs (no ghost drawn)
     if (netplay.takeHostLost()) { // netplay client: the host is gone -- this room again with its own actors
         const bool wasPlaying = playerView.play;
+        if (od::port::playerDown()) netplay.world().respawnHere(); // no hold any more: up before the room is kept
         reload(stage, sub);
         if (wasPlaying) playerView.enterPlay(current);
+        od::port::puppetsForget();
     }
     ++simTicks;
 }
 
 void App::followHost(const TravelOrder& t) {
     const bool wasPlaying = playerView.play;
+    netplay.world().leavingRoom();
     netTravelling = true;
     reload(t.stage, t.sub); // out of play first, the character kept (as a jump from F1)
     netTravelling = false;
@@ -297,6 +302,7 @@ void App::followHost(const TravelOrder& t) {
         playerView.enterPlay(current);
         netPlaceSteps = 150;
     }
+    netplay.world().arrived(SDL_GetTicksNS());
 }
 
 void App::updateCamera() {

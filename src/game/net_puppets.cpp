@@ -30,20 +30,20 @@ ActorHeader& slotHeader(uint8_t slot) {
 }
 ActorPool poolOfSlot(uint8_t slot) { return slot < kProjectileFirst ? ActorPool::Animated : ActorPool::Projectiles; }
 
-struct Entry {
-    bool any = false;
+// a slot's entries of one tick (the pass they were submitted before)
+struct Entries {
     uint32_t pass = 0;
-    int16_t pos[3] = {};
-    uint32_t ownerShape = 0, attack = 0;
+    uint8_t count = 0;
+    PuppetHitEntry hits[kPuppetHitEntries];
 };
 struct Puppet {
     bool on = false;
     bool initRan = false; // its class ran its first tick (the init: the model, the bones)
     PuppetState target;
-    HitBox box;
+    HitBox boxes[kPuppetHitEntries];
 };
 
-std::array<Entry, 256> gEntries;
+std::array<Entries, 256> gEntries;
 std::array<Puppet, 256> gPuppets;
 std::set<RoutineId> gShared;
 std::vector<PuppetHit> gHits;
@@ -98,28 +98,48 @@ void puppetTick(ActorHeader& h) {
             an.prevAnim = an.anim;
         }
     }
-    if (p.box.result & kHitAttackByPlayer)
-        gHits.push_back({a.at, p.box.result, {p.box.contact.x, p.box.contact.y, p.box.contact.z}});
-    p.box.result = 0;
-    if ((t.hitShape & kHitRadiusMask) != 0) {
-        p.box.previousX = a.prevPos.x.whole;
-        p.box.previousZ = a.prevPos.z.whole;
-        hitListSubmit(t.hitPos, p.box, hitOwner(a.slot) | (t.hitOwnerFlags & ~kHitSlotMask) | t.hitShape, t.hitAttack);
+    bool reported = false; // one claim per tick (the first entry a local attack hit)
+    for (int k = 0; k < kPuppetHitEntries; ++k) {
+        HitBox& box = p.boxes[k];
+        if (!reported && (box.result & kHitAttackByPlayer)) {
+            gHits.push_back({a.at, box.result, {box.contact.x, box.contact.y, box.contact.z}});
+            reported = true;
+        }
+        box.result = 0;
+    }
+    for (int k = 0; k < t.hitCount && k < kPuppetHitEntries; ++k) {
+        const PuppetHitEntry& e = t.hits[k];
+        HitBox& box = p.boxes[k];
+        box.previousX = a.prevPos.x.whole;
+        box.previousZ = a.prevPos.z.whole;
+        const uint32_t owner = hitOwner(a.slot) | (e.ownerShape & ~kHitSlotMask);
+        if (e.capsule) hitListSubmitCapsule(e.a, e.ra, e.b, e.rb, box, owner, e.attack);
+        else hitListSubmit(e.a, box, owner & ~kHitCapsuleMask, e.attack);
     }
 }
 
 } // namespace
 
-void noteHitEntry(uint8_t slot, const int16_t pos[3], uint32_t ownerShape, uint32_t attack) {
+void noteHitEntry(uint8_t slot, const int16_t a[3], const int16_t b[3], uint16_t ra, uint16_t rb, uint32_t ownerShape,
+                  uint32_t attack) {
     if (!sharedPoolSlot(slot)) return;
-    Entry& e = gEntries[slot];
-    e.any = true;
-    e.pass = gPass;
-    e.pos[0] = pos[0];
-    e.pos[1] = pos[1];
-    e.pos[2] = pos[2];
-    e.ownerShape = ownerShape;
-    e.attack = attack;
+    Entries& es = gEntries[slot];
+    if (es.pass != gPass) { // the first entry of this tick
+        es.pass = gPass;
+        es.count = 0;
+    }
+    if (es.count < kPuppetHitEntries) {
+        PuppetHitEntry& e = es.hits[es.count++];
+        e.capsule = b != nullptr;
+        for (int k = 0; k < 3; ++k) {
+            e.a[k] = a[k];
+            e.b[k] = b ? b[k] : int16_t(0);
+        }
+        e.ra = ra;
+        e.rb = rb;
+        e.ownerShape = ownerShape & ~kHitSlotMask;
+        e.attack = attack;
+    }
     if (netSharedEntry(ownerShape, attack)) learn(classOf(slotHeader(slot), poolOfSlot(slot)));
 }
 
@@ -149,14 +169,10 @@ std::vector<PuppetState> captureWorld() {
             s.scale[1] = an.scale.y;
             s.scale[2] = an.scale.z;
         }
-        const Entry& e = gEntries[size_t(slot)];
-        if (e.any && e.pass + 1 == gPass) {
-            s.hitShape = uint16_t(e.ownerShape);
-            s.hitPos[0] = e.pos[0];
-            s.hitPos[1] = e.pos[1];
-            s.hitPos[2] = e.pos[2];
-            s.hitOwnerFlags = e.ownerShape & kHitOwnerMask & ~kHitSlotMask;
-            s.hitAttack = e.attack;
+        const Entries& es = gEntries[size_t(slot)];
+        if (es.count != 0 && es.pass + 1 == gPass) { // the entries of the tick the last pass took
+            s.hitCount = es.count;
+            for (int k = 0; k < es.count; ++k) s.hits[k] = es.hits[k];
         }
         out.push_back(s);
     }
@@ -200,6 +216,11 @@ void puppetFree(uint32_t actor) {
     if (!p.on) return;
     p = Puppet{};
     freeActor(h);
+}
+
+void puppetsForget() {
+    gPuppets = {};
+    gHits.clear();
 }
 
 void puppetsReset() {

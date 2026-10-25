@@ -55,8 +55,8 @@ NetWorldHooks& netWorldHooks();
 
 // the player is dead and held (holdDeath)
 bool playerDown();
-// game/player/player_update: the held player back: hit points full, the status cleared, at its room's arrival point
-// (the transition request's destination), in its init state
-void playerRespawn();
+// game/player/player_update: the held player back: hit points full, the status cleared, at `pos` (16.16) facing `yaw`,
+// in its init state
+void playerRespawn(const int32_t pos[3], int16_t yaw);
 
 } // namespace od::port

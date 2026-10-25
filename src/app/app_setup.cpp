@@ -519,7 +519,7 @@ int App::init() {
 
 void App::reload(int newStage, int newSub, bool transition) {
     // netplay: only the host changes the room (its clients follow it, app/netplay_world)
-    if (netplay.isClient() && netplay.world().active() && !netTravelling) {
+    if (netplay.isClient() && netplay.world().active() && !netTravelling && !transition) { // the game's own loads pass
         if (!netRefusedLogged) SDL_Log("netplay: só o host muda o cenário");
         netRefusedLogged = true;
         return;

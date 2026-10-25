@@ -200,7 +200,7 @@ void submit(const int16_t pos[3], HitBoxHead& box, HitBox* contactBox, uint32_t 
     s.hitCount = n + 1;
     auto&& e = s.hitList[n];
     writeEntry(e, pos, box, contactBox, ownerShape & kHitOwnerMask, uint16_t(ownerShape), attack);
-    noteHitEntry(uint8_t(ownerShape >> kHitSlotShift), pos, ownerShape, attack); // netplay: the shared actors
+    noteHitEntry(uint8_t(ownerShape >> kHitSlotShift), pos, nullptr, 0, 0, ownerShape, attack); // netplay
 }
 
 void submitCapsule(const int16_t a[3], uint16_t ra, const int16_t b[3], uint16_t rb, HitBoxHead& box,
@@ -215,7 +215,7 @@ void submitCapsule(const int16_t a[3], uint16_t ra, const int16_t b[3], uint16_t
                    attack);
     }
     s.hitCount = n + 2;
-    noteHitEntry(uint8_t(ownerShape >> kHitSlotShift), a, ownerShape, attack); // netplay: the shared actors
+    noteHitEntry(uint8_t(ownerShape >> kHitSlotShift), a, b, ra, rb, ownerShape, attack); // netplay
 }
 
 } // namespace

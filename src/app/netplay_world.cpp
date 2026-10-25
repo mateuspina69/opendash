@@ -50,16 +50,21 @@ void NetWorld::end() {
     outgoing_.clear();
     tracks_ = {};
     capture_.clear();
-    captured_ = false;
     clients_.clear();
     respawnAt_.clear();
     sharedScript_ = -1;
+    scriptSentTo_.clear();
     scriptDone_.clear();
     waiting_.clear();
     holdStarting_ = false;
     shown_.clear();
+    noSlotLogged_.clear();
     allowScript_ = hostScript_ = -1;
+    queuedScripts_.clear();
     travel_.reset();
+    travelling_ = false;
+    heldEvents_.clear();
+    partsSeen_ = 0;
     bodyPlayers_.clear();
     wasDown_ = false;
     stats_ = {};
@@ -72,8 +77,9 @@ void NetWorld::installHooks() {
     if (host_) {
         h.scriptStarted = [this](uint8_t id) {
             if (id == kExitScript || id == kTravelScript || id == kShopScript) return;
+            if (sharedScript_ >= 0) sharedScriptEnded(); // one script ended and started the next in the same tick
             sharedScript_ = id;
-            scriptDone_.clear();
+            scriptSentTo_ = clients_;
             NetEvent e;
             e.kind = EventKind::ScriptStarted;
             e.id = id;
@@ -151,6 +157,17 @@ void NetWorld::afterTick(uint32_t tick) {
         c.contact[2] = box.contact.z;
         claim(c);
     }
+    // both: where the player entered this room (its respawn point)
+    const od::port::GhostRoom room = od::port::ghostRoomOf();
+    if (room.fieldPlay && (!entryValid_ || !sameRoom(room, entryRoom_))) {
+        const od::port::Player& p = od::port::player();
+        entryRoom_ = room;
+        entryValid_ = true;
+        entryPos_[0] = p.pos.x;
+        entryPos_[1] = p.pos.y;
+        entryPos_[2] = p.pos.z;
+        entryYaw_ = p.rotation.y;
+    }
     // both: downed
     const bool down = od::port::playerDown();
     if (down && !wasDown_) {
@@ -181,14 +198,8 @@ void NetWorld::afterTick(uint32_t tick) {
         }
         for (size_t slot = 0; slot < tracks_.size(); ++slot)
             if (!seen[slot]) tracks_[slot].present = false;
-        captured_ = true;
         // the shared script's end: hold for the clients that have not finished it
-        if (sharedScript_ >= 0 && !(running && script.id == uint8_t(sharedScript_))) {
-            for (uint8_t id : clients_)
-                if (!scriptDone_.contains(id)) waiting_.insert(id);
-            holdStarting_ = !waiting_.empty();
-            sharedScript_ = -1;
-        }
+        if (sharedScript_ >= 0 && !(running && script.id == uint8_t(sharedScript_))) sharedScriptEnded();
     } else {
         // the host's script ended here (or another took its place)
         if (hostScript_ >= 0 && !(running && script.id == uint8_t(hostScript_))) {
@@ -197,6 +208,11 @@ void NetWorld::afterTick(uint32_t tick) {
             e.id = uint8_t(hostScript_);
             send(od::net::kHostPlayerId, e);
             hostScript_ = -1;
+            if (!queuedScripts_.empty()) { // the host's next one, held while this one ran
+                const uint8_t next = queuedScripts_.front();
+                queuedScripts_.erase(queuedScripts_.begin());
+                clientStartScript(next);
+            }
         }
         // a local attack on a puppet
         for (const od::port::PuppetHit& hit : od::port::takePuppetHits()) {
@@ -264,8 +280,8 @@ void NetWorld::hostApply(uint64_t nowNs, uint8_t from, const NetEvent& e) {
         break;
     case EventKind::Downed: respawnAt_[from] = nowNs + kRespawnNs; break;
     case EventKind::ScriptDone:
-        scriptDone_.insert(from);
-        waiting_.erase(from);
+        scriptDone_.insert({e.id, from});
+        waiting_.erase({e.id, from});
         break;
     default: break; // the host's own kinds: from a client they are ignored
     }
@@ -280,7 +296,9 @@ void NetWorld::clientApply(uint64_t nowNs, const NetEvent& e) {
             od::port::hitListQueueExternal(
                 {od::port::player().slot, e.hit.attack, {e.hit.contact[0], e.hit.contact[1], e.hit.contact[2]}});
         break;
-    case EventKind::Respawn: od::port::playerRespawn(); break;
+    case EventKind::Respawn:
+        if (od::port::playerDown()) respawnHere();
+        break;
     case EventKind::DropSpawned:
         if (here) od::port::spawnPickup(e.pickup);
         break;
@@ -288,28 +306,33 @@ void NetWorld::clientApply(uint64_t nowNs, const NetEvent& e) {
         if (here) od::port::breakableWallApplyStep(e.wall);
         break;
     case EventKind::ScriptStarted:
-        if (!here) break;
-        allowScript_ = e.id;
-        od::port::scriptRun(e.id);
-        allowScript_ = -1;
-        if (od::port::scriptState().flags & od::port::kScriptRunning) hostScript_ = e.id;
-        else { // it could not start here (the player down): done at once, the host does not wait
+        if (!here || !od::port::ghostRoomOf().fieldPlay) { // not where it plays (or out of play): the host need not wait
             NetEvent done;
             done.kind = EventKind::ScriptDone;
             done.id = e.id;
             send(od::net::kHostPlayerId, done);
+        } else if (hostScript_ >= 0) {
+            queuedScripts_.push_back(e.id); // after the one running here
+        } else {
+            clientStartScript(e.id);
         }
         break;
-    case EventKind::Travel:
+    case EventKind::Travel: {
         travel_ = e.travel;
-        if (hostScript_ >= 0) { // the room changes under the script: nothing more to wait for
-            NetEvent done;
-            done.kind = EventKind::ScriptDone;
-            done.id = uint8_t(hostScript_);
-            send(od::net::kHostPlayerId, done);
-            hostScript_ = -1;
+        travelling_ = true;
+        // the room changes under the scripts: nothing more to wait for
+        std::vector<uint8_t> done = std::move(queuedScripts_);
+        queuedScripts_.clear();
+        if (hostScript_ >= 0) done.push_back(uint8_t(hostScript_));
+        hostScript_ = -1;
+        for (uint8_t id : done) {
+            NetEvent d;
+            d.kind = EventKind::ScriptDone;
+            d.id = id;
+            send(od::net::kHostPlayerId, d);
         }
         break;
+    }
     case EventKind::Settings: combat_ = e.settings; break;
     default: break; // the clients' own kinds
     }
@@ -319,8 +342,15 @@ void NetWorld::clientWorld(uint64_t nowNs, const WorldPart& part) {
     if (!sameRoom(part.room, od::port::ghostRoomOf()) || !od::port::ghostRoomOf().fieldPlay ||
         part.fingerprint != localFingerprint())
         return;
+    lastWorldNs_ = nowNs;
+    if (part.tick != partTick_) {
+        partTick_ = part.tick;
+        partsSeen_ = 0;
+    }
+    ++partsSeen_;
     for (const WorldPuppet& p : part.puppets) {
         Shown& s = shown_[p.state.hostSlot];
+        s.lastTick = part.tick;
         if (s.actor != 0 && s.generation != p.generation) { // the slot holds another actor now
             od::port::puppetFree(s.actor);
             s.actor = 0;
@@ -338,6 +368,16 @@ void NetWorld::clientWorld(uint64_t nowNs, const WorldPart& part) {
         }
         od::port::puppetApply(s.actor, p.state);
     }
+    if (partsSeen_ < part.parts) return;
+    // the whole step arrived: what it does not list is gone on the host (killed, burst)
+    for (auto it = shown_.begin(); it != shown_.end();) {
+        if (it->second.lastTick == part.tick) {
+            ++it;
+            continue;
+        }
+        if (it->second.actor != 0) od::port::puppetFree(it->second.actor);
+        it = shown_.erase(it);
+    }
 }
 
 void NetWorld::step(uint64_t nowNs, od::net::Session& session, const GhostView& ghosts,
@@ -349,6 +389,8 @@ void NetWorld::step(uint64_t nowNs, od::net::Session& session, const GhostView& 
         const auto e = decodeEvent(r.payload);
         if (!e) continue;
         if (host_) hostApply(nowNs, r.from, *e);
+        else if (travelling_ && e->kind != EventKind::Travel && e->kind != EventKind::Settings)
+            heldEvents_.push_back(*e); // for the room the client goes to: once it is there
         else clientApply(nowNs, *e);
     }
     if (host_) {
@@ -367,7 +409,7 @@ void NetWorld::step(uint64_t nowNs, od::net::Session& session, const GhostView& 
                 continue;
             }
             if (it->first == localId_) {
-                od::port::playerRespawn();
+                if (od::port::playerDown()) respawnHere();
             } else {
                 NetEvent e;
                 e.kind = EventKind::Respawn;
@@ -376,7 +418,7 @@ void NetWorld::step(uint64_t nowNs, od::net::Session& session, const GhostView& 
             }
             it = respawnAt_.erase(it);
         }
-        if (captured_) {
+        if (od::port::ghostRoomOf().fieldPlay) { // every step, the last capture again while the ticks are held
             std::vector<std::array<int32_t, 3>> players;
             const od::port::Player& me = od::port::player();
             players.push_back({me.pos.x, me.pos.y, me.pos.z});
@@ -391,13 +433,14 @@ void NetWorld::step(uint64_t nowNs, od::net::Session& session, const GhostView& 
             if (trimmed && trimmedLogged_.insert(uint16_t(room.stage << 8 | room.sub)).second)
                 SDL_Log("netplay: ST%02X sub %u has more shared actors than %d parts hold: the farthest left out",
                         unsigned(room.stage), unsigned(room.sub), kMaxWorldParts);
-            captured_ = false;
         }
     } else {
         for (const od::net::ReceivedWorld& w : session.takeWorldStates())
             if (const auto part = decodeWorld(w.payload)) clientWorld(nowNs, *part);
+        // a puppet unheard of for 1 s while the steps arrive (its parts lost) is gone; none while the host sends none
+        const bool arriving = nowNs - lastWorldNs_ < kPuppetGoneNs;
         for (auto it = shown_.begin(); it != shown_.end();) {
-            if (nowNs - it->second.lastNs < kPuppetGoneNs) {
+            if (!arriving || nowNs - it->second.lastNs < kPuppetGoneNs) {
                 ++it;
                 continue;
             }
@@ -443,7 +486,8 @@ void NetWorld::peerJoined(uint8_t id) {
 
 void NetWorld::peerLeft(uint8_t id) {
     clients_.erase(id);
-    waiting_.erase(id);
+    scriptSentTo_.erase(id);
+    std::erase_if(waiting_, [&](const ScriptWait& w) { return w.second == id; });
     respawnAt_.erase(id);
     std::erase_if(outgoing_, [&](const Outgoing& o) { return o.to == id; });
 }
@@ -472,9 +516,57 @@ void NetWorld::hostTravelled(int stage, int sub, bool transition) {
 
 std::optional<TravelOrder> NetWorld::takeTravel() { return std::exchange(travel_, std::nullopt); }
 
+void NetWorld::sharedScriptEnded() {
+    const bool wasHeld = !waiting_.empty();
+    for (uint8_t id : scriptSentTo_)
+        if (clients_.contains(id) && !scriptDone_.contains({uint8_t(sharedScript_), id}))
+            waiting_.insert({uint8_t(sharedScript_), id});
+    if (!wasHeld && !waiting_.empty()) holdStarting_ = true;
+    sharedScript_ = -1;
+    scriptSentTo_.clear();
+}
+
+void NetWorld::clientStartScript(uint8_t id) {
+    allowScript_ = id;
+    od::port::scriptRun(id);
+    allowScript_ = -1;
+    if ((od::port::scriptState().flags & od::port::kScriptRunning) && od::port::scriptState().id == id) {
+        hostScript_ = id;
+        return;
+    }
+    NetEvent done; // it could not start here (the player down): the host need not wait
+    done.kind = EventKind::ScriptDone;
+    done.id = id;
+    send(od::net::kHostPlayerId, done);
+}
+
+void NetWorld::leavingRoom() {
+    od::port::puppetsReset();
+    shown_.clear();
+    noSlotLogged_.clear();
+    partsSeen_ = 0;
+}
+
+void NetWorld::arrived(uint64_t nowNs) {
+    od::port::puppetsForget(); // the room's init reused the freed slots: none of them is a puppet
+    travelling_ = false;
+    std::vector<NetEvent> held = std::move(heldEvents_);
+    heldEvents_.clear();
+    for (const NetEvent& e : held) clientApply(nowNs, e);
+}
+
+void NetWorld::respawnHere() {
+    const od::port::Player& p = od::port::player();
+    const bool entry = entryValid_ && sameRoom(entryRoom_, od::port::ghostRoomOf());
+    const int32_t here[3] = {p.pos.x, p.pos.y, p.pos.z};
+    od::port::playerRespawn(entry ? entryPos_ : here, entry ? entryYaw_ : p.rotation.y);
+}
+
 std::string NetWorld::waitingFor() const {
+    std::set<uint8_t> ids;
+    for (const ScriptWait& w : waiting_) ids.insert(w.second);
     std::string s;
-    for (uint8_t id : waiting_) {
+    for (uint8_t id : ids) {
         if (!s.empty()) s += ", ";
         const auto it = names_.find(id);
         s += it != names_.end() ? it->second : "id " + std::to_string(id);
