@@ -54,10 +54,8 @@ struct SparkStyle : DataRecord {
 };
 constexpr uint32_t kSparkStyleCount = 0x20;
 using SparkStyleTable = RecordTable<SparkStyle, kSparkStyleCount, 8>;
-inline const SparkStyleTable& sparkStyles() {
-    static const DataTable<SparkStyleTable> t{TableId::HitSparkStyles};
-    return *t;
-}
+inline const DataTable<SparkStyleTable> sparkStylesTable{TableId::HitSparkStyles};
+inline const SparkStyleTable& sparkStyles() { return *sparkStylesTable; }
 // the burst's colour by its size class >> 1 (exe data 0x8c3c50: r | g << 8 | b << 16)
 inline const DataTable<ScalarTable<uint32_t, 8>> burstColours{TableId::BurstColours};
 // the effects' states (+8)
@@ -79,10 +77,8 @@ struct HurtSparksVariant : DataRecord {
     }
 };
 using HurtSparksVariantTable = RecordTable<HurtSparksVariant, 8, 8>;
-inline const HurtSparksVariantTable& hurtSparksVariants() {
-    static const DataTable<HurtSparksVariantTable> t{TableId::HurtSparksVariants};
-    return *t;
-}
+inline const DataTable<HurtSparksVariantTable> hurtSparksVariantsTable{TableId::HurtSparksVariants};
+inline const HurtSparksVariantTable& hurtSparksVariants() { return *hurtSparksVariantsTable; }
 constexpr uint16_t kHitSparkSize = 0x80; // the size exe 0x5e5400 gives its spark
 // the hit spark's variants (its style in the table kSparkStyles) the game spawns by name
 constexpr uint8_t kSparkVariantHit = 0;

@@ -58,6 +58,7 @@
 {TableId::TownPropsSt09KickableTalkBox, 0x0, "DAT/ST09T.BIN", 0x800f2c10u},
 {TableId::TownPropsSt09TalkingCollisionBox, 0x0, "DAT/ST00T.BIN", 0x800ef728u},
 {TableId::TownPropsSt09TalkingTalkBox, 0x0, "DAT/ST00T.BIN", 0x800ef734u},
+{TableId::HitSparkStyles, 0x0, "COMMON/GAME.BIN", 0x800dd43cu},
 {TableId::St0eTurretHurtVoices, 0x0, "DAT/ST0E01T.BIN", 0x800fd70cu},
 {TableId::St0eTurretSweepVoices, 0x0, "DAT/ST0E01T.BIN", 0x800fd72cu},
 {TableId::St0eTurretCoreBlastSounds, 0x0, "DAT/ST0E01T.BIN", 0x800fd754u},

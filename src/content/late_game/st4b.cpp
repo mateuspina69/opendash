@@ -45,6 +45,9 @@ using namespace st4b_state;
 
 namespace {
 
+// the boss's move by rng & 0xf (exe 0x4b9768: a byte table after the function's code)
+const DataTable<ScalarTable<uint8_t, 16>> bossMovePicks{TableId::St4bBossMovePicks};
+
 void sound(uint16_t id) { soundPlayAtPos(id, kSoundAtListener); } // exe 0x5d5380(id, 0)
 int16_t t16(int v) { return int16_t(uint16_t(uint32_t(v))); }
 int16_t fold(int16_t v) { // the +-0x800 folds of the classes (16-bit)
@@ -930,9 +933,8 @@ void hover(AnimatedActor& actor, BossFields& boss) {
                 actor.subState = uint8_t(BossMove::Fall);
                 return;
             }
-            // the move by rng & 0xf (exe 0x4b9768: a byte table after the function's code)
-            static const DataTable<ScalarTable<uint8_t, 16>> movePicks{TableId::St4bBossMovePicks};
-            switch (movePicks[rngStep() & 0xf]) {
+            // the move by rng & 0xf (bossMovePicks)
+            switch (bossMovePicks[rngStep() & 0xf]) {
             case 0: // exe 0x4b92ad: the dive
                 boss.flags &= ~kBossVolleyAgain;
                 actor.restartStep();
