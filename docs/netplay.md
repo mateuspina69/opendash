@@ -3,9 +3,9 @@
 OpenDash players in the same room see each other's Mega Man as a **ghost**: the real model, look, animation and
 movement, smoothed over the network. And they play in **one world, the host's**:
 
-- **The host's world is the only one that simulates.** The enemies, their shots, their deaths and their drops happen
-  in the host's game. A client shows the host's enemies (its own copies of them are removed) and sends the host its
-  hits on them. The host applies each hit through the game's own hit code, so the enemy flinches, loses health and
+- **The host's world is the only one that simulates.** Every actor of the field happens in the host's game: the
+  enemies, their shots, their deaths and their drops, the NPCs walking their routes, the critters. A client shows the
+  host's (its own copies of them are removed) and sends the host its hits on them. The host applies each hit through the game's own hit code, so the enemy flinches, loses health and
   dies the same way on every screen.
 - **Everyone travels together.** When the host changes room (a door, the F1 *Cenarios* tab, PgUp/PgDn, `[` `]`), every
   client loads the same room and is placed beside the host. Only the host can change the room: a client's *Cenarios*
@@ -19,7 +19,9 @@ movement, smoothed over the network. And they play in **one world, the host's**:
 - **Breakable walls are shared.** A client's hit on a wall goes to the host, and the wall breaks on every screen.
 - **Cutscenes.** When a story cutscene starts on the host, it starts on every client too. Each player watches or skips
   it at their own pace, and the host's world waits ("aguardando <nomes>") until everyone has finished, for 60 s at
-  most. Talking to NPCs and shops stays local.
+  most. Talking to NPCs and shops stays local: while a client talks to
+  an NPC, that NPC stops and faces it on the client's screen (on the host's it keeps going), then follows the host's
+  again. On a client, the host's actors cannot be lifted.
 - **Friendly fire** (F1 → Netplay → Combate, the host's setting): with *fogo amigo* on, the players' shots hit each
   other, with knockback, for *dano entre jogadores %* (25-100 %) of their damage. With it off, shots go through the
   other players. A client sees the host's setting, greyed out ("definido pelo host").
@@ -28,7 +30,7 @@ movement, smoothed over the network. And they play in **one world, the host's**:
 - **If the host leaves**, every client goes back to its own world: the room loads again with its own enemies, and the
   player keeps their health, items and position. F1 → Netplay shows "host saiu".
 
-Each player keeps their own items and save (the story shown is the host's, the one saved is the player's). Enemies are shared only in the host's room; a cutscene's own cast
+Each player keeps their own items and save (the story shown is the host's, the one saved is the player's). The actors are shared only in the host's room; a cutscene's own cast
 stays each player's.
 
 One player **hosts** and the others **join** the host's `ip:port` over UDP. Up to 8 players: the host and 7 others.
@@ -50,6 +52,20 @@ Transport: `docs/adr/0005-netplay-transport.md`.
 ## Settings
 
 Put these in `opendash.ini` next to where OpenDash runs. Command-line flags override them.
+
+`--config <file.ini>` reads another ini instead of `opendash.ini`, and its `log=<file>` names the log file (relative to
+the ini's folder; default `opendash.log` next to the executable). Two copies on one PC, from the same build:
+
+```ini
+# host.ini                      # client.ini
+net=host                        net=join
+net_name=Host                   net_join=127.0.0.1:27460
+log=host.log                    net_name=Client
+                                log=client.log
+```
+
+`opendash --config host.ini`, then `opendash --config client.ini`. Copy your `opendash.ini`'s lines (`dat_dir=`,
+`exe=`, `display=` ...) into both if you set any. Settings changed in the app are saved to the ini given.
 
 | `opendash.ini` | flag | meaning |
 |---|---|---|

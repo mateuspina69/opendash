@@ -190,6 +190,7 @@ void App::parseArgs(int argc, char** argv) {
             netFlags.mode = NetMode::Join;
             netFlags.join = argv[++i];
         }
+        else if (a == "--config" && i + 1 < argc) ++i; // the ini (main reads it before the log starts)
         else if (a == "--net-name" && i + 1 < argc) netFlags.name = argv[++i];
         else if (a == "--net-key" && i + 1 < argc) netFlags.key = argv[++i];
         else if (a == "--net-sim") { // test instrument: <latency ms> <jitter ms> <loss %> on this end's datagrams

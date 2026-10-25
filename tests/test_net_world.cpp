@@ -7,8 +7,10 @@
 #include "check.hpp"
 #include "data_source_binding.hpp"
 #include "game/actor_state.hpp"
+#include "game/actors.hpp"
 #include "game/game_state.hpp"
 #include "game/hit_list.hpp"
+#include "game/net_puppets.hpp"
 #include "game/net_world.hpp"
 #include "game/player/player_damage.hpp"
 #include "game/player/player_state.hpp"
@@ -91,6 +93,16 @@ void hostStoryShown() {
     netOwnStory().reset();
 }
 
+// the host simulates every field actor (pool 0x20) but the cutscene cast; the projectiles (pool 0x40) once they attack
+void hostSimulatesTheField() {
+    using od::RoutineId;
+    CHECK(netSharedClass(RoutineId::ShyCritterUpdate, ActorPool::Animated)); // ST0D's rabbits
+    CHECK(netSharedClass(RoutineId::TownNpcUpdate, ActorPool::Animated));
+    CHECK(!netSharedClass(RoutineId::TalkerUpdate, ActorPool::Animated)); // the cutscene cast: each machine's
+    CHECK(!netSharedClass(RoutineId::None, ActorPool::Animated));
+    CHECK(!netSharedClass(RoutineId::EnemyShotUpdate, ActorPool::Projectiles)); // not seen attacking yet
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -100,6 +112,7 @@ int main(int argc, char** argv) {
     puppetFlagsTravel();
     travelCarriesStory();
     hostStoryShown();
+    hostSimulatesTheField();
     if (g_failures == 0) std::printf("test_net_world: ok\n");
     return g_failures == 0 ? 0 : 1;
 }

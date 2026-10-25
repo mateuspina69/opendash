@@ -10,8 +10,10 @@
 #include "game/actor_pools.hpp"
 #include "game/actor_state.hpp"
 #include "game/actors.hpp"
+#include "game/event_state.hpp"
 #include "game/hit_list.hpp"
 #include "game/net_world.hpp"
+#include "game/player/player_state.hpp"
 
 namespace od::port {
 
@@ -36,9 +38,15 @@ struct Entries {
     uint8_t count = 0;
     PuppetHitEntry hits[kPuppetHitEntries];
 };
+enum class Talk : uint8_t {
+    None,
+    Starting, // the local player talks to it: its class's tick runs (and starts the event)
+    Talking,  // the event runs: its class's ticks until the event's end
+};
 struct Puppet {
     bool on = false;
     bool initRan = false; // its class ran its first tick (the init: the model, the bones)
+    Talk talk = Talk::None;
     PuppetState target;
     HitBox boxes[kPuppetHitEntries];
 };
@@ -79,6 +87,7 @@ void puppetTick(ActorHeader& h) {
     Actor& a = static_cast<Actor&>(h);
     a.savePreviousPose();
     a.flags = uint8_t(t.flags | kActorLive); // drawn or hidden as on the host
+    a.interaction &= uint8_t(~kInteractLift);
     a.runFlags = uint8_t((a.runFlags & ~kActorShown) | (t.runFlags & kActorShown));
     a.pos.x = t.pos[0];
     a.pos.y = t.pos[1];
@@ -122,6 +131,25 @@ void puppetTick(ActorHeader& h) {
     }
 }
 
+// a talk with the local player: the class's own ticks from the talk's start to the event's end, then the host's pose
+bool localTalk(Puppet& p, const ActorHeader& actor) {
+    const bool event = eventState().active != 0;
+    switch (p.talk) {
+    case Talk::None:
+        if (event || !player().talksTo(actor)) return false;
+        p.talk = Talk::Starting;
+        return true;
+    case Talk::Starting: // its tick started the event, or did not
+        p.talk = event ? Talk::Talking : Talk::None;
+        return event;
+    case Talk::Talking:
+        if (event) return true;
+        p.talk = Talk::None;
+        return false;
+    }
+    return false;
+}
+
 } // namespace
 
 void noteHitEntry(uint8_t slot, const int16_t a[3], const int16_t b[3], uint16_t ra, uint16_t rb, uint32_t ownerShape,
@@ -144,12 +172,16 @@ void noteHitEntry(uint8_t slot, const int16_t a[3], const int16_t b[3], uint16_t
         e.ownerShape = ownerShape & ~kHitSlotMask;
         e.attack = attack;
     }
-    if (netSharedEntry(ownerShape, attack)) learn(classOf(slotHeader(slot), poolOfSlot(slot)));
+    if (poolOfSlot(slot) == ActorPool::Projectiles && netSharedEntry(ownerShape, attack))
+        learn(classOf(slotHeader(slot), ActorPool::Projectiles));
 }
 
 void noteHitPassEnded() { ++gPass; }
 
-bool netSharedClass(RoutineId cls) { return gShared.contains(cls); }
+bool netSharedClass(RoutineId cls, ActorPool pool) {
+    if (cls == RoutineId::None || netLocalOnly(cls)) return false;
+    return pool == ActorPool::Animated || gShared.contains(cls);
+}
 
 std::vector<PuppetState> captureWorld() {
     std::vector<PuppetState> out;
@@ -158,7 +190,7 @@ std::vector<PuppetState> captureWorld() {
         const ActorHeader& h = slotHeader(uint8_t(slot));
         const ActorPool pool = poolOfSlot(uint8_t(slot));
         const RoutineId cls = classOf(h, pool);
-        if (cls == RoutineId::None || !netSharedClass(cls)) continue;
+        if (!netSharedClass(cls, pool)) continue;
         PuppetState s;
         s.pool = slot < kProjectileFirst ? kAnimatedFirst : kProjectileFirst;
         s.routine = uint16_t(cls);
@@ -205,7 +237,7 @@ uint32_t puppetSpawn(const PuppetState& s) {
     p = Puppet{};
     p.on = true;
     p.target = s;
-    learn(RoutineId(s.routine));
+    if (s.pool == kProjectileFirst) learn(RoutineId(s.routine));
     return address;
 }
 
@@ -247,10 +279,11 @@ bool netPoolBefore(const PlayerEnv& env, ActorHeader& actor, ActorPool pool, Rou
             p.initRan = true;
             return false;
         }
+        if (localTalk(p, actor)) return false;
         puppetTick(actor);
         return true;
     }
-    if (netSharedClass(cls)) { // the client's own copy of a shared class: the host's is shown instead
+    if (netSharedClass(cls, pool)) { // the client's own copy of a shared class: the host's is shown instead
         freeActor(actor);
         return true;
     }
@@ -260,7 +293,7 @@ bool netPoolBefore(const PlayerEnv& env, ActorHeader& actor, ActorPool pool, Rou
 void netPoolAfter(ActorHeader& actor, ActorPool pool, RoutineId cls) {
     if (!netWorldHooks().mirror || isPuppetActor(actor) || !sharedPoolSlot(actor.slot)) return;
     if (pool != ActorPool::Animated && pool != ActorPool::Projectiles) return;
-    if (netSharedClass(cls) && actor.live()) freeActor(actor); // learned during its own tick
+    if (netSharedClass(cls, pool) && actor.live()) freeActor(actor); // learned during its own tick
 }
 
 } // namespace od::port

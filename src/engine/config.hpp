@@ -41,11 +41,15 @@ struct Config {
     // on each other, net_ff_scale= 25..100 the % of their damage
     bool netFriendlyFire = false;
     int netFfScale = 100;
+    // log= the run's log file (relative: to the ini's folder); unset: opendash.log next to the executable
+    std::filesystem::path log;
 };
 
 // opendash.ini's folder: the executable's (the app sets it before loadConfig); an opendash.ini in the working directory
 // still wins. Unset: the working directory.
 void setConfigDir(const std::filesystem::path& dir);
+// --config <file>: this ini instead (setConfigDir then leaves it)
+void setConfigPath(const std::filesystem::path& file);
 const std::filesystem::path& configPath();
 
 // Resolution order: OPENDASH_DAT_DIR env var, then `dat_dir=` in opendash.ini,

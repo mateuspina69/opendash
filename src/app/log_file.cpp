@@ -25,11 +25,16 @@ void writeLine(void* data, int category, SDL_LogPriority priority, const char* m
 
 } // namespace
 
-void startLogFile() {
+void startLogFile(const std::filesystem::path& file) {
     if (g_file) return;
     const char* base = SDL_GetBasePath();
-    const std::string path = std::string(base ? base : "") + "opendash.log";
+    const std::filesystem::path chosen = file.empty() ? std::filesystem::path(base ? base : "") / "opendash.log" : file;
+    const std::string path = chosen.string();
+#ifdef _WIN32
+    g_file = _wfopen(chosen.c_str(), L"w");
+#else
     g_file = std::fopen(path.c_str(), "w");
+#endif
     SDL_GetLogOutputFunction(&g_console, &g_consoleData);
     SDL_SetLogOutputFunction(writeLine, nullptr);
     if (!g_file) SDL_Log("log: cannot write %s", path.c_str());

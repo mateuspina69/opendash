@@ -21,12 +21,14 @@
 #include "app/app.hpp"
 #include "app/log_file.hpp"
 #include "app/ui/prompts.hpp"
+#include "engine/config.hpp"
 
 #include <SDL3/SDL_main.h>
 #include <imgui.h>
 #include <imgui_impl_sdl3.h>
 
 #include <algorithm>
+#include <string_view>
 
 #include "game/audio_logic.hpp"
 #include "game/display.hpp"
@@ -191,7 +193,11 @@ void App::shutdown() {
 } // namespace od::app
 
 int main(int argc, char** argv) {
-    od::app::startLogFile(); // opendash.log next to the executable, however the game was started
+    // --config <file>: that ini instead of opendash.ini (its log= names the log file)
+    for (int i = 1; i + 1 < argc; ++i)
+        if (std::string_view(argv[i]) == "--config") od::setConfigPath(argv[i + 1]);
+    if (const char* base = SDL_GetBasePath()) od::setConfigDir(base);
+    od::app::startLogFile(od::loadConfig().log); // log=, else opendash.log next to the executable
     od::content::registerAll(); // the game code dispatches into the content through its registry
     od::app::App app;
     return app.run(argc, argv);

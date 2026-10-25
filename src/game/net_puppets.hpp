@@ -1,12 +1,15 @@
-// Netplay's shared actors (none of this is the exe's; app/netplay_world drives it). The shared actors are the combat
-// actors of pools 0x20 (the field's slots) and 0x40: an actor is shared from the tick it submits a shared entry
-// (game/net_world netSharedEntry), and so is every later actor of its class (the classes learned stay learned).
+// Netplay's shared actors (none of this is the exe's; app/netplay_world drives it). The host simulates every actor of
+// the field's slots of pool 0x20 (the enemies, the NPCs, the critters; not the cutscene cast, game/net_world
+// netLocalOnly) and the projectiles of pool 0x40 whose class submitted a shared entry (game/net_world netSharedEntry:
+// the enemies' shots; the classes learned stay learned).
 //
 // The host captures them after each tick (captureWorld). A client shows them as puppets: the same class spawned into a
 // free slot of its own, its first tick run by the class (the init: the model, the bones), then the puppet's own tick instead of the
 // class's -- the host's pose followed, the animation stepped toward the host's key, the host's hit entry submitted (its
 // touch hurts the client's player through the normal hit pass), a local player attack's hit reported
 // (takePuppetHits) and never applied. A client's own copies of a shared class are freed (netWorldHooks().mirror).
+// A talk with the local player runs on the class's own tick, from its start to the event's end (the message, the turn
+// to the player); a puppet cannot be lifted (its lifted states are the class's).
 #pragma once
 
 #include <cstdint>
@@ -57,8 +60,9 @@ void noteHitEntry(uint8_t slot, const int16_t a[3], const int16_t b[3], uint16_t
 void puppetsForget();
 // game/hit_list's pass, at its end: the tick's entries are the last tick's
 void noteHitPassEnded();
-// a class learned as shared (not the cutscene cast)
-bool netSharedClass(RoutineId cls);
+// a shared class: every field actor's (pool 0x20) but the cutscene cast's; a projectile's (pool 0x40) once one of its
+// actors submitted a shared entry
+bool netSharedClass(RoutineId cls, ActorPool pool);
 
 // host: every live shared actor, its hit entry of the last tick
 std::vector<PuppetState> captureWorld();

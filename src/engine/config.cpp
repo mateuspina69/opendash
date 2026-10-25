@@ -20,6 +20,7 @@ std::string trim(std::string s) {
     return b == std::string::npos ? std::string{} : s.substr(b, e - b + 1);
 }
 std::filesystem::path g_iniPath = "opendash.ini";
+bool g_iniGiven = false; // --config
 
 // the default install path: Windows's, or the same path in the default Wine prefix
 std::filesystem::path defaultDatDir() {
@@ -48,9 +49,15 @@ std::string envValue(const char* name) {
 }
 
 void setConfigDir(const std::filesystem::path& dir) {
+    if (g_iniGiven) return;
     // an opendash.ini in the working directory keeps winning (the setups made before it moved next to the exe)
     std::error_code ec;
     g_iniPath = std::filesystem::exists("opendash.ini", ec) ? std::filesystem::path("opendash.ini") : dir / "opendash.ini";
+}
+
+void setConfigPath(const std::filesystem::path& file) {
+    g_iniPath = file;
+    g_iniGiven = true;
 }
 
 const std::filesystem::path& configPath() { return g_iniPath; }
@@ -90,6 +97,7 @@ Config loadConfig() {
             if (key == "net_friendly_fire") cfg.netFriendlyFire = trim(line.substr(eq + 1)) == "1";
             if (key == "net_ff_scale")
                 cfg.netFfScale = std::clamp(std::atoi(trim(line.substr(eq + 1)).c_str()), 25, 100);
+            if (key == "log") cfg.log = g_iniPath.parent_path() / trim(line.substr(eq + 1));
         }
     }
     if (const std::string v = envValue("OPENDASH_DAT_DIR"); !v.empty()) cfg.datDir = v;
