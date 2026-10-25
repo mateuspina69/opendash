@@ -56,6 +56,7 @@ struct Ps1LabelSlot {
 struct Ps1LabelTable {
     TableId id;
     uint32_t label; // kPs1Labels index
+    bool own;       // the PS1's own: its bytes not the PC's (its slots the PS1 words that point)
 };
 #include "engine/ps1_labels.inc"
 
@@ -350,7 +351,7 @@ RoutineRef Ps1DataSource::routineOf(uint32_t pointer) const {
 
 std::vector<Ps1DataSource::AddressTable> Ps1DataSource::addressTables() {
     std::vector<AddressTable> out;
-    for (const Ps1LabelTable& t : kPs1LabelTables) out.push_back({t.id, kPs1Labels[t.label].bytes});
+    for (const Ps1LabelTable& t : kPs1LabelTables) out.push_back({t.id, kPs1Labels[t.label].bytes, t.own});
     return out;
 }
 

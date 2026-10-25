@@ -198,12 +198,18 @@ int main(int argc, char** argv) {
                 }
                 return ok;
             };
+        size_t own = 0;
         for (const auto& t : od::Ps1DataSource::addressTables()) {
-            ++n;
             const od::TableKey key{t.id, 0};
+            if (t.own) { // the PS1's own: it reads (no PC bytes to match)
+                own += ps1.stateData(ps1.stateAddress(key), t.bytes).size() == t.bytes;
+                continue;
+            }
+            ++n;
             if (sameAt(pc.stateAddress(key), ps1.stateAddress(key), t.bytes, od::describe(key), false)) ++same;
         }
         std::printf("%zu tables read by address on the disc (%zu followed): %zu read as the PC's\n", n, followed, same);
+        std::printf("%zu tables read by address the PS1's own, read whole\n", own);
         CHECK(n > 0 && same == n);
     }
     std::printf("%zu tables on the disc: %zu read as the PC's\n", tables, equal);

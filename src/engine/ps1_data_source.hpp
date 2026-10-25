@@ -53,6 +53,7 @@ public:
     struct AddressTable {
         TableId id;
         uint32_t bytes;
+        bool own; // the PS1's own: its bytes not the PC's (the PC port changed it)
     };
     static std::vector<AddressTable> addressTables();
     // the bytes from a pointer of this source to the end of the address-read table it lies in (0: none; a PS1 table the
