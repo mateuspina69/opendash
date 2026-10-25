@@ -95,6 +95,11 @@ void GhostView::appendDynamic(std::vector<od::DynamicObject>& dyn, uint32_t room
     }
 }
 
+const od::port::RemotePlayerState* GhostView::shownState(int slot) const {
+    const Slot& s = slots_.at(size_t(slot));
+    return s.remote && s.shown ? &s.remoteState : nullptr;
+}
+
 std::string GhostView::status(int slot) const {
     const Slot& g = slots_.at(size_t(slot));
     std::string text = stateText(g.state, g.hidden);

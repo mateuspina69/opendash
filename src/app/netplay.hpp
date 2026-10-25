@@ -2,10 +2,11 @@
 // owns the session and one smoothing buffer (game/ghost_buffer) per ghost slot, and maps each remote player id to a
 // slot (an id with no free slot is dropped and logged, never passed to GhostView).
 //
-// Between game ticks only (never inside one, never writing local game state): after every logic tick afterTick()
-// captures the local player's state (game/player/player_snapshot, reads only); once per sim step step() sends the
-// newest one, polls the session, feeds the received states into the buffers and sets each slot of GhostView from its
-// buffer's render point (clearRemote when a player leaves or falls silent).
+// Between game ticks only (never inside one): after every logic tick afterTick() captures the local player's state
+// (game/player/player_snapshot, reads only); once per sim step step() sends the newest one, polls the session, feeds the
+// received states into the buffers and sets each slot of GhostView from its buffer's render point (clearRemote when a
+// player leaves or falls silent). The shared world (app/netplay_world) runs alongside while a session is up: it writes
+// the game state only through the game's netplay hooks, between ticks.
 //
 // The dev mirror (--ghost-mirror) is a source like a peer: the local player's state of `delay` ticks ago, moved by
 // (dx, dz), through the same buffer into its own slot.
@@ -22,6 +23,7 @@
 #include <vector>
 
 #include "app/ghost_view.hpp"
+#include "app/netplay_world.hpp"
 #include "engine/config.hpp"
 #include "game/ghost.hpp"
 #include "game/ghost_buffer.hpp"
@@ -82,6 +84,15 @@ public:
     od::net::SessionStatus status(uint64_t nowNs) const;
     // the ghost slot of a remote player (-1: none)
     int slotOf(uint8_t playerId) const;
+    // the shared world (app/netplay_world)
+    NetWorld& world() { return world_; }
+    const NetWorld& world() const { return world_; }
+    // a session joined to a host (the client role)
+    bool isClient() const { return session_ && session_->status(0).role == od::net::Role::Client; }
+    // the host was lost since the last call (a connected client's host left or fell silent; the world ended)
+    bool takeHostLost() { return std::exchange(hostLost_, false); }
+    // the host was lost and not found again yet (F1)
+    bool hostGone() const { return hostGone_; }
     // what feeds a slot: "" (free), "mirror", or "<name> (id N)"
     std::string slotSource(int slot) const;
 
@@ -97,6 +108,8 @@ private:
     void release(int slot, GhostView& ghosts);
 
     std::unique_ptr<od::net::Session> session_;
+    NetWorld world_;
+    bool hostLost_ = false, hostGone_ = false;
     std::string error_;
     std::optional<MirrorSettings> mirror_;
     std::array<Source, od::ghost::kMaxGhosts> sources_;

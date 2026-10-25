@@ -86,7 +86,10 @@ void Netplay::start(const NetSettings& settings, const std::optional<MirrorSetti
     }
 }
 
-void Netplay::stop() { session_.reset(); }
+void Netplay::stop() {
+    world_.end();
+    session_.reset();
+}
 
 int Netplay::claimSlot(Source::Kind kind, uint8_t playerId, const std::string& name) {
     for (int slot = 0; slot < od::ghost::kMaxGhosts; ++slot) {
@@ -146,6 +149,7 @@ void Netplay::afterTick() {
         }
     }
     latest_ = std::move(s);
+    world_.afterTick(localTick_);
 }
 
 void Netplay::step(uint64_t nowNs, GhostView& ghosts) {
@@ -155,9 +159,23 @@ void Netplay::step(uint64_t nowNs, GhostView& ghosts) {
             latest_.reset();
         }
         session_->poll(nowNs);
+        // the shared world runs while hosting or joined; a client that loses its host goes back to its own world
+        const od::net::SessionStatus st = session_->status(nowNs);
+        const bool up = st.role == od::net::Role::Host || st.connection == od::net::Connection::Connected;
+        if (up && !world_.active()) {
+            world_.begin(st.role == od::net::Role::Host, st.localId);
+            hostGone_ = false;
+        } else if (!up && world_.active()) {
+            if (!world_.host()) {
+                hostLost_ = hostGone_ = true;
+                SDL_Log("netplay: the host is gone: back to this world");
+            }
+            world_.end();
+        }
         for (const od::net::PeerEvent& e : session_->takePeerEvents()) {
             if (e.kind == od::net::PeerEvent::Kind::Joined) {
                 SDL_Log("netplay: %s (id %u) joined", e.peer.name.c_str(), unsigned(e.peer.playerId));
+                if (e.peer.playerId != od::net::kHostPlayerId) world_.peerJoined(e.peer.playerId);
                 if (slotOf(e.peer.playerId) < 0 &&
                     claimSlot(Source::Kind::Peer, e.peer.playerId, e.peer.name) < 0 &&
                     noSlotLogged_.insert(e.peer.playerId).second)
@@ -165,6 +183,7 @@ void Netplay::step(uint64_t nowNs, GhostView& ghosts) {
                             unsigned(e.peer.playerId));
             } else {
                 SDL_Log("netplay: %s (id %u) left", e.peer.name.c_str(), unsigned(e.peer.playerId));
+                world_.peerLeft(e.peer.playerId);
                 noSlotLogged_.erase(e.peer.playerId);
                 badPayloadLogged_.erase(e.peer.playerId);
                 if (const int slot = slotOf(e.peer.playerId); slot >= 0) release(slot, ghosts);
@@ -203,6 +222,14 @@ void Netplay::step(uint64_t nowNs, GhostView& ghosts) {
             ghosts.clearRemote(slot);
             s.remoteSet = false;
         }
+    }
+    if (session_ && world_.active()) {
+        std::array<int, od::ghost::kMaxGhosts> slotPlayer;
+        for (int slot = 0; slot < od::ghost::kMaxGhosts; ++slot) {
+            const Source& s = sources_[size_t(slot)];
+            slotPlayer[size_t(slot)] = s.kind == Source::Kind::Peer ? int(s.playerId) : -1;
+        }
+        world_.step(nowNs, *session_, ghosts, slotPlayer);
     }
 }
 
