@@ -1,8 +1,31 @@
-# Netplay (ghosts over the network)
+# Netplay (a shared world over the network)
 
 OpenDash players in the same room see each other's Mega Man as a **ghost**: the real model, look, animation and
-movement, smoothed over the network. A ghost changes nothing in your game: no collision, no damage, no shared enemies
-or story. Each player's game runs exactly as single player.
+movement, smoothed over the network. And they play in **one world, the host's**:
+
+- **The host's world is the only one that simulates.** The enemies, their shots, their deaths and their drops happen
+  in the host's game. A client shows the host's enemies (its own copies of them are removed) and sends the host its
+  hits on them. The host applies each hit through the game's own hit code, so the enemy flinches, loses health and
+  dies the same way on every screen.
+- **Everyone travels together.** When the host changes room (a door, the F1 *Cenarios* tab, PgUp/PgDn, `[` `]`), every
+  client loads the same room and is placed beside the host. Only the host can change the room: a client's *Cenarios*
+  tab is locked ("só o host muda o cenário"), and its keys do nothing.
+- **Drops: each player gets their own copy.** The host rolls the drop, and every player sees it in the same place.
+  Picking it up is local, so nobody takes it from anyone else. Chests work the same way: everyone opens their own.
+- **Breakable walls are shared.** A client's hit on a wall goes to the host, and the wall breaks on every screen.
+- **Cutscenes.** When a story cutscene starts on the host, it starts on every client too. Each player watches or skips
+  it at their own pace, and the host's world waits ("aguardando <nomes>") until everyone has finished, for 60 s at
+  most. Talking to NPCs and shops stays local.
+- **Friendly fire** (F1 → Netplay → Combate, the host's setting): with *fogo amigo* on, the players' shots hit each
+  other, with knockback, for *dano entre jogadores %* (25-100 %) of their damage. With it off, shots go through the
+  other players. A client sees the host's setting, greyed out ("definido pelo host").
+- **Dying** is not a game over in netplay: a downed player gets up again 3 s later at the room's arrival point, with
+  full health.
+- **If the host leaves**, every client goes back to its own world: the room loads again with its own enemies, and the
+  player keeps their health, items and position. F1 → Netplay shows "host saiu".
+
+Each player keeps their own story, items and save. Enemies are shared only in the host's room; a cutscene's own cast
+stays each player's.
 
 One player **hosts** and the others **join** the host's `ip:port` over UDP. Up to 8 players: the host and 7 others.
 Everyone talks only to the host, and the host forwards each player's state to the others.
@@ -13,7 +36,7 @@ Transport: `docs/adr/0005-netplay-transport.md`.
 
 - **The same OpenDash build.** The host refuses a different build and names both. The build id is a hash of the
   sources of the game state, the content scripts, the data loading and the wire (`src/game`, `src/content`,
-  `src/engine`, `src/net`, `src/app/netplay.*`; `cmake/build_id.cmake`), so anyone who builds the same sources gets
+  `src/engine`, `src/net`, `src/app/netplay*`; `cmake/build_id.cmake`), so anyone who builds the same sources gets
   the same id, and builds that differ only in rendering, upscalers or UI play together.
 - **The same game files.** That means `dash2.exe` and the whole `.DAT` set. The host refuses different files and says
   whether the exe or the `.DAT` set differs. Language packs (`opendash/lang`) do not count.
@@ -31,6 +54,8 @@ Put these in `opendash.ini` next to where OpenDash runs. Command-line flags over
 | `net_join=10.8.0.1:27460` | `--join 10.8.0.1:27460` | the host's address and port (only for `net=join`) |
 | `net_name=Mateus` | `--net-name Mateus` | your name, shown to the others (default: your Windows user name) |
 | `net_key=...` | `--net-key ...` | the session key; it must match the host's |
+| `net_friendly_fire=0\|1` | (F1 → Netplay) | the host's friendly fire (default 0: off) |
+| `net_ff_scale=100` | (F1 → Netplay) | the % of a player's damage on another player, 25-100 (default 100) |
 
 Host example:
 
