@@ -17,6 +17,8 @@ movement, smoothed over the network. And they play in **one world, the host's**:
 - **Drops: each player gets their own copy.** The host rolls the drop, and every player sees it in the same place.
   Picking it up is local, so nobody takes it from anyone else. Chests work the same way: everyone opens their own.
 - **Breakable walls are shared.** A client's hit on a wall goes to the host, and the wall breaks on every screen.
+- **Fires are shared** (the Flutter's fire mission, ST1E). A client's spray on a fire goes to the host, and a fire put out
+  on the host goes out on every screen.
 - **Cutscenes.** When a story cutscene starts on the host, it starts on every client too. Each player watches or skips
   it at their own pace, and the host's world waits ("aguardando <nomes>") until everyone has finished, for 60 s at
   most. Talking to NPCs and shops stays local: while a client talks to

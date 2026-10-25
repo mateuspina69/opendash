@@ -24,6 +24,7 @@
 #include "game/hit_effects.hpp"
 #include "game/hit_list.hpp"
 #include "game/lock_on_targets.hpp"
+#include "game/net_world.hpp"
 #include "game/player/player_state.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
@@ -109,27 +110,44 @@ void savePrevious(StaticActor& actor) {
 }
 
 // exe 0x5aea40: the hit's damage on the strength -- the water does more the closer the player stands; 1 = hit, 0 =
-// untouched, -1 = put out
+// untouched, -1 = put out. Netplay: the fire is the host's -- a client sends its hit and takes the host's strength;
+// the host adds the clients' hits and sends the strength each hit leaves
 int fireDamage(StaticActor& actor, BurningFields& fire) {
     const uint32_t v = fire.hitBox.result;
-    int d = int(v & kHitDamageMask) * 0x20;
-    if (!(v & (kHitAttackByPlayer | kHitAttackWater))) return 0;
-    if (v & kHitAttackWater) {
-        int dist = distance3(player().pos, actor.pos);
-        if (dist > 0x100)
-            dist = 0x100;
-        else if (dist < 0x80)
-            dist = 0x80;
-        d += ((((0x100 - dist) * 0x340) >> 7) + 0x3c0) >> 3;
+    int d = 0;
+    if (v & (kHitAttackByPlayer | kHitAttackWater)) {
+        d = int(v & kHitDamageMask) * 0x20;
+        if (v & kHitAttackWater) {
+            int dist = distance3(player().pos, actor.pos);
+            if (dist > 0x100)
+                dist = 0x100;
+            else if (dist < 0x80)
+                dist = 0x80;
+            d += ((((0x100 - dist) * 0x340) >> 7) + 0x3c0) >> 3;
+        }
     }
-    if (d == 0) return 0;
-    const int32_t s = fire.strength - d;
-    fire.strength = s;
-    if (s <= kOutStrength) {
+    const NetWorldHooks& net = netWorldHooks();
+    const int16_t x = actor.pos.x.whole, z = actor.pos.z.whole;
+    if (net.mirror) {
+        if (d != 0 && net.fireHit) net.fireHit(x, z, d);
+        const std::optional<int32_t> host = takeFireStep(x, z);
+        if (!host) return 0;
+        fire.strength = *host;
+        if (*host > kOutStrength) return 1;
         fire.strength = 0;
         return -1;
     }
-    return 1;
+    d += takeFireHits(x, z);
+    if (d == 0) return 0;
+    const int32_t s = fire.strength - d;
+    fire.strength = s;
+    int r = 1;
+    if (s <= kOutStrength) {
+        fire.strength = 0;
+        r = -1;
+    }
+    if (net.fireChanged) net.fireChanged({x, z, fire.strength});
+    return r;
 }
 // exe 0x5aeb90: the sprite's frame (the sprite: a draw command, render output)
 void stepFrame(const StaticActor& actor, BurningFields& fire) {

@@ -46,6 +46,7 @@ void NetWorld::end() {
     od::port::netWorldHooks() = {};
     od::port::hitListSetRemoteBodies({});
     od::port::puppetsReset();
+    od::port::firesReset();
     active_ = false;
     outgoing_.clear();
     tracks_ = {};
@@ -86,6 +87,7 @@ void NetWorld::installHooks() {
             if (sharedScript_ >= 0) sharedScriptEnded(); // one script ended and started the next in the same tick
             sharedScript_ = id;
             scriptSentTo_ = clients_;
+            SDL_Log("netplay: script %02x started: sent to %zu client(s)", unsigned(id), clients_.size());
             NetEvent e;
             e.kind = EventKind::ScriptStarted;
             e.id = id;
@@ -95,6 +97,12 @@ void NetWorld::installHooks() {
             NetEvent e;
             e.kind = EventKind::DropSpawned;
             e.pickup = p;
+            send(od::net::kAllPlayers, e);
+        };
+        h.fireChanged = [this](const od::port::FireStep& f) {
+            NetEvent e;
+            e.kind = EventKind::FireChanged;
+            e.fire = f;
             send(od::net::kAllPlayers, e);
         };
         h.wallBroken = [this](const od::port::WallStep& w) {
@@ -111,6 +119,14 @@ void NetWorld::installHooks() {
             c.target = ClaimTarget::Wall;
             c.wallResult = result;
             c.attack = uint32_t(attack);
+            claim(c);
+        };
+        h.fireHit = [this](int16_t x, int16_t z, int damage) {
+            HitClaim c = claimFromHere(lastTick_);
+            c.target = ClaimTarget::Fire;
+            c.contact[0] = x;
+            c.contact[2] = z;
+            c.attack = uint32_t(damage);
             claim(c);
         };
     }
@@ -209,6 +225,7 @@ void NetWorld::afterTick(uint32_t tick) {
     } else {
         // the host's script ended here (or another took its place)
         if (hostScript_ >= 0 && !(running && script.id == uint8_t(hostScript_))) {
+            SDL_Log("netplay: the host's script %02x ended here", unsigned(hostScript_));
             NetEvent e;
             e.kind = EventKind::ScriptDone;
             e.id = uint8_t(hostScript_);
@@ -251,6 +268,7 @@ void NetWorld::hostClaim(uint8_t from, const HitClaim& c) {
         break;
     }
     case ClaimTarget::Wall: od::port::queueBreakableWallHit(c.wallResult, int(c.attack)); break;
+    case ClaimTarget::Fire: od::port::fireQueueHit(c.contact[0], c.contact[2], int(c.attack)); break;
     case ClaimTarget::Player: {
         if (!combat_.friendlyFire || c.playerId == from) {
             ++stats_.claimsDropped;
@@ -309,22 +327,33 @@ void NetWorld::clientApply(uint64_t nowNs, const NetEvent& e) {
     case EventKind::ObjectChanged:
         if (here) od::port::breakableWallApplyStep(e.wall);
         break;
+    case EventKind::FireChanged:
+        if (here) od::port::fireApplyStep(e.fire);
+        break;
     case EventKind::ScriptStarted:
         if (!here || !od::port::ghostRoomOf().fieldPlay) { // not where it plays (or out of play): the host need not wait
+            SDL_Log("netplay: the host's script %02x not played here (%s)", unsigned(e.id),
+                    here ? "out of play" : "another room");
             NetEvent done;
             done.kind = EventKind::ScriptDone;
             done.id = e.id;
             send(od::net::kHostPlayerId, done);
         } else if (hostScript_ >= 0) {
+            SDL_Log("netplay: the host's script %02x queued after %02x", unsigned(e.id), unsigned(hostScript_));
             queuedScripts_.push_back(e.id); // after the one running here
         } else {
             clientStartScript(e.id);
         }
         break;
     case EventKind::Travel: {
-        travel_ = e.travel;
         hostRoom_ = e.travel;
         od::port::netHostStory() = e.travel.story;
+        if (hostScript_ >= 0) { // the shared script changes the room here too (its own load); strayed() after its end
+            SDL_Log("netplay: the host went to ST%02X sub %d in script %02x: this one's script takes the player there",
+                    unsigned(e.travel.stage), e.travel.sub, unsigned(hostScript_));
+            break;
+        }
+        travel_ = e.travel;
         travelling_ = true;
         // the room changes under the scripts: nothing more to wait for
         std::vector<uint8_t> done = std::move(queuedScripts_);
@@ -554,8 +583,11 @@ void NetWorld::clientStartScript(uint8_t id) {
     allowScript_ = -1;
     if ((od::port::scriptState().flags & od::port::kScriptRunning) && od::port::scriptState().id == id) {
         hostScript_ = id;
+        SDL_Log("netplay: the host's script %02x started here", unsigned(id));
         return;
     }
+    SDL_Log("netplay: the host's script %02x could not start here (the player down, or another script running)",
+            unsigned(id));
     NetEvent done; // it could not start here (the player down): the host need not wait
     done.kind = EventKind::ScriptDone;
     done.id = id;
@@ -564,6 +596,7 @@ void NetWorld::clientStartScript(uint8_t id) {
 
 void NetWorld::leavingRoom() {
     od::port::puppetsReset();
+    od::port::firesReset();
     shown_.clear();
     noSlotLogged_.clear();
     partsSeen_ = 0;

@@ -99,8 +99,31 @@ void hostSimulatesTheField() {
     CHECK(netSharedClass(RoutineId::ShyCritterUpdate, ActorPool::Animated)); // ST0D's rabbits
     CHECK(netSharedClass(RoutineId::TownNpcUpdate, ActorPool::Animated));
     CHECK(!netSharedClass(RoutineId::TalkerUpdate, ActorPool::Animated)); // the cutscene cast: each machine's
+    CHECK(!netSharedClass(RoutineId::OpeningCrewUpdate, ActorPool::Animated)); // the opening's crew (script 5)
+    CHECK(!netSharedClass(RoutineId::St1cFlyerUpdate, ActorPool::Animated));
+    CHECK(netSharedClass(RoutineId::St11FighterUpdate, ActorPool::Animated)); // a fight inside a script: the host's
     CHECK(!netSharedClass(RoutineId::None, ActorPool::Animated));
     CHECK(!netSharedClass(RoutineId::EnemyShotUpdate, ActorPool::Projectiles)); // not seen attacking yet
+}
+
+// a fire (ST1E) is the host's: a client's hit travels as a claim, the host's strength comes back as a step
+void firesShared() {
+    od::app::NetEvent e;
+    e.kind = od::app::EventKind::FireChanged;
+    e.fire = {-120, 340, 0x1234};
+    auto back = od::app::decodeEvent(od::app::encodeEvent(e));
+    CHECK(back && back->fire.x == -120 && back->fire.z == 340 && back->fire.strength == 0x1234);
+    od::app::NetEvent c;
+    c.kind = od::app::EventKind::HitClaim;
+    c.claim.target = od::app::ClaimTarget::Fire;
+    back = od::app::decodeEvent(od::app::encodeEvent(c));
+    CHECK(back && back->claim.target == od::app::ClaimTarget::Fire);
+    fireQueueHit(5, 6, 100);
+    fireQueueHit(5, 6, 20);
+    CHECK(takeFireHits(5, 6) == 120 && takeFireHits(5, 6) == 0);
+    fireApplyStep({5, 6, 77});
+    const auto s = takeFireStep(5, 6);
+    CHECK(s && *s == 77 && !takeFireStep(5, 6));
 }
 
 } // namespace
@@ -113,6 +136,7 @@ int main(int argc, char** argv) {
     travelCarriesStory();
     hostStoryShown();
     hostSimulatesTheField();
+    firesShared();
     if (g_failures == 0) std::printf("test_net_world: ok\n");
     return g_failures == 0 ? 0 : 1;
 }

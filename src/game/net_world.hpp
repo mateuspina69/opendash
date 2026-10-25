@@ -45,6 +45,20 @@ struct WallStep {
 // game/breakable_walls: the step set as the host's tick set it (its reaction: the debris, the crumble)
 void breakableWallApplyStep(const WallStep& w);
 
+// one fire's strength (ST1E's fires, content/intro/flutter_fire), the fire known by its place
+struct FireStep {
+    int16_t x = 0, z = 0;
+    int32_t strength = 0;
+};
+// client: the host's strength, taken by the fire's next tick (its own code puts it out)
+void fireApplyStep(const FireStep& s);
+std::optional<int32_t> takeFireStep(int16_t x, int16_t z);
+// host: a client's hit on the fire there, added by the fire's next tick
+void fireQueueHit(int16_t x, int16_t z, int damage);
+int takeFireHits(int16_t x, int16_t z);
+// a new room: none pending
+void firesReset();
+
 struct NetWorldHooks {
     bool mirror = false;    // client: the host's world shown; local shared actors freed, encounters and wall damage held
     bool holdDeath = false; // netplay: the dead player holds (no game over); the app respawns it
@@ -53,6 +67,8 @@ struct NetWorldHooks {
     std::function<void(const PickupSpawn&)> pickupSpawned;   // host: a drop's pickup spawned
     std::function<void(uint32_t result, int attack)> wallHit; // client: a wall hit, sent to the host instead of queued
     std::function<void(const WallStep&)> wallBroken;         // host: a segment took its next step
+    std::function<void(int16_t x, int16_t z, int damage)> fireHit; // client: a hit on a fire, sent to the host instead
+    std::function<void(const FireStep&)> fireChanged;               // host: a fire's strength after a hit
 };
 NetWorldHooks& netWorldHooks();
 

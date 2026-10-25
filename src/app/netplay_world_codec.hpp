@@ -51,8 +51,10 @@ enum class EventKind : uint8_t {
     ScriptDone,    // client -> host (id: the script)
     Travel,        // host -> all
     Settings,      // host -> all
+    FireChanged,   // host -> all (a fire's strength, ST1E)
 };
-enum class ClaimTarget : uint8_t { Puppet = 0, Player = 1, Wall = 2 };
+enum class ClaimTarget : uint8_t { Puppet = 0, Player = 1, Wall = 2, Fire = 3 }; // Fire: its place in contact x / z,
+                                                                                 // the damage in attack
 
 struct HitClaim {
     ClaimTarget target = ClaimTarget::Puppet;
@@ -92,6 +94,7 @@ struct NetEvent {
     od::port::WallStep wall;
     TravelOrder travel;
     NetCombatSettings settings;
+    od::port::FireStep fire;
 };
 std::vector<uint8_t> encodeEvent(const NetEvent& e);
 std::optional<NetEvent> decodeEvent(std::span<const uint8_t> payload);

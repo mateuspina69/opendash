@@ -230,6 +230,11 @@ std::vector<uint8_t> encodeEvent(const NetEvent& e) {
         w.boolean(e.settings.friendlyFire);
         w.u8(uint8_t(e.settings.scale));
         break;
+    case EventKind::FireChanged:
+        w.i16(e.fire.x);
+        w.i16(e.fire.z);
+        w.i32(e.fire.strength);
+        break;
     }
     return w.take();
 }
@@ -238,14 +243,14 @@ std::optional<NetEvent> decodeEvent(std::span<const uint8_t> payload) {
     ByteReader r(payload);
     NetEvent e;
     const uint8_t kind = r.u8();
-    if (kind < uint8_t(EventKind::HitClaim) || kind > uint8_t(EventKind::Settings)) return std::nullopt;
+    if (kind < uint8_t(EventKind::HitClaim) || kind > uint8_t(EventKind::FireChanged)) return std::nullopt;
     e.kind = EventKind(kind);
     e.room = readRoom(r);
     switch (e.kind) {
     case EventKind::HitClaim: {
         HitClaim& c = e.claim;
         const uint8_t target = r.u8();
-        if (target > uint8_t(ClaimTarget::Wall)) return std::nullopt;
+        if (target > uint8_t(ClaimTarget::Fire)) return std::nullopt;
         c.target = ClaimTarget(target);
         c.hostSlot = r.u8();
         c.generation = r.u8();
@@ -295,6 +300,11 @@ std::optional<NetEvent> decodeEvent(std::span<const uint8_t> payload) {
     case EventKind::Settings:
         e.settings.friendlyFire = r.boolean();
         e.settings.scale = std::clamp(int(r.u8()), 25, 100);
+        break;
+    case EventKind::FireChanged:
+        e.fire.x = r.i16();
+        e.fire.z = r.i16();
+        e.fire.strength = r.i32();
         break;
     }
     if (!r.done()) return std::nullopt;
