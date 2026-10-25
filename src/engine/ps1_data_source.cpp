@@ -57,7 +57,8 @@ struct Ps1LabelTable {
     TableId id;
     uint32_t index; // the table's (a stage's ...; 0: one of its own)
     uint32_t label; // kPs1Labels index
-    bool own;       // the PS1's own: its bytes not the PC's (its slots the PS1 words that point)
+    bool own;        // the PS1's own: its bytes not the PC's (its slots the PS1 words that point)
+    uint32_t stride; // a room array (index: the stage): a table per room, this many bytes apart (0: one table)
 };
 #include "engine/ps1_labels.inc"
 
@@ -110,7 +111,13 @@ Ps1DataSource::Ps1DataSource(std::shared_ptr<const DiscImage> disc) : disc_(std:
     }
     for (const Ps1LabelTable& t : kPs1LabelTables) {
         const Ps1Label& l = kPs1Labels[t.label];
-        tables_.emplace(TableKey{t.id, t.index}, Located{size_t(-1), l.file, l.address, false});
+        if (t.stride == 0) {
+            tables_.emplace(TableKey{t.id, t.index}, Located{size_t(-1), l.file, l.address, false});
+            continue;
+        }
+        for (uint32_t room = 0; room * t.stride < l.bytes; ++room)
+            tables_.emplace(TableKey{t.id, roomIndex(int(t.index), int(room))},
+                            Located{size_t(-1), l.file, l.address + room * t.stride, false});
     }
     makeTables();
 }
@@ -353,7 +360,14 @@ RoutineRef Ps1DataSource::routineOf(uint32_t pointer) const {
 
 std::vector<Ps1DataSource::AddressTable> Ps1DataSource::addressTables() {
     std::vector<AddressTable> out;
-    for (const Ps1LabelTable& t : kPs1LabelTables) out.push_back({{t.id, t.index}, kPs1Labels[t.label].bytes, t.own});
+    for (const Ps1LabelTable& t : kPs1LabelTables) {
+        if (t.stride == 0) {
+            out.push_back({{t.id, t.index}, kPs1Labels[t.label].bytes, t.own});
+            continue;
+        }
+        for (uint32_t room = 0; room * t.stride < kPs1Labels[t.label].bytes; ++room)
+            out.push_back({{t.id, roomIndex(int(t.index), int(room))}, t.stride, t.own});
+    }
     return out;
 }
 
