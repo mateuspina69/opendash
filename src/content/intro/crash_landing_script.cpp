@@ -433,7 +433,7 @@ struct BurnRecord : DataRecord {
         return rec;
     }
 };
-const DataTable<RecordTable<BurnRecord, 4, 8>> burnRecords{TableId::CrashLandingScriptBurnRecords};
+const DataTable<RecordTable<BurnRecord, 3, 8>> burnRecords{TableId::CrashLandingScriptBurnRecords};
 // the statics the burn spawns (the stage's types 7 / 8) and their two parameter words
 constexpr uint8_t kBurnStaticType = 7, kEmberStaticType = 8;
 struct BurnStaticParams {
