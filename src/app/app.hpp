@@ -169,6 +169,7 @@ struct App {
     HudUi hudUi;
     od::FogMode fogMode = od::FogMode::Remaster; // F1 Visual; the room's fog, if it has one
     float fogDistance = 1.0f;
+    FogSource fogSource = FogSource::OpenDash; // F1 Visual: the fog of a room with no range of its own (the disc's rooms)
     bool waterRemaster = true; // F1 Video: the underwater look (remaster / the PS1 screen wave)
     od::Config cfg;
     // the game's data (DAT/ and dash2.exe read as files: engine/pc_data_source), bound for the whole run (before

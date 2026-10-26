@@ -323,6 +323,7 @@ int App::init() {
             if (!noFog) fogMode = fm == "off" ? od::FogMode::Off : fm == "classic" ? od::FogMode::Classic
                                                                                   : od::FogMode::Remaster;
             fogDistance = std::clamp(cfg.fogDistance, 0.25f, 4.0f);
+            fogSource = cfg.fogSource == "ps1" ? FogSource::Ps1 : FogSource::OpenDash;
             waterRemaster = cfg.water != "classic";
         }
         if (const auto c = voiceTestArg.find(':'); c != std::string::npos && playerView.mixer) {
@@ -550,7 +551,7 @@ void App::reload(int newStage, int newSub, bool transition) {
         renderer->resetHistory();
         if (mesh.bgCleared) renderer->setClearColor(0.0f, 0.0f, 0.0f); // SetSkyGradient(0): isbg, black
         else renderer->setClearColor(mesh.clear[0], mesh.clear[1], mesh.clear[2]);
-        renderer->setFog(fogFor(mesh, fogMode, fogDistance));
+        renderer->setFog(fogFor(mesh, fogMode, fogDistance, fogSource));
         const float ext = std::max(mesh.hi[0] - mesh.lo[0], mesh.hi[2] - mesh.lo[2]);
         cam.eye[0] = (mesh.lo[0] + mesh.hi[0]) * 0.5f;
         cam.eye[1] = mesh.hi[1] + ext * 0.25f;

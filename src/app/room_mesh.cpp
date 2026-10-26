@@ -213,12 +213,74 @@ void loadBankGeometry(RoomMesh& mesh, const od::GameFile& st, int shift, SliceFn
 
 } // namespace
 
-od::Fog fogFor(const RoomMesh& mesh, od::FogMode mode, float distance) {
+namespace {
+// OpenDash's fog for the rooms the disc gives no range (the PS1 has none outside its depth cue): per room, the look
+// the remaster has on the PC data -- a grey haze outdoors, tinted by the place (the sea, the ice, the sand), none
+// indoors, the snowing Yosyonke a cold haze as thick as the snowfall. Start / end: fractions of the depth range
+struct RoomFog {
+    int stage;
+    uint32_t rooms; // bit r: sub-room r
+    uint8_t colour[3];
+    float start, end;
+};
+constexpr RoomFog kRoomFog[] = {
+    {0x00, 0x0001, {192, 192, 192}, 0.10f, 0.60f},
+    {0x01, 0x0001, {192, 192, 192}, 0.10f, 0.60f},
+    {0x08, 0x0001, {182, 186, 198}, 0.00f, 0.32f},
+    {0x09, 0x0001, {182, 186, 198}, 0.00f, 0.32f},
+    {0x0b, 0x0001, {182, 186, 198}, 0.00f, 0.32f},
+    {0x0c, 0x0007, {192, 192, 192}, 0.10f, 0.60f},
+    {0x0d, 0x0003, {176, 176, 184}, 0.10f, 0.60f},
+    {0x0e, 0x0007, {176, 176, 184}, 0.00f, 0.50f},
+    {0x10, 0x0003, {160, 208, 224}, 0.10f, 0.60f},
+    {0x11, 0x0001, {160, 208, 224}, 0.00f, 0.35f},
+    {0x15, 0x0001, {192, 192, 192}, 0.10f, 0.60f},
+    {0x16, 0x0001, {208, 208, 208}, 0.10f, 0.60f},
+    {0x17, 0x0001, {192, 192, 192}, 0.10f, 0.60f},
+    {0x18, 0x0002, {192, 192, 192}, 0.00f, 0.35f},
+    {0x18, 0x0009, {192, 192, 192}, 0.10f, 0.60f},
+    {0x19, 0x0007, {192, 192, 192}, 0.10f, 0.60f},
+    {0x1c, 0x0007, {192, 192, 192}, 0.10f, 0.60f},
+    {0x1d, 0x0007, {160, 208, 224}, 0.10f, 0.60f},
+    {0x1f, 0x0003, {208, 240, 248}, 0.10f, 0.60f},
+    {0x20, 0x0001, {192, 192, 192}, 0.00f, 0.50f},
+    {0x21, 0x0001, {192, 192, 192}, 0.10f, 0.60f},
+    {0x22, 0x0001, {208, 240, 248}, 0.10f, 0.60f},
+    {0x23, 0x0001, {208, 240, 248}, 0.10f, 0.60f},
+    {0x24, 0x0003, {184, 232, 216}, 0.10f, 0.60f},
+    {0x25, 0x0041, {184, 232, 216}, 0.20f, 0.60f},
+    {0x27, 0x0001, {192, 192, 192}, 0.10f, 0.60f},
+    {0x28, 0x0001, {0, 0, 0}, 0.10f, 0.60f},
+    {0x29, 0x0003, {192, 192, 192}, 0.10f, 0.60f},
+    {0x2a, 0x001f, {192, 192, 192}, 0.10f, 0.60f},
+    {0x2b, 0x000f, {192, 192, 192}, 0.10f, 0.60f},
+    {0x30, 0x001f, {192, 192, 192}, 0.10f, 0.60f},
+    {0x31, 0x0003, {192, 192, 192}, 0.10f, 0.60f},
+    {0x3b, 0x0003, {192, 192, 192}, 0.10f, 0.60f},
+    {0x3c, 0x001f, {192, 192, 192}, 0.10f, 0.60f},
+    {0x40, 0x3ffd, {192, 192, 192}, 0.10f, 0.60f},
+    {0x46, 0x000d, {192, 192, 192}, 0.10f, 0.60f},
+    {0x46, 0x0002, {192, 192, 192}, 0.50f, 0.90f},
+    {0x47, 0x0007, {192, 192, 192}, 0.10f, 0.60f},
+    {0x48, 0x0003, {222, 206, 153}, 0.20f, 0.60f},
+    {0x49, 0x0008, {192, 192, 192}, 0.10f, 0.60f},
+    {0x4f, 0x4000, {160, 0, 30}, 0.00f, 0.00f},
+    {0x52, 0x0008, {192, 192, 192}, 0.10f, 0.60f},
+    {0x53, 0x0001, {192, 192, 192}, 0.00f, 0.50f},
+    {0x54, 0x0007, {192, 192, 192}, 0.20f, 0.80f},
+    {0x56, 0x0001, {192, 192, 192}, 0.10f, 0.60f},
+    {0x57, 0x0001, {192, 192, 192}, 0.10f, 0.60f},
+    {0x59, 0x0001, {192, 192, 192}, 0.10f, 0.60f},
+    {0x5a, 0x0001, {192, 192, 192}, 0.10f, 0.60f},
+    {0x5b, 0x0001, {192, 192, 192}, 0.10f, 0.60f},
+};
+} // namespace
+
+od::Fog fogFor(const RoomMesh& mesh, od::FogMode mode, float distance, FogSource source) {
     od::Fog f;
     for (int c = 0; c < 3; ++c) f.color[c] = mesh.clear[c];
-    if (mesh.depthCue) {
-        if (mode == od::FogMode::Off) return f;
-        // the PS1's depth cue: IR0 = view depth >> the coordinate shift (SLUS 0x80025b74's mtc2 before each DPCS), the
+    if (mesh.depthCue && mode == od::FogMode::Classic) {
+        // the PS1's depth cue (the original look only: the remaster has no darkening with distance): IR0 = view depth >> the coordinate shift (SLUS 0x80025b74's mtc2 before each DPCS), the
         // far colour the game's (the room's record, a script's)
         const od::port::RoomDrawState& d = od::port::roomDraw();
         f.mode = od::FogMode::DepthCue;
@@ -226,7 +288,14 @@ od::Fog fogFor(const RoomMesh& mesh, od::FogMode mode, float distance) {
         f.end = 4096.0f * float(1u << (od::port::stage().coordinateShift & 0x1f));
         return f;
     }
-    const float s = mesh.fogStart, e = mesh.fogEnd;
+    float s = mesh.fogStart, e = mesh.fogEnd;
+    if (e <= s && source == FogSource::OpenDash && !mesh.d3dFog)
+        for (const RoomFog& t : kRoomFog)
+            if (t.stage == mesh.stage && mesh.sub >= 0 && mesh.sub < 32 && (t.rooms >> mesh.sub & 1u)) {
+                for (int c = 0; c < 3; ++c) f.color[c] = float(t.colour[c]) / 255.0f;
+                s = t.start * 16384.0f;
+                e = t.end * 16384.0f;
+            }
     if (e <= s || mode == od::FogMode::Off) return f;
     f.mode = mode;
     f.start = s;
@@ -395,6 +464,7 @@ RoomMesh loadRoom(int stage, int sub) {
         mesh.fogStart = roomParams.fogStart * kDepthRange;
         mesh.fogEnd = roomParams.fogEnd * kDepthRange;
         mesh.depthCue = !roomParams.d3dFog && roomParams.depthCue;
+        mesh.d3dFog = roomParams.d3dFog;
         SDL_Log("ST%02X_%d: fog %.0f..%.0f colour %u %u %u", stage, sub < 0 ? 0 : sub, mesh.fogStart, mesh.fogEnd,
                 roomParams.fogColour[0], roomParams.fogColour[1], roomParams.fogColour[2]);
     }

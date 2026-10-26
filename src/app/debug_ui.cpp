@@ -232,9 +232,19 @@ void App::drawDebugMenu() {
                 ImGui::BeginDisabled(fm != int(od::FogMode::Remaster));
                 changed |= ImGui::SliderFloat("distancia", &fogDistance, 0.25f, 4.0f, "%.2fx");
                 ImGui::EndDisabled();
-                if (changed) {
+                static const char* kFogSources[] = {"so a do PS1", "OpenDash (todos os estagios)"};
+                int fs = int(fogSource);
+                const bool sourceChanged = ImGui::Combo("neblina pelo disco", &fs, kFogSources, 2);
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("Rodando do disco do PS1: o jogo original so escurece as dungeons com a distancia\n"
+                                      "(so no modo original). OpenDash da a sua neblina a todos os estagios, como no remaster do PC.");
+                if (sourceChanged) {
+                    fogSource = FogSource(fs);
+                    od::saveConfigValue("fog_source", fogSource == FogSource::Ps1 ? "ps1" : "opendash");
+                }
+                if (changed || sourceChanged) {
                     fogMode = od::FogMode(fm);
-                    renderer->setFog(fogFor(current, fogMode, fogDistance));
+                    renderer->setFog(fogFor(current, fogMode, fogDistance, fogSource));
                 }
                 if (ImGui::IsItemDeactivatedAfterEdit() || (changed && !ImGui::IsItemActive())) {
                     od::saveConfigValue("fog", fogMode == od::FogMode::Off       ? "off"

@@ -338,7 +338,7 @@ static void travelOffset(const float r[3], std::vector<od::RenderVertex>& v) {
 }
 
 void App::updateScene() {
-    if (current.depthCue) renderer->setFog(fogFor(current, fogMode, fogDistance)); // the game's far colour as it goes
+    if (current.depthCue && fogMode == od::FogMode::Classic) renderer->setFog(fogFor(current, fogMode, fogDistance, fogSource)); // the game's far colour as it goes
     const float* travel = playerView.renderOffset;
     drawCam = cam;
     for (int c = 0; c < 3; ++c) drawCam.eye[c] += travel[c];

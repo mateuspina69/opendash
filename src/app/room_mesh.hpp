@@ -100,6 +100,7 @@ struct RoomMesh {
     // the PS1's depth cue (a record with no D3D range and its +0x7 bit 0): fogFor, from the game's far colour and
     // coordinate shift as they go
     bool depthCue = false;
+    bool d3dFog = false; // the record has the PC port's fog range (fogStart / fogEnd)
     std::array<uint32_t, 4> semiStart{};                          // semi-transparent vertex ranges
     std::vector<SkyLayer> sky;
     // ST01 (the travel map, script 7): the 2D world map of FUN_00518c00 (8-bit pages 0x15 / 0x17 / 0x19 / 0x1b,
@@ -206,7 +207,10 @@ extern int g_stageDatsStage;
 // fog of the snowing town (ST08 / 09 / 0B: end 0.3 of the depth range, the others 0.5..0.8) stays heavy but softer,
 // elsewhere a light haze -- about a third at the original's end, at most maxOpacity, thinner up high (towers and
 // cliffs stay visible), thicker in valleys. distance scales the remaster distances (F1 Visual, fog_distance=).
-od::Fog fogFor(const RoomMesh& mesh, od::FogMode mode, float distance);
+// The fog of a room whose record has no range of its own (the disc's: the PS1 fogs only its dungeons): none as on the
+// PS1, or OpenDash's fog per room (its own table, room_mesh.cpp kRoomFog)
+enum class FogSource { Ps1, OpenDash };
+od::Fog fogFor(const RoomMesh& mesh, od::FogMode mode, float distance, FogSource source);
 
 // Loads ST{stage}.DAT geometry + floor, textures from INIT/GAME/ST{stage}T, and flattens quads into
 // one triangle list (game Y-down -> Y-up).

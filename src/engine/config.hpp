@@ -28,6 +28,7 @@ struct Config {
     std::string keys, pad, mouse;
     // fog= remaster|classic|off (F1 Visual), fog_distance= scale of the remaster fog's distance
     std::string fog = "remaster";
+    std::string fogSource = "opendash"; // a room with no fog range of its own (the disc's rooms): "ps1" none, "opendash" ours
     float fogDistance = 1.0f;
     // water= remaster|classic (F1 Video): the flooded rooms' underwater look (OpenDash's or the PS1 / PSP screen wave)
     std::string water = "remaster";
