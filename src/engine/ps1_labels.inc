@@ -12206,6 +12206,7 @@ static constexpr Ps1Label kPs1Labels[] = {
     {"DAT/ST4ET.BIN", 0x80101034u, 0xc},
     {"DAT/ST4FT.BIN", 0x800fe990u, 0xc},
     {"DAT/ST50T.BIN", 0x800ff0fcu, 0xc},
+    {"COMMON/GAME.BIN", 0x800dcd50u, 0xc},
 };
 static constexpr Ps1LabelSlot kPs1LabelSlots[] = {
     {6917, 0x0, SlotKind::Data, RoutineId::None, 0x0},
@@ -28332,6 +28333,8 @@ static constexpr Ps1LabelSlot kPs1LabelSlots[] = {
     {12173, 0x0, SlotKind::Function, RoutineId::TownCastJunkShopRoll, 0x0},
     {12173, 0x4, SlotKind::Function, RoutineId::TownCastJunkShopClerk, 0x0},
     {12173, 0x8, SlotKind::Function, RoutineId::TownCastJunkShopThird, 0x0},
+    {12199, 0x4, SlotKind::Function, RoutineId::PlayerBusterArm, 0x0},
+    {12199, 0x8, SlotKind::Function, RoutineId::PlayerBusterArm, 0x0},
 };
 static constexpr Ps1LabelTable kPs1LabelTables[] = {
     {TableId::AbandonedMineExitCameraScript, 0x0, 5683, false, 0},
@@ -28517,7 +28520,7 @@ static constexpr Ps1LabelTable kPs1LabelTables[] = {
     {TableId::BurningDataPaths, 0x0, 10818, false, 0},
     {TableId::BurningDataSceneSubTables, 0x0, 9769, true, 0},
     {TableId::BurstColours, 0x0, 152, false, 0},
-    {TableId::BusterArmHandlers, 0x0, 9830, true, 0},
+    {TableId::BusterArmHandlers, 0x0, 12199, false, 0},
     {TableId::BusterBox, 0x0, 10819, false, 0},
     {TableId::BusterBox, 0x0, 10820, false, 0},
     {TableId::BusterCannonBox, 0x0, 441, false, 0},

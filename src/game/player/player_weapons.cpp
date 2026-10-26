@@ -70,7 +70,7 @@ const DataTable<RecordPointerTable<WeaponStatTable, 18, WeaponStatTable::kBytes>
 // The arms' handlers by weapon id (exe 0x8c4f40: the buster's, 0x8c4ef8: the special weapon's): the named routines
 // (engine/routines.csv: the buster's arm for every buster; the generic special arm for weapons 1..3, 5..7, 9, 13, 14,
 // 16, the cannon's for 4, the extinguisher's for 15, the Blade Arm's for 11)
-const DataTable<RoutineTable<18>> busterArmHandlers{TableId::BusterArmHandlers};
+const DataTable<RoutineTable<3>> busterArmHandlers{TableId::BusterArmHandlers}; // none, the kick, the buster
 const DataTable<RoutineTable<18>> specialArmHandlers{TableId::SpecialArmHandlers};
 
 // The special weapons' gauges (exe 0x8c4bf8, 8 bytes per weapon id): its refill rate, a shot's cost, its maximum
