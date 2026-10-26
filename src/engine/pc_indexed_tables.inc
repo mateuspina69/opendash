@@ -67,4 +67,5 @@
 {TableId::RoomScriptHandlers, 0x4f, 0x8cd6b8u},
 {TableId::RoomScriptHandlers, 0x51, 0x8cd7b8u},
 {TableId::RoomScriptHandlers, 0x53, 0x8cd80cu},
+{TableId::RoomScriptHandlers, 0x55, 0x8cd858u},
 {TableId::RoomScriptHandlers, 0x58, 0x8cd890u},
