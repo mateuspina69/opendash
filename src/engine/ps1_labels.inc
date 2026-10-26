@@ -9077,6 +9077,12 @@ static constexpr Ps1Label kPs1Labels[] = {
     {"DAT/ST1D01T.BIN", 0x800fd1b4u, 0xc},
     {"DAT/ST1DT.BIN", 0x800fd1acu, 0x8},
     {"DAT/ST1D01T.BIN", 0x800fd1acu, 0x8},
+    {"DAT/ST1CT.BIN", 0x800f4208u, 0x10},
+    {"DAT/ST1CT.BIN", 0x800f4220u, 0x8},
+    {"DAT/ST1C01T.BIN", 0x800f4208u, 0x10},
+    {"DAT/ST1C01T.BIN", 0x800f4220u, 0x8},
+    {"DAT/ST02T.BIN", 0x800f14fcu, 0xc},
+    {"DAT/ST02T.BIN", 0x800f1508u, 0x4},
 };
 static constexpr Ps1LabelSlot kPs1LabelSlots[] = {
     {6319, 0x0, SlotKind::Data, RoutineId::None, 0x0},
@@ -20605,6 +20611,13 @@ static constexpr Ps1LabelSlot kPs1LabelSlots[] = {
     {9063, 0xa4, SlotKind::Data, RoutineId::None, 0x0},
     {9066, 0x4, SlotKind::Function, RoutineId::ElephantScriptStep5, 0x0},
     {9067, 0x4, SlotKind::Function, RoutineId::ElephantScriptStep5, 0x0},
+    {9070, 0x0, SlotKind::Data, RoutineId::None, 0x0},
+    {9071, 0x0, SlotKind::Data, RoutineId::None, 0x0},
+    {9071, 0x4, SlotKind::Data, RoutineId::None, 0x0},
+    {9072, 0x0, SlotKind::Data, RoutineId::None, 0x0},
+    {9073, 0x0, SlotKind::Data, RoutineId::None, 0x0},
+    {9073, 0x4, SlotKind::Data, RoutineId::None, 0x0},
+    {9075, 0x0, SlotKind::Function, RoutineId::St02CastDrifts, 0x0},
 };
 static constexpr Ps1LabelTable kPs1LabelTables[] = {
     {TableId::AbandonedMineExitCameraScript, 0x0, 5198, false, 0},
@@ -24443,6 +24456,12 @@ static constexpr Ps1LabelTable kPs1LabelTables[] = {
     {TableId::ElephantBossScript29Steps, 0x0, 9067, true, 0},
     {TableId::ElephantBossScript29Camera, 0x0, 9068, true, 0},
     {TableId::ElephantBossScript29Camera, 0x0, 9069, true, 0},
+    {TableId::St1cCastVanishingWalkerFirstTracks, 0x0, 9070, true, 0},
+    {TableId::St1cCastVanishingWalkerSecondTracks, 0x0, 9071, true, 0},
+    {TableId::St1cCastVanishingWalkerFirstTracks, 0x0, 9072, true, 0},
+    {TableId::St1cCastVanishingWalkerSecondTracks, 0x0, 9073, true, 0},
+    {TableId::St02AttractCastDriftingBox, 0x0, 9074, true, 0},
+    {TableId::St02AttractCastDriftingVariants, 0x0, 9075, true, 0},
 };
 // kPs1StateTables: {the table, its index, the engine's address of it, its bytes}: the tables in the
 // program's state (built at run time, initially zero); kEngineState: the engine's state addresses.
