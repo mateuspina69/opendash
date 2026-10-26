@@ -9848,6 +9848,7 @@ static constexpr Ps1Label kPs1Labels[] = {
     {"DAT/ST50T.BIN", 0x800fdefcu, 0x2c},
     {"DAT/ST50T.BIN", 0x800fe270u, 0x2c},
     {"DAT/ST50T.BIN", 0x800fe5fcu, 0x2c},
+    {"DAT/ST57T.BIN", 0x800e8258u, 0x190},
 };
 static constexpr Ps1LabelSlot kPs1LabelSlots[] = {
     {6868, 0x0, SlotKind::Data, RoutineId::None, 0x0},
@@ -23796,6 +23797,7 @@ static constexpr Ps1LabelTable kPs1LabelTables[] = {
     {TableId::EndScriptsScript75Record, 0x0, 8867, false, 0},
     {TableId::EndScriptsScript75Steps, 0x0, 6764, false, 0},
     {TableId::EndScriptsSt5cSpawns, 0x0, 6709, false, 0},
+    {TableId::EndScriptsStaffPages, 0x0, 9841, true, 0},
     {TableId::EndScriptsStaffRollCamera, 0x0, 9820, false, 0},
     {TableId::EndScriptsStaffRollSteps, 0x0, 9821, false, 0},
     {TableId::EnemySpawnersFirstWallBlast, 0x0, 3871, false, 0},
