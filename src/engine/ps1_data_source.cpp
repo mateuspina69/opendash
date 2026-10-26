@@ -461,7 +461,12 @@ TableReader Ps1DataSource::table(TableKey key, uint32_t bytes) const {
     if (it == tables_.end()) throw DataSourceError("data source (PS1): the disc has no table " + describe(key));
     const Located& t = it->second;
     if (t.state) return TableReader(*this, std::vector<uint8_t>(bytes, 0)); // the state's initial bytes
-    if (voiceBytes_.count(key)) return regionBytes(voicePart(key, t), 0, bytes, std::nullopt);
+    if (voiceBytes_.count(key)) {
+        TableReader r = regionBytes(voicePart(key, t), 0, bytes, std::nullopt);
+        if (std::getenv("OPENDASH_TRACE_DATA") && r.size() < bytes)
+            std::fprintf(stderr, "PS1 voice table %s: %zu of %u bytes\n", describe(key).c_str(), r.size(), bytes);
+        return r;
+    }
     if (t.made) { // a made table: as many bytes as asked (zeros past its own)
         TableReader r = regionBytes(t.part, 0, bytes, std::nullopt);
         if (r.size() >= bytes) return r;
