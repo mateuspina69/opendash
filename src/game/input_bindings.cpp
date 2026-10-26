@@ -1,7 +1,6 @@
 // The PC's input bindings (see input_bindings.hpp): their defaults and the keys' names.
 #include "game/loaded_data.hpp"
 #include "game/input_bindings.hpp"
-#include "engine/data_source.hpp"
 
 namespace od::port {
 
@@ -18,27 +17,27 @@ constexpr uint16_t kKeyDefaults[9][2] = {{0x11, 0x10},   {0x1f, 0x40},  {0x1e, 0
 constexpr uint16_t kPadDefaults[kPadBindings][2] = {{4, 0x8000}, {2, 0x4000}, {3, 0x2000}, {5, 0x1000}, {7, 0x400},
                                                     {8, 0x800},  {6, 0x100},  {1, 0x200},  {9, 0x8},    {10, 0x1}};
 constexpr uint16_t kMouseDefaults[kMouseBindings][2] = {{1, 0x8000}, {2, 0x200}};
-// the key names (exe table 0x8475c8: {u32 DirectInput code, char* name}, a 0 code ends it)
-struct KeyNameEntry : DataRecord {
-    static constexpr uint32_t kBytes = 0x8;
-    uint32_t code = 0; // +0x0
-    uint32_t name = 0; // +0x4
-    template <class R> static KeyNameEntry load(const R& r) {
-        KeyNameEntry v;
-        v.code = r.template read<uint32_t>(0x0);
-        v.name = r.template read<uint32_t>(0x4);
-        return v;
-    }
+// the nameable keys: {DirectInput code, name} (what the key configuration shows; OpenDash's own list, the same keys
+// and names as the PC exe's)
+struct KeyName {
+    uint32_t code;
+    const char* name;
 };
-constexpr size_t kMaxKeyName = 0x80;
+constexpr KeyName kKeyNames[] = {
+    {0x02, "1"},   {0x03, "2"},   {0x04, "3"},   {0x05, "4"},   {0x06, "5"},   {0x07, "6"},    {0x08, "7"},   {0x09, "8"},
+    {0x0a, "9"},   {0x0b, "0"},   {0x0c, "-"},   {0x0d, "="},   {0x0e, "BS"},  {0x0f, "TAB"},  {0x10, "Q"},   {0x11, "W"},
+    {0x12, "E"},   {0x13, "R"},   {0x14, "T"},   {0x15, "Y"},   {0x16, "U"},   {0x17, "I"},    {0x18, "O"},   {0x19, "P"},
+    {0x1a, "["},   {0x1b, "]"},   {0x1e, "A"},   {0x1f, "S"},   {0x20, "D"},   {0x21, "F"},    {0x22, "G"},   {0x23, "H"},
+    {0x24, "J"},   {0x25, "K"},   {0x26, "L"},   {0x27, ";"},   {0x28, "'"},   {0x29, "`"},    {0x2b, "\\"},  {0x2c, "Z"},
+    {0x2d, "X"},   {0x2e, "C"},   {0x2f, "V"},   {0x30, "B"},   {0x31, "N"},   {0x32, "M"},    {0x33, ","},   {0x34, "."},
+    {0x35, "/"},   {0x90, "^"},   {0x7d, "~"},   {0x91, "@"},   {0x92, ":"},   {0x1d, "L-C"},  {0x2a, "L-S"}, {0x9d, "R-C"},
+    {0x36, "R-S"}, {0x39, "SPC"}, {0xd2, "INS"}, {0xd3, "DEL"}, {0xc7, "HOME"}, {0xcf, "END"}, {0xc9, "PGUP"}, {0xd1, "PGDN"}};
 
-// the address of the key's name (0: not nameable)
-uint32_t keyNameAddress(uint32_t key) {
-    for (uint32_t p = stateAddress(TableId::InputBindingsKeyNames);; p += 8) {
-        const KeyNameEntry e = dataRecord<KeyNameEntry>(p, KeyNameEntry::kBytes);
-        if (e.code == 0) return 0;
-        if (e.code == key) return e.name;
-    }
+// the key's name (nullptr: not nameable)
+const char* keyNameOf(uint32_t key) {
+    for (const KeyName& k : kKeyNames)
+        if (k.code == key) return k.name;
+    return nullptr;
 }
 
 } // namespace
@@ -53,12 +52,10 @@ void inputConfigDefaults() {
 }
 
 std::string keyName(uint32_t key) {
-    std::string s;
-    const uint32_t a = keyNameAddress(key);
-    if (a == 0) return s;
-    return dataString(a, kMaxKeyName);
+    const char* n = keyNameOf(key);
+    return n ? n : "";
 }
 
-bool keyNameable(uint32_t key) { return keyNameAddress(key) != 0; }
+bool keyNameable(uint32_t key) { return keyNameOf(key) != nullptr; }
 
 } // namespace od::port

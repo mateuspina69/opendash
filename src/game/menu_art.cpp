@@ -26,6 +26,24 @@ Glyph pcGlyph(std::span<const uint8_t> font, uint32_t g) {
     return out;
 }
 
+// glyph g of a PS1 message font page: the cell's texels by their low two bits (1 the glyph, 3 its edge)
+Glyph ps1Glyph(std::span<const uint8_t> page, std::span<const uint8_t> widths, uint32_t g) {
+    constexpr int kCell = 12, kColumns = 20;
+    Glyph out;
+    out.w = out.h = kCell;
+    out.advance = g < 256 && g < (widths.size() > 256 ? widths[256] : 0u) ? widths[g] : kCell;
+    out.level.assign(size_t(kCell * kCell), 0);
+    if (page.size() < 0x8000 || g >= 21 * kColumns) return out;
+    for (int y = 0; y < kCell; ++y)
+        for (int x = 0; x < kCell; ++x) {
+            const int sx = int(g % kColumns) * kCell + x, sy = int(g / kColumns) * kCell + y;
+            const uint8_t b = page[size_t(sy) * 128 + size_t(sx) / 2];
+            const int n = ((sx & 1) ? b >> 4 : b & 0xf) & 3;
+            out.level[size_t(y * kCell + x)] = n == 1 ? 15 : n == 3 ? 4 : 0;
+        }
+    return out;
+}
+
 // the caption cell: the box (index 3) inside a 1-texel clear border, the glyphs centred (index 6 the glyph, 4 its edge),
 // packed 4 texels per VRAM halfword into the tpage's cell
 void caption(Vram& vram, uint16_t tpage, int u, int v, int w, const std::vector<Glyph>& glyphs) {

@@ -19,6 +19,7 @@
 #include "game/input_bindings.hpp"
 #include "game/key_config.hpp"
 #include "game/language_pack.hpp"
+#include "game/menu_art.hpp"
 #include "game/menu_banks.hpp"
 #include "game/menu_draw.hpp"
 #include "game/message.hpp"
@@ -117,8 +118,10 @@ constexpr uint16_t kOptMode = 7;
 constexpr uint16_t kValueClut = 0x7f50, kLabelClut = 0x7f90, kRailClut = 0x7f12;
 constexpr uint32_t kCursorBarColour = 0x101080;
 
-// the language row's caption: tpage 7 (0xc0, 0xe0), 48 x 16 (OpenDash art, see game/menu_art); its help text
-constexpr uint32_t kLangCaption = 0x7f12e0c0;
+// OpenDash's cells of the options texture (tpage 7, 48 x 16, see game/menu_art) as the rows' texture words
+constexpr uint16_t kCaptionClut = 0x7f12;
+constexpr uint32_t cellArt(menuart::Cell c) { return uint32_t(kCaptionClut) << 16 | uint32_t(c.v) << 8 | uint32_t(c.u); }
+constexpr uint32_t kLangCaption = cellArt(menuart::kCellLanguage), kVideoCaption = cellArt(menuart::kCellVideo);
 
 // the PC glyph codes of OpenDash's Japanese texts (font slot 0: 0x80.. hiragana)
 constexpr uint16_t kLangHelpJp[] = {0xba, 0xad, 0xbb, 0xac, 0x83, 0xa6, 0xc8, 0x9e, 0x8c}; // げんごをえらびます
@@ -130,11 +133,11 @@ constexpr uint16_t kTitleCaptionJp[] = {0x8f, 0x81, 0x93, 0xa8, 0};             
 constexpr uint16_t kTitleHelpJp[] = {0x8f, 0x81, 0x93, 0xa8, 0x95, 0x85, 0x83, 0xa7, 0x9e, 0x8c}; // たいとるにかえります
 constexpr uint16_t kYesJp[] = {0x99, 0x81, 0};                                                // はい
 constexpr uint16_t kNoJp[] = {0x81, 0x81, 0x83, 0};                                           // いいえ
-const char* const kTitleCaptionLatin[3] = {"", "To Title", "TÃ­tulo"};
+const char* const kTitleCaptionLatin[3] = {"", "To Title", "T\xc3\xadtulo"};
 const char* const kTitleHelpLatin[3] = {"", "Return to the title screen. Unsaved progress is lost.",
-                                               "Volta Ã  tela de tÃ­tulo. O progresso nÃ£o salvo Ã© perdido."};
+                                               "Volta \xc3\xa0 tela de t\xc3\xadtulo. O progresso n\xc3\xa3o salvo \xc3\xa9 perdido."};
 const char* const kYesLatin[3] = {"", "Yes", "Sim"};
-const char* const kNoLatin[3] = {"", "No", "NÃ£o"};
+const char* const kNoLatin[3] = {"", "No", "N\xc3\xa3o"};
 
 // OpenDash's texts for the rows the PS1 page lacks, in the packs' languages (EN, PT-BR)
 const char* const kVideoHelpLatin[3] = {"", "Set the anti-aliasing, the screen size and the window mode.",
@@ -144,6 +147,13 @@ const char* const kKeyHelpLatin[3][3] = {
     {"", "", ""},
     {"Change the gamepad button settings.", "Change the keyboard key settings.", "Change the mouse button settings."},
     {"Altere os bot\xc3\xb5" "es do controle.", "Altere as teclas do teclado.", "Altere os bot\xc3\xb5" "es do mouse."}};
+
+// the key configuration's windows are OpenDash's own messages (a u16 page header, the window's fb 06 op, then the text):
+// window 0's help (the window's columns / lines as the PC's page has them) and window 2's action lists, one per column
+constexpr uint8_t kKeyHelpHeader[10] = {0x00, 0x00, 0xfb, 0x06, 0x00, 0x68, 0x00, 0xa1, 0x10, 0x02};
+constexpr uint8_t kKeyListsHeader[3][13] = {{0x00, 0x00, 0xfb, 0x09, 0x00, 0xfb, 0x06, 0x00, 0x1c, 0x00, 0x3e, 0x17, 0x05},
+                                            {0x00, 0x00, 0xfb, 0x09, 0x00, 0xfb, 0x06, 0x00, 0x1c, 0x00, 0x3e, 0x17, 0x05},
+                                            {0x00, 0x00, 0xfb, 0x09, 0x00, 0xfb, 0x06, 0x00, 0x1c, 0x00, 0x5e, 0x17, 0x02}};
 
 // window 2's action lists by column ('|': the right column), as the JP ones (0x8c2c30)
 const char* const kKeyListsLatin[3][3][6] = {
@@ -158,6 +168,22 @@ const char* const kKeyListsLatin[3][3][6] = {
       "Direita|Pular", "A\xc3\xa7\xc3\xa3o", nullptr},
      {"Buster|Travar mira", nullptr}}};
 
+// The source's own page, by exe row (0..9: keys, camera, lock-on, vibration, furigana, mono, volume, video, defaults,
+// close): the row of the source's tables (captions, entries, values) that means the same, -1 where it has none. The
+// PC's page has ten rows in that order; the PS1's nine are controller, view, lock-on, vibration, sound, volume, screen
+// position, defaults, close (its screen position is not OpenDash's video row: that one has art of its own)
+constexpr int8_t kPcRows[10] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+constexpr int8_t kPs1Rows[10] = {0, 1, 2, 3, -1, 4, 5, -1, 7, 8};
+const int8_t* sourceRows() {
+    const int rows = RowTable(stateAddress(TableId::StatusOptionsCaptionRows)).count;
+    if (rows == 10) return kPcRows;
+    if (rows == 9) return kPs1Rows;
+    throw DataSourceError("options page: a source page of " + std::to_string(rows) + " rows");
+}
+// OpenDash's cursor entries of the states that are its own (the key configuration's three columns, the video, language
+// and title rows' overlays)
+constexpr uint32_t kKeysEntryHead = 3u | 1u << 8 | 3u << 24, kOverlayEntryHead = 3u | 1u << 8;
+
 // One of the page's rows (OpenDash's layout)
 struct OptRow {
     uint8_t state, exe; // exe: the row in the exe's tables (0..9), kNoExeRow = OpenDash's
@@ -165,7 +191,7 @@ struct OptRow {
 constexpr uint8_t kNoExeRow = 0xff;
 std::vector<OptRow> gRows;
 uint32_t gVal[9];          // the value tables (their copies, moved with their row)
-int gVolDy = 0;            // the volume row's move (its bars)
+int gVolY = 0;             // the volume row's y (its bars)
 std::vector<int> gLines;   // the rows whose value is on the row (exe 0x5eeda0's underlines: exe rows 0..6)
 OptionsHost gHost;
 OptionsHost::Video gVideoEdit, gVideoShown; // the video row: the settings being edited, the ones applied
@@ -194,7 +220,7 @@ void optLayout() {
     const bool jp = lang == 0;
     gRows.clear();
     for (uint8_t e = 0; e < 10; ++e) {
-        if (e == 4 && !jp) continue; // ふりがな: Japanese only
+        if (e == 4 && (!jp || sourceRows()[4] < 0)) continue; // ふりがな: Japanese only, and the source's
         if (e == 8) gRows.push_back({kLangState, kNoExeRow});
         if (e == 9 && gameState().frontEnd != kFrontEndTitle && gHost.returnToTitle)
             gRows.push_back({kTitleState, kNoExeRow}); // in play only
@@ -208,8 +234,17 @@ void optLayout() {
     root.setHead(n << 24);
     root.link = kOptHelp;
     storeCursorEntry(kOpt, root);
-    for (uint32_t c = 3; c <= kTitleState; ++c)
-        storeCursorEntry(kOpt + 8 + (c - 3) * 8, cursorEntryAt(stateAddress(TableId::StatusOptionsLevelTwoEntries) + (c >= kLangState ? 0xa : c) * 8 - 0x10));
+    const int8_t* rows = sourceRows();
+    for (uint32_t c = 3; c <= kTitleState; ++c) {
+        CursorEntry entry;
+        const int source = c >= kLangState || c == uint32_t(OptionsState::Video) ? -1 : rows[c - 3];
+        if (c == uint32_t(OptionsState::Keys)) entry.setHead(kKeysEntryHead);
+        else if (c >= uint32_t(OptionsState::Video) && c != uint32_t(OptionsState::Defaults)) entry.setHead(kOverlayEntryHead);
+        else if (source >= 0) // the source's entry of the row that means this state (its state is the row + 3)
+            entry = cursorEntryAt(stateAddress(TableId::StatusOptionsLevelTwoEntries) + uint32_t(source + 3) * 8 - 0x10);
+        else continue; // a row the source has none of (it is not on the page)
+        storeCursorEntry(kOpt + 8 + (c - 3) * 8, entry);
+    }
     CursorEntry page = pageCursorEntry(uint32_t(StatusPage::Options));
     page.link = kOpt;
     storeCursorEntry(pageCursorEntryAddress(uint32_t(StatusPage::Options)), page);
@@ -223,12 +258,12 @@ void optLayout() {
             storeData(row, int16_t(kCaptionX));
             storeRowArtWord(row, 1, 0);
             storeRowArtWord(row, 2, 0);
-        } else if (gRows[i].exe == kNoExeRow) {
+        } else if (gRows[i].exe == kNoExeRow || rows[gRows[i].exe] < 0) { // OpenDash's art
             storeData(row, int16_t(kCaptionX));
-            storeRowArtWord(row, 1, kLangCaption);
+            storeRowArtWord(row, 1, gRows[i].exe == kNoExeRow ? kLangCaption : kVideoCaption);
             storeRowArtWord(row, 2, kCaptionSize);
         } else {
-            storeRowArt(row, captionsFrom.row(gRows[i].exe));
+            storeRowArt(row, captionsFrom.row(size_t(rows[gRows[i].exe])));
         }
         storeData(row + 2, int16_t(kCaptionY + i * 0x10)); // y
     }
@@ -243,28 +278,49 @@ void optLayout() {
         int row = -1;
         for (uint32_t i = 0; i < n; ++i)
             if (gRows[i].exe == kValueRows[k]) row = int(i);
-        const int dy = (row - kValueRows[k]) * 0x10;
         gVal[k] = kOptValues + uint32_t(k) * kOptValueSize;
+        if (row < 0) { // a hidden row (or one the source has none of): no values (the count)
+            storeData(gVal[k], int16_t(0));
+            continue;
+        }
+        const int rowY = int(kCaptionY) + row * 0x10;
+        if (k == 0 && !dataSource().hasTable({TableId::StatusOptionsKeyConfigValues, 0})) {
+            // the source has no picture of the key configuration's devices: OpenDash's cells (game/menu_art), the pad,
+            // the keys and the mouse in a row
+            storeData(gVal[k], uint32_t(3) | uint32_t(3) << 16); // the count, the level byte's offset
+            storeData(gVal[k] + 4, uint32_t(0));
+            storeData(gVal[k] + 8, uint32_t(0));
+            static constexpr int kKeyX[3] = {0x88, 0xb8, 0xe8};
+            for (size_t i = 0; i < 3; ++i) {
+                const menuart::Cell c = menuart::kCellKeys[i];
+                storeRowArt(rowArtAt(gVal[k], i), {{}, int16_t(kKeyX[i]), int16_t(rowY), uint16_t(c.u | c.v << 8),
+                                                   kCaptionClut, menuart::kCellWidth, menuart::kCellHeight});
+            }
+            continue;
+        }
         const RowTable from(stateAddress(kValueTables[k]));
         for (size_t b = 0; b < RowTable::kCopyWords; ++b) storeData(gVal[k] + uint32_t(b) * 4, from.word(b));
-        if (row < 0) storeData(gVal[k], int16_t(0)); // a hidden row: no values (the count)
+        // the table's rows keep their place in the source's row: moved with the row's caption
+        const int dy = rowY - captionsFrom.row(size_t(rows[kValueRows[k]])).y;
         const RowTable copy(gVal[k]);
         for (int i = 0; i < copy.count && i < 3; ++i)
             storeData(rowArtAt(gVal[k], size_t(i)) + 2, int16_t(copy.row(size_t(i)).y + dy));
-        if (k == 8) gVolDy = dy;
+        if (k == 8) gVolY = rowY;
     }
     // the rows' help: the bank of the root entry -- the exe's (Japanese) or the pack's PS1 one, whose nine rows are
     // the PS1 page's (controller, view, lock-on, vibration, sound, volume, screen position, defaults, close: the PC
     // rows map onto them; the video and language rows have OpenDash's texts) -- into the copies' help bank
     const bool pack = langBank(stateAddress(TableId::MenuBankOptionsHelp)) != stateAddress(TableId::MenuBankOptionsHelp);
-    static constexpr int kPs1Row[10] = {0, 1, 2, 3, -1, 4, 5, -1, 7, 8};
+    const int8_t* helpRows = pack ? kPs1Rows : rows; // the pack's bank is the PS1's, else the source's own
     const uint32_t src = langBank(stateAddress(TableId::MenuBankOptionsHelp));
     TextBytes out(kOpt);
     const uint32_t help = kOptHelp - kOpt;
     uint32_t at = help + n * 2;
     // the PS1 scripts' fb 06 cols are 2 px units (game/message): the JP header's 12 px columns x 6 for a pack's text
-    auto ps1Cols = [&](uint32_t from, uint32_t to) {
-        if (jp) return;
+    // (the source's own headers are the PS1's already where its page has the PS1's nine rows)
+    const bool sourcePs1 = rows == kPs1Rows;
+    auto ps1Cols = [&](uint32_t from, uint32_t to, bool sourceHeader = false) {
+        if (jp || (sourceHeader && sourcePs1)) return;
         for (uint32_t q = from; q + 7 < to; ++q)
             if (out.byte(q) == 0xfb && out.byte(q + 1) == 0x06)
                 out.byte(q + 6) = uint8_t(std::min<uint32_t>(out.byte(q + 6) * 6u, 0xffu));
@@ -300,7 +356,7 @@ void optLayout() {
         const TextBytes p(MessageBank(bank).message(id));
         const uint32_t from = at;
         for (uint32_t k = 0; k < 10; ++k) out.byte(at++) = p.byte(k);
-        ps1Cols(from, at);
+        ps1Cols(from, at, true);
     };
     auto setOffset = [&](uint32_t table, uint32_t i, uint32_t value) {
         storeData(kOpt + table + i * 2, uint16_t(value)); // a help bank's message offset
@@ -308,8 +364,8 @@ void optLayout() {
     for (uint32_t i = 0; i < n; ++i) {
         setOffset(help, i, at - help);
         const uint8_t e = gRows[i].exe;
-        if (e != kNoExeRow && (!pack || kPs1Row[e] >= 0)) {
-            at += copyMessage(src, pack ? kPs1Row[e] : e, at);
+        if (e != kNoExeRow && helpRows[e] >= 0) {
+            at += copyMessage(src, helpRows[e], at);
             continue;
         }
         header(stateAddress(TableId::MenuBankOptionsHelp), 0);
@@ -322,15 +378,17 @@ void optLayout() {
         }
         out.byte(at++) = 0xff;
     }
-    // the key configuration's windows in a pack's language (the PS1 has no such page): window 0 by column and window 2's
+    // the key configuration's windows in a pack's language (OpenDash's own banks: the PS1 has no such page): window 0 by column and window 2's
     // action lists (two columns, the right one at the JP text's cell 11 -- fb 2e 0xc0 | 11)
-    setKeyConfigLatinBanks(0, 0);
+    setKeyConfigBanks(0, 0);
     if (!jp) {
         const uint32_t keys = kOptLatinKeys - kOpt;
         at = keys + 3 * 2;
         for (int k = 0; k < 3; ++k) {
             setOffset(keys, uint32_t(k), at - keys);
-            header(stateAddress(TableId::MenuKeyConfigHelpBank), k);
+            const uint32_t from = at;
+            for (const uint8_t byte : kKeyHelpHeader) out.byte(at++) = byte;
+            ps1Cols(from, at);
             wrapped(kKeyHelpLatin[lang][k], at - 1);
             out.byte(at++) = 0xff;
         }
@@ -338,9 +396,8 @@ void optLayout() {
         at = lists + 3 * 2;
         for (int k = 0; k < 3; ++k) {
             setOffset(lists, uint32_t(k), at - lists);
-            const TextBytes p(MessageBank(stateAddress(TableId::MenuKeyConfigListsBank)).message(k)); // 00 00, fb 09 00, fb 06 + 6 bytes
             const uint32_t from = at;
-            for (uint32_t b = 0; b < 13; ++b) out.byte(at++) = p.byte(b);
+            for (const uint8_t byte : kKeyListsHeader[k]) out.byte(at++) = byte;
             ps1Cols(from, at);
             for (const char* line : kKeyListsLatin[lang][k]) {
                 if (!line) break;
@@ -357,7 +414,7 @@ void optLayout() {
             }
             out.byte(at - 1) = 0xff;
         }
-        setKeyConfigLatinBanks(kOptLatinKeys, kOptLatinLists);
+        setKeyConfigBanks(kOptLatinKeys, kOptLatinLists);
     }
 }
 
@@ -397,7 +454,7 @@ void optionsValuesDraw() {
             otSprite(c, e.x, e.y, clut << 16 | e.uv, e.w, e.h);
         }
     }
-    const int vy = 0x86 + gVolDy;
+    const int vy = gVolY;
     SoundMasters& volume = soundMasters();
     labelNext(kLblVolBox);
     otSprite(c, 0x78, vy, kVolumeBoxArt, 0x40, 0x10);
@@ -605,7 +662,7 @@ void optionsVolume(StatusScreen& s) {
         } else if (s3 == uint8_t(RowStep::Back)) {
             levelBack(s, 3);
         }
-        volumeBarDraw(s, music ? 0x78 : 0xd8, 0x86 + gVolDy);
+        volumeBarDraw(s, music ? 0x78 : 0xd8, gVolY);
         s.cursor = int8_t(s.cursorKept);
     }
     rowsDraw(s, gVal[kValueVolumeLabels]);
@@ -637,7 +694,7 @@ void overlayFrame(const StatusScreen& s, int rows, bool icons) {
     }
     otTile(c, 0x28, 0x48, 0xf4, rows * 0x20, 0, kTileSemi);
     otTile(c, 0x4e, int8_t(s.step) * 0x20 + 0x50, 0xc8, 0x10, kCursorBarColour, kTileSemi);
-    if (icons)
+    if (icons && optionsPictures())
         for (int k = 0; k < 3; ++k)
             otSprite(c, 0x2c, 0x4c + k * 0x20, kVideoIconArts[k], 0x19, 0x19, kNeutral, kSpriteHalf);
     otSprite(c, 8, 8, kCornerArts[0], 0x10, 0x10);
@@ -887,6 +944,8 @@ void optTitleCaption(const StatusScreen& s) {
 } // namespace
 
 OptionsHost& optionsHost() { return gHost; }
+
+bool optionsPictures() { return dataSource().hasTable({TableId::KeyConfigPadButtonArts, 0}); }
 
 uint32_t optionsValueTable(size_t k) { return gVal[k]; }
 

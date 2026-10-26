@@ -121,8 +121,25 @@ void insertKeyName(uint32_t& read, uint32_t& ret) {
     const uint8_t k = TextBytes(p).byte(2);
     read = p + 3;
     ret = p + 3;
-    TextBytes name(MessageBank(stateAddress(TableId::TextScriptKeyNameBank)).message(k));
-    read = name.at;
+    read = keyNameText(k);
+}
+
+} // namespace
+
+// fb 22 k's string. The PS1's bank is by the pad's layout (its table of layouts x 12 gives the bank's message, the pad's
+// button glyph); the PC's is by k, its first glyph patched with the key bound to the pad button keyNameButtons[k]
+// (k = kKeyNamePair: L1's and R1's)
+uint32_t keyNameText(uint8_t k) {
+    const MessageBank bank(stateAddress(TableId::TextScriptKeyNameBank));
+    if (dataSource().hasTable({TableId::TextScriptKeyNameLayouts, 0})) {
+        constexpr uint8_t kAnalogPad = 7;
+        constexpr uint32_t kLayoutNames = 12, kAnalogLayouts = 3;
+        const GameOptions& o = gameOptions();
+        const uint32_t layout = pad0().typeByte() == kAnalogPad ? o.controllerLayout + kAnalogLayouts : o.controlOption;
+        const DataArray<uint8_t> layouts(stateAddress(TableId::TextScriptKeyNameLayouts));
+        return bank.message(layouts[size_t(layout * kLayoutNames + k)]);
+    }
+    TextBytes name(bank.message(k));
     const uint16_t button = keyNameButtons[k];
     if (button != 0) {
         name.byte(0) = uint8_t(uint8_t(padButtonKey(button)) + kKeyGlyphBase);
@@ -130,7 +147,10 @@ void insertKeyName(uint32_t& read, uint32_t& ret) {
         name.byte(0) = uint8_t(uint8_t(padButtonKey(kPadL1)) + kKeyGlyphBase);
         name.byte(2) = uint8_t(uint8_t(padButtonKey(kPadR1)) + kKeyGlyphBase);
     }
+    return name.at;
 }
+
+namespace {
 
 // fb 23 k (logic exe 0x55a810 / layout 0x55aaf0): a time into TableId::TextScriptTimeText (k 0: the play time, 1: the window's time as a
 // clock, 2: as a lap), ended by fb 1f

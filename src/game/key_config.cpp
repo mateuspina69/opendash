@@ -25,10 +25,10 @@ namespace {
 enum class KeyConfigStep : uint8_t { Enter = 0, Columns = 1, Back = 2, Action = 3 };
 // the columns (the cursor)
 constexpr int kPadColumn = 0, kKeysColumn = 1, kMouseColumn = 2;
-// the actions' PS1 bits by column (exe tables: the pad's 1..8, the keys' nine, the mouse's two)
-const DataTable<ScalarTable<uint16_t, 10>> padActions{TableId::KeyConfigPadActions};
-const DataTable<ScalarTable<uint16_t, 9>> keyActions{TableId::KeyConfigActions};
-const DataTable<ScalarTable<uint16_t, 2>> mouseActions{TableId::KeyConfigMouseActions};
+// the actions' PS1 bits by column (OpenDash's: the pad's start / 1..8, the keys' nine, the mouse's two)
+constexpr uint16_t padActions[9] = {0x0, 0x400, 0x800, 0x200, 0x4000, 0x8000, 0x1000, 0x2000, 0x100};
+constexpr uint16_t keyActions[9] = {0x10, 0x40, 0x80, 0x20, 0x2000, 0x400, 0x800, 0x1000, 0x4000};
+constexpr uint16_t mouseActions[2] = {0x8000, 0x200};
 constexpr uint32_t kPadActions = 9, kKeyActions = 9, kMouseActions = 2;
 constexpr uint32_t kPadUpperAction = 4; // the pad's fifth action: its own row under the others
 // the buttons' art (exe tables: {u8 u, u8 v} by the button's number - 1)
@@ -43,6 +43,9 @@ struct ButtonArt : DataRecord {
 };
 const DataTable<RecordTable<ButtonArt, 0x10, 2>> padButtonArts{TableId::KeyConfigPadButtonArts};
 const DataTable<RecordTable<ButtonArt, 2, 2>> mouseButtonArts{TableId::KeyConfigMouseButtonArts};
+// the source's pictures of the devices and their buttons (the PC's, in its options texture) -- a source without them
+// (the PS1's disc) gets OpenDash's own, drawn from tiles and text
+bool sourceArt() { return optionsPictures(); }
 // The tables kept on entry (cross restores them) and the action being set
 // the art (the device pictures in the 8-bit tpage 8; the PC's half-size sprites)
 constexpr uint16_t kPictureMode = 0x88, kOptMode = 7;
@@ -59,6 +62,46 @@ template <size_t N> void keep(StateArray<uint32_t, N>& to, const BindingTable<N>
 }
 template <size_t N> void restore(BindingTable<N>& to, const StateArray<uint32_t, N>& from) {
     for (size_t i = 0; i < N; ++i) to.setWord(i, from[i]);
+}
+
+// OpenDash's own pictures (no texture): the colours (BGR) of the tiles
+constexpr uint32_t kBodyColour = 0x6a5a4a, kPartColour = 0x4a3a2c, kBadgeColour = 0x80704e, kKeyBoxColour = 0x705040;
+// a numbered badge (a pad's or a mouse's button) 16 x 16 at x y
+void ownBadge(size_t c, int x, int y, const std::string& label) {
+    otTile(c, x, y, 0x10, 0x10, kBadgeColour, kTileOpaque);
+    asciiTextDraw(label, x + (label.size() > 1 ? 1 : 4), y + 2, true);
+}
+// the pad (the picture 0x80 x 0x58 at 0x60 0x3a), the keyboard, the mouse
+void ownPadPicture(size_t c) {
+    otTile(c, 0x70, 0x48, 0x60, 0x38, kBodyColour, kTileOpaque); // the body
+    otTile(c, 0x64, 0x5c, 0x14, 0x34, kBodyColour, kTileOpaque); // the grips
+    otTile(c, 0xc8, 0x5c, 0x14, 0x34, kBodyColour, kTileOpaque);
+    otTile(c, 0x74, 0x3e, 0x20, 0x0a, kBodyColour, kTileOpaque); // the shoulder buttons
+    otTile(c, 0xb4, 0x3e, 0x20, 0x0a, kBodyColour, kTileOpaque);
+    otTile(c, 0x7a, 0x5c, 0x18, 0x08, kPartColour, kTileOpaque); // the d-pad
+    otTile(c, 0x7f, 0x57, 0x08, 0x18, kPartColour, kTileOpaque);
+    for (int k = 0; k < 4; ++k) // the face buttons
+        otTile(c, 0xb6 + (k % 2) * 0x10, 0x54 + (k / 2) * 0x10, 0x0a, 0x0a, kPartColour, kTileOpaque);
+    otTile(c, 0x96, 0x60, 0x0c, 0x06, kPartColour, kTileOpaque); // select, start
+    otTile(c, 0xa4, 0x60, 0x0c, 0x06, kPartColour, kTileOpaque);
+}
+void ownKeyboardPicture(size_t c) {
+    otTile(c, 0x4a, 0x4a, 0xaa, 0x34, kBodyColour, kTileOpaque);
+    for (int r = 0; r < 4; ++r)
+        for (int k = 0; k < (r == 3 ? 1 : 12); ++k)
+            if (r == 3) otTile(c, 0x70, 0x72, 0x60, 0x08, kPartColour, kTileOpaque);
+            else otTile(c, 0x4e + k * 0xe, 0x4e + r * 0xc, 0xc, 0x08, kPartColour, kTileOpaque);
+}
+void ownMousePicture(size_t c) {
+    otTile(c, 0x88, 0x40, 0x34, 0x58, kBodyColour, kTileOpaque);
+    otTile(c, 0x8a, 0x42, 0x16, 0x26, kPartColour, kTileOpaque); // the two buttons
+    otTile(c, 0xa2, 0x42, 0x16, 0x26, kPartColour, kTileOpaque);
+}
+// the d-pad's badge (the first action: the move)
+void ownDpadBadge(size_t c, int x, int y) {
+    otTile(c, x, y, 0x10, 0x10, kBadgeColour, kTileOpaque);
+    otTile(c, x + 2, y + 6, 0xc, 0x4, kPartColour, kTileOpaque);
+    otTile(c, x + 6, y + 2, 0x4, 0xc, kPartColour, kTileOpaque);
 }
 
 // exe 0x5ef2f0(block, action): the key configuration of the cursor's column -- the device code pressed now bound to
@@ -109,10 +152,15 @@ void keyConfigure(StatusScreen& s, uint32_t act) {
         }
     }
     if (drawing()) {
+        const bool art = sourceArt();
         const size_t c = otOpen(kOtRows);
         otDrawMode(c, kOptMode);
         otTile(c, 0x14, 0x37, 0x118, 0x60, kPanelColour, kTileSemi);
-        if (col == kPadColumn) {
+        if (!art) {
+            if (col == kPadColumn) ownPadPicture(c);
+            else if (col == kKeysColumn) ownKeyboardPicture(c);
+            else ownMousePicture(c);
+        } else if (col == kPadColumn) {
             otDrawMode(c, kPictureMode);
             otSprite(c, 0x60, 0x3a, kPadPictureArt, 0x80, 0x58, kNeutral, kSpriteFree); // the pad (exe 0x580080's word)
         } else if (col == kKeysColumn) {
@@ -128,40 +176,51 @@ void keyConfigure(StatusScreen& s, uint32_t act) {
         else otTile(c, int(act / 5) * 0x84 + 0x1c, int(act % 5) * 0x10 + 0x3e, 0x84, 0x10, kCursorColour, kTileSemi);
         if (col == kPadColumn) {
             otDrawMode(c, kOptMode);
-            otSprite(c, 0x82, 0x3e, kPadStartArt, 0x10, 0x10, kNeutral, kSpriteHalf);
+            if (art) otSprite(c, 0x82, 0x3e, kPadStartArt, 0x10, 0x10, kNeutral, kSpriteHalf);
+            else ownDpadBadge(c, 0x82, 0x3e);
             for (uint32_t k = 1; k < kPadActions; ++k) {
                 const int n = int(b.pad.codeOf(padActions[k])) - 1;
-                const ButtonArt art = padButtonArts[size_t(uint32_t(n))];
-                const uint32_t uv = uint32_t(art.u) | uint32_t(art.v) << 8;
                 const int x = k == kPadUpperAction ? 0xa2 : int(k / 5) * 0x84 + 0x82;
                 const int y = k == kPadUpperAction ? 0x7e : int(k % 5) * 0x10 + 0x3e;
-                otSprite(c, x, y, kButtonArtBase | uv, 0x10, 0x10, kNeutral, kSpriteHalf);
+                if (art) {
+                    const ButtonArt a = padButtonArts[size_t(uint32_t(n))];
+                    otSprite(c, x, y, kButtonArtBase | uint32_t(a.u) | uint32_t(a.v) << 8, 0x10, 0x10, kNeutral, kSpriteHalf);
+                } else {
+                    ownBadge(c, x, y, std::to_string(n + 1));
+                }
             }
         } else if (col == kKeysColumn) {
             otDrawMode(c, kOptMode);
             for (uint32_t k = 0; k < kKeyActions; ++k) {
                 const int x0 = int(k / 5) * 0x84, y = int(k % 5) * 0x10 + 0x3e;
-                otSprite(c, x0 + 0x96, y, kKeyBoxRightArt, 8, 0x10, kNeutral, kSpriteHalf);
                 const std::string name = keyName(b.keys.codeOf(keyActions[k]));
                 int w = 0;
-                for (size_t i = 1; i < name.size(); ++i) {
-                    w += 0xc;
-                    otSprite(c, x0 - w + 0x96, y, kKeyBoxMiddleArt, 0xc, 0x10, kNeutral, kSpriteHalf);
+                for (size_t i = 1; i < name.size(); ++i) w += 0xc;
+                if (art) {
+                    otSprite(c, x0 + 0x96, y, kKeyBoxRightArt, 8, 0x10, kNeutral, kSpriteHalf);
+                    for (int m = 0xc; m <= w; m += 0xc)
+                        otSprite(c, x0 - m + 0x96, y, kKeyBoxMiddleArt, 0xc, 0x10, kNeutral, kSpriteHalf);
+                    otSprite(c, x0 - w + 0x8e, y, kKeyBoxLeftArt, 8, 0x10, kNeutral, kSpriteHalf);
+                } else {
+                    otTile(c, x0 - w + 0x8e, y, w + 0x10, 0x10, kKeyBoxColour, kTileOpaque); // the box: caps and cells
                 }
-                otSprite(c, x0 - w + 0x8e, y, kKeyBoxLeftArt, 8, 0x10, kNeutral, kSpriteHalf);
             }
         } else if (col == kMouseColumn) {
             otDrawMode(c, kPictureMode);
             for (uint32_t k = 0; k < kMouseActions; ++k) {
                 const int n = int(b.mouse.codeOf(mouseActions[k])) - 1;
-                const ButtonArt art = mouseButtonArts[size_t(uint32_t(n))];
-                const uint32_t uv = uint32_t(art.u) | uint32_t(art.v) << 8;
-                otSprite(c, int(0x8e + k * 0x84), 0x5e, kButtonArtBase | uv, 0x10, 0x10, kNeutral, kSpriteHalf);
+                if (art) {
+                    const ButtonArt a = mouseButtonArts[size_t(uint32_t(n))];
+                    otSprite(c, int(0x8e + k * 0x84), 0x5e, kButtonArtBase | uint32_t(a.u) | uint32_t(a.v) << 8, 0x10, 0x10,
+                             kNeutral, kSpriteHalf);
+                } else {
+                    ownBadge(c, int(0x8e + k * 0x84), 0x5e, std::to_string(n + 1));
+                }
             }
         }
         otDrawMode(c, kOptMode);
     }
-    menuWindowOpen(kHintWindow, stateAddress(TableId::MenuKeyConfigListsBank), int16_t(col));
+    menuWindowOpen(kHintWindow, keyConfigListsBank(), int16_t(col));
     if (col == kKeysColumn)
         for (uint32_t k = 0; k < kKeyActions; ++k) {
             const std::string name = keyName(b.keys.codeOf(keyActions[k]));
@@ -248,7 +307,7 @@ void keyConfigState(StatusScreen& s) {
         break;
     }
     rowsDraw(s, optionsValueTable(0));
-    menuWindowOpen(0, stateAddress(TableId::MenuKeyConfigHelpBank), s.cursor);
+    menuWindowOpen(0, keyConfigHelpBank(), s.cursor);
     s.cursor = int8_t(s.cursorKept);
 }
 

@@ -51,6 +51,9 @@ uint32_t runLogicCode(MessageWindow& w, uint32_t index);
 // the layout pass's code `index` (exe table 0x8b15e8) on window w
 void runLayoutCode(MessageWindow& w, uint32_t index);
 
+// fb 22 k: where the key name's string is read from (the host's text draw follows the same string)
+uint32_t keyNameText(uint8_t k);
+
 // exe 0x559700: the page at +0x2c (re)started: its header into +0x1c, the read pointer after it, the speaker bytes
 void pageRestart(MessageWindow& w);
 // exe 0x5596c0: the window jumps to message `id` of its bank (the page started)

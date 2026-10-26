@@ -126,9 +126,6 @@
 {TableId::InputBindingsPadDefaults, 0x8478f0u},
 {TableId::InputBindingsMouseDefaults, 0x847918u},
 // game/key_config
-{TableId::KeyConfigPadActions, 0x91b880u},
-{TableId::KeyConfigActions, 0x91b8a8u},
-{TableId::KeyConfigMouseActions, 0x91b8bcu},
 {TableId::KeyConfigPadButtonArts, 0x91b894u},
 {TableId::KeyConfigMouseButtonArts, 0x91b8c0u},
 // game/lift_box
@@ -1400,7 +1397,6 @@
 // game/guardian_reaverbot
 {TableId::GuardianReaverbotFistWallBoxes, 0x88edf8u},
 // game/input_bindings
-{TableId::InputBindingsKeyNames, 0x8475c8u},
 // game/language_pack
 {TableId::MenuBankItemNames, 0x8b6dfcu},
 // game/lens_flare

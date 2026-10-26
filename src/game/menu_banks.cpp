@@ -8,7 +8,7 @@ namespace od::port {
 namespace {
 MenuBanks gBanks;
 bool gBanksSet = false;
-uint32_t gLatinKeys = 0, gLatinLists = 0; // OpenDash's Latin banks of the key configuration
+uint32_t gKeysBank = 0, gListsBank = 0; // OpenDash's own banks of the key configuration (0: the source's)
 } // namespace
 
 MenuBanks exeMenuBanks() {
@@ -46,10 +46,12 @@ const MenuBanks& menuBanks() {
     if (!gBanksSet) gBanks = exeMenuBanks(); // the bound source's
     return gBanks;
 }
-void setKeyConfigLatinBanks(uint32_t help, uint32_t lists) {
-    gLatinKeys = help;
-    gLatinLists = lists;
+void setKeyConfigBanks(uint32_t help, uint32_t lists) {
+    gKeysBank = help;
+    gListsBank = lists;
 }
+uint32_t keyConfigHelpBank() { return gKeysBank ? gKeysBank : stateAddress(TableId::MenuKeyConfigHelpBank); }
+uint32_t keyConfigListsBank() { return gListsBank ? gListsBank : stateAddress(TableId::MenuKeyConfigListsBank); }
 
 uint32_t langBank(uint32_t bank) {
     const MenuBanks exe = exeMenuBanks();
@@ -74,8 +76,6 @@ uint32_t langBank(uint32_t bank) {
     if (bank == exe.equipBuster) return set.equipBuster;
     if (bank == exe.equipSort) return set.equipSort;
     if (bank == exe.equipBody) return set.equipBody;
-    if (bank == stateAddress(TableId::MenuKeyConfigHelpBank) && gLatinKeys) return gLatinKeys; // OpenDash's texts of the PC-only page
-    if (bank == stateAddress(TableId::MenuKeyConfigListsBank) && gLatinLists) return gLatinLists;
     return bank;
 }
 

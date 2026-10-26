@@ -66,7 +66,7 @@ inline uint16_t padButtonKey(uint16_t bit) { return inputBindings().pad.codeOf(b
 // 0x847918)
 void inputConfigDefaults();
 
-// exe 0x40a050(key): the key's name (exe table 0x8475c8 {u32 DirectInput code, char* name}); "" = not nameable
+// exe 0x40a050(key): the key's name (OpenDash's list of the DirectInput codes); "" = not nameable
 std::string keyName(uint32_t key);
 // the key can be named (a key the configuration accepts)
 bool keyNameable(uint32_t key);

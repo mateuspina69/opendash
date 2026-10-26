@@ -35,8 +35,11 @@ MenuBanks exeMenuBanks();
 void setMenuBanks(const MenuBanks& b);
 // the banks set (none set: the exe's)
 const MenuBanks& menuBanks();
-// OpenDash's Latin banks of the key configuration (0: the exe's)
-void setKeyConfigLatinBanks(uint32_t help, uint32_t lists);
+// The key configuration's banks (window 0's help, window 2's action lists): OpenDash's own where the options page built
+// them (setKeyConfigBanks; 0: not), else the source's
+void setKeyConfigBanks(uint32_t help, uint32_t lists);
+uint32_t keyConfigHelpBank();
+uint32_t keyConfigListsBank();
 // an exe bank address -> the language pack's copy (the row tables name the exe's banks)
 uint32_t langBank(uint32_t bank);
 // the shop list's price strings: kShopPriceStrings strings of kShopPriceStringSize bytes from MenuBanks::shopPrices

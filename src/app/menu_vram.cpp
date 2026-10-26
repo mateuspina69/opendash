@@ -12,7 +12,9 @@
 #include "engine/dat.hpp"
 #include "engine/data_source.hpp"
 #include "game/status_screen.hpp"
+#include "engine/lang.hpp"
 #include "game/menu_art.hpp"
+#include "game/status_options.hpp"
 
 namespace od::app {
 
@@ -113,23 +115,50 @@ void MenuVram::packArt(const std::string& name) {
 }
 
 void MenuVram::art() {
-    if (artPack) return;
-    if (font.empty() && !fontDat.empty()) {
-        try {
-            const od::GameFile init = od::dataSource().gameFile(fontDat);
-            for (const od::FilePart& p : init.parts)
-                if (p.kind == od::FilePart::Kind::PcFont && p.arg == 0) {
-                    font = p.bytes;
-                    break;
-                }
-        } catch (const std::exception& e) {
-            SDL_Log("menu art: %s", e.what());
-        }
-    }
-    if (font.empty()) return;
+    if (artPack && artPack->has("art/SUBSCN06.bin")) return; // the pack's own pictures
     std::vector<od::menuart::Glyph> g;
-    for (const uint32_t c : {0xbau, 0xadu, 0xbbu}) g.push_back(od::menuart::pcGlyph(font, c));
-    od::menuart::caption(vram, 7, 0xc0, 0xe0, 0x30, g);
+    if (!artPack) { // Japanese: the language row's caption in the PC font
+        if (font.empty() && !fontDat.empty()) {
+            try {
+                const od::GameFile init = od::dataSource().gameFile(fontDat);
+                for (const od::FilePart& p : init.parts)
+                    if (p.kind == od::FilePart::Kind::PcFont && p.arg == 0) {
+                        font = p.bytes;
+                        break;
+                    }
+            } catch (const std::exception& e) {
+                SDL_Log("menu art: %s", e.what());
+            }
+        }
+        if (font.empty()) return;
+        for (const uint32_t c : {0xbau, 0xadu, 0xbbu}) g.push_back(od::menuart::pcGlyph(font, c));
+        od::menuart::caption(vram, 7, od::menuart::kCellLanguage.u, od::menuart::kCellLanguage.v, od::menuart::kCellWidth, g);
+        return;
+    }
+    // a pack with the PS1 message font (the disc's, or an installed one): OpenDash's cells in its language
+    if (!artPack->has("font.bin") || !artPack->has("widths.bin")) return;
+    try {
+        const std::vector<uint8_t> page = artPack->file("font.bin"), widths = artPack->file("widths.bin");
+        const int lang = od::port::optionsHost().language ? od::port::optionsHost().language() : 1;
+        struct Text {
+            od::menuart::Cell cell;
+            const char* en;
+            const char* pt;
+        };
+        static constexpr Text kTexts[] = {{od::menuart::kCellLanguage, "Language", "Idioma"},
+                                          {od::menuart::kCellVideo, "Video", "Vídeo"},
+                                          {od::menuart::kCellKeys[0], "Pad", "Controle"},
+                                          {od::menuart::kCellKeys[1], "Keys", "Teclado"},
+                                          {od::menuart::kCellKeys[2], "Mouse", "Mouse"}};
+        for (const Text& t : kTexts) {
+            g.clear();
+            for (const uint8_t c : od::lang::ps1Encode(lang == 2 ? t.pt : t.en))
+                g.push_back(od::menuart::ps1Glyph(page, widths, c));
+            od::menuart::caption(vram, 7, t.cell.u, t.cell.v, od::menuart::kCellWidth, g);
+        }
+    } catch (const std::exception& e) {
+        SDL_Log("menu art (%s): %s", artPack->id().c_str(), e.what());
+    }
 }
 
 MenuVram* g_menuVram = nullptr;

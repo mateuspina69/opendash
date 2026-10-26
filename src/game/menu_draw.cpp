@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <deque>
 
 #include "engine/data_source.hpp"
 #include "game/display.hpp"
@@ -12,6 +13,7 @@
 #include "game/list_cursor.hpp"
 #include "game/menu_banks.hpp"
 #include "game/message_state.hpp"
+#include "engine/lang.hpp"
 
 namespace od::port {
 
@@ -31,6 +33,16 @@ struct AsciiGlyphMetric : DataRecord {
     }
 };
 const DataTable<RecordTable<AsciiGlyphMetric, 0x100, 2>> asciiMetrics{TableId::MenuDrawAsciiMetrics};
+// the bound source has the PC's ASCII font (metrics and glyphs); without it (the PS1's disc has none) the text is drawn
+// with the message font, OpenDash's Latin strings of the Text primitives
+bool asciiFont() { return asciiMetrics.available(); }
+// a string a Text primitive points at until the frame is painted (a ring: the page draws a dozen a frame)
+const char* textKept(const std::string& t) {
+    static std::deque<std::string> ring;
+    ring.push_back(t);
+    if (ring.size() > 256) ring.pop_front();
+    return ring.back().c_str();
+}
 constexpr uint32_t kAsciiSpaceWidth = 4;
 
 // the backdrop's tiles: 21 x 16 of 16 px from the sheet's 4 x 4 cells at (0x30, 0x20), clut 0x7f92, tpage 0xd
@@ -275,6 +287,22 @@ void bankTextDraw(uint32_t packed, uint32_t bank, int16_t id, uint32_t mode) {
 }
 
 void asciiTextDraw(const std::string& text, int x, int y, bool proportional) {
+    if (!asciiFont()) {
+        if (!gSink) return;
+        auto put = [&](const std::string& t, int px) {
+            ScreenPrim& p = otPut(otOpen(kOtOverlay), ScreenPrim::Text);
+            p.x = p.ax = int16_t(px);
+            p.y = int16_t(y);
+            p.utf8 = textKept(t);
+        };
+        if (proportional) {
+            put(text, x);
+        } else { // the cells of 12 px of the PC's fixed text: one glyph each
+            for (size_t i = 0; i < text.size(); ++i)
+                if (text[i] != ' ') put(std::string(1, text[i]), x + int(i) * 12);
+        }
+        return;
+    }
     float fx = float(x);
     for (const char ch : text) {
         const uint8_t c = uint8_t(ch);
@@ -299,6 +327,10 @@ void asciiTextDraw(const std::string& text, int x, int y, bool proportional) {
 
 uint32_t asciiTextWidth(const std::string& text) {
     uint32_t w = 0;
+    if (!asciiFont()) { // the message font's advances
+        for (const uint8_t g : lang::ps1Encode(text)) w += uint32_t(ps1Advance(g));
+        return w;
+    }
     for (const char c : text) w += c == ' ' ? kAsciiSpaceWidth : uint32_t(int(asciiMetrics[uint8_t(c)].width) + 1);
     return w >> 1;
 }

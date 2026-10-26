@@ -454,7 +454,7 @@ void MessageUi::draw(ui::Canvas& cv, float width, float height, int pass) const 
                 if (op == 0x20 && ret == 0) { ret = p + 4; p = nameAt(be16(p + 2)); continue; }
                 if (op == 0x3d && ret == 0) { ret = p + 2; p = nameAt(win.itemName); continue; }
                 if (op == 0x21 && ret == 0) { ret = p + 3; p = 0x8b172c; continue; }
-                if (op == 0x22 && ret == 0) { ret = p + 3; p = od::port::MessageBank(od::stateAddress(od::TableId::TextScriptKeyNameBank)).message(od::port::TextBytes(p).byte(2)); continue; }
+                if (op == 0x22 && ret == 0) { ret = p + 3; p = od::port::keyNameText(od::port::TextBytes(p).byte(2)); continue; }
                 if (op == 0x23 && ret == 0) { ret = p + 3; p = 0x8b1738; continue; }
                 if (op == 0x44 && ret == 0) { ret = p + 3; p = od::port::MessageBank(od::port::bankRedirect(od::stateAddress(od::TableId::TextScriptPlaceNameBank))).message(win.place); continue; }
                 if (op == 0x0a) { // fb 0a c (FUN_00559c70): colour c & 0x7f (> 7: 0), c & 0x80 dim

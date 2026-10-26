@@ -169,9 +169,6 @@ namespace od {
     X(InputBindingsPadDefaults)                                                                                        \
     X(InputBindingsMouseDefaults)                                                                                      \
     /* ---- game/key_config */                                                                                         \
-    X(KeyConfigPadActions)                                                                                             \
-    X(KeyConfigActions)                                                                                                \
-    X(KeyConfigMouseActions)                                                                                           \
     X(KeyConfigPadButtonArts)                                                                                          \
     X(KeyConfigMouseButtonArts)                                                                                        \
     /* ---- game/lift_box */                                                                                           \
@@ -1449,7 +1446,6 @@ namespace od {
     /* ---- game/guardian_reaverbot */                                                                              \
     X(GuardianReaverbotFistWallBoxes)                                                                               \
     /* ---- game/input_bindings */                                                                                  \
-    X(InputBindingsKeyNames)                                                                                        \
     /* ---- game/language_pack */                                                                                   \
     /* ---- game/lens_flare */                                                                                      \
     X(LensFlareSets)                                                                                                \
@@ -1501,6 +1497,7 @@ namespace od {
     X(TextScriptWarpBank) /* the bank of the message fb 3c reopens in another stage */                              \
     X(TextScriptPlaceNameBank) /* fb 44's bank (a language pack's copy: game/language_pack) */                      \
     X(TextScriptKeyNameBank) /* fb 22's key names (their first glyph patched with the key) */                       \
+    X(TextScriptKeyNameLayouts) /* the PS1's: the key-name message of each pad layout's 12 names */                 \
     /* ---- game/text_script_state */                                                                               \
     X(TextScriptNumberText) /* the text fb 21 inserts (7 digits, fb 1f) */                                          \
     X(TextScriptTimeText) /* the text fb 23 inserts (8 characters, fb 1f) */                                        \

@@ -57,6 +57,9 @@ OptionsHost& optionsHost();
 
 // exe 0x5edb70: page 6 one frame (the state's handler, the pad's kind, the values, the page)
 void optionsPage(StatusScreen& s);
+// the source's options texture has the PC's pictures (the pad, the keyboard, the mouse, the buttons' and the video
+// row's icons: tpage 8); without them (the PS1's) OpenDash draws its own where it needs them
+bool optionsPictures();
 // the inline value table k of the rows (OpenDash's copies, moved with their row: 0 the key configuration's columns)
 uint32_t optionsValueTable(size_t k);
 
