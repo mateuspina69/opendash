@@ -24050,7 +24050,7 @@ static constexpr Ps1LabelTable kPs1LabelTables[] = {
     {TableId::TitleDepthCue, 0x0, 6980, false, 0},
     {TableId::TitleDepthCue, 0x0, 6981, false, 0},
     {TableId::TownNpcLookSets, 0x0, 6307, true, 0},
-    {TableId::TownNpcSpeeds, 0x0, 456, false, 0},
+    {TableId::TownNpcSpeeds, 0x0, 456, true, 0},
     {TableId::TownNpcSpeeds, 0x0, 7085, false, 0},
     {TableId::TownNpcSpeeds, 0x0, 7086, false, 0},
     {TableId::TownNpcSpeeds, 0x0, 7087, false, 0},

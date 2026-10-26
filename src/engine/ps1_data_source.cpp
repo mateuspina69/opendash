@@ -486,7 +486,7 @@ TableReader Ps1DataSource::table(TableKey key, uint32_t bytes) const {
         const Part& pt = parts_[p];
         if (address >= pt.base && address - pt.base < pt.data->size()) {
             const size_t have = pt.data->size() - (address - pt.base);
-            if (key.id == TableId::CrashLandingScriptBurnRecords && have > 0) {
+            if ((key.id == TableId::CrashLandingScriptBurnRecords || key.id == TableId::TownNpcSpeeds) && have > 0) {
                 // Its fourth record is the first bytes of ST3A01.DAT, which the script loads later: keep the
                 // overlay's own records and let the rest read as zero until the data file is in.
                 std::vector<uint8_t> b(bytes, 0);
