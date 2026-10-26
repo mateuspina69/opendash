@@ -426,6 +426,7 @@ int main(int argc, char** argv) {
             if (!ps1.hasFile(name + ".DAT")) { // a placement in a file the disc does not have
                 ++failed;
                 std::fprintf(stderr, "%s: no such file on the disc (%zu tables)\n", file.c_str(), uses.size());
+                for (const auto& [use, key] : uses) std::fprintf(stderr, "  %s\n", od::describe(key).c_str());
                 continue;
             }
             (void)ps1.gameFile(name + ".DAT"); // the copy in this file is the one read now
