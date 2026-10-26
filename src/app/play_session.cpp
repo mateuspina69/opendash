@@ -1294,7 +1294,7 @@ void PlayerView::beginPlay() {
 
 void PlayerView::leavePlay() {
     if (play) {
-        od::port::saveBuildImage(0);
+        od::port::saveSerialise(od::port::kSaveBuf); // the state only: the memory card's title / icon are not state
         const auto img = od::port::saveImageAt(od::port::kSaveBuf).bytes();
         sessionSave.assign(img.begin(), img.end());
         SDL_Log("F2: session state kept (story %u, ST%02X sub %d)", unsigned(od::port::gameState().story), img[0x128],
