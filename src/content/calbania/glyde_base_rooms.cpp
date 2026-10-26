@@ -35,10 +35,10 @@
 //   -> 2; 2: no Birdbot left -> the music faded (0x199), 0x28 ticks -> 3; 3 (the player alive): flags 0x23 / 0x670, the
 //   story + 1, script 0x24 -> 4.
 #include "content/calbania/ch3_rooms.hpp"
-#include "content/calbania/glyde_base_rooms_state.hpp"
 #include "content/calbania/calbania_rooms.hpp"
 #include "content/calbania/escape_timer_state.hpp"
 
+#include "content/nino/glyde_box_walkers_state.hpp"
 #include "engine/data_source.hpp"
 #include "game/actor_pools.hpp"
 #include "game/actor_state.hpp"
@@ -64,7 +64,6 @@
 
 namespace od::port {
 
-using namespace glyde_base_rooms_state;
 
 using od::content::GlydeBaseRoomState;
 using od::content::glydeBaseRoomState;
@@ -644,7 +643,7 @@ void boxRoom() { // exe 0x585f80
                 a.pos.x.whole = place.x;
                 a.pos.z.whole = place.z;
                 a.rotation.y = place.yaw;
-                classState<WalkerTarget>(a).target = 0;
+                classState<glyde_box_walkers_state::WalkerFields>(a).target = 0;
             }
             base.walkers[i] = address;
         }

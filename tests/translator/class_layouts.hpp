@@ -217,7 +217,6 @@ namespace od::port::glyde_attack_talkers_state { struct TalkerFields; }
 namespace od::port::glyde_base_bombers_state { struct GlydeBomberFields; }
 namespace od::port::glyde_base_gun_state { struct GunFields; }
 namespace od::port::glyde_base_key_state { struct GlydeKeyFields; }
-namespace od::port::glyde_base_rooms_state { struct WalkerTarget; }
 namespace od::port::glyde_base_scene_birdbots_state { struct SceneBirdbotFields; }
 namespace od::port::glyde_base_tank_state { struct GlydeTankFields; }
 namespace od::port::glyde_base_turret_state { struct TurretFields; }
@@ -783,7 +782,6 @@ void layoutValue(LayoutVisitor&, uint32_t, od::port::glyde_attack_talkers_state:
 void layoutValue(LayoutVisitor&, uint32_t, od::port::glyde_base_bombers_state::GlydeBomberFields&);
 void layoutValue(LayoutVisitor&, uint32_t, od::port::glyde_base_gun_state::GunFields&);
 void layoutValue(LayoutVisitor&, uint32_t, od::port::glyde_base_key_state::GlydeKeyFields&);
-void layoutValue(LayoutVisitor&, uint32_t, od::port::glyde_base_rooms_state::WalkerTarget&);
 void layoutValue(LayoutVisitor&, uint32_t, od::port::glyde_base_scene_birdbots_state::SceneBirdbotFields&);
 void layoutValue(LayoutVisitor&, uint32_t, od::port::glyde_base_tank_state::GlydeTankFields&);
 void layoutValue(LayoutVisitor&, uint32_t, od::port::glyde_base_turret_state::TurretFields&);

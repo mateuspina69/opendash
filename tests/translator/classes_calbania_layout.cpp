@@ -13,7 +13,6 @@
 #include "content/calbania/glyde_base_bombers_state.hpp"
 #include "content/calbania/glyde_base_gun_state.hpp"
 #include "content/calbania/glyde_base_key_state.hpp"
-#include "content/calbania/glyde_base_rooms_state.hpp"
 #include "content/calbania/glyde_base_scene_birdbots_state.hpp"
 #include "content/calbania/glyde_base_tank_state.hpp"
 #include "content/calbania/glyde_base_turret_state.hpp"
@@ -235,11 +234,6 @@ void layoutValue(LayoutVisitor& v, uint32_t a, od::port::glyde_base_key_state::G
     using namespace od::port::glyde_base_key_state;
     layoutValue(v, a + 0xc, s.flagIndex);
     layoutValue(v, a + 0xc6, s.landedMark);
-}
-
-void layoutValue(LayoutVisitor& v, uint32_t a, od::port::glyde_base_rooms_state::WalkerTarget& s) {
-    using namespace od::port::glyde_base_rooms_state;
-    layoutValue(v, a + 0x14c, s.target);
 }
 
 void layoutValue(LayoutVisitor& v, uint32_t a, od::port::glyde_base_scene_birdbots_state::SceneBirdbotFields& s) {
@@ -476,7 +470,6 @@ bool classes_calbania(LayoutVisitor& v, uint32_t a, ActorClassState& s) {
     if (typeid(s) == typeid(od::port::calbania_spawners_state::St1fSpawnerFields)) { layoutValue(v, a, static_cast<od::port::calbania_spawners_state::St1fSpawnerFields&>(s)); return true; }
     if (typeid(s) == typeid(od::port::calbania_cast_state::SittingPuppetFields)) { layoutValue(v, a, static_cast<od::port::calbania_cast_state::SittingPuppetFields&>(s)); return true; }
     if (typeid(s) == typeid(od::port::ch3_script_cast_state::Script20AppoDahFields)) { layoutValue(v, a, static_cast<od::port::ch3_script_cast_state::Script20AppoDahFields&>(s)); return true; }
-    if (typeid(s) == typeid(od::port::glyde_base_rooms_state::WalkerTarget)) { layoutValue(v, a, static_cast<od::port::glyde_base_rooms_state::WalkerTarget&>(s)); return true; }
     if (typeid(s) == typeid(od::port::nino_return_scripts_state::FlyPointFields)) { layoutValue(v, a, static_cast<od::port::nino_return_scripts_state::FlyPointFields&>(s)); return true; }
     if (typeid(s) == typeid(od::port::AppoDahFightFields)) { layoutValue(v, a, static_cast<od::port::AppoDahFightFields&>(s)); return true; }
     if (typeid(s) == typeid(od::port::tron_boss_state::TronFields)) { layoutValue(v, a, static_cast<od::port::tron_boss_state::TronFields&>(s)); return true; }
