@@ -466,7 +466,12 @@ TableReader Ps1DataSource::table(TableKey key, uint32_t bytes) const {
     debugTableName() = describe(key); // a diagnostic for TableReader's error
     if (std::getenv("OPENDASH_TRACE_DATA")) lastTableKey_ = describe(key);
     const auto it = tables_.find(key);
-    if (it == tables_.end()) throw DataSourceError("data source (PS1): the disc has no table " + describe(key));
+    if (it == tables_.end()) {
+        // The save/status menu's time text is PC-generated (glyph cells); the PS1 has no copy. Blank text is better
+        // than stopping play while the save UI is ported; the save format itself stays a separate question.
+        if (key.id == TableId::TextScriptTimeText) return TableReader(*this, std::vector<uint8_t>(bytes, 0));
+        throw DataSourceError("data source (PS1): the disc has no table " + describe(key));
+    }
     const Located& t = it->second;
     if (t.state) return TableReader(*this, std::vector<uint8_t>(bytes, 0)); // the state's initial bytes
     if (voiceBytes_.count(key)) {
