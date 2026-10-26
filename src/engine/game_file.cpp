@@ -5,6 +5,8 @@
 
 #include "engine/dat.hpp"
 #include "engine/ps1_container.hpp"
+#include "engine/ps1_music.hpp"
+#include "engine/ps1_sfx.hpp"
 
 namespace od {
 
@@ -37,7 +39,7 @@ const FilePart* GameFile::first(FilePart::Kind kind) const {
 const FilePart& GameFile::require(FilePart::Kind kind) const {
     if (const FilePart* p = first(kind)) return *p;
     static const char* const kNames[] = {"code",     "model bank", "geometry",  "VRAM",        "PC message bank",
-                                         "PC font",  "WAV SFX bank", "MP3 music", "PS1 message bank", "PS1 block"};
+                                         "PC font",  "WAV SFX bank", "MP3 music", "PS1 message bank", "PS1 block", "PS1 music"};
     throw std::runtime_error(name + ": no " + kNames[int(kind)] + " part");
 }
 
@@ -80,9 +82,42 @@ GameFile ps1GameFile(std::string name, std::span<const uint8_t> bin) {
     GameFile f;
     f.name = std::move(name);
     using K = FilePart::Kind;
-    for (const Ps1Block& b : ps1Blocks(bin)) {
+    const auto blocks = ps1Blocks(bin);
+    std::vector<bool> musicBanks(blocks.size(), false);
+    for (size_t bi = 0; bi < blocks.size(); ++bi) {
+        const Ps1Block& b = blocks[bi];
+        if (b.type == 8 || b.type == 9 || b.type == 15 || b.type == 16) {
+            // The sequence precedes its bank on the disc; other blocks may sit between them.
+            const uint32_t bankType = b.type < 10 ? 5u : 14u;
+            auto bank = std::find_if(blocks.begin() + bi + 1, blocks.end(), [=](const Ps1Block& x) {
+                return x.type == bankType;
+            });
+            if (bank == blocks.end()) throw std::runtime_error(f.name + ": music sequence has no instrument bank");
+            musicBanks[size_t(bank - blocks.begin())] = true;
+            const auto seqBytes = bin.subspan(b.offset, size_t(b.sectors) * kPs1Sector);
+            const auto bankBytes = bin.subspan(bank->offset, size_t(bank->sectors) * kPs1Sector);
+            for (auto& packet : ps1MusicTracks(seqBytes, bankBytes)) {
+                const Ps1MusicPlayer player(packet, false);
+                FilePart music;
+                music.kind = K::Ps1Music;
+                music.arg = player.info().hasLoop ? 1 : 0;
+                music.bytes = std::move(packet);
+                f.parts.push_back(std::move(music));
+            }
+            continue;
+        }
         FilePart p;
         switch (b.type) {
+        case kPs1SoundBank: {
+            if (musicBanks[bi]) continue;
+            const auto whole = bin.subspan(b.offset, size_t(b.sectors) * kPs1Sector);
+            const uint32_t key = ps1SfxBankKey(whole);
+            p.kind = K::WavSfxBank;
+            p.arg = key & 0xffff;
+            p.extra = key >> 16;
+            p.bytes = ps1SfxBank(whole);
+            break;
+        }
         case kPs1Code:
             p.kind = K::Code;
             p.arg = b.header[3] - kPs1RamBase;

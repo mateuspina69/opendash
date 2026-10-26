@@ -52,7 +52,7 @@ NetSettings resolveNetSettings(const od::Config& cfg, const NetFlags& flags) {
 }
 
 void Netplay::start(const NetSettings& settings, const std::optional<MirrorSettings>& mirror,
-                    const std::filesystem::path& datDir, const std::filesystem::path& exe) {
+                    const std::filesystem::path& datDir, const std::filesystem::path& exe, const od::DiscImage* disc) {
     mirror_ = mirror;
     if (mirror_) claimSlot(Source::Kind::Mirror, 0, "mirror");
     if (settings.mode == NetMode::Off) return;
@@ -64,7 +64,7 @@ void Netplay::start(const NetSettings& settings, const std::optional<MirrorSetti
         c.name = settings.name;
         c.buildId = buildId();
         const uint64_t t0 = SDL_GetTicksNS();
-        const od::GameFilesHash files = od::gameFilesHash(datDir, exe);
+        const od::GameFilesHash files = disc ? od::gameFilesHash(*disc) : od::gameFilesHash(datDir, exe);
         SDL_Log("netplay: game files hash %016llx (exe %016llx) in %llu ms", (unsigned long long)files.all,
                 (unsigned long long)files.exe, (unsigned long long)((SDL_GetTicksNS() - t0) / 1'000'000));
         c.gameFilesHash = files.all;

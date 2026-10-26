@@ -54,6 +54,69 @@ address), which hold 99% of the exe ranges located so far.
 * Sound needs decoders the PC never had: SPU ADPCM for the VAB SFX, a sequence player for the music, XA ADPCM for
   the streams.
 
+## Running the disc data source (2026-10-25)
+
+This remains an experimental data source for the desktop engine. It does not build a PS1 console executable.
+The supported image is the USA release (`SLUS_011.40`), as a `.cue` and its raw 2352-byte `.bin` tracks.
+Set these keys in `opendash.ini` next to OpenDash (or use the environment variables below):
+
+```ini
+data=disc
+disc=C:/path/to/Mega Man Legends 2 (USA).cue
+lang=en
+net=off
+```
+
+The matching environment variables are `OPENDASH_DATA=disc`, `OPENDASH_DISC=<cue path>` and `OPENDASH_LANG=en`.
+Startup now validates the selected source: disc mode needs the cue and tracks, without requiring `dash2.exe`,
+`dat/` or `snd/`. If the image is missing or unreadable, interactive startup offers a cue-file picker.
+The PC source keeps its existing installation checks. A disc configured only for an English language pack
+(`data=pc`) still requires the PC installation.
+
+The missing `RollSt09FollowerPoint` is now mapped to `DAT/ST09T.BIN:0x800f2cf4`, after its spawn record.
+`test_ps1_source` explicitly requires this table, so its usual skip of unmapped tables cannot hide this regression.
+Scripted ST09/sub 0 sessions complete 120 ticks at story 0 and story 1, with nonexistent PC data/exe paths
+(story 1 uses an explicitly supplied PC save, only for its story state). This is a short gameplay check, not a
+full playthrough. The startup checks have separate coverage in `test_game_files`, including a broken cue,
+absent PC files and the unchanged PC installation path. A synthetic ISO also covers corrupt executable headers,
+oversized declared text sections and a truncated INIT payload.
+
+### Implemented and remaining work
+
+The disc source now translates all 87 stage voice-table families and the five built-in voices to the engine's
+four-byte descriptors. Tests cover all 424 XA clips in 14 files. Native SPU sound banks load without a PC bank;
+the sequence player supplies 172 music tracks from the disc's sequence/sample banks, including looping,
+controllers, ADSR and reverb. Music rendering uses linear sample interpolation and a separate reverb state per
+stream; it is not a cycle-accurate SPU emulator.
+
+Netplay fingerprints the selected disc's executable and game containers rather than the PC installation.
+Quoted INI paths are accepted. Disc mode defaults to English, prevents Japanese-font selection on the USA disc,
+and falls back to disc voices after optional translated/restored voice folders, without reading the PC `snd/`.
+
+Kuna 1.820 was used locally to inspect MIPS initialization routines for all 93 stages. Verified corrections
+include the junk-shop class table, cabin handlers, complete actor-table pointer coverage and 119 native camera
+programs beyond their previously mapped prefixes. The shared menu code is the fifth container of
+`COMMON/SUBSCN.BIN`, at file offset `0x2a800`, loaded at `0x801d6800`; the preceding four page containers terminate
+independently. Cursor-bank references now resolve to the same handles as the named English banks.
+
+Disc-only application checks have passed the initial 1,200 ticks of New Game, ST09, ST0A's opening scene and
+the ST08 landing/transition into ST04. This is not a complete playthrough. Remaining work includes:
+
+* Complete title/attract and story-path coverage; missing tables are still reported rather than substituted.
+* Compose the four status/equipment/options art packs from native images and the host's captions/key prompts.
+  `test_lang_pack` retains its existing expectation that `art/GAME.bin` is not yet supplied by the disc pack.
+* The status-menu map page is unported in the current desktop engine, including its PC mode. The strict
+  `test_ps1_gameplay` integration check deliberately reports this gap when its menu script enters that page.
+* A full campaign, save/load progression and remaining menu-page validation are still required before calling
+  disc support complete. The pre-existing `test_storm_draw` has six `drawcmd_a.bin` mismatches in the baseline.
+
+The PS1 table tests compare only tables already mapped by the source. Passing them does not establish
+coverage of every room or story path; newly supported paths also need mandatory-table and gameplay checks.
+
+Run `python tests/test_ps1_gameplay.py --exe build/Release/opendash.exe --disc <cue> --work build/ps1-gameplay
+--force` for the strict GPU checks, adding `--sweep` for stage-entry coverage. These integration checks are opt-in
+under CTest (`OPENDASH_DISC_GAMEPLAY=1`) and currently expose the remaining gaps.
+
 ## Text
 
 The English text comes off the disc whole (engine/lang_pack, held to a pack folder by test_lang_pack): the message

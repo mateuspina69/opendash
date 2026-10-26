@@ -39,13 +39,21 @@ int App::run(int argc, char** argv) {
     if (const int rc = init(); rc >= 0) return rc;
     while (running) frame();
     shutdown();
-    return 0;
+    return scriptFailed ? 1 : 0;
 }
 
 void App::frame() {
+    if (scripted && (!playerView.playError.empty() || !titleScreen.error.empty())) {
+        SDL_Log("scripted run failed: %s", !playerView.playError.empty() ? playerView.playError.c_str()
+                                                                       : titleScreen.error.c_str());
+        scriptFailed = true;
+        running = false;
+        return;
+    }
     if (scripted && ++scriptedFrames > scriptedFrameLimit) {
         SDL_Log("scripted run: %llu frames without an end (limit), quitting", (unsigned long long)scriptedFrameLimit);
         running = false;
+        scriptFailed = true;
     }
     handleEvents();
     now = SDL_GetTicksNS();

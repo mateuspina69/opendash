@@ -103,6 +103,7 @@ void PlayerView::playerFiles() {
 }
 
 void PlayerView::init(const od::Config& cfg) {
+    discData = cfg.data == "disc";
     try {
         files.mapCode(od::dataSource().gameFile("PL00P000.DAT"));
         od::port::registerBuiltData(kFrameByte, frameKey);
@@ -132,9 +133,9 @@ void PlayerView::loadMessageBank() {
         const auto b = pack->file(name);
         std::copy_n(b.begin(), std::min(b.size(), bank.size()), bank.begin());
     } else {
-        if (pack) SDL_Log("lang: %s missing in %s, Japanese bank", name.c_str(), pack->id().c_str());
+        if (pack) SDL_Log("lang: %s missing in %s, native bank", name.c_str(), pack->id().c_str());
         for (const od::FilePart& seg : bankRoomFile->parts)
-            if (seg.kind == od::FilePart::Kind::PcMessages)
+            if (seg.kind == od::FilePart::Kind::PcMessages || seg.kind == od::FilePart::Kind::Ps1Messages)
                 std::copy_n(seg.bytes.begin(), std::min(seg.bytes.size(), bank.size()), bank.begin());
     }
     files.map(od::port::kMessageBank, bank);
@@ -156,7 +157,7 @@ std::unique_ptr<od::lang::LangPack> PlayerView::makePack(od::lang::Language l) c
 }
 
 bool PlayerView::packOffered(od::lang::Language l) const {
-    if (l == od::lang::Language::Japanese) return true;
+    if (l == od::lang::Language::Japanese) return !discData;
     if (const auto it = packOfferedCache.find(l); it != packOfferedCache.end()) return it->second;
     return packOfferedCache[l] = makePack(l) != nullptr;
 }
@@ -187,15 +188,23 @@ void PlayerView::applyVoiceDirs() {
     mixer->setVoiceDirs(std::move(dirs));
     if (pack && dir.empty()) // the disc's voices (engine/lang_pack): the clips of its XA files
         mixer->setVoiceSource([p = pack](const std::string& f, uint32_t t) { return p->voiceTrack(f, t); });
+    else if (discData) {
+        std::shared_ptr<const od::lang::LangPack> fallback = makePack(od::lang::Language::English);
+        mixer->setVoiceSource([p = std::move(fallback)](const std::string& f, uint32_t t) {
+            return p ? p->voiceTrack(f, t) : std::vector<uint8_t>();
+        }, true);
+    }
     else
         mixer->setVoiceSource(nullptr);
 }
 
 void PlayerView::setLanguage(od::lang::Language l) {
+    if (discData && l == od::lang::Language::Japanese) l = od::lang::Language::English;
     pack = makePack(l);
     if (l != od::lang::Language::Japanese && !pack) {
         SDL_Log("lang: no %s pack (disc image or %s)", od::lang::code(l), langDir.string().c_str());
-        l = od::lang::Language::Japanese;
+        l = discData ? od::lang::Language::English : od::lang::Language::Japanese;
+        pack = makePack(l);
     }
     language = l;
     applyVoiceDirs();
@@ -534,7 +543,7 @@ void PlayerView::bindRoomData(const RoomMesh& mesh, int param) {
 
 void PlayerView::audioInit(const od::Config& cfg, bool device) {
     try {
-        mixer = std::make_unique<od::audio::Mixer>(cfg.datDir.parent_path() / "snd");
+        mixer = std::make_unique<od::audio::Mixer>(discData ? std::filesystem::path() : cfg.datDir.parent_path() / "snd");
         if (device) mixer->open();
         mixer->setMasterGain(audioVolume);
         soundRec.next = mixer.get();
@@ -569,10 +578,11 @@ void PlayerView::audioBindRoom(const RoomMesh& mesh) {
         if (od::dataSource().hasFile(mesh.textureFile)) {
             const od::GameFile tex = od::dataSource().gameFile(mesh.textureFile);
             for (const od::FilePart& seg : tex.parts)
-                if (seg.kind == od::FilePart::Kind::Mp3Music) od::port::loadMp3Slot(seg.bytes, uint32_t(mp3++), seg.arg);
+                if (seg.kind == od::FilePart::Kind::Mp3Music || seg.kind == od::FilePart::Kind::Ps1Music)
+                    od::port::loadMp3Slot(seg.bytes, uint32_t(mp3++), seg.arg);
         }
         od::port::stageMusic(); // the stage setup's Maybe_StageSoundStart / ambience calls
-        SDL_Log("audio: ST%02X: %d SFX bank(s), %d MP3 slot(s)", mesh.stage, banks, mp3);
+        SDL_Log("audio: ST%02X: %d SFX bank(s), %d music slot(s)", mesh.stage, banks, mp3);
     } catch (const std::exception& e) {
         SDL_Log("audio: stage bind failed: %s", e.what());
     }
@@ -1523,7 +1533,7 @@ void PlayerView::processDatQueue() {
                         g_altBankDat[at == kAltBankBuffers[0] ? 0 : 1] = name;
                         assetsDirty = true;
                     }
-                } else if (sg.kind == od::FilePart::Kind::PcMessages) { // the fight / scene DAT's bank: through the
+                } else if (sg.kind == od::FilePart::Kind::PcMessages || sg.kind == od::FilePart::Kind::Ps1Messages) { // the fight / scene DAT's bank: through the
                     // language pack like the room's
                     bankRoomFile = std::make_shared<const od::GameFile>(f);
                     bankRoomName = name;
@@ -1532,7 +1542,7 @@ void PlayerView::processDatQueue() {
                     vramSeg = true;
                 } else if (sg.kind == od::FilePart::Kind::WavSfxBank) { // 0x40ed0e: Maybe_LoadSfxBank 0x5d5010(data, size, TOC arg, extra)
                     od::lang_sfx::load(pack.get(), name, d, sg.arg, sg.extra);
-                } else if (sg.kind == od::FilePart::Kind::Mp3Music) {
+                } else if (sg.kind == od::FilePart::Kind::Mp3Music || sg.kind == od::FilePart::Kind::Ps1Music) {
                     od::port::loadMp3Slot(d, mp3++, sg.arg);
                 }
             }

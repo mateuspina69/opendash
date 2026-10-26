@@ -9,6 +9,8 @@
 #include <string>
 #include <vector>
 
+#include "engine/disc_image.hpp"
+
 namespace od {
 
 namespace {
@@ -69,6 +71,14 @@ uint64_t fileHash(const std::filesystem::path& p) {
     return h.value();
 }
 
+uint64_t bytesHash(const std::vector<uint8_t>& bytes) {
+    Hasher h;
+    for (size_t at = 0; at < bytes.size(); at += kChunk)
+        h.bytes(bytes.data() + at, std::min(kChunk, bytes.size() - at));
+    h.word(bytes.size());
+    return h.value();
+}
+
 std::string upper(std::string s) {
     for (char& c : s) c = char(std::toupper(uint8_t(c)));
     return s;
@@ -92,6 +102,26 @@ GameFilesHash gameFilesHash(const std::filesystem::path& datDir, const std::file
     for (const auto& [name, path] : dats) {
         all.text(name);
         all.word(fileHash(path));
+    }
+    out.all = all.value();
+    return out;
+}
+
+GameFilesHash gameFilesHash(const DiscImage& disc) {
+    GameFilesHash out;
+    out.exe = bytesHash(disc.file("SLUS_011.40"));
+    std::vector<std::string> files;
+    for (const DiscFile& file : disc.files())
+        if ((file.path.starts_with("COMMON/") || file.path.starts_with("DAT/")) && file.path.ends_with(".BIN"))
+            files.push_back(file.path);
+    std::sort(files.begin(), files.end());
+    Hasher all;
+    all.text("OpenDash PS1 SLUS_011.40"); // different source layouts must not join each other accidentally
+    all.word(out.exe);
+    all.word(files.size());
+    for (const std::string& name : files) {
+        all.text(name);
+        all.word(bytesHash(disc.file(name)));
     }
     out.all = all.value();
     return out;

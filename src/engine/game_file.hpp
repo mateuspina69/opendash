@@ -29,6 +29,7 @@ struct FilePart {
         Mp3Music,    // a music track as MP3 (arg: the loop flag); PC 9
         Ps1Messages, // the message / script bank, the PS1 script in the PS1 font's encoding; PS1 0x12
         Ps1Block,    // a PS1 block no reader takes yet (arg: its type; bytes: the whole block, header included)
+        Ps1Music,    // ODSM packet: disc SEQ + its sampled instrument bank (arg: loop flag)
     };
     Kind kind = Kind::Code;
     uint32_t arg = 0, extra = 0;

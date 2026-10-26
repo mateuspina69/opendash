@@ -122,6 +122,39 @@ uint32_t ps1SfxBankKey(std::span<const uint8_t> block) {
     return rd32(block.data() + 0x0c);
 }
 
+std::vector<uint8_t> ps1SfxBank(std::span<const uint8_t> blk) {
+    if (blk.size() < kPs1BlockHeader + 0x20 || rd32(blk.data()) != kPs1SoundBank) fail("invalid native block");
+    const uint32_t base = rd32(blk.data() + 0x10), tab = rd32(blk.data() + 0x14);
+    const size_t header = size_t(rd16(blk.data() + 0x1c)) * 8;
+    if (header > tab || size_t(kPs1BlockHeader) + tab > blk.size()) fail("native table past block");
+    const size_t count = (tab - header) / 20;
+    const size_t body = (kPs1BlockHeader + size_t(tab) + kPs1Sector - 1) / kPs1Sector * kPs1Sector + 0x10;
+    // The existing encoder accepts an entry layout as its template. Build that layout from the disc's tone slots,
+    // rather than inheriting PC-specific disabled entries or substituting PC samples.
+    const uint32_t tableSize = uint32_t(4 + count * 8);
+    std::vector<uint8_t> layout(tableSize, 0);
+    for (unsigned i = 0; i < 4; ++i) layout[i] = uint8_t(tableSize >> (8 * i));
+    for (size_t i = 0; i < count; ++i) {
+        const uint8_t* p = blk.data() + kPs1BlockHeader + header + i * 20;
+        const Record rec{rd32(p), p[6], p[8], p[9], p[0xa], rd16(p + 0x12)};
+        if (!rec.volume || rec.sample == 255) continue;
+        if (rec.sample > 254 || rec.addr < base) fail("native tone has an invalid sample");
+        const uint64_t start = uint64_t(body) + rec.addr - base;
+        if (start + 16 > blk.size()) fail("native tone sample past block");
+        size_t end = size_t(start);
+        while (end + 16 <= blk.size() && !(blk[end + 1] & 1)) end += 16;
+        if (end + 16 > blk.size()) fail("native sample has no end frame");
+        const size_t at = 4 + i * 8;
+        layout[at] = uint8_t(rec.sample + 1);
+        layout[at + 1] = rec.volume;
+        const uint16_t freq = rec.freq();
+        layout[at + 2] = uint8_t(freq);
+        layout[at + 3] = uint8_t(freq >> 8);
+    }
+    auto bank = ps1SfxBank(blk, layout);
+    return bank.empty() ? layout : bank;
+}
+
 std::vector<uint8_t> ps1SfxBank(std::span<const uint8_t> blk, std::span<const uint8_t> pcBank) {
     if (blk.size() < kPs1BlockHeader + 0x20) fail("block too short");
     const uint32_t base = rd32(blk.data() + 0x10), tab = rd32(blk.data() + 0x14);

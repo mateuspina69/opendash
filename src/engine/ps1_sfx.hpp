@@ -23,6 +23,10 @@ std::vector<int16_t> decodeSpuAdpcm(std::span<const uint8_t> frames);
 // the block's PC TOC key: extra << 16 | arg
 uint32_t ps1SfxBankKey(std::span<const uint8_t> block);
 
+// Native disc bank: preserve every tone slot and decode every active sample directly from its SPU address.
+// No PC bank is consulted. Invalid active sample references are errors.
+std::vector<uint8_t> ps1SfxBank(std::span<const uint8_t> block);
+
 // The PC-layout bank of a PS1 sound bank block (the whole block, header included), given the PC's bank for the same
 // slot: an entry takes the PS1 record's sample + 1, volume and frequency (u16(44100 * 2^((key - note + fine / 128) /
 // 12))) except where the PC's entry is silent or disabled; a sample the block has no complete copy of is the PC's.

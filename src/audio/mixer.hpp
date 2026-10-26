@@ -73,9 +73,9 @@ public:
     // language pack voice dirs, searched in order before the game's snd/ (same file names; ODXA or MP3 tracks):
     // e.g. <pack>/snd_restored (AI-restored voices), <pack>/snd. Empty = the game's snd/ only
     void setVoiceDirs(std::vector<std::filesystem::path> dirs);
-    // a pack without a folder (the PS1 disc, engine/lang_pack): asked for a track before the voice dirs (empty: none)
+    // A pack without a folder (the PS1 disc). afterDirs keeps optional translated/restored voices first.
     using VoiceSource = std::function<std::vector<uint8_t>(const std::string& file, uint32_t track)>;
-    void setVoiceSource(VoiceSource source);
+    void setVoiceSource(VoiceSource source, bool afterDirs = false);
 
     // the game's DirectSound volume / pan mapping as linear gains (exposed for tests / logs)
     static float volumeGain(int32_t v);
@@ -98,6 +98,7 @@ private:
     std::filesystem::path sndDir_;
     std::vector<std::filesystem::path> voiceDirs_;
     VoiceSource voiceSource_;
+    bool voiceSourceAfterDirs_ = false;
     SDL_AudioStream* stream_ = nullptr;
     std::mutex lock_;
     std::map<uint32_t, Buffer> buffers_;

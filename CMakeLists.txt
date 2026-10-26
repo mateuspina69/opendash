@@ -177,6 +177,16 @@ target_link_libraries(test_disc PRIVATE odengine)
 target_include_directories(test_disc PRIVATE tests)
 add_test(NAME test_disc COMMAND test_disc ${OPENDASH_DISC_CUE})
 
+add_executable(test_game_files tests/test_game_files.cpp src/app/game_files.cpp)
+target_link_libraries(test_game_files PRIVATE odengine SDL3::SDL3)
+target_include_directories(test_game_files PRIVATE tests)
+add_test(NAME test_game_files COMMAND test_game_files ${OPENDASH_DISC_CUE})
+
+add_executable(test_config tests/test_config.cpp)
+target_link_libraries(test_config PRIVATE odengine)
+target_include_directories(test_config PRIVATE tests)
+add_test(NAME test_config COMMAND test_config)
+
 add_executable(test_ps1_files tests/test_ps1_files.cpp)
 target_link_libraries(test_ps1_files PRIVATE odengine)
 target_include_directories(test_ps1_files PRIVATE tests)
@@ -195,6 +205,30 @@ target_link_libraries(test_ps1_source PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,odco
     "$<LINK_LIBRARY:WHOLE_ARCHIVE,odgame>" "$<LINK_LIBRARY:WHOLE_ARCHIVE,odengine>")
 target_include_directories(test_ps1_source PRIVATE tests)
 add_test(NAME test_ps1_source COMMAND test_ps1_source ${OPENDASH_EXE} ${OPENDASH_DAT_DIR} ${OPENDASH_DISC_CUE})
+
+add_executable(test_ps1_voices tests/test_ps1_voices.cpp)
+target_link_libraries(test_ps1_voices PRIVATE odengine)
+target_include_directories(test_ps1_voices PRIVATE tests)
+add_test(NAME test_ps1_voices COMMAND test_ps1_voices ${OPENDASH_EXE} ${OPENDASH_DAT_DIR} ${OPENDASH_DISC_CUE})
+
+add_executable(test_ps1_music tests/test_ps1_music.cpp)
+target_link_libraries(test_ps1_music PRIVATE odengine)
+target_include_directories(test_ps1_music PRIVATE tests)
+add_test(NAME test_ps1_music COMMAND test_ps1_music ${OPENDASH_DISC_CUE})
+
+add_executable(test_ps1_mixer tests/test_ps1_mixer.cpp src/audio/mixer.cpp src/audio/music_loops.cpp)
+target_link_libraries(test_ps1_mixer PRIVATE odgame SDL3::SDL3)
+target_include_directories(test_ps1_mixer PRIVATE tests)
+add_test(NAME test_ps1_mixer COMMAND test_ps1_mixer ${OPENDASH_DISC_CUE})
+
+add_executable(test_ps1_sfx tests/test_ps1_sfx.cpp)
+target_link_libraries(test_ps1_sfx PRIVATE odengine)
+target_include_directories(test_ps1_sfx PRIVATE tests)
+add_test(NAME test_ps1_sfx COMMAND test_ps1_sfx ${OPENDASH_DISC_CUE})
+
+add_test(NAME test_ps1_gameplay COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_ps1_gameplay.py
+    --exe $<TARGET_FILE:opendash> --disc ${OPENDASH_DISC_CUE} --work ${CMAKE_BINARY_DIR}/ps1-gameplay)
+set_tests_properties(test_ps1_gameplay PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 240)
 
 add_executable(test_lang_pack tests/test_lang_pack.cpp)
 target_link_libraries(test_lang_pack PRIVATE odengine)

@@ -23,6 +23,7 @@
 
 #include "app/ghost_view.hpp"
 #include "engine/config.hpp"
+#include "engine/disc_image.hpp"
 #include "game/ghost.hpp"
 #include "game/ghost_buffer.hpp"
 #include "game/player/player_snapshot.hpp"
@@ -67,7 +68,8 @@ public:
     // starts the session (mode != Off) and the mirror; a session that cannot start (the port in use, an address that
     // does not resolve, unreadable game files) is logged and shown in the F1 panel (error()), and netplay stays off
     void start(const NetSettings& settings, const std::optional<MirrorSettings>& mirror,
-               const std::filesystem::path& datDir, const std::filesystem::path& exe);
+               const std::filesystem::path& datDir, const std::filesystem::path& exe,
+               const od::DiscImage* disc = nullptr);
     void stop(); // Bye to the others (shutdown)
 
     // after every logic tick (between ticks): the local player's state; reads the game state only

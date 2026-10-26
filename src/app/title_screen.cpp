@@ -126,6 +126,7 @@ void TitleScreen::applyDat(const std::string& name) {
         dropTextures();
     } catch (const std::exception& e) {
         SDL_Log("title: %s: %s", name.c_str(), e.what());
+        error = e.what();
     }
 }
 
@@ -144,8 +145,9 @@ void TitleScreen::processDats() {
             int mp3 = 0;
             for (const od::FilePart& sg : f.parts) {
                 const std::span<const uint8_t> d(sg.bytes);
-                if (sg.kind == od::FilePart::Kind::Mp3Music) od::port::loadMp3Slot(d, uint32_t(mp3++), sg.arg);
-                else if (sg.kind == od::FilePart::Kind::PcMessages)
+                if (sg.kind == od::FilePart::Kind::Mp3Music || sg.kind == od::FilePart::Kind::Ps1Music)
+                    od::port::loadMp3Slot(d, uint32_t(mp3++), sg.arg);
+                else if (sg.kind == od::FilePart::Kind::PcMessages || sg.kind == od::FilePart::Kind::Ps1Messages)
                     od::loadedFiles().map(od::port::kMessageBank, d.first(std::min<size_t>(d.size(), 0x4000)));
             }
             mv.applyDat(name, std::move(f));
@@ -153,6 +155,7 @@ void TitleScreen::processDats() {
             SDL_Log("title: dat load %s", name.c_str());
         } catch (const std::exception& e) {
             SDL_Log("title: dat load %s failed: %s", name.c_str(), e.what());
+            error = e.what();
         }
     }
     queue.clear();

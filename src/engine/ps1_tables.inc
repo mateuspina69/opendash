@@ -113,6 +113,7 @@
 {TableId::RollFieldRecord, 0x0, "DAT/ST0DT.BIN", 0x800f0fd8u},
 {TableId::RollFollowerPoint, 0x0, "DAT/ST08T.BIN", 0x800f4fe8u},
 {TableId::RollShedPoint, 0x0, "DAT/ST08T.BIN", 0x800f4ffcu},
+{TableId::RollSt09FollowerPoint, 0x0, "DAT/ST09T.BIN", 0x800f2cf4u},
 {TableId::RollFieldPoint, 0x0, "DAT/ST0DT.BIN", 0x800f0fe4u},
 {TableId::RollFollowerCollisionBox, 0x0, "DAT/ST00T.BIN", 0x800ef3b8u},
 {TableId::RollFollowerTalkBox, 0x0, "DAT/ST00T.BIN", 0x800ef3c4u},
@@ -1714,3 +1715,22 @@
 {TableId::RoomParams, 0x5a00, "DAT/ST5AT.BIN", 0x800eab28u},
 {TableId::RoomParams, 0x5b00, "DAT/ST5BT.BIN", 0x800eb72cu},
 {TableId::RoomParams, 0x5c00, "DAT/ST5CT.BIN", 0x800f9598u},
+
+{TableId::TextLogicHandlers, 0x0, "SLUS_011.40", 0x8006b630u},
+
+{TableId::TextLayoutHandlers, 0x0, "SLUS_011.40", 0x8006b760u},
+
+{TableId::OpeningCastCrewVariants, 0x0, "DAT/ST3901T.BIN", 0x800edb74u},
+
+{TableId::ArrivalDescentCameraScript, 0x0, "DAT/ST08T.BIN", 0x800f5318u},
+
+{TableId::ArrivalDescentSteps, 0x0, "DAT/ST08T.BIN", 0x800f5344u},
+
+// ST0A's cast wrapper (800ea440), confirmed by Kuna's MIPS decompilation.
+{TableId::TownStoryCastJunkShopVariants, 0x0, "DAT/ST0AT.BIN", 0x800efda8u},
+{TableId::AttractSt02RoomHandlers, 0x0, "DAT/ST02T.BIN", 0x800f0f04u},
+{TableId::FlutterCabinNpcVariants, 0x0, "DAT/ST04T.BIN", 0x800f2594u},
+{TableId::St02AttractCastPropBox, 0x0, "DAT/ST02T.BIN", 0x800f129cu},
+{TableId::St02AttractCastPropVariants, 0x0, "DAT/ST02T.BIN", 0x800f12a8u},
+
+{TableId::StatusScreenHighlightClutRect, 0x0, "SLUS_011.40", 0x80078c64u},

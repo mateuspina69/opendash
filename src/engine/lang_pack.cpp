@@ -13,6 +13,7 @@
 #include "engine/ps1_container.hpp"
 #include "engine/ps1_exe_banks.hpp"
 #include "engine/ps1_sfx.hpp"
+#include "engine/ps1_xa.hpp"
 #include "engine/vram.hpp"
 
 namespace od::lang {
@@ -128,15 +129,15 @@ public:
         for (char& c : stem) c = char(std::toupper(uint8_t(c)));
         const DiscFile* xa = disc_->find("XA/" + std::string(std::isdigit(uint8_t(stem[0])) ? "ST" : "") + stem + ".XA");
         if (!xa) return {};
-        const std::vector<Clip>* clips;
+        const std::vector<Ps1XaClip>* clips;
         {
             std::lock_guard lock(clipLock_);
             auto it = clips_.find(xa->path);
-            if (it == clips_.end()) it = clips_.emplace(xa->path, splitClips(*xa)).first;
+            if (it == clips_.end()) it = clips_.emplace(xa->path, ps1XaClips(*disc_, *xa)).first;
             clips = &it->second;
         }
         if (track >= clips->size()) return {};
-        const Clip& c = (*clips)[track];
+        const Ps1XaClip& c = (*clips)[track];
         // "ODXA" u8 coding, 3 pad, u32 sectors, then each sector's 18 sound groups
         std::vector<uint8_t> out = {'O', 'D', 'X', 'A', c.coding, 0, 0, 0};
         for (int k = 0; k < 4; ++k) out.push_back(uint8_t(c.sectors.size() >> (8 * k)));
@@ -155,42 +156,16 @@ public:
         const DiscFile* f = disc_->find("DAT/" + stem + ".BIN");
         if (!f) f = disc_->find("COMMON/" + stem + ".BIN");
         if (!f) return {};
-        for (const FilePart& p : ps1GameFile(datName, disc_->file(f->path)).parts)
-            if (p.kind == FilePart::Kind::Ps1Block && p.arg == kPs1SoundBank && ps1SfxBankKey(p.bytes) == (extra << 16 | arg))
-                return ps1SfxBank(p.bytes, pcBank);
+        const auto bytes = disc_->file(f->path);
+        for (const Ps1Block& block : ps1Blocks(bytes)) {
+            if (block.type != kPs1SoundBank) continue;
+            const auto whole = std::span(bytes).subspan(block.offset, size_t(block.sectors) * kPs1Sector);
+            if (ps1SfxBankKey(whole) == (extra << 16 | arg)) return ps1SfxBank(whole, pcBank);
+        }
         return {};
     }
 
 private:
-    struct Clip {
-        uint8_t channel = 0, coding = 0;
-        std::vector<uint32_t> sectors; // LBAs
-    };
-    // the audio sectors (submode bit 2) per channel (subheader +1), a clip ending at a sector with the EOF bit (0x80)
-    std::vector<Clip> splitClips(const DiscFile& f) const {
-        std::map<uint8_t, Clip> open;
-        std::vector<std::pair<uint32_t, Clip>> done; // by first sector
-        for (uint32_t i = 0; i < f.sectors(); ++i) {
-            const RawSector s = disc_->rawSector(f.lba + i);
-            const uint8_t ch = s[17], sm = s[18], ci = s[19];
-            if (!(sm & 0x04)) continue;
-            auto it = open.find(ch);
-            if (it == open.end()) it = open.emplace(ch, Clip{ch, ci, {}}).first;
-            it->second.sectors.push_back(f.lba + i);
-            if (sm & 0x80) {
-                done.emplace_back(it->second.sectors.front(), std::move(it->second));
-                open.erase(it);
-            }
-        }
-        for (auto& [ch, c] : open) done.emplace_back(c.sectors.front(), std::move(c));
-        std::sort(done.begin(), done.end(), [](const auto& a, const auto& b) {
-            return a.second.channel != b.second.channel ? a.second.channel < b.second.channel : a.first < b.first;
-        });
-        std::vector<Clip> out;
-        for (auto& [first, c] : done) out.push_back(std::move(c));
-        return out;
-    }
-
     // "msg/ST09.bin" -> "DAT/ST09.BIN" ("" for any other name)
     static std::string messageFile(const std::string& name) {
         if (name.rfind("msg/", 0) != 0 || name.size() < 9 || name.compare(name.size() - 4, 4, ".bin") != 0) return {};
@@ -217,7 +192,7 @@ private:
     uint32_t textAddr_ = 0;
     std::map<std::string, std::vector<uint8_t>> files_;
     mutable std::mutex clipLock_;
-    mutable std::map<std::string, std::vector<Clip>> clips_; // per XA file, made on its first voice
+    mutable std::map<std::string, std::vector<Ps1XaClip>> clips_; // per XA file, made on its first voice
 };
 
 } // namespace

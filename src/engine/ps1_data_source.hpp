@@ -9,7 +9,8 @@
 //     its own slots translated the same way when it is followed.
 // Tables the PS1 keeps in another form, made from the disc: the DAT names of the load indices (the file table of
 // SLUS_011.40, its entries named by the ISO directory), the stages' geometry / texture files (ST%02X / ST%02XT), the
-// banks the PC keeps in dash2.exe (engine/ps1_exe_banks).
+// banks the PC keeps in dash2.exe (engine/ps1_exe_banks), the voice filenames and eight-byte XA descriptors as the
+// engine's four-byte {file, track} records (ps1_voice_tables.inc, engine/ps1_xa), including the five built-in voices.
 // The tables the game reads by address (ps1_labels.inc: scripts, spawn records, cameras ...): at their PS1 address, the
 // pointer slots in their extent translated the same way on every read that meets them.
 // The room parameters: their PS1 records, 0x24 bytes (the PS1's colour; the PC's D3D fog range past them reads as
@@ -26,6 +27,7 @@
 
 #include "engine/data_source.hpp"
 #include "engine/disc_image.hpp"
+#include "engine/ps1_xa.hpp"
 
 namespace od {
 
@@ -107,7 +109,15 @@ private:
         // one read is in the file loaded last (the overlay in PS1 RAM), the first before any of them is loaded
         std::vector<std::pair<std::string, uint32_t>> copies;
     };
+    size_t voicePart(TableKey key, const Located& table) const;
     std::map<TableKey, Located> tables_;
+    // Embedded native pointers to message banks must resolve to the same bank handles as the named tables.
+    std::map<std::pair<std::string, uint32_t>, TableId> bankAliases_;
+    std::vector<std::string> voiceFiles_; // logical voice file -> ISO XA path, from SLUS's load-index table
+    std::map<TableKey, uint32_t> voiceBytes_; // converted four-byte record extent
+    std::map<TableKey, uint32_t> voiceCounts_; // complete PS1 descriptor list lengths (general labels may overrun)
+    mutable std::map<std::pair<std::string, uint32_t>, size_t> voiceParts_;
+    mutable std::map<std::string, std::vector<Ps1XaClip>> voiceClips_;
     // the file and address of a disc table: its copy in the file loaded last
     std::pair<std::string, uint32_t> placeOf(const Located& t) const;
     mutable std::map<std::string, uint64_t> loadedAt_; // a disc file: when gameFile last loaded it

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <set>
 
@@ -11,10 +12,16 @@
 #include "engine/game_file.hpp"
 #include "engine/ps1_container.hpp"
 #include "engine/ps1_exe_banks.hpp"
+#include "engine/ps1_menu_file.hpp"
 
 namespace od {
 
 namespace {
+
+void tracePointer(uint32_t pointer, uint32_t bytes) {
+    if (pointer == 0 || !std::getenv("OPENDASH_TRACE_DATA")) return;
+    std::fprintf(stderr, "PS1 unresolved pointer %08x, %u bytes\n", pointer, bytes);
+}
 
 struct Ps1Table {
     TableId id;
@@ -73,6 +80,18 @@ struct Ps1StateTable {
 // 1 SLUS_011.40, 2 COMMON/DEMO.BIN ...: the numbering the PS1's data uses)
 constexpr uint32_t kFileTable = 0x80068484;
 constexpr size_t kLoadIndices = 0x200;
+constexpr uint32_t kVoiceLoadIndices = 0x80069608; // twenty u16 load indices, zero: unused logical voice file
+constexpr uint32_t kBuiltInVoices = 0x80069638; // five eight-byte descriptors, XA/COM_18.XA
+constexpr uint32_t kBuiltInVoicePrefix = 0x7f00 * 4; // voiceClipPlay indexes with the masked built-in id
+struct VoiceTable {
+    TableId id;
+    uint32_t index;
+    const char* file;
+    uint32_t address, count;
+};
+constexpr VoiceTable kVoiceTables[] = {
+#include "engine/ps1_voice_tables.inc"
+};
 
 std::string upper(std::string s) {
     for (char& c : s) c = char(std::toupper(uint8_t(c)));
@@ -123,6 +142,8 @@ Ps1DataSource::Ps1DataSource(std::shared_ptr<const DiscImage> disc) : disc_(std:
     }
     for (const Ps1LabelTable& t : kPs1LabelTables) {
         const Ps1Label& l = kPs1Labels[t.label];
+        if (t.id == TableId::StageVoices || t.id == TableId::StageSecondVoices)
+            voiceBytes_[{t.id, t.index}] = l.bytes;
         if (t.stride == 0) {
             const TableKey key{t.id, t.index};
             if (const auto it = tables_.find(key); it != tables_.end() && !it->second.made && it->second.file != l.file)
@@ -133,6 +154,15 @@ Ps1DataSource::Ps1DataSource(std::shared_ptr<const DiscImage> disc) : disc_(std:
         for (uint32_t room = 0; room * t.stride < l.bytes; ++room)
             tables_.emplace(TableKey{t.id, roomIndex(int(t.index), int(room))},
                             Located{size_t(-1), l.file, l.address + room * t.stride, false});
+    }
+    tables_[{TableId::AudioBuiltInVoices, 0}] = {slus_, "SLUS_011.40", kBuiltInVoices, false};
+    voiceBytes_[{TableId::AudioBuiltInVoices, 0}] = 5 * 4;
+    voiceCounts_[{TableId::AudioBuiltInVoices, 0}] = 5;
+    for (const VoiceTable& v : kVoiceTables) {
+        tables_.try_emplace(TableKey{v.id, v.index}, Located{size_t(-1), v.file, v.address, false});
+        voiceCounts_[{v.id, v.index}] = v.count;
+        auto& bytes = voiceBytes_[{v.id, v.index}];
+        bytes = std::max(bytes, v.count * 4);
     }
     makeTables();
 }
@@ -173,6 +203,14 @@ void Ps1DataSource::makeTables() {
             indexOf.emplace(names[i], uint16_t(i));
         }
     }
+    // The disc packs these four independent page containers into one physical file. Give each page its own
+    // otherwise unused logical id, so native code can request the page by name without PC load-index constants.
+    constexpr const char* menuFiles[] = {"SUBSCN01.DAT", "SUBSCN02.DAT", "SUBSCN03.DAT", "SUBSCN06.DAT"};
+    for (size_t i = 0; i < std::size(menuFiles); ++i) {
+        const auto id = uint16_t(kLoadIndices - std::size(menuFiles) + i);
+        names[id] = menuFiles[i];
+        indexOf.emplace(menuFiles[i], id);
+    }
     std::vector<uint8_t> strings;
     std::vector<uint32_t> at(kLoadIndices, 0);
     for (size_t i = 0; i < kLoadIndices; ++i) {
@@ -186,6 +224,35 @@ void Ps1DataSource::makeTables() {
     for (size_t i = 0; i < kLoadIndices; ++i)
         if (at[i]) put32(nameTable, 4 * i, parts_[stringPart].vbase + at[i] - 1);
     made({TableId::DatFileNames, 0}, "DAT name table", std::move(nameTable));
+    // The voice file numbering is separate from DAT load indices. Build its names from the disc's own load
+    // table and ISO paths, preserving the holes in the logical numbering.
+    voiceFiles_.resize(20);
+    std::vector<uint8_t> voiceStrings, voiceNames(0x100 * 4, 0);
+    std::vector<uint32_t> voiceOffsets(voiceFiles_.size(), 0);
+    for (size_t i = 0; i < voiceFiles_.size(); ++i) {
+        const Part& text = parts_[slus_]; // addPart below may reallocate parts_
+        const size_t o = size_t(kVoiceLoadIndices - text.base) + i * 2;
+        if (o + 2 > text.data->size()) throw DataSourceError("data source (PS1): voice load table past SLUS");
+        const uint16_t load = rd16(text.data->data() + o);
+        if (!load) continue;
+        const size_t entry = size_t(kFileTable - text.base) + size_t(load) * 12;
+        if (entry + 12 > text.data->size()) throw DataSourceError("data source (PS1): voice file index past SLUS");
+        const auto file = byLba.find(rd32(text.data->data() + entry));
+        if (file == byLba.end() || file->second->path.rfind("XA/", 0) != 0)
+            throw DataSourceError("data source (PS1): voice load index has no XA file");
+        voiceFiles_[i] = file->second->path;
+        std::string stem = voiceFiles_[i].substr(3);
+        stem.resize(stem.rfind('.'));
+        if (stem.rfind("ST", 0) == 0) stem.erase(0, 2);
+        const std::string name = "XA" + stem + ".DAT";
+        voiceOffsets[i] = uint32_t(voiceStrings.size()) + 1;
+        voiceStrings.insert(voiceStrings.end(), name.begin(), name.end());
+        voiceStrings.push_back(0);
+    }
+    const size_t voiceStringPart = addPart("<voice file names>", 0, std::move(voiceStrings));
+    for (size_t i = 0; i < voiceOffsets.size(); ++i)
+        if (voiceOffsets[i]) put32(voiceNames, i * 4, parts_[voiceStringPart].vbase + voiceOffsets[i] - 1);
+    made({TableId::VoiceFileNames, 0}, "voice name table", std::move(voiceNames));
     // the stages' geometry / texture files: ST%02X / ST%02XT
     for (const auto& [id, suffix] : {std::pair{TableId::StageGeometryFiles, ""}, std::pair{TableId::StageTextureFiles, "T"}}) {
         std::vector<uint8_t> ids(2 * size_t(kStageCount), 0);
@@ -200,11 +267,26 @@ void Ps1DataSource::makeTables() {
         made({id, 0}, suffix[0] ? "stage texture files" : "stage geometry files", std::move(ids));
     }
     // the banks the PC keeps in dash2.exe: their PS1 copies
-    for (const Ps1ExeBank& b : ps1ExeBanks()) made({b.table, 0}, b.name, ps1ExeBank(*disc_, b));
+    for (const Ps1ExeBank& b : ps1ExeBanks()) {
+        made({b.table, 0}, b.name, ps1ExeBank(*disc_, b));
+        if (std::string(b.file) == "SLUS_011.40") {
+            bankAliases_[{b.file, parts_[slus_].base + b.offset - 0x800}] = b.table;
+            continue;
+        }
+        const auto file = disc_->file(b.file);
+        const size_t start = std::string(b.file) == "COMMON/SUBSCN.BIN" ? kPs1MenuCodeOffset : 0;
+        if (start > file.size()) throw DataSourceError("PS1 menu: truncated code container");
+        for (const Ps1Block& block : ps1Blocks(std::span(file).subspan(start))) {
+            const size_t payload = start + block.offset + kPs1BlockHeader;
+            if (block.type == kPs1Code && b.offset >= payload && b.offset - payload < block.size)
+                bankAliases_[{b.file, block.header[3] + uint32_t(b.offset - payload)}] = b.table;
+        }
+    }
     made({TableId::MenuBankShopPriceStrings, 0}, "shop prices", ps1ShopPrices(*disc_));
 }
 
 std::string Ps1DataSource::discPath(const std::string& name) const {
+    if (isPs1MenuFile(name)) return disc_->find("COMMON/SUBSCN.BIN") ? "COMMON/SUBSCN.BIN" : "";
     std::string stem = upper(name);
     if (const size_t dot = stem.rfind('.'); dot != std::string::npos) stem.resize(dot);
     for (const char* dir : {"DAT/", "COMMON/"})
@@ -221,6 +303,7 @@ GameFile Ps1DataSource::gameFile(const std::string& name) const {
         std::lock_guard lock(lock_);
         loadedAt_[path] = ++loads_;
     }
+    if (isPs1MenuFile(name)) return ps1MenuFile(*disc_, name);
     return ps1GameFile(name, disc_->file(path));
 }
 
@@ -229,8 +312,11 @@ const std::vector<size_t>& Ps1DataSource::partsOf(const std::string& file) const
     if (const auto it = partsByFile_.find(file); it != partsByFile_.end()) return it->second;
     std::vector<size_t> out;
     const auto bytes = disc_->file(file);
-    for (const Ps1Block& b : ps1Blocks(bytes))
-        if (b.type == kPs1Code) out.push_back(addPart(file, b.header[3], ps1Payload(bytes, b)));
+    const size_t start = file == "COMMON/SUBSCN.BIN" ? kPs1MenuCodeOffset : 0;
+    if (start > bytes.size()) throw DataSourceError("PS1 menu: truncated code container");
+    const auto container = std::span(bytes).subspan(start);
+    for (const Ps1Block& b : ps1Blocks(container))
+        if (b.type == kPs1Code) out.push_back(addPart(file, b.header[3], ps1Payload(container, b)));
     return partsByFile_[file] = std::move(out);
 }
 
@@ -240,9 +326,14 @@ std::optional<size_t> Ps1DataSource::partFor(size_t near, uint32_t address, uint
         return address >= part.base && size_t(address - part.base) + n <= part.data->size();
     };
     if (holds(near)) return near;
-    for (const size_t p : partsOf(parts_[near].file))
+    const std::string nearFile = parts_[near].file;
+    for (const size_t p : partsOf(nearFile))
         if (p != near && holds(p)) return p;
     if (holds(slus_)) return slus_;
+    // SLUS's cursor tree points into the shared sub-screen overlay, loaded separately from the page images.
+    if (address >= 0x801d6800u && address < 0x801e4000u)
+        for (const size_t p : partsOf("COMMON/SUBSCN.BIN"))
+            if (holds(p)) return p;
     return std::nullopt;
 }
 
@@ -254,7 +345,8 @@ uint32_t Ps1DataSource::virtualOf(size_t part, uint32_t address, std::optional<R
 }
 
 TableReader Ps1DataSource::regionBytes(size_t part, uint32_t address, uint32_t n, std::optional<Region> region) const {
-    const Part& pt = parts_[part];
+    // Following a shared-menu pointer can lazily append a part; keep this block stable across vector growth.
+    const Part pt = parts_[part];
     const size_t off = address - pt.base;
     const size_t take = off < pt.data->size() ? std::min<size_t>(n, pt.data->size() - off) : 0;
     std::vector<uint8_t> b(pt.data->begin() + std::ptrdiff_t(off), pt.data->begin() + std::ptrdiff_t(off + take));
@@ -262,7 +354,15 @@ TableReader Ps1DataSource::regionBytes(size_t part, uint32_t address, uint32_t n
     auto dataPointer = [&](size_t o, std::optional<Region> to) {
         const uint32_t p = rd32(raw + o);
         if (p == 0) return;
+        for (const std::string& file : {pt.file, std::string("SLUS_011.40"), std::string("COMMON/SUBSCN.BIN")}) {
+            const auto bank = bankAliases_.find({file, p});
+            if (bank != bankAliases_.end()) {
+                put32(b, o, stateAddress({bank->second, 0}));
+                return;
+            }
+        }
         const auto at = partFor(part, p, 1);
+        if (!at) tracePointer(p, 1);
         put32(b, o, at ? virtualOf(*at, p, to) : 0);
     };
     // the slots of the tables the game reads by address whose extent [address, address + take) meets
@@ -299,7 +399,7 @@ TableReader Ps1DataSource::regionBytes(size_t part, uint32_t address, uint32_t n
         // the function pointers: this source's routine values
         if (const auto it = routineSlots_.find({region->key, region->region}); it != routineSlots_.end())
             for (const auto& [o, routine] : it->second)
-                if (o + 4 <= b.size()) put32(b, o, kRoutineTag | static_cast<uint16_t>(routine));
+                if (o + 4 <= b.size() && rd32(raw + o) != 0) put32(b, o, kRoutineTag | static_cast<uint16_t>(routine));
         // the data pointers: this source's addresses of the PS1 data they point at (null stays null)
         if (const auto it = dataSlots_.find({region->key, region->region}); it != dataSlots_.end())
             for (const auto& [o, child] : it->second)
@@ -310,11 +410,48 @@ TableReader Ps1DataSource::regionBytes(size_t part, uint32_t address, uint32_t n
 
 bool Ps1DataSource::hasTable(TableKey key) const { return tables_.count(key) != 0; }
 
+size_t Ps1DataSource::voicePart(TableKey key, const Located& table) const {
+    std::lock_guard lock(lock_);
+    const auto place = placeOf(table);
+    if (const auto it = voiceParts_.find(place); it != voiceParts_.end()) return it->second;
+    const uint32_t count = voiceCounts_.at(key);
+    const uint32_t prefix = key.id == TableId::AudioBuiltInVoices ? kBuiltInVoicePrefix : 0;
+    std::vector<uint8_t> converted(prefix + voiceBytes_.at(key), 0);
+    for (const size_t p : partsOf(place.first)) {
+        const Part& part = parts_[p];
+        if (place.second < part.base || place.second - part.base >= part.data->size()) continue;
+        const auto block = part.data; // indexing clips/addPart must not invalidate a reference into parts_
+        const size_t offset = place.second - part.base;
+        for (uint32_t i = 0; i < count; ++i) {
+            const size_t at = offset + size_t(i) * 8;
+            if (at + 8 > block->size()) throw DataSourceError("data source (PS1): voice descriptors past their block");
+            const auto descriptor = std::span<const uint8_t, 8>(block->data() + at, 8);
+            const uint8_t file = descriptor[0];
+            if (file >= voiceFiles_.size() || voiceFiles_[file].empty())
+                throw DataSourceError("data source (PS1): " + describe(key) + " descriptor " + std::to_string(i) +
+                                      " names absent XA file " + std::to_string(file));
+            const DiscFile& xa = *disc_->find(voiceFiles_[file]);
+            auto clips = voiceClips_.find(xa.path);
+            if (clips == voiceClips_.end()) clips = voiceClips_.emplace(xa.path, ps1XaClips(*disc_, xa)).first;
+            const uint16_t track = ps1XaTrack(descriptor, xa.lba, clips->second);
+            const size_t to = prefix + size_t(i) * 4;
+            converted[to] = file;
+            converted[to + 2] = uint8_t(track);
+            converted[to + 3] = uint8_t(track >> 8);
+        }
+        const size_t made = addPart("<voice descriptors " + place.first + ">", 0, std::move(converted));
+        voiceParts_[place] = made;
+        return made;
+    }
+    throw DataSourceError("data source (PS1): voice descriptor list is in no block of " + place.first);
+}
+
 TableReader Ps1DataSource::table(TableKey key, uint32_t bytes) const {
     const auto it = tables_.find(key);
     if (it == tables_.end()) throw DataSourceError("data source (PS1): the disc has no table " + describe(key));
     const Located& t = it->second;
     if (t.state) return TableReader(*this, std::vector<uint8_t>(bytes, 0)); // the state's initial bytes
+    if (voiceBytes_.count(key)) return regionBytes(voicePart(key, t), 0, bytes, std::nullopt);
     if (t.made) { // a made table: as many bytes as asked (zeros past its own)
         TableReader r = regionBytes(t.part, 0, bytes, std::nullopt);
         if (r.size() >= bytes) return r;
@@ -343,6 +480,7 @@ uint32_t Ps1DataSource::stateAddress(TableKey key) const {
     if (it == tables_.end()) throw DataSourceError("data source (PS1): the disc has no table " + describe(key));
     const Located& t = it->second;
     if (t.state) return t.state;
+    if (voiceBytes_.count(key)) return parts_[voicePart(key, t)].vbase;
     if (t.made) return parts_[t.part].vbase;
     const auto [file, address] = placeOf(t);
     for (const size_t p : partsOf(file)) {
@@ -369,7 +507,10 @@ std::pair<std::string, uint32_t> Ps1DataSource::placeOf(const Located& t) const 
 TableReader Ps1DataSource::pointee(uint32_t pointer, uint32_t n) const {
     // the program's state: its initial bytes (zero), as the PC reads its .bss
     if (pointer >= kEngineState[0] && pointer < kEngineState[1]) return TableReader(*this, std::vector<uint8_t>(n, 0));
-    if (pointer < kVirtualBase || pointer >= kRoutineTag) return TableReader(*this, {});
+    if (pointer < kVirtualBase || pointer >= kRoutineTag) {
+        tracePointer(pointer, n);
+        return TableReader(*this, {});
+    }
     size_t part;
     std::optional<Region> region;
     {
@@ -408,6 +549,8 @@ std::vector<Ps1DataSource::AddressTable> Ps1DataSource::addressTables() {
         for (uint32_t room = 0; room * t.stride < kPs1Labels[t.label].bytes; ++room)
             out.push_back({{t.id, roomIndex(int(t.index), int(room))}, t.stride, t.own});
     }
+    for (const VoiceTable& v : kVoiceTables)
+        if (seen.insert({v.id, v.index}).second) out.push_back({{v.id, v.index}, v.count * 4, true});
     return out;
 }
 

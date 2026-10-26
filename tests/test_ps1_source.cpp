@@ -3,6 +3,7 @@
 // every pointee's bytes equal but at the pointer words (the PS1 source's routine values / data handles), the same
 // routines resolved in the same order, the same pointees followed (argv: dash2.exe, the PC dat/, the disc's cue).
 #include <cstdio>
+#include <algorithm>
 #include <functional>
 #include <memory>
 #include <set>
@@ -94,7 +95,8 @@ bool same(const std::vector<Event>& pc, const std::vector<Event>& ps, std::strin
 // a load past it reads the PS1's own neighbours, as the PS1 does)
 bool madeTable(od::TableId id) {
     if (id == od::TableId::DatFileNames || id == od::TableId::StageGeometryFiles || id == od::TableId::RoomParams ||
-        id == od::TableId::StageTextureFiles || id == od::TableId::MenuBankShopPriceStrings)
+        id == od::TableId::StageTextureFiles || id == od::TableId::MenuBankShopPriceStrings ||
+        id == od::TableId::VoiceFileNames || id == od::TableId::AudioBuiltInVoices)
         return true;
     for (const od::Ps1ExeBank& b : od::ps1ExeBanks())
         if (b.table == id) return true;
@@ -110,6 +112,104 @@ int main(int argc, char** argv) {
     od::content::registerAll();
     const od::PcDataSource pc(argv[2], argv[1]);
     const od::Ps1DataSource ps1(std::make_shared<const od::DiscImage>(argv[3]));
+    for (const od::TableId id : {od::TableId::TextLogicHandlers, od::TableId::TextLayoutHandlers,
+                               od::TableId::OpeningScriptSteps, od::TableId::OpeningCastCrewVariants,
+                               od::TableId::ArrivalDescentSteps, od::TableId::ArrivalDescentCameraScript,
+                               od::TableId::StatusScreenHighlightClutRect, od::TableId::StatusScreenClassTables,
+                               od::TableId::OpeningCastCrewTracks, od::TableId::ArrivalCabinSteps,
+                               od::TableId::ArrivalCabinMouth, od::TableId::TownStoryCastJunkShopVariants,
+                               od::TableId::AttractSt02RoomHandlers, od::TableId::StatusControlsCursorTree})
+        CHECK(ps1.hasTable({id, 0}));
+    { // Camera bytecode continues beyond the PC-identical prefix. Its spawn-record operands must still translate.
+        uint32_t at = ps1.stateAddress({od::TableId::OpeningScriptCameraScript, 0});
+        size_t spawns = 0;
+        for (size_t instructions = 0; instructions < 512; ++instructions) {
+            const auto op = ps1.stateData(at, 20);
+            const uint32_t code = op.u32(0) >> 24;
+            if (code == 0xff) break;
+            if (code == 0x40 || code == 0x41) {
+                const uint32_t record = op.u32(4);
+                CHECK(record >= od::Ps1DataSource::kVirtualBase && record < od::Ps1DataSource::kRoutineTag);
+                CHECK(ps1.stateData(record, 20).size() == 20);
+                ++spawns;
+            }
+            const uint32_t size = code >= 0x10 && code <= 0x1a ? 16 :
+                                  code == 0x1b || code == 0x40 || code == 0x41 ? 8 : code == 0x42 ? 20 : 4;
+            at += size;
+        }
+        CHECK(spawns > 0);
+    }
+    for (uint32_t stage : {1u, 2u})
+        CHECK(ps1.hasTable({od::TableId::RoomSpawnList, od::roomIndex(int(stage), 0)}));
+    { // A wrongly shaped pointer array previously dispatched junk-shop actors into texture bytes.
+        const auto classes = ps1.table({od::TableId::StageAnimatedClasses, 0x0a}, 4);
+        const auto handlers = ps1.stateData(classes.u32(0), 8);
+        CHECK(handlers.routine(0).is(od::RoutineId::TownNpcUpdate));
+        CHECK(handlers.routine(4).is(od::RoutineId::JunkShopCastUpdate));
+    }
+    { // Story 0, room 0 of the cabin runs its arrival handler after ST08's landing.
+        const auto stories = ps1.table({od::TableId::RoomScriptHandlers, 4}, 4);
+        const auto rooms = ps1.stateData(stories.u32(0), 12);
+        CHECK(rooms.routine(0).is(od::RoutineId::St04Story0Sub0RoomHandlerA));
+        CHECK(rooms.routine(4).is(od::RoutineId::EmptyRoutine));
+    }
+    { // ST02's later actor types lie past the old eight-byte verified prefix of the class table.
+        const auto a = pc.table({od::TableId::StageAnimatedClasses, 2}, 244);
+        const auto b = ps1.table({od::TableId::StageAnimatedClasses, 2}, 244);
+        size_t found = 0;
+        for (uint32_t o = 0; o < 244; o += 4) {
+            if (!a.u32(o)) continue;
+            CHECK(b.u32(o) >= od::Ps1DataSource::kVirtualBase && b.u32(o) < od::Ps1DataSource::kRoutineTag);
+            if (b.u32(o) < od::Ps1DataSource::kVirtualBase || b.u32(o) >= od::Ps1DataSource::kRoutineTag) continue;
+            const auto pa = pc.stateData(a.u32(o), 4), pb = ps1.stateData(b.u32(o), 4);
+            CHECK(pa.routine(0).id() == pb.routine(0).id());
+            ++found;
+        }
+        CHECK(found >= 3);
+    }
+    { // The shared menu overlay follows four terminated image containers; SLUS's tree links into it.
+        const auto root = ps1.table({od::TableId::StatusControlsCursorTree, 0}, 40);
+        CHECK(root.u32(4) == ps1.stateAddress({od::TableId::MenuBankPanelHelp, 0}));
+        for (uint32_t o : {12u, 20u, 28u, 36u}) {
+            const uint32_t pointer = root.u32(o);
+            CHECK(pointer >= od::Ps1DataSource::kVirtualBase && pointer < od::Ps1DataSource::kRoutineTag);
+            CHECK(ps1.stateData(pointer, 8).size() == 8);
+        }
+        const auto icons = ps1.table({od::TableId::StatusControlsItemIconArts, 0}, 64);
+        const auto expected = pc.table({od::TableId::StatusControlsItemIconArts, 0}, 64);
+        CHECK(std::equal(icons.bytes(0,64).begin(), icons.bytes(0,64).end(), expected.bytes(0,64).begin()));
+    }
+    // Required by ST09's story-0 Roll spawner. The parity loop below deliberately skips absent tables, so it alone
+    // cannot detect a missing mapping that stops an otherwise playable room.
+    CHECK(ps1.hasTable({od::TableId::RollSt09FollowerPoint, 0}));
+    for (const od::TableId id : {od::TableId::FadeDirections, od::TableId::FadeSpeeds,
+                                od::TableId::TownStoryJunkShopEyes, od::TableId::TownStoryJunkShopMouth})
+        CHECK(ps1.hasTable({id, 0}));
+    if (ps1.hasTable({od::TableId::FadeDirections, 0})) {
+        const auto directions = ps1.table({od::TableId::FadeDirections, 0}, 3);
+        CHECK(directions.s8(0) == 1 && directions.s8(2) == -1);
+    }
+    { // Fade speeds must come from the real request table; a readable zero-filled area stalls every fade.
+        const auto a = pc.table({od::TableId::FadeSpeeds, 0}, 12);
+        const auto b = ps1.table({od::TableId::FadeSpeeds, 0}, 12);
+        for (uint32_t o = 0; o < 12; ++o) CHECK(a.u8(o) == b.u8(o));
+    }
+    { // The 41-entry bank on ST05 uses the disc's text encoding and offsets.
+        const auto bank = ps1.table({od::TableId::St05EntryListEntryNames, 0}, 713);
+        CHECK(bank.u16(0) == 41 * 2 && bank.u8(712) == 0xff);
+        for (uint32_t i = 1; i < 41; ++i) CHECK(bank.u16(i * 2) >= bank.u16((i - 1) * 2));
+    }
+    { // Four real paths precede the critter's handler tables; zero-filled RAM is not a path table.
+        const auto a = pc.table({od::TableId::LeapingCritterPaths, 0}, 16);
+        const auto b = ps1.table({od::TableId::LeapingCritterPaths, 0}, 16);
+        for (uint32_t i = 0; i < 4; ++i) {
+            CHECK(b.u32(i * 4) != 0);
+            if (b.u32(i * 4) == 0) continue;
+            const uint32_t bytes = i < 2 ? 16 : 12;
+            const auto pa = pc.stateData(a.u32(i * 4), bytes), pb = ps1.stateData(b.u32(i * 4), bytes);
+            for (uint32_t o = 0; o < bytes; ++o) CHECK(pa.u8(o) == pb.u8(o));
+        }
+    }
     size_t tables = 0, equal = 0;
     std::set<od::TableKey> done;
     for (const od::TableUse& u : od::tableUses()) {
@@ -145,6 +245,12 @@ int main(int argc, char** argv) {
         const od::TableReader texture = ps1.table({od::TableId::StageTextureFiles, 0}, 2 * od::kStageCount);
         CHECK(od::datFileName(geometry.u16(9 * 2)) == "ST09.DAT" && od::datFileName(texture.u16(9 * 2)) == "ST09T.DAT");
         CHECK(ps1.hasTable({od::TableId::MenuBankItemNames, 0}));
+        for (const char* name : {"SUBSCN01.DAT", "SUBSCN02.DAT", "SUBSCN03.DAT", "SUBSCN06.DAT"}) {
+            CHECK(ps1.hasFile(name));
+            if (!ps1.hasFile(name)) continue;
+            CHECK(od::datFileName(od::datFileIndex(name)) == name);
+            CHECK(ps1.gameFile(name).has(od::FilePart::Kind::Vram));
+        }
     }
     { // the room parameters: the PS1's 0x24-byte records, the PC's from +0x3 on, no fog range past them
         size_t rooms = 0, same = 0;
@@ -198,11 +304,15 @@ int main(int argc, char** argv) {
                 }
                 return ok;
             };
-        size_t own = 0;
+        size_t own = 0, ownTables = 0;
         for (const auto& t : od::Ps1DataSource::addressTables()) {
             const od::TableKey key = t.key;
             if (t.own) { // the PS1's own: it reads (no PC bytes to match)
-                own += ps1.stateData(ps1.stateAddress(key), t.bytes).size() == t.bytes;
+                ++ownTables;
+                const size_t got = ps1.stateData(ps1.stateAddress(key), t.bytes).size();
+                own += got == t.bytes;
+                if (got != t.bytes) std::fprintf(stderr, "%s: own table read %zu / %u bytes\n",
+                                               od::describe(key).c_str(), got, t.bytes);
                 continue;
             }
             ++n;
@@ -211,6 +321,7 @@ int main(int argc, char** argv) {
         std::printf("%zu tables read by address on the disc (%zu followed): %zu read as the PC's\n", n, followed, same);
         std::printf("%zu tables read by address the PS1's own, read whole\n", own);
         CHECK(n > 0 && same == n);
+        CHECK(own == ownTables);
     }
     std::printf("%zu tables on the disc: %zu read as the PC's\n", tables, equal);
     CHECK(tables > 0 && equal == tables);

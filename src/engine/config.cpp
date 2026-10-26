@@ -18,6 +18,14 @@ std::string trim(std::string s) {
     const auto e = s.find_last_not_of(" \t\r\n");
     return b == std::string::npos ? std::string{} : s.substr(b, e - b + 1);
 }
+
+std::filesystem::path pathValue(std::string value) {
+    value = trim(std::move(value));
+    if (value.size() >= 2 && ((value.front() == '"' && value.back() == '"') ||
+                              (value.front() == '\'' && value.back() == '\'')))
+        value = value.substr(1, value.size() - 2);
+    return std::filesystem::path(std::u8string(value.begin(), value.end()));
+}
 std::filesystem::path g_iniPath = "opendash.ini";
 
 // the default install path: Windows's, or the same path in the default Wine prefix
@@ -56,6 +64,7 @@ const std::filesystem::path& configPath() { return g_iniPath; }
 
 Config loadConfig() {
     Config cfg;
+    bool languageSpecified = false;
     cfg.datDir = defaultDatDir();
     cfg.langDir = kDefaultLangDir;
     if (std::ifstream ini(g_iniPath); ini) {
@@ -63,13 +72,13 @@ Config loadConfig() {
             const auto eq = line.find('=');
             if (eq == std::string::npos) continue;
             const std::string key = trim(line.substr(0, eq));
-            if (key == "dat_dir") cfg.datDir = trim(line.substr(eq + 1));
-            if (key == "exe") cfg.exePath = trim(line.substr(eq + 1));
+            if (key == "dat_dir") cfg.datDir = pathValue(line.substr(eq + 1));
+            if (key == "exe") cfg.exePath = pathValue(line.substr(eq + 1));
             if (key == "aa") cfg.aa = trim(line.substr(eq + 1));
             if (key == "aa_quality") cfg.aaQuality = trim(line.substr(eq + 1));
-            if (key == "lang_dir") cfg.langDir = trim(line.substr(eq + 1));
-            if (key == "lang") cfg.lang = trim(line.substr(eq + 1));
-            if (key == "disc") cfg.disc = trim(line.substr(eq + 1));
+            if (key == "lang_dir") cfg.langDir = pathValue(line.substr(eq + 1));
+            if (key == "lang") { cfg.lang = trim(line.substr(eq + 1)); languageSpecified = true; }
+            if (key == "disc") cfg.disc = pathValue(line.substr(eq + 1));
             if (key == "data") cfg.data = trim(line.substr(eq + 1));
             if (key == "restored_voices") cfg.restoredVoices = trim(line.substr(eq + 1)) != "0";
             if (key == "story_save") cfg.storySave = trim(line.substr(eq + 1));
@@ -89,13 +98,14 @@ Config loadConfig() {
             if (key == "net_key") cfg.netKey = trim(line.substr(eq + 1));
         }
     }
-    if (const std::string v = envValue("OPENDASH_DAT_DIR"); !v.empty()) cfg.datDir = v;
-    if (const std::string v = envValue("OPENDASH_EXE"); !v.empty()) cfg.exePath = v;
-    if (const std::string v = envValue("OPENDASH_LANG_DIR"); !v.empty()) cfg.langDir = v;
-    if (const std::string v = envValue("OPENDASH_LANG"); !v.empty()) cfg.lang = v;
-    if (const std::string v = envValue("OPENDASH_DISC"); !v.empty()) cfg.disc = v;
+    if (const std::string v = envValue("OPENDASH_DAT_DIR"); !v.empty()) cfg.datDir = pathValue(v);
+    if (const std::string v = envValue("OPENDASH_EXE"); !v.empty()) cfg.exePath = pathValue(v);
+    if (const std::string v = envValue("OPENDASH_LANG_DIR"); !v.empty()) cfg.langDir = pathValue(v);
+    if (const std::string v = envValue("OPENDASH_LANG"); !v.empty()) { cfg.lang = v; languageSpecified = true; }
+    if (const std::string v = envValue("OPENDASH_DISC"); !v.empty()) cfg.disc = pathValue(v);
     if (const std::string v = envValue("OPENDASH_DATA"); !v.empty()) cfg.data = v;
     if (cfg.exePath.empty()) cfg.exePath = cfg.datDir.parent_path() / "dash2.exe";
+    if (cfg.data == "disc" && !languageSpecified) cfg.lang = "en";
     return cfg;
 }
 

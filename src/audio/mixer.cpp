@@ -15,12 +15,14 @@
 #include "audio/music_loops.hpp"
 #include "engine/lang.hpp"
 #include "engine/file_data.hpp"
+#include "engine/ps1_music.hpp"
 
 namespace od::audio {
 
 struct Mixer::Stream {
     std::vector<uint8_t> data;
     drmp3 dec{};
+    std::unique_ptr<od::Ps1MusicPlayer> ps1;
     std::optional<od::lang::XaTrack> xa; // ODXA track of a language pack (CD-XA ADPCM) instead of MP3
     od::lang::XaDecoder xaDec;
     uint32_t xaSector = 0;
@@ -40,9 +42,20 @@ struct Mixer::Stream {
     size_t pendingAt = 0;
 
     ~Stream() {
-        if (ok && !xa) drmp3_uninit(&dec);
+        if (ok && !xa && !ps1) drmp3_uninit(&dec);
     }
     bool init() {
+        if (od::isPs1Music(data)) {
+            try {
+                ps1 = std::make_unique<od::Ps1MusicPlayer>(data, loop);
+                rate = Mixer::kRate;
+                channels = 2;
+                return ok = true;
+            } catch (const std::exception& e) {
+                SDL_Log("audio: PS1 music: %s", e.what());
+                return false;
+            }
+        }
         if ((xa = od::lang::parseXaTrack(data))) {
             channels = xa->stereo ? 2 : 1;
             rate = xa->rate;
@@ -56,7 +69,8 @@ struct Mixer::Stream {
         return ok;
     }
     void rewind() {
-        if (ok && !xa) drmp3_seek_to_pcm_frame(&dec, 0);
+        if (ps1) ps1->rewind();
+        else if (ok && !xa) drmp3_seek_to_pcm_frame(&dec, 0);
         xaSector = 0;
         xaDec = {};
         pcmPos = 0;
@@ -68,6 +82,11 @@ struct Mixer::Stream {
     }
     // next stereo frame at the stream's own rate; false at the end (after looping if set)
     bool next(float& l, float& r) {
+        if (ps1) {
+            if (ps1->next(l, r)) return true;
+            ended = true;
+            return false;
+        }
         if (!pcm.empty()) {
             if (pcmPos >= loopEnd) {
                 if (!loop) {
@@ -361,8 +380,8 @@ uint32_t Mixer::createStream(std::span<const uint8_t> mp3, uint32_t loop) {
     auto s = std::make_unique<Stream>();
     s->data.assign(mp3.begin(), mp3.end());
     s->loop = loop != 0;
-    if (!s->init()) SDL_Log("audio: MP3 stream of %zu bytes not decodable", mp3.size());
-    else if (s->loop && !s->xa) {
+    if (!s->init()) SDL_Log("audio: stream of %zu bytes not decodable", mp3.size());
+    else if (s->loop && !s->xa && !s->ps1) {
         if (const MusicLoop* ml = findMusicLoop(mp3)) {
             drmp3_config cfg{};
             drmp3_uint64 frames = 0;
@@ -431,9 +450,10 @@ void Mixer::setVoiceDirs(std::vector<std::filesystem::path> dirs) {
     voiceDirs_ = std::move(dirs);
 }
 
-void Mixer::setVoiceSource(VoiceSource source) {
+void Mixer::setVoiceSource(VoiceSource source, bool afterDirs) {
     std::lock_guard<std::mutex> g(lock_);
     voiceSource_ = std::move(source);
+    voiceSourceAfterDirs_ = afterDirs;
 }
 
 // the language pack's voice source, its voice dirs in order (same pack layout), then the game's snd/
@@ -442,26 +462,48 @@ std::vector<uint8_t> Mixer::readVoiceTrack(const std::string& file, uint32_t tra
     for (char& c : lower) c = char(std::tolower(static_cast<unsigned char>(c)));
     std::vector<std::filesystem::path> voiceDirs;
     VoiceSource source;
+    bool afterDirs;
     {
         std::lock_guard<std::mutex> g(lock_);
         voiceDirs = voiceDirs_;
         source = voiceSource_;
+        afterDirs = voiceSourceAfterDirs_;
     }
-    if (source)
+    if (source && !afterDirs)
         if (std::vector<uint8_t> t = source(lower, track); !t.empty()) return t;
-    std::ifstream f;
-    for (const auto& d : voiceDirs)
-        if (!f.is_open()) f.open(d / lower, std::ios::binary);
-    if (!f.is_open()) f.open(sndDir_ / lower, std::ios::binary);
-    if (!f.is_open()) f.open(sndDir_ / file, std::ios::binary);
-    if (!f) return {};
-    uint32_t o[2]{};
-    f.seekg(std::streamoff(track) * 4);
-    if (!f.read(reinterpret_cast<char*>(o), 8) || o[1] <= o[0]) return {};
-    std::vector<uint8_t> d(o[1] - o[0]);
-    f.seekg(o[0]);
-    if (!f.read(reinterpret_cast<char*>(d.data()), std::streamsize(d.size()))) return {};
-    return d;
+    auto read = [&](const std::filesystem::path& path) -> std::vector<uint8_t> {
+        std::ifstream f(path, std::ios::binary | std::ios::ate);
+        if (!f) return {};
+        const auto size = f.tellg();
+        if (size < std::streamoff(8)) return {};
+        uint8_t header[8]{};
+        f.seekg(0);
+        if (!f.read(reinterpret_cast<char*>(header), 4)) return {};
+        auto word = [](const uint8_t* b) {
+            return uint32_t(b[0]) | uint32_t(b[1]) << 8 | uint32_t(b[2]) << 16 | uint32_t(b[3]) << 24;
+        };
+        const uint32_t first = word(header);
+        if (first < 8 || first % 4 || uint64_t(first) > uint64_t(size) || track >= first / 4 - 1) return {};
+        f.seekg(std::streamoff(track) * 4);
+        if (!f.read(reinterpret_cast<char*>(header), 8)) return {};
+        const uint32_t a = word(header), b = word(header + 4);
+        if (a < first || b <= a || uint64_t(b) > uint64_t(size)) return {};
+        std::vector<uint8_t> bytes(b - a);
+        f.seekg(a);
+        if (!f.read(reinterpret_cast<char*>(bytes.data()), std::streamsize(bytes.size()))) return {};
+        return bytes;
+    };
+    auto fromDir = [&](const std::filesystem::path& dir) {
+        auto bytes = read(dir / lower);
+        if (bytes.empty() && file != lower) bytes = read(dir / file);
+        return bytes;
+    };
+    for (const auto& dir : voiceDirs)
+        if (!dir.empty())
+            if (auto bytes = fromDir(dir); !bytes.empty()) return bytes;
+    if (source && afterDirs)
+        if (auto bytes = source(lower, track); !bytes.empty()) return bytes;
+    return sndDir_.empty() ? std::vector<uint8_t>() : fromDir(sndDir_);
 }
 
 } // namespace od::audio

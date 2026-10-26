@@ -182,6 +182,16 @@ void App::parseArgs(int argc, char** argv) {
             l.specialWeapon = int8_t(std::stoi(argv[++i]));
             ghostLookArg = l;
         }
+        else if (a == "--net") {
+            const std::string mode = argv[++i];
+            if (mode == "off") netFlags.mode = NetMode::Off;
+            else if (mode == "host") netFlags.mode = NetMode::Host;
+            else if (mode == "join") netFlags.mode = NetMode::Join;
+            else {
+                SDL_Log("unknown --net mode %s (netplay off)", mode.c_str());
+                netFlags.mode = NetMode::Off;
+            }
+        }
         else if (a == "--host") { // netplay: host a session on [port] (app/netplay, docs/netplay.md)
             netFlags.mode = NetMode::Host;
             if (i + 1 < argc && argv[i + 1][0] != '-') netFlags.port = std::stoi(argv[++i]);
@@ -294,7 +304,7 @@ int App::init() {
             } catch (const std::invalid_argument& e) {
                 SDL_Log("netplay settings: %s (netplay off)", e.what());
             }
-            netplay.start(net, mirrorArg, cfg.datDir, cfg.exePath);
+            netplay.start(net, mirrorArg, cfg.datDir, cfg.exePath, cfg.data == "disc" ? playerView.disc.get() : nullptr);
         }
         stages = scanStages();
         for (const auto& si : stages) playerView.stageSubs.emplace_back(si.stage, si.subs);
@@ -332,6 +342,8 @@ int App::init() {
         }
     } catch (const std::exception& e) {
         SDL_Log("config failed: %s", e.what());
+        if (!scripted) SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "OpenDash", e.what(), window);
+        return 1;
     }
     playerView.room = &current; // transitions load rooms through main's reload (game/transition room setup)
     playerView.loadRoom = [&](int st, int sb) { reload(st, sb, true); };
@@ -726,6 +738,7 @@ void App::titleStep(uint16_t ps1) {
             od::port::messageTick();
         } catch (const std::exception& e) {
             SDL_Log("title: %s -- back to the stage viewer", e.what());
+            titleScreen.error = e.what();
             titleScreen.active = false;
             return;
         }

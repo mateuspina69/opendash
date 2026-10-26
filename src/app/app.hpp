@@ -138,6 +138,7 @@ struct App {
     uint64_t scriptedFrameLimit = 0;
     uint64_t scriptedFrames = 0;
     bool scriptEnded = false;
+    bool scriptFailed = false;
     // ---- playthrough segments ----
     uint64_t ptTicks = 0;      // logic ticks of the script so far
     std::string ptLast;        // the last timeline state printed

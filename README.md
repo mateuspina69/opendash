@@ -41,6 +41,10 @@ On its first start, if the game is not installed in `C:/Program Files (x86)/Capc
 `dat_dir=` / `exe=` in `opendash.ini` next to the executable. The environment variables `OPENDASH_DAT_DIR` / `OPENDASH_EXE` override
 it. The tests take `OPENDASH_DAT_DIR`, `OPENDASH_EXE` and `OPENDASH_GAME_DIR` from the CMake cache.
 
+An experimental USA PS1 disc data source is also available with `data=disc`, `disc=<path to .cue>` and
+`lang=en` in `opendash.ini`. It can start without the PC installation, but has known gameplay gaps; see
+[PS1 setup and current limitations](docs/ps1_disc.md#running-the-disc-data-source-2026-10-25).
+
 ## Tests
 
 The tests compare OpenDash with data recorded from your own copy of the game. That data is derived from the game and

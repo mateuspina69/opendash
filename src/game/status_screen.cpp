@@ -3,6 +3,7 @@
 #include "game/loaded_data.hpp"
 #include "game/state_array.hpp"
 #include "game/status_screen.hpp"
+#include "game/dat_names.hpp"
 #include "game/status_screen_state.hpp"
 
 #include <algorithm>
@@ -47,7 +48,7 @@ uint32_t gFieldBank = 0;
 bool gPageBank = false;
 
 // the page DATs' files: kPageDatFile + k (1 SUBSCN01 map, 2 SUBSCN02 items, 3 SUBSCN03 equipment, 4 SUBSCN06 options)
-constexpr uint16_t kPageDatFile = 0x3d;
+constexpr const char* kPageDatFiles[] = {"SUBSCN01.DAT", "SUBSCN02.DAT", "SUBSCN03.DAT", "SUBSCN06.DAT"};
 // the panel's rows -> their pages (exe table 0x91a98c; 2 the closing)
 const DataTable<ScalarTable<uint8_t, 5>> panelPages{TableId::StatusScreenPanelPages};
 constexpr int8_t kPanelCloseRow = 6; // cross on the panel: the cursor off its rows
@@ -449,7 +450,8 @@ void pageDatLoad(StatusScreen& s, uint8_t k) {
     }
     stage().bankBuffer = s.savedBankBuffer;
     statusBankWalk();
-    datLoadRequest(uint16_t(int8_t(k) + kPageDatFile));
+    if (k < 1 || k > std::size(kPageDatFiles)) throw DataSourceError("status screen: invalid page file");
+    datLoadRequest(DatFile{kPageDatFiles[k - 1]});
     s.pageDat = uint8_t(k | kPageDatLoading);
 }
 
