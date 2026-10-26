@@ -102,6 +102,13 @@ std::string upper(std::string s) {
 // read as zero -- the room parameters' D3D fog range (+0x24 / +0x28, the PC's), none on the PS1
 uint32_t ps1RecordBytes(TableId id) { return id == TableId::RoomParams ? 0x24 : 0; }
 
+// The menu/status UI tables are PC-only so far (the banks, rows, page metrics). Until the PS1 menu containers are
+// wired, a zero-filled table keeps the menus open instead of stopping play; the caller logs the blank table.
+bool isBlankMenuTable(TableId id) {
+    const std::string n = tableName(id);
+    return n.rfind("Menu", 0) == 0 || n.rfind("Status", 0) == 0 || n.rfind("Save", 0) == 0;
+}
+
 void put32(std::vector<uint8_t>& b, size_t o, uint32_t v) {
     for (int k = 0; k < 4; ++k) b[o + size_t(k)] = uint8_t(v >> (8 * k));
 }
@@ -467,9 +474,12 @@ TableReader Ps1DataSource::table(TableKey key, uint32_t bytes) const {
     if (std::getenv("OPENDASH_TRACE_DATA")) lastTableKey_ = describe(key);
     const auto it = tables_.find(key);
     if (it == tables_.end()) {
-        // The save/status menu's time text is PC-generated (glyph cells); the PS1 has no copy. Blank text is better
-        // than stopping play while the save UI is ported; the save format itself stays a separate question.
-        if (key.id == TableId::TextScriptTimeText) return TableReader(*this, std::vector<uint8_t>(bytes, 0));
+        // The save/status menu's time text is PC-generated (glyph cells), and the rest of the PC menu tables have no
+        // PS1 copy yet. Blank data is better than stopping play while the PS1 menu containers are wired.
+        if (isBlankMenuTable(key.id) || key.id == TableId::TextScriptTimeText) {
+            std::fprintf(stderr, "PS1 menu table %s: blank (not ported)\n", describe(key).c_str());
+            return TableReader(*this, std::vector<uint8_t>(bytes, 0));
+        }
         throw DataSourceError("data source (PS1): the disc has no table " + describe(key));
     }
     const Located& t = it->second;
@@ -516,7 +526,10 @@ TableReader Ps1DataSource::table(TableKey key, uint32_t bytes) const {
 
 uint32_t Ps1DataSource::stateAddress(TableKey key) const {
     const auto it = tables_.find(key);
-    if (it == tables_.end()) throw DataSourceError("data source (PS1): the disc has no table " + describe(key));
+    if (it == tables_.end()) {
+        if (isBlankMenuTable(key.id)) return 0; // the menu resolves it as an empty bank
+        throw DataSourceError("data source (PS1): the disc has no table " + describe(key));
+    }
     const Located& t = it->second;
     if (t.state) return t.state;
     if (voiceBytes_.count(key)) return parts_[voicePart(key, t)].vbase;
