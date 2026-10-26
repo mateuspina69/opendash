@@ -78,6 +78,10 @@ struct SaveTitleText : DataRecord {
 };
 constexpr uint32_t kSlotDigit = 0x0c, kHoursTens = 0x10, kHoursOnes = 0x12, kMinutesTens = 0x16, kMinutesOnes = 0x18,
                    kSecondsTens = 0x1c, kSecondsOnes = 0x1e;
+// the PS1's title (USA: "MEGAMAN LEGENDS2[*]**:**:**", the save points' overlays, ST04T.BIN 0x800f0008; its builder
+// 0x800e9744): the digits 0x16 further on, no place name in it
+constexpr uint32_t kPs1TitleShift = 0x16;
+uint32_t titleShift() { return dataSource().isPs1() ? kPs1TitleShift : 0; }
 PatchedRecord<SaveTitleText> gSaveTitle{TableId::SaveImageTitle};
 SaveTitleText& saveTitleText() { return *gSaveTitle; }
 // byte i of place name slot `slot` (slot 0: the title's copy)
@@ -464,17 +468,19 @@ void saveTitle(uint8_t slot, uint32_t image, uint32_t time, uint32_t fromImage) 
             break;
         }
     SaveTitleText& title = saveTitleText();
-    title.bytes[kSlotDigit + 1] = uint8_t(slot + 0x50);
-    title.bytes[kSlotDigit] = uint8_t((slot + 0x8250u) >> 8);
+    const uint32_t at = titleShift();
+    title.bytes[at + kSlotDigit + 1] = uint8_t(slot + 0x50);
+    title.bytes[at + kSlotDigit] = uint8_t((slot + 0x8250u) >> 8);
     const uint32_t h = (t / kFramesPerHour) & 0xff;
     const uint32_t mi = uint8_t((t % kFramesPerHour) / kFramesPerMinute);
     const uint32_t s = uint8_t((t % kFramesPerMinute) / kFramesPerSecond);
-    writeDigit(title.glyph(kHoursTens), h / 10);
-    writeDigit(title.glyph(kHoursOnes), h % 10);
-    writeDigit(title.glyph(kMinutesTens), mi / 10);
-    writeDigit(title.glyph(kMinutesOnes), mi % 10);
-    writeDigit(title.glyph(kSecondsTens), s / 10);
-    writeDigit(title.glyph(kSecondsOnes), s % 10);
+    writeDigit(title.glyph(at + kHoursTens), h / 10);
+    writeDigit(title.glyph(at + kHoursOnes), h % 10);
+    writeDigit(title.glyph(at + kMinutesTens), mi / 10);
+    writeDigit(title.glyph(at + kMinutesOnes), mi % 10);
+    writeDigit(title.glyph(at + kSecondsTens), s / 10);
+    writeDigit(title.glyph(at + kSecondsOnes), s % 10);
+    if (at != 0) return; // the PS1's title has no place name
     // the place's name into slot 0 (the title's), its end mark, the padding
     const std::span<uint8_t, kPlaceNameSize> to = saveTitleText().placeName();
     const size_t from = b.place;
