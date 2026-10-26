@@ -9160,6 +9160,7 @@ static constexpr Ps1Label kPs1Labels[] = {
     {"DAT/ST1ET.BIN", 0x800e7018u, 0x8},
     {"DAT/ST1ET.BIN", 0x800f0b8cu, 0x10},
     {"SLUS_011.40", 0x80073024u, 0x10},
+    {"DAT/ST1ET.BIN", 0x800f0ba8u, 0xc},
 };
 static constexpr Ps1LabelSlot kPs1LabelSlots[] = {
     {6319, 0x0, SlotKind::Data, RoutineId::None, 0x0},
@@ -24785,6 +24786,7 @@ static constexpr Ps1LabelTable kPs1LabelTables[] = {
     {TableId::FlutterFireEmberTarget, 0x0, 9150, true, 0},
     {TableId::FlutterFireEmberSizes, 0x0, 9151, true, 0},
     {TableId::BusterArmHandlers, 0x0, 9152, true, 0},
+    {TableId::FlutterFireEmberBox, 0x0, 9153, true, 0},
 };
 // kPs1StateTables: {the table, its index, the engine's address of it, its bytes}: the tables in the
 // program's state (built at run time, initially zero); kEngineState: the engine's state addresses.
