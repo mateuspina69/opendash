@@ -9108,6 +9108,7 @@ static constexpr Ps1Label kPs1Labels[] = {
     {"DAT/ST3AT.BIN", 0x800f58acu, 0xc},
     {"DAT/ST3AT.BIN", 0x800f55e8u, 0x4},
     {"DAT/ST06T.BIN", 0x800e8b48u, 0x18},
+    {"DAT/ST0FT.BIN", 0x801008ccu, 0x28},
 };
 static constexpr Ps1LabelSlot kPs1LabelSlots[] = {
     {6319, 0x0, SlotKind::Data, RoutineId::None, 0x0},
@@ -20731,6 +20732,16 @@ static constexpr Ps1LabelSlot kPs1LabelSlots[] = {
     {9100, 0xc, SlotKind::Function, RoutineId::RoomDoorScript, 0x0},
     {9100, 0x10, SlotKind::Function, RoutineId::RoomDoorScript, 0x0},
     {9100, 0x14, SlotKind::Function, RoutineId::RoomDoorScript, 0x0},
+    {9101, 0x0, SlotKind::Function, RoutineId::EmptyRoutine, 0x0},
+    {9101, 0x4, SlotKind::Function, RoutineId::St07Sub1RoomHandler, 0x0},
+    {9101, 0x8, SlotKind::Function, RoutineId::EmptyRoutine, 0x0},
+    {9101, 0xc, SlotKind::Function, RoutineId::EmptyRoutine, 0x0},
+    {9101, 0x10, SlotKind::Function, RoutineId::St04Story0Sub0RoomHandler, 0x0},
+    {9101, 0x14, SlotKind::Function, RoutineId::JoesLabRoomHandler, 0x0},
+    {9101, 0x18, SlotKind::Function, RoutineId::St08Story1Sub0RoomHandler, 0x0},
+    {9101, 0x1c, SlotKind::Function, RoutineId::St08Story1Sub1RoomHandler, 0x0},
+    {9101, 0x20, SlotKind::Function, RoutineId::EmptyRoomHandler, 0x0},
+    {9101, 0x24, SlotKind::Function, RoutineId::EmptyRoomHandler, 0x0},
 };
 static constexpr Ps1LabelTable kPs1LabelTables[] = {
     {TableId::AbandonedMineExitCameraScript, 0x0, 5198, false, 0},
@@ -24598,6 +24609,7 @@ static constexpr Ps1LabelTable kPs1LabelTables[] = {
     {TableId::CrashLandingPieceRoutines, 0x0, 9098, true, 0},
     {TableId::CrashLandingCastTalkerVariants, 0x0, 9099, true, 0},
     {TableId::TownRoomCasesSt06Handlers, 0x0, 9100, true, 0},
+    {TableId::RoomScriptHandlers, 0x7, 9101, true, 0},
 };
 // kPs1StateTables: {the table, its index, the engine's address of it, its bytes}: the tables in the
 // program's state (built at run time, initially zero); kEngineState: the engine's state addresses.
