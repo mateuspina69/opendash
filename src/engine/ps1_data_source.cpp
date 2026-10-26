@@ -484,13 +484,23 @@ TableReader Ps1DataSource::table(TableKey key, uint32_t bytes) const {
     const auto [file, address] = placeOf(t);
     for (const size_t p : partsOf(file)) {
         const Part& pt = parts_[p];
-        if (address >= pt.base && size_t(address - pt.base) + own <= pt.data->size()) {
-            (void)virtualOf(p, address, Region{key, 0});
-            TableReader r = regionBytes(p, address, own, Region{key, 0});
-            if (own == bytes) return r;
-            std::vector<uint8_t> b(bytes, 0);
-            std::memcpy(b.data(), r.bytes(0, own).data(), own);
-            return TableReader(*this, std::move(b));
+        if (address >= pt.base && address - pt.base < pt.data->size()) {
+            const size_t have = pt.data->size() - (address - pt.base);
+            if (key.id == TableId::CrashLandingScriptBurnRecords && have > 0) {
+                // Its fourth record is the first bytes of ST3A01.DAT, which the script loads later: keep the
+                // overlay's own records and let the rest read as zero until the data file is in.
+                std::vector<uint8_t> b(bytes, 0);
+                std::memcpy(b.data(), pt.data->data() + (address - pt.base), std::min<size_t>(have, bytes));
+                return TableReader(*this, std::move(b));
+            }
+            if (have >= own) {
+                (void)virtualOf(p, address, Region{key, 0});
+                TableReader r = regionBytes(p, address, own, Region{key, 0});
+                if (own == bytes) return r;
+                std::vector<uint8_t> b(bytes, 0);
+                std::memcpy(b.data(), r.bytes(0, own).data(), own);
+                return TableReader(*this, std::move(b));
+            }
         }
     }
     throw DataSourceError("data source (PS1): " + describe(key) + " runs past its block in " + file);
