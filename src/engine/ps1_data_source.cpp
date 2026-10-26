@@ -539,6 +539,8 @@ std::pair<std::string, uint32_t> Ps1DataSource::placeOf(const Located& t) const 
 }
 
 TableReader Ps1DataSource::pointee(uint32_t pointer, uint32_t n) const {
+    // a null pointer reads as zeros: the game's code checks many optional records this way
+    if (pointer == 0) return TableReader(*this, std::vector<uint8_t>(n, 0));
     // the program's state: its initial bytes (zero), as the PC reads its .bss
     if (pointer >= kEngineState[0] && pointer < kEngineState[1]) return TableReader(*this, std::vector<uint8_t>(n, 0));
     if (pointer < kVirtualBase || pointer >= kRoutineTag) {
