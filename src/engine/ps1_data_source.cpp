@@ -527,7 +527,7 @@ TableReader Ps1DataSource::table(TableKey key, uint32_t bytes) const {
 uint32_t Ps1DataSource::stateAddress(TableKey key) const {
     const auto it = tables_.find(key);
     if (it == tables_.end()) {
-        if (isBlankMenuTable(key.id)) return 0; // the menu resolves it as an empty bank
+        if (isBlankMenuTable(key.id) || key.id == TableId::TextScriptTimeText) return 0; // the menu resolves it as empty
         throw DataSourceError("data source (PS1): the disc has no table " + describe(key));
     }
     const Located& t = it->second;
