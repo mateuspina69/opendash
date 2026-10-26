@@ -9109,6 +9109,16 @@ static constexpr Ps1Label kPs1Labels[] = {
     {"DAT/ST3AT.BIN", 0x800f55e8u, 0x4},
     {"DAT/ST06T.BIN", 0x800e8b48u, 0x18},
     {"DAT/ST0FT.BIN", 0x801008ccu, 0x28},
+    {"DAT/ST15T.BIN", 0x80105034u, 0x70},
+    {"DAT/ST16T.BIN", 0x80105cd0u, 0x70},
+    {"DAT/ST17T.BIN", 0x801076e8u, 0x70},
+    {"DAT/ST1703T.BIN", 0x801076e8u, 0x70},
+    {"DAT/ST1704T.BIN", 0x801076e8u, 0x70},
+    {"DAT/ST1706T.BIN", 0x801076e8u, 0x70},
+    {"DAT/ST18T.BIN", 0x80107aacu, 0x70},
+    {"DAT/ST1802T.BIN", 0x80107aacu, 0x70},
+    {"DAT/ST1804T.BIN", 0x80107aacu, 0x70},
+    {"DAT/ST16T.BIN", 0x80105aecu, 0x4},
 };
 static constexpr Ps1LabelSlot kPs1LabelSlots[] = {
     {6319, 0x0, SlotKind::Data, RoutineId::None, 0x0},
@@ -24610,6 +24620,16 @@ static constexpr Ps1LabelTable kPs1LabelTables[] = {
     {TableId::CrashLandingCastTalkerVariants, 0x0, 9099, true, 0},
     {TableId::TownRoomCasesSt06Handlers, 0x0, 9100, true, 0},
     {TableId::RoomScriptHandlers, 0x7, 9101, true, 0},
+    {TableId::MissionTargetsTargetCapsules, 0x0, 9102, false, 0},
+    {TableId::MissionTargetsTargetCapsules, 0x0, 9103, false, 0},
+    {TableId::MissionTargetsTargetCapsules, 0x0, 9104, false, 0},
+    {TableId::MissionTargetsTargetCapsules, 0x0, 9105, false, 0},
+    {TableId::MissionTargetsTargetCapsules, 0x0, 9106, false, 0},
+    {TableId::MissionTargetsTargetCapsules, 0x0, 9107, false, 0},
+    {TableId::MissionTargetsTargetCapsules, 0x0, 9108, false, 0},
+    {TableId::MissionTargetsTargetCapsules, 0x0, 9109, false, 0},
+    {TableId::MissionTargetsTargetCapsules, 0x0, 9110, false, 0},
+    {TableId::BarsAndGateSt16BarModels, 0x0, 9111, true, 0},
 };
 // kPs1StateTables: {the table, its index, the engine's address of it, its bytes}: the tables in the
 // program's state (built at run time, initially zero); kEngineState: the engine's state addresses.
