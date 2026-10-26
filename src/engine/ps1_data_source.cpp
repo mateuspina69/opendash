@@ -487,9 +487,10 @@ TableReader Ps1DataSource::table(TableKey key, uint32_t bytes) const {
         const Part& pt = parts_[p];
         if (address >= pt.base && address - pt.base < pt.data->size()) {
             const size_t have = pt.data->size() - (address - pt.base);
-            if ((key.id == TableId::CrashLandingScriptBurnRecords || key.id == TableId::TownNpcSpeeds) && have > 0) {
-                // Its fourth record is the first bytes of ST3A01.DAT, which the script loads later: keep the
-                // overlay's own records and let the rest read as zero until the data file is in.
+            if ((key.id == TableId::CrashLandingScriptBurnRecords || key.id == TableId::TownNpcSpeeds ||
+                 key.id == TableId::HingedDoorViews) && have > 0) {
+                // Some tables sit at the end of an overlay (a record continues in a later data file, or the PS1
+                // table is shorter than the PC's): keep the bytes present and let the rest read as zero.
                 std::vector<uint8_t> b(bytes, 0);
                 std::memcpy(b.data(), pt.data->data() + (address - pt.base), std::min<size_t>(have, bytes));
                 return TableReader(*this, std::move(b));

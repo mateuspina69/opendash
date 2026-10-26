@@ -9132,6 +9132,8 @@ static constexpr Ps1Label kPs1Labels[] = {
     {"DAT/ST3001T.BIN", 0x801027f8u, 0xc},
     {"DAT/ST2DT.BIN", 0x800fe600u, 0x8},
     {"DAT/ST2DT.BIN", 0x800fea24u, 0xc},
+    {"DAT/ST1ET.BIN", 0x800f0bb0u, 0x8},
+    {"COMMON/GAME.BIN", 0x800dce20u, 0x5},
 };
 static constexpr Ps1LabelSlot kPs1LabelSlots[] = {
     {6319, 0x0, SlotKind::Data, RoutineId::None, 0x0},
@@ -21595,7 +21597,7 @@ static constexpr Ps1LabelTable kPs1LabelTables[] = {
     {TableId::GuardianCastGuardianDissolvingBox, 0x0, 3207, false, 0},
     {TableId::GuardianReaverbotSparkBones, 0x0, 1391, false, 0},
     {TableId::HingedDoorStates, 0x0, 6328, true, 0},
-    {TableId::HingedDoorViews, 0x0, 1009, false, 0},
+    {TableId::HingedDoorViews, 0x0, 1009, true, 0},
     {TableId::HingedDoorViews, 0x0, 7294, false, 0},
     {TableId::HingedDoorViews, 0x0, 7295, false, 0},
     {TableId::HingedDoorViews, 0x0, 7296, false, 0},
@@ -24656,6 +24658,8 @@ static constexpr Ps1LabelTable kPs1LabelTables[] = {
     {TableId::MissionGunshipsWaveGunshipBox, 0x0, 9122, false, 0},
     {TableId::TreasureChestContents, 0x0, 9123, true, 0},
     {TableId::RuinBlocksBlockBox, 0x0, 9124, false, 0},
+    {TableId::ExitHingedDoorCamera, 0x0, 9125, true, 0},
+    {TableId::DoorLeavesHingedLeafSigns, 0x0, 9126, false, 0},
 };
 // kPs1StateTables: {the table, its index, the engine's address of it, its bytes}: the tables in the
 // program's state (built at run time, initially zero); kEngineState: the engine's state addresses.

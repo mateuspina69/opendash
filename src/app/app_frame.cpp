@@ -265,6 +265,8 @@ void App::simStep(int gameFrames) {
     }
     if (!netStepped) netplay.step(SDL_GetTicksNS(), ghosts); // outside play the session still runs (no ghost drawn)
     ++simTicks;
+    // the room script sets its door locks on its first tick; a scripted --clear-flag run must clear after that
+    if (simTicks == 2 && playerView.play && (!flagArgs.empty() || !flagClearArgs.empty())) applyFlags();
 }
 
 void App::updateCamera() {
