@@ -132,6 +132,7 @@ void App::parseArgs(int argc, char** argv) {
         else if (a == "--classic") classicArg = std::stoi(argv[++i]) != 0; // the original tank controls (scripted runs)
         else if (a == "--precise-poses") od::precise::setEnabled(std::stoi(argv[++i]) != 0); // 0 = the PS1 rounded poses
         else if (a == "--flag") flagArgs.push_back(uint32_t(std::stoul(argv[++i], nullptr, 0)));
+        else if (a == "--clear-flag") flagClearArgs.push_back(uint32_t(std::stoul(argv[++i], nullptr, 0)));
         else if (a == "--story-save") storySaveArg = argv[++i]; // free play: story state of DASH2-NN.DAT (none = story 0)
         else if (a == "--sun" && i + 2 < argc) {
             sunAzimuth = std::stof(argv[++i]);
@@ -661,6 +662,11 @@ void App::applyFlags() {
         if (playerView.play && (f >> 3) < od::port::kStoryFlagBytes + od::port::kExtraFlagBytes) {
             od::port::setStoryFlag(f);
             SDL_Log("flag 0x%x set", f);
+        }
+    for (const uint32_t f : flagClearArgs) // --clear-flag (dev: start with a door unlocked)
+        if (playerView.play && (f >> 3) < od::port::kStoryFlagBytes + od::port::kExtraFlagBytes) {
+            od::port::clearStoryFlag(f);
+            SDL_Log("flag 0x%x cleared", f);
         }
 }
 

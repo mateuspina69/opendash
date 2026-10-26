@@ -84,6 +84,7 @@ struct App {
     bool classicArg = false;        // --classic 1: tank controls + the game's camera (as F1 "controles classicos")
     std::string storySaveArg;       // --story-save N|path|none (see PlayerView::storySave; read-only)
     std::vector<uint32_t> flagArgs;  // --flag N: event flags set after the start (dev: e.g. 0x6ff opens a shop)
+    std::vector<uint32_t> flagClearArgs; // --clear-flag N: event flags cleared after the start (dev: 0x711 opens ST1E's door)
     bool teleportArg = false; // --teleport x y z (see PlayerView::teleport)
     int teleportYawArg = -1;  // --yaw (with --teleport)
     int teleportPosArg[3]{};
