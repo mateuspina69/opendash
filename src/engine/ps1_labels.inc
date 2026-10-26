@@ -9100,8 +9100,11 @@ static constexpr Ps1Label kPs1Labels[] = {
     {"DAT/ST3AT.BIN", 0x800f4aacu, 0xc},
     {"DAT/ST3AT.BIN", 0x800f545cu, 0x28},
     {"DAT/ST3AT.BIN", 0x800f55dcu, 0x10},
-    {"DAT/ST3AT.BIN", 0x800e7104u, 0xc},
+    {"DAT/ST3AT.BIN", 0x800f56c4u, 0xc},
     {"DAT/ST3AT.BIN", 0x800f5508u, 0x14},
+    {"DAT/ST3AT.BIN", 0x800f5930u, 0xc},
+    {"DAT/ST3AT.BIN", 0x800f593cu, 0x14},
+    {"DAT/ST3AT.BIN", 0x800e70fcu, 0x14},
 };
 static constexpr Ps1LabelSlot kPs1LabelSlots[] = {
     {6319, 0x0, SlotKind::Data, RoutineId::None, 0x0},
@@ -20705,6 +20708,11 @@ static constexpr Ps1LabelSlot kPs1LabelSlots[] = {
     {9094, 0x8, SlotKind::Function, RoutineId::CrashCastSecondBodyStill, 0x0},
     {9094, 0xc, SlotKind::Function, RoutineId::CrashCastSecondBodyBlink, 0x0},
     {9094, 0x10, SlotKind::Function, RoutineId::CrashCastSecondBodySpeech, 0x0},
+    {9097, 0x0, SlotKind::Function, RoutineId::CrashCraftArriving, 0x0},
+    {9097, 0x4, SlotKind::Function, RoutineId::CrashCraftLanding, 0x0},
+    {9097, 0x8, SlotKind::Function, RoutineId::CrashCraftDiving, 0x0},
+    {9097, 0xc, SlotKind::Function, RoutineId::CrashCastCraftParked, 0x0},
+    {9097, 0x10, SlotKind::Function, RoutineId::CrashCastCraftLeaving, 0x0},
 };
 static constexpr Ps1LabelTable kPs1LabelTables[] = {
     {TableId::AbandonedMineExitCameraScript, 0x0, 5198, false, 0},
@@ -24564,8 +24572,11 @@ static constexpr Ps1LabelTable kPs1LabelTables[] = {
     {TableId::CrashLandingCastBarrelVariants, 0x0, 9090, true, 0},
     {TableId::CrashLandingCastFaceMouth, 0x0, 9091, true, 0},
     {TableId::CrashLandingCastSecondBodyMouth, 0x0, 9092, true, 0},
-    {TableId::CrashLandingCraftVariants, 0x0, 9093, true, 0},
+    {TableId::CrashLandingCastJetVariants, 0x0, 9093, true, 0},
     {TableId::CrashLandingCastSecondBodyVariants, 0x0, 9094, true, 0},
+    {TableId::OpeningLiftStreakKinds, 0x0, 9095, true, 0},
+    {TableId::LiftStreakFrames, 0x0, 9096, true, 0},
+    {TableId::CrashLandingCraftVariants, 0x0, 9097, true, 0},
 };
 // kPs1StateTables: {the table, its index, the engine's address of it, its bytes}: the tables in the
 // program's state (built at run time, initially zero); kEngineState: the engine's state addresses.
