@@ -9096,9 +9096,12 @@ static constexpr Ps1Label kPs1Labels[] = {
     {"DAT/ST3AT.BIN", 0x800f6784u, 0x14},
     {"DAT/ST3AT.BIN", 0x800f58d4u, 0x1c},
     {"DAT/ST3AT.BIN", 0x800f5368u, 0xc},
-    {"DAT/ST3AT.BIN", 0x800f5388u, 0x10},
+    {"DAT/ST3AT.BIN", 0x800f5394u, 0x10},
     {"DAT/ST3AT.BIN", 0x800f4aacu, 0xc},
     {"DAT/ST3AT.BIN", 0x800f545cu, 0x28},
+    {"DAT/ST3AT.BIN", 0x800f55dcu, 0x10},
+    {"DAT/ST3AT.BIN", 0x800e7104u, 0xc},
+    {"DAT/ST3AT.BIN", 0x800f5508u, 0x14},
 };
 static constexpr Ps1LabelSlot kPs1LabelSlots[] = {
     {6319, 0x0, SlotKind::Data, RoutineId::None, 0x0},
@@ -20690,6 +20693,18 @@ static constexpr Ps1LabelSlot kPs1LabelSlots[] = {
     {9091, 0x1c, SlotKind::Data, RoutineId::None, 0x0},
     {9091, 0x20, SlotKind::Data, RoutineId::None, 0x0},
     {9091, 0x24, SlotKind::Data, RoutineId::None, 0x0},
+    {9092, 0x0, SlotKind::Data, RoutineId::None, 0x0},
+    {9092, 0x4, SlotKind::Data, RoutineId::None, 0x0},
+    {9092, 0x8, SlotKind::Data, RoutineId::None, 0x0},
+    {9092, 0xc, SlotKind::Data, RoutineId::None, 0x0},
+    {9093, 0x0, SlotKind::Function, RoutineId::CrashCastJetLeader, 0x0},
+    {9093, 0x4, SlotKind::Function, RoutineId::CrashCastJetFighter, 0x0},
+    {9093, 0x8, SlotKind::Function, RoutineId::CrashCastJetCompanion, 0x0},
+    {9094, 0x0, SlotKind::Function, RoutineId::CrashCastSecondBodyTalk, 0x0},
+    {9094, 0x4, SlotKind::Function, RoutineId::CrashCastSecondBodyIdle, 0x0},
+    {9094, 0x8, SlotKind::Function, RoutineId::CrashCastSecondBodyStill, 0x0},
+    {9094, 0xc, SlotKind::Function, RoutineId::CrashCastSecondBodyBlink, 0x0},
+    {9094, 0x10, SlotKind::Function, RoutineId::CrashCastSecondBodySpeech, 0x0},
 };
 static constexpr Ps1LabelTable kPs1LabelTables[] = {
     {TableId::AbandonedMineExitCameraScript, 0x0, 5198, false, 0},
@@ -24548,6 +24563,9 @@ static constexpr Ps1LabelTable kPs1LabelTables[] = {
     {TableId::CrashLandingCastRollMouth, 0x0, 9089, true, 0},
     {TableId::CrashLandingCastBarrelVariants, 0x0, 9090, true, 0},
     {TableId::CrashLandingCastFaceMouth, 0x0, 9091, true, 0},
+    {TableId::CrashLandingCastSecondBodyMouth, 0x0, 9092, true, 0},
+    {TableId::CrashLandingCraftVariants, 0x0, 9093, true, 0},
+    {TableId::CrashLandingCastSecondBodyVariants, 0x0, 9094, true, 0},
 };
 // kPs1StateTables: {the table, its index, the engine's address of it, its bytes}: the tables in the
 // program's state (built at run time, initially zero); kEngineState: the engine's state addresses.

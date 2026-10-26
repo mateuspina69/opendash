@@ -372,7 +372,13 @@ TableReader Ps1DataSource::regionBytes(size_t part, uint32_t address, uint32_t n
             }
         }
         const auto at = partFor(part, p, 1);
-        if (!at) tracePointer(p, 1);
+        if (!at) {
+            if (std::getenv("OPENDASH_TRACE_DATA"))
+                std::fprintf(stderr, "PS1 unresolved pointer %08x at %s+%08x+%zx (%s)\n", p, pt.file.c_str(),
+                             address, o, region ? describe(region->key).c_str() : "label");
+            else
+                tracePointer(p, 1);
+        }
         put32(b, o, at ? virtualOf(*at, p, to) : 0);
     };
     // the slots of the tables the game reads by address whose extent [address, address + take) meets
