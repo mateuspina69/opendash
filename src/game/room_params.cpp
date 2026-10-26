@@ -50,7 +50,8 @@ void roomParamsSetup(uint32_t address) {
     StageState& s = stage();
     r.params.pointAt(address);
     const RoomParams params = dataRecord<RoomParams>(address, RoomParams::kBytes);
-    setFogDistance(int32_t(uint32_t(params.fogDistance)));
+    setFogDistance(int32_t(uint32_t(params.fogDistance)));                       // exe 0x40ba60
+    setFogColour(params.fogColour[0], params.fogColour[1], params.fogColour[2]); // exe 0x40ba90
     s.coordinateShift = params.coordinateShift;
     s.gridByte = params.gridByte;
     roomGrid().roomFlags = params.roomFlags;

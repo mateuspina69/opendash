@@ -23,6 +23,7 @@
 #include "game/door_leaves.hpp"
 #include "game/room_exits.hpp"
 #include "game/room_params.hpp"
+#include "game/stage_state.hpp"
 #include "game/stage_files.hpp"
 
 namespace od::app {
@@ -215,6 +216,16 @@ void loadBankGeometry(RoomMesh& mesh, const od::GameFile& st, int shift, SliceFn
 od::Fog fogFor(const RoomMesh& mesh, od::FogMode mode, float distance) {
     od::Fog f;
     for (int c = 0; c < 3; ++c) f.color[c] = mesh.clear[c];
+    if (mesh.depthCue) {
+        if (mode == od::FogMode::Off) return f;
+        // the PS1's depth cue: IR0 = view depth >> the coordinate shift (SLUS 0x80025b74's mtc2 before each DPCS), the
+        // far colour the game's (the room's record, a script's)
+        const od::port::RoomDrawState& d = od::port::roomDraw();
+        f.mode = od::FogMode::DepthCue;
+        for (int c = 0; c < 3; ++c) f.color[c] = float(d.fogColour[size_t(c)]) / 255.0f;
+        f.end = 4096.0f * float(1u << (od::port::stage().coordinateShift & 0x1f));
+        return f;
+    }
     const float s = mesh.fogStart, e = mesh.fogEnd;
     if (e <= s || mode == od::FogMode::Off) return f;
     f.mode = mode;
@@ -383,6 +394,7 @@ RoomMesh loadRoom(int stage, int sub) {
         constexpr float kDepthRange = 16384.0f;
         mesh.fogStart = roomParams.fogStart * kDepthRange;
         mesh.fogEnd = roomParams.fogEnd * kDepthRange;
+        mesh.depthCue = !roomParams.d3dFog && roomParams.depthCue;
         SDL_Log("ST%02X_%d: fog %.0f..%.0f colour %u %u %u", stage, sub < 0 ? 0 : sub, mesh.fogStart, mesh.fogEnd,
                 roomParams.fogColour[0], roomParams.fogColour[1], roomParams.fogColour[2]);
     }

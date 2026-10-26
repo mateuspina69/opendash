@@ -97,6 +97,9 @@ struct RoomMesh {
     // +0x18 via FUN_00549a40), the frame is cleared to the drawenv colour (black) instead of showing the fog colour
     bool bgCleared = false;
     float fogStart = 0.0f, fogEnd = 0.0f;                         // camera depth (world units)
+    // the PS1's depth cue (a record with no D3D range and its +0x7 bit 0): fogFor, from the game's far colour and
+    // coordinate shift as they go
+    bool depthCue = false;
     std::array<uint32_t, 4> semiStart{};                          // semi-transparent vertex ranges
     std::vector<SkyLayer> sky;
     // ST01 (the travel map, script 7): the 2D world map of FUN_00518c00 (8-bit pages 0x15 / 0x17 / 0x19 / 0x1b,

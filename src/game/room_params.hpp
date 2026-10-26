@@ -55,15 +55,18 @@ struct RoomParamsRecord : DataRecord {
     static constexpr uint32_t kBytes = 0x2c;
     std::array<uint8_t, 3> fogColour{};
     uint8_t coordinateShift = 0;
-    uint16_t fogDistance = 0; // +0x4: the fog distance (the depth cue's near: game/room_params setFogDistance)
+    uint16_t fogDistance = 0; // +0x4: the fog distance (game/room_params setFogDistance)
+    // +0x7 bit 0: the PS1's depth cue (SLUS 0x80024ba0 / 0x80078b90: the meshes and the ground fog toward the far
+    // colour by view depth / 4096, the dungeons' rooms); the PC draws its D3D fog instead
+    bool depthCue = false;
     // the PC port's D3D table fog, start / end fractions of the depth range (+0x24 / +0x28): the PC's records only (the
     // PS1's are 0x24 bytes; its fog is the depth cue)
     bool d3dFog = false;
     float fogStart = 0.0f, fogEnd = 0.0f;
     static RoomParamsRecord load(const TableReader& r) {
         const bool d3d = r.size() >= kBytes;
-        return {{}, {r.u8(0), r.u8(1), r.u8(2)}, r.u8(3), r.u16(0x4), d3d, d3d ? r.f32(0x24) : 0.0f,
-                d3d ? r.f32(0x28) : 0.0f};
+        return {{}, {r.u8(0), r.u8(1), r.u8(2)}, r.u8(3), r.u16(0x4), (r.u8(0x7) & 1) != 0, d3d,
+                d3d ? r.f32(0x24) : 0.0f, d3d ? r.f32(0x28) : 0.0f};
     }
 };
 

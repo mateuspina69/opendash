@@ -70,7 +70,7 @@ struct FrameConstants {
     float shadowMode;
     float semiPass; // a semi-transparent range: 1 its opaque texels (no STP bit), 2 its blended ones; 0 any draw else
     float pad1[2];
-    float fogMode; // 0 off, 1 classic (linear on depth), 2 remaster (exponential height fog)
+    float fogMode; // 0 off, 1 classic (linear on depth), 2 remaster (exponential height fog), 3 the PS1's depth cue
     float fogDensity;
     float fogHeightFalloff;
     float fogMaxOpacity;

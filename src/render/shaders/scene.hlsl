@@ -19,7 +19,7 @@ cbuffer Frame : register(b0) {
     float shadowMode;  // 1: this draw receives sun shadows (opaque world / actors); 0: sky, blended effects, sun off
     float semiPass;    // a semi-transparent range: 1 its opaque texels (no STP bit), 2 its blended ones; 0 any draw else
     float2 pad1;
-    float fogMode;          // 0 off, 1 classic (the original's linear table fog), 2 remaster (exponential height fog)
+    float fogMode;          // 0 off, 1 classic (the original's linear table fog), 2 remaster (exponential height fog), 3 the PS1's depth cue
     float fogDensity;       // remaster: extinction per world unit
     float fogHeightFalloff; // remaster: density e-folds per world unit of height above the eye
     float fogMaxOpacity;    // remaster: the far field never fogs more than this
@@ -331,7 +331,9 @@ PSOut ps_main(VSOut i, bool front : SV_IsFrontFace) {
     // fog: an opaque / averaged surface turns into the fog colour; light a draw adds (B+F, B+F/4) or takes away
     // (B*(1-F)) fades out instead -- pulled toward the fog colour it would add a fog-coloured veil of its own
     const bool fadeOut = blendMode > 1.5;
-    if (fogMode > 0.5 && fogMode < 1.5 && fogEnd > fogStart) { // D3D linear table fog (Maybe_SetD3DFog)
+    if (fogMode > 2.5) { // the PS1's depth cue (GTE DPCS: SLUS 0x80025b74's meshes, the ground's grid)
+        if (!fadeOut) rgb = max(rgb + (rgb * fogColor * (255.0 / 128.0) - rgb) * (max(i.depth, 0.0) / fogEnd), 0.0);
+    } else if (fogMode > 0.5 && fogMode < 1.5 && fogEnd > fogStart) { // D3D linear table fog (Maybe_SetD3DFog)
         const float keep = saturate((fogEnd - i.depth) / (fogEnd - fogStart));
         rgb = fadeOut ? rgb * keep : lerp(fogColor, rgb, keep);
     } else if (fogMode > 1.5) {

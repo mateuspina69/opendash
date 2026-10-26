@@ -80,7 +80,9 @@ struct SunLight {
 // at end). Remaster: exponential fog on the view distance from `start` on (density per world unit), thinner above the
 // eye and thicker below (heightFalloff per world unit, the analytic integral along the ray), never more opaque than
 // maxOpacity (far geometry stays a silhouette), brightened toward the sun when the sun is on.
-enum class FogMode { Off, Classic, Remaster };
+// DepthCue: the PS1's (GTE DPCS): the colour toward the colour times the far colour (128 = 1.0) by view depth / end,
+// from the eye, past 1 too (the colour clamps at 0); not on effects (an added / taken light)
+enum class FogMode { Off, Classic, Remaster, DepthCue };
 struct Fog {
     FogMode mode = FogMode::Off;
     float color[3]{0.0f, 0.0f, 0.0f};
