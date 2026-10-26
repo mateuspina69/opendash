@@ -18,6 +18,7 @@
 #include "game/game_state.hpp"
 #include "game/input_bindings.hpp"
 #include "game/items.hpp"
+#include "game/menu_art.hpp"
 #include "game/menu_banks.hpp"
 #include "game/menu_draw.hpp"
 #include "game/message.hpp"
@@ -31,6 +32,7 @@
 #include "game/status_equipment.hpp"
 #include "game/status_items.hpp"
 #include "game/status_options.hpp"
+#include "game/status_title.hpp"
 #include "game/transition.hpp"
 
 using namespace od::port::status_screen_state;
@@ -142,6 +144,25 @@ constexpr uint16_t kRowCursorClut = 0x7f13, kRowClut = 0x7f12;
 constexpr uint32_t kLifeBlink = 0x17f; // the empty gauge's blink: (ph < 0x11 ? ph * 8 + 0x7f : 0x17f - ph * 8)
 constexpr int kTimeX[6] = {0x74, 0x80, 0x94, 0xa0, 0xb4, 0xc0};
 constexpr uint32_t kFramesPerHour = 0x34bc0, kFramesPerMinute = 0xe10, kFramesPerSecond = 0x3c;
+// The panel's sixth row (game/status_title) in play: the box of the rows (the tile map's columns 0..9, rows 4..16 in the
+// exe) is two tile rows taller (plain rows inserted after row 9, kBoxGrowEnd the first row that stays), the rows are one
+// texel apart instead of two, and the caption is OpenDash's cell (game/menu_art) in the options texture's free place
+constexpr int kBoxColumns = 10, kBoxGrowAfter = 10, kBoxGrowRows = 2, kBoxGrowEnd = 19;
+constexpr int kRowGap = 1;
+constexpr uint16_t kTitleCellMode = 0x200 | menuart::kTitleCellTpage; // the cell's tpage, the panel's mode flags
+// the row's picture of the panel's row k (the exe's, the rows moved when there is a sixth)
+RowArtRecord panelRowArt(int k) {
+    const int exe = panelExeRow(k);
+    RowArtRecord e = exe >= 0 ? panelRows[size_t(exe)] : panelRows[0];
+    if (exe < 0) { // OpenDash's cell
+        e.uv = uint16_t(menuart::kCellTitle.u | menuart::kCellTitle.v << 8);
+        e.clut = kRowClut;
+        e.w = menuart::kCellWidth;
+        e.h = menuart::kCellHeight;
+    }
+    if (panelHasTitle()) e.y = int16_t(panelRows[0].y + kRowGap + k * (panelRows[0].h + kRowGap));
+    return e;
+}
 
 // exe 0x5e7920: the panel's tile map and the "status" / "location" captions, in kOtFrames
 void panelTileMapDraw() {
@@ -152,14 +173,19 @@ void panelTileMapDraw() {
     otSprite(c, 0x70, 0x10, kStatusTitleArt, 0x60, 0x10);
     labelNext(kLblStatusLocation);
     otSprite(c, 0x88, 0x20, kStatusLocationArt, 0x30, 0x10);
-    uint32_t p = 0;
     const int cols = map.columns, rows = map.rows;
     const bool small = map.tileSize == 8;
     const int sh = small ? 3 : 4;
+    const bool grown = panelHasTitle();
     artBegin(kVecStatusPanel);
     for (int r = 0; r < rows; ++r)
         for (int k = 0; k < cols; ++k) {
-            const uint8_t i = map.mapByte(p++);
+            // OpenDash's sixth row: the rows' box (the map's columns 0..kBoxColumns - 1) grows by kBoxGrowRows plain rows
+            // (the middle ones repeat), the tiles below them move down
+            int mapRow = r;
+            if (grown && k < kBoxColumns && r >= kBoxGrowAfter && r < kBoxGrowEnd)
+                mapRow = r < kBoxGrowAfter + kBoxGrowRows ? kBoxGrowAfter - 1 : r - kBoxGrowRows;
+            const uint8_t i = map.mapByte(uint32_t(mapRow * cols + k));
             if (small && i == 0) continue;
             otSprite(c, k << sh, r << sh, map.tile(i), 1 << sh, 1 << sh, kNeutral, small ? kSprite8 : kSprite16);
         }
@@ -191,12 +217,15 @@ void panelDraw(StatusScreen& s) {
     panelTileMapDraw();
     const size_t c = otOpen(kOtRows);
     otDrawMode(c, kPanelMode);
-    for (int k = 0; k < 5; ++k) {
-        const RowArtRecord& e = panelRows[size_t(k)];
+    for (int k = 0; k < panelRowCount(); ++k) {
+        const RowArtRecord e = panelRowArt(k);
         const uint32_t clut = kRowCursorClut - uint32_t(s.cursor != k);
-        labelNext(kLblStatusRow, uint16_t(k | (s.cursor == k ? 0x10 : 0)));
+        const bool own = panelExeRow(k) < 0; // OpenDash's cell lies on its own texture page
+        if (own) otDrawMode(c, kTitleCellMode);
+        labelNext(kLblStatusRow, uint16_t((own ? kPanelTitleLabelRow : panelExeRow(k)) | (s.cursor == k ? 0x10 : 0)));
         rowNext(k);
         otSprite(c, e.x, e.y, clut << 16 | e.uv, e.w, e.h);
+        if (own) otDrawMode(c, kPanelMode);
     }
     int32_t z = g.zenny, div = 1000000;
     for (int k = 0, x = 0x78; k < 7; ++k, x += 10) {
@@ -284,19 +313,28 @@ void pageNotPorted(StatusScreen& s, uint8_t page) {
 void panel(StatusScreen& s) {
     switch (PanelState(s.state)) {
     case PanelState::Enter:
+        panelTitleSetUp();
         s.state = uint8_t(PanelState::Rows);
         [[fallthrough]];
     case PanelState::Rows:
         menuCursorStep(s, 1);
         if ((menuPadPressed() & kPadTriangle) == 0) {
             if (menuPadPressed() & kPadConfirm) {
-                s.state = uint8_t(uint32_t(panelPages[size_t(int32_t(s.cursor))] != uint8_t(StatusPage::Closing)) + 2u);
+                const int exe = panelExeRow(s.cursor);
+                if (exe < 0) { // OpenDash's "To Title": its question
+                    s.state = uint8_t(PanelState::ToTitle);
+                    s.sub = 0;
+                    s.step = 0;
+                    break;
+                }
+                s.state = uint8_t(uint32_t(panelPages[size_t(exe)] != uint8_t(StatusPage::Closing)) + 2u);
                 break;
             }
             if (menuPadPressed() & kPadCross) s.cursor = kPanelCloseRow;
         }
         // triangle with a special weapon: the panel's weapon switch -- not ported
         break;
+    case PanelState::ToTitle: panelTitleQuestion(s); break;
     case PanelState::Close:
         // exe 0x5e7dd0: the display buffer copied over the screen for the closing frames -- the host keeps the last
         // picture itself
@@ -314,7 +352,7 @@ void panel(StatusScreen& s) {
     case PanelState::WaitPage:
         if (pageDatReady(s) == 0) break;
         {
-            const uint8_t page = panelPages[size_t(int32_t(s.cursor))];
+            const uint8_t page = panelPages[size_t(panelExeRow(s.cursor))];
             s.enterPage(StatusPage(page));
             if (page == uint8_t(StatusPage::Map)) pageNotPorted(s, page);
         }

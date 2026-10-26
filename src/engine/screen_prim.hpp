@@ -37,7 +37,7 @@ enum VecLabel : uint16_t {
     kLblNone = 0,
     kLblStatusTitle,    // "STATUS" between its two rings (FUN_005e7920: 0x70, 0x10, 96 x 16)
     kLblStatusLocation, // the "location" caption (0x88, 0x20, 48 x 16)
-    kLblStatusRow,      // a row of the status panel (0x91a998): arg = the row | 0x10 the cursor's row
+    kLblStatusRow,      // a row of the status panel (0x91a998): arg = the row (5 OpenDash's "To Title") | 0x10 the cursor's row
     kLblGaugeCell,      // a cell of the life gauge (8 x 7): arg 0 = a capacity cell, 1 = life
     kLblWeaponSwap,     // the special weapon caption (0x68, 0x98, 64 x 16): arg 1 = dimmed (no special weapon)
     kLblWeaponLifter,   // its "<-> lifter" half (0xa8, 0x98, 48 x 16): arg 1 = dimmed

@@ -32,6 +32,10 @@ struct Cell {
 constexpr Cell kCellLanguage{0xc0, 0xe0}, kCellVideo{0x90, 0xe0};
 constexpr Cell kCellKeys[3] = {{0x00, 0xd0}, {0x30, 0xd0}, {0x60, 0xd0}}; // the key configuration's pad / keys / mouse
 constexpr int kCellWidth = 0x30, kCellHeight = 0x10;
+// the panel's "To Title" row (game/status_title): a cell of its own texture page, in the VRAM's left part (the PS1's
+// frame buffers, which the host's sub-screen VRAM keeps empty: the options texture and the panel's have no free cell)
+constexpr uint16_t kTitleCellTpage = 0;
+constexpr Cell kCellTitle{0x00, 0x00};
 
 // a caption cell at (u, v) of the 4-bit tpage `tpage`: w x 16, the box with the glyphs centred
 void caption(Vram& vram, uint16_t tpage, int u, int v, int w, const std::vector<Glyph>& glyphs);

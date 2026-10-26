@@ -6,6 +6,7 @@ status.row.1=ITEMS
 status.row.2=EQUIPMENT
 status.row.3=OPTIONS
 status.row.4=BACK
+status.row.5=TO TITLE
 status.weapon=Spec.Weapon
 status.lifter=Lifter
 bar.confirm=Confirm

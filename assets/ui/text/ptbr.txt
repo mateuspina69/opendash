@@ -6,6 +6,7 @@ status.row.1=Itens
 status.row.2=Peças
 status.row.3=Opções
 status.row.4=Voltar
+status.row.5=Título
 status.weapon=Arma.Espec
 status.lifter=Gancho
 bar.confirm=Confirmar

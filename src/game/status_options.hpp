@@ -1,7 +1,7 @@
 // The status sub-screen's options page (page 6, exe 0x5edb70; SUBSCN06; the title's options run it too): its rows
-// (OpenDash's layout of them: the furigana row only in Japanese, the language row before "defaults", the "back to the
-// title" row in play), the two-choice rows (camera, vibration, furigana, mono), the lock-on, the volume, the video row,
-// the defaults, the language and the back-to-the-title rows, the inline values and the overlays; the key configuration
+// (OpenDash's layout of them: the furigana row only in Japanese, the language row before "defaults"), the two-choice
+// rows (camera, vibration, furigana, mono), the lock-on, the volume, the video row, the defaults and the language rows,
+// the inline values and the overlays; the key configuration
 // (state 3) is game/key_config. What the exe asks of its PC layer is answered by OpenDash's own settings (OptionsHost).
 #pragma once
 
@@ -19,8 +19,8 @@ struct StatusScreen;
 //     raw devices while a binding is captured
 //   - the video row (state 0xa, the exe's place for it) is OpenDash's: the anti-aliasing, the resolution, the display
 //     mode (window / borderless / exclusive full screen), on OpenDash's settings, not the exe's video globals
-//   - OpenDash's rows: the language (state 0xc, modelled on the video row's overlay), back to the title (state 0xd,
-//     in play only: the soft reset after a yes / no)
+//   - OpenDash's language row (state 0xc, modelled on the video row's overlay)
+//   - the panel's "To Title" row (game/status_title) asks the host for the game's soft reset after a yes
 struct OptionsHost {
     std::function<int()> language;          // 0 Japanese, 1 English, 2 Portuguese
     std::function<int()> languageCount;
@@ -50,7 +50,7 @@ struct OptionsHost {
     // (the one choice: the render resolution is the anti-aliasing quality's), Exclusive the display's modes
     std::function<std::vector<VideoMode>(DisplayMode)> videoModes;
     std::function<void(const Video&)> videoApply; // apply + persist
-    std::function<void()> returnToTitle; // OpenDash's "back to the title" row: the game's soft reset (game/title)
+    std::function<void()> returnToTitle; // the panel's "To Title" row (game/status_title): the game's soft reset (game/title)
     std::function<void(uint32_t type, uint8_t param)> fade; // exe 0x53f6b0 (the title's options)
 };
 OptionsHost& optionsHost();
@@ -60,6 +60,12 @@ void optionsPage(StatusScreen& s);
 // the source's options texture has the PC's pictures (the pad, the keyboard, the mouse, the buttons' and the video
 // row's icons: tpage 8); without them (the PS1's) OpenDash draws its own where it needs them
 bool optionsPictures();
+// the options page's overlay (the screen dimmed and lined, the box of `rows` lines, the cursor bar on line s.step, the
+// corner brackets; `icons`: the video row's pictures where the source has them): the questions of the sub-screen use it
+void optionsOverlay(const StatusScreen& s, int rows, bool icons);
+// the source's own message headers are the PS1's (their window columns are in 2 px units): its options page has the
+// PS1's nine rows
+bool optionsSourceHeadersPs1();
 // the inline value table k of the rows (OpenDash's copies, moved with their row: 0 the key configuration's columns)
 uint32_t optionsValueTable(size_t k);
 

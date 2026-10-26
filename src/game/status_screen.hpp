@@ -38,6 +38,7 @@ enum class PanelState : uint8_t {
     WaitLoads = 3, // a row chosen: the loads done first
     LoadPage = 4,  // the page's DAT
     WaitPage = 0xa,
+    ToTitle = 0xb, // OpenDash's "To Title" row (game/status_title): its question
 };
 // +1 of the closing page
 enum class ClosingState : uint8_t { ResetWeapons = 0, Restore = 1, Closed = 2 };
