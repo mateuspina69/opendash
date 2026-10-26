@@ -9086,6 +9086,10 @@ static constexpr Ps1Label kPs1Labels[] = {
     {"DAT/ST1ET.BIN", 0x800ef1f0u, 0xc},
     {"DAT/ST1E01T.BIN", 0x800ef1f0u, 0xc},
     {"COMMON/GAME.BIN", 0x800dc45cu, 0x14},
+    {"SLUS_011.40", 0x8006b338u, 0x10},
+    {"SLUS_011.40", 0x8006b0b8u, 0x20},
+    {"DAT/ST1ET.BIN", 0x800f0d6cu, 0xc},
+    {"DAT/ST1E01T.BIN", 0x800f0d6cu, 0xc},
 };
 static constexpr Ps1LabelSlot kPs1LabelSlots[] = {
     {6319, 0x0, SlotKind::Data, RoutineId::None, 0x0},
@@ -20632,6 +20636,15 @@ static constexpr Ps1LabelSlot kPs1LabelSlots[] = {
     {9078, 0x8, SlotKind::Function, RoutineId::EventItemGet, 0x0},
     {9078, 0xc, SlotKind::Function, RoutineId::EventPose, 0x0},
     {9078, 0x10, SlotKind::Function, RoutineId::EventStandThenItem, 0x0},
+    {9079, 0x0, SlotKind::Data, RoutineId::None, 0x0},
+    {9079, 0x4, SlotKind::Data, RoutineId::None, 0x0},
+    {9079, 0x8, SlotKind::Data, RoutineId::None, 0x0},
+    {9081, 0x0, SlotKind::Function, RoutineId::MissionResultSetUpState, 0x0},
+    {9081, 0x4, SlotKind::Function, RoutineId::MissionResultStepsState, 0x0},
+    {9081, 0x8, SlotKind::Function, RoutineId::MissionResultWrapUpState, 0x0},
+    {9082, 0x0, SlotKind::Function, RoutineId::MissionResultSetUpState, 0x0},
+    {9082, 0x4, SlotKind::Function, RoutineId::MissionResultStepsState, 0x0},
+    {9082, 0x8, SlotKind::Function, RoutineId::MissionResultWrapUpState, 0x0},
 };
 static constexpr Ps1LabelTable kPs1LabelTables[] = {
     {TableId::AbandonedMineExitCameraScript, 0x0, 5198, false, 0},
@@ -24479,6 +24492,10 @@ static constexpr Ps1LabelTable kPs1LabelTables[] = {
     {TableId::FireMissionRoomsRoomHandlers, 0x0, 9076, true, 0},
     {TableId::FireMissionRoomsRoomHandlers, 0x0, 9077, true, 0},
     {TableId::EventRunners, 0x0, 9078, true, 0},
+    {TableId::HudBannerLayouts, 0x0, 9079, true, 0},
+    {TableId::HudBannerKinds, 0x0, 9080, true, 0},
+    {TableId::MissionResultStates, 0x0, 9081, true, 0},
+    {TableId::MissionResultStates, 0x0, 9082, true, 0},
 };
 // kPs1StateTables: {the table, its index, the engine's address of it, its bytes}: the tables in the
 // program's state (built at run time, initially zero); kEngineState: the engine's state addresses.
