@@ -463,6 +463,7 @@ size_t Ps1DataSource::voicePart(TableKey key, const Located& table) const {
 }
 
 TableReader Ps1DataSource::table(TableKey key, uint32_t bytes) const {
+    if (std::getenv("OPENDASH_TRACE_DATA")) lastTableKey_ = describe(key);
     const auto it = tables_.find(key);
     if (it == tables_.end()) throw DataSourceError("data source (PS1): the disc has no table " + describe(key));
     const Located& t = it->second;
@@ -539,7 +540,11 @@ TableReader Ps1DataSource::pointee(uint32_t pointer, uint32_t n) const {
     // the program's state: its initial bytes (zero), as the PC reads its .bss
     if (pointer >= kEngineState[0] && pointer < kEngineState[1]) return TableReader(*this, std::vector<uint8_t>(n, 0));
     if (pointer < kVirtualBase || pointer >= kRoutineTag) {
-        tracePointer(pointer, n);
+        if (std::getenv("OPENDASH_TRACE_DATA"))
+            std::fprintf(stderr, "PS1 unresolved pointer %08x, %u bytes (last table %s)\n", pointer, n,
+                         lastTableKey_.c_str());
+        else
+            tracePointer(pointer, n);
         return TableReader(*this, {});
     }
     size_t part;

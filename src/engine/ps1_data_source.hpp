@@ -82,6 +82,7 @@ private:
         TableKey key;
         int region = 0;
     };
+    mutable std::string lastTableKey_; // the last table a read started (the trace's context)
 
     std::string discPath(const std::string& name) const; // "" when the disc has no such file
     size_t addPart(std::string file, uint32_t base, std::vector<uint8_t> data) const;
