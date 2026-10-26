@@ -383,12 +383,6 @@ RoomMesh loadRoom(int stage, int sub) {
         constexpr float kDepthRange = 16384.0f;
         mesh.fogStart = roomParams.fogStart * kDepthRange;
         mesh.fogEnd = roomParams.fogEnd * kDepthRange;
-        // The PS1 record is 0x24 bytes: the PC's D3D start/end past it read as zero. Fall back to the PS1 fog
-        // distance (world units) the room's draw call uses, so the stage keeps its fog.
-        if (od::dataSource().isPs1() && mesh.fogEnd <= mesh.fogStart && roomParams.fogDistance != 0) {
-            mesh.fogStart = 0.0f;
-            mesh.fogEnd = float(roomParams.fogDistance);
-        }
         SDL_Log("ST%02X_%d: fog %.0f..%.0f colour %u %u %u", stage, sub < 0 ? 0 : sub, mesh.fogStart, mesh.fogEnd,
                 roomParams.fogColour[0], roomParams.fogColour[1], roomParams.fogColour[2]);
     }
