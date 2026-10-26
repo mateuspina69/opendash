@@ -9073,6 +9073,10 @@ static constexpr Ps1Label kPs1Labels[] = {
     {"DAT/ST1D01T.BIN", 0x800fd04cu, 0x11c},
     {"DAT/ST1DT.BIN", 0x800fcd88u, 0xc},
     {"DAT/ST1D01T.BIN", 0x800fcd88u, 0xc},
+    {"DAT/ST1DT.BIN", 0x800fd1b4u, 0xc},
+    {"DAT/ST1D01T.BIN", 0x800fd1b4u, 0xc},
+    {"DAT/ST1DT.BIN", 0x800fd1acu, 0x8},
+    {"DAT/ST1D01T.BIN", 0x800fd1acu, 0x8},
 };
 static constexpr Ps1LabelSlot kPs1LabelSlots[] = {
     {6319, 0x0, SlotKind::Data, RoutineId::None, 0x0},
@@ -20599,6 +20603,8 @@ static constexpr Ps1LabelSlot kPs1LabelSlots[] = {
     {9063, 0x94, SlotKind::Data, RoutineId::None, 0x0},
     {9063, 0x9c, SlotKind::Data, RoutineId::None, 0x0},
     {9063, 0xa4, SlotKind::Data, RoutineId::None, 0x0},
+    {9066, 0x4, SlotKind::Function, RoutineId::ElephantScriptStep5, 0x0},
+    {9067, 0x4, SlotKind::Function, RoutineId::ElephantScriptStep5, 0x0},
 };
 static constexpr Ps1LabelTable kPs1LabelTables[] = {
     {TableId::AbandonedMineExitCameraScript, 0x0, 5198, false, 0},
@@ -24433,6 +24439,10 @@ static constexpr Ps1LabelTable kPs1LabelTables[] = {
     {TableId::ElephantBossScript28Camera, 0x0, 9063, true, 0},
     {TableId::ElephantBossArenaCentre, 0x0, 9064, true, 0},
     {TableId::ElephantBossArenaCentre, 0x0, 9065, true, 0},
+    {TableId::ElephantBossScript29Steps, 0x0, 9066, true, 0},
+    {TableId::ElephantBossScript29Steps, 0x0, 9067, true, 0},
+    {TableId::ElephantBossScript29Camera, 0x0, 9068, true, 0},
+    {TableId::ElephantBossScript29Camera, 0x0, 9069, true, 0},
 };
 // kPs1StateTables: {the table, its index, the engine's address of it, its bytes}: the tables in the
 // program's state (built at run time, initially zero); kEngineState: the engine's state addresses.

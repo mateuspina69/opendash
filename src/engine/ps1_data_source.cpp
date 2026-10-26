@@ -283,6 +283,16 @@ void Ps1DataSource::makeTables() {
         }
     }
     made({TableId::MenuBankShopPriceStrings, 0}, "shop prices", ps1ShopPrices(*disc_));
+    // The PC keeps the identity matrix in the exe (0x847ac4). It is a constant of the transform math, not game
+    // content: the 3x3 diagonal 0x1000 and the padding short the rotation helper copies along with it.
+    {
+        std::vector<uint8_t> identity(0x14, 0);
+        for (const size_t at : {size_t(0), size_t(8), size_t(16)}) {
+            identity[at] = 0x00;
+            identity[at + 1] = 0x10; // 0x1000, little-endian
+        }
+        made({TableId::IdentityMatrix, 0}, "identity matrix", std::move(identity));
+    }
 }
 
 std::string Ps1DataSource::discPath(const std::string& name) const {
