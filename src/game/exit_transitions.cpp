@@ -94,10 +94,19 @@ const ViewTable slidingPairViews{TableId::SlidingPairViews}; // exe 0x88c668
 const ViewTable walkOffViews{TableId::WalkOffViews};         // exe 0x88c868
 // the door leaves' offsets (the exit's high nibble of byte 2 picks them)
 struct LeafOffset : DataRecord {
+    static constexpr uint32_t kBytes = 4;
     int16_t x = 0, z = 0;
-    static LeafOffset load(const TableReader& r) { return {{}, r.s16(0), r.s16(2)}; }
+    template <class R> static LeafOffset load(const R& r) {
+        return {{}, r.template read<int16_t>(0), r.template read<int16_t>(2)};
+    }
 };
-using LeafOffsets = DataTable<RecordTable<LeafOffset, 0x10, 4>>;
+// a door kind's leaf offsets (4-byte records): as long as the exits' nibbles reach; the record read is the one named
+struct LeafOffsets {
+    TableId id;
+    LeafOffset operator[](size_t i) const {
+        return dataRecord<LeafOffset>(stateAddress(id) + uint32_t(i) * 4, LeafOffset::kBytes);
+    }
+};
 const LeafOffsets passageLeafOffsets{TableId::PassageLeafOffsets};         // exe 0x88c7d4
 const LeafOffsets doubleLeafOffsets{TableId::DoubleDoorLeafOffsets};       // exe 0x88c634
 const LeafOffsets slidingPairLeafOffsets{TableId::SlidingPairLeafOffsets}; // exe 0x88c694
