@@ -71,7 +71,8 @@ TableId stageTableOf(StageGlobal global) {
     default: notPortedAt(kStageSetupPort, "a stage setup write of a global that names no table", uint32_t(global));
     }
 }
-// the value a stage setup writes into a global that points at a table: the stage's table (0: the stage has none)
+// The setups also write nulls to clear optional globals. The source distinguishes a stage with no table from a
+// required table with no placement (an error), so only a genuine absence becomes zero here.
 uint32_t stageTableValue(StageGlobal global, int stage) {
     const TableKey key{stageTableOf(global), uint32_t(stage)};
     return dataSource().hasTable(key) ? dataSource().stateAddress(key) : 0;
