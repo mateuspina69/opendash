@@ -76,12 +76,12 @@ struct TransitionView : DataRecord {
     int16_t distance = 0;
     static TransitionView load(const TableReader& r) { return {{}, r.s16(0), r.s16(2), r.s16(4)}; }
 };
-using ViewTable = DataTable<RecordTable<TransitionView, 0x100, 8>>;
-const ViewTable passageViews{TableId::PassageViews};         // exe 0x88c7a8
-const ViewTable hingedViews{TableId::HingedDoorViews};       // exe 0x88c578
-const ViewTable doubleViews{TableId::DoubleDoorViews};       // exe 0x88c600
-const ViewTable slidingPairViews{TableId::SlidingPairViews}; // exe 0x88c668
-const ViewTable walkOffViews{TableId::WalkOffViews};         // exe 0x88c868
+template <size_t N> using ViewTable = DataTable<RecordTable<TransitionView, N, 8>>;
+const ViewTable<0x100> passageViews{TableId::PassageViews};         // exe 0x88c7a8
+const ViewTable<8> hingedViews{TableId::HingedDoorViews};           // exe 0x88c578
+const ViewTable<0x100> doubleViews{TableId::DoubleDoorViews};       // exe 0x88c600
+const ViewTable<0x100> slidingPairViews{TableId::SlidingPairViews}; // exe 0x88c668
+const ViewTable<0x100> walkOffViews{TableId::WalkOffViews};         // exe 0x88c868
 // the door leaves' offsets (the exit's high nibble of byte 2 picks them)
 struct LeafOffset : DataRecord {
     int16_t x = 0, z = 0;
@@ -203,7 +203,7 @@ void placePlayer(const PlayerEnv& env, const RoomPlace& place, int16_t side, int
 
 // exe 0x42c410(x, z, view): the transition camera between the player and the point, above the player's feet, at the
 // view (the door kinds inline it with their tables)
-void doorCamera(int16_t x, int16_t z, int16_t view, const ViewTable& views) {
+template <size_t N> void doorCamera(int16_t x, int16_t z, int16_t view, const ViewTable<N>& views) {
     ScriptCamera& sc = scriptCamera();
     const Player& p = player();
     sc.setAnchor(ScriptCameraAnchor::Absolute);
@@ -690,7 +690,7 @@ struct DoorPairKind {
     TableId camera, steps; // the camera script and the steps
     int16_t side, back;
     const AxisSigns& signs;
-    const ViewTable& views;
+    const ViewTable<0x100>& views;
 };
 // exe 0x42ac60 (kind 1: double hinged leaves) / 0x42b0f0 (kind 2: a sliding pair): two leaves with the offsets of the
 // exit's high nibble, mirrored by their variants

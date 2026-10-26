@@ -490,14 +490,6 @@ TableReader Ps1DataSource::table(TableKey key, uint32_t bytes) const {
         const Part& pt = parts_[p];
         if (address >= pt.base && address - pt.base < pt.data->size()) {
             const size_t have = pt.data->size() - (address - pt.base);
-            if ((key.id == TableId::CrashLandingScriptBurnRecords || key.id == TableId::TownNpcSpeeds ||
-                 key.id == TableId::HingedDoorViews || key.id == TableId::FireEmberKeys) && have > 0) {
-                // Some tables sit at the end of an overlay (a record continues in a later data file, or the PS1
-                // table is shorter than the PC's): keep the bytes present and let the rest read as zero.
-                std::vector<uint8_t> b(bytes, 0);
-                std::memcpy(b.data(), pt.data->data() + (address - pt.base), std::min<size_t>(have, bytes));
-                return TableReader(*this, std::move(b));
-            }
             if (have >= own) {
                 (void)virtualOf(p, address, Region{key, 0});
                 TableReader r = regionBytes(p, address, own, Region{key, 0});
@@ -543,8 +535,6 @@ std::pair<std::string, uint32_t> Ps1DataSource::placeOf(const Located& t) const 
 }
 
 TableReader Ps1DataSource::pointee(uint32_t pointer, uint32_t n) const {
-    // a null pointer reads as zeros: the game's code checks many optional records this way
-    if (pointer == 0) return TableReader(*this, std::vector<uint8_t>(n, 0));
     // the program's state: its initial bytes (zero), as the PC reads its .bss
     if (pointer >= kEngineState[0] && pointer < kEngineState[1]) return TableReader(*this, std::vector<uint8_t>(n, 0));
     if (pointer < kVirtualBase || pointer >= kRoutineTag) {

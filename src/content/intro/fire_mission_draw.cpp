@@ -21,16 +21,16 @@ float greyOf(uint32_t word) {
 
 // the keyframed sprites of the effect's kinds: their key scripts and styles
 struct KindSprites {
-    const DataTable<KeyScripts>* keys = nullptr; // nullptr: not a sprite
+    KeyScript (*keys)(size_t) = nullptr; // nullptr: not a sprite
     const DataTable<SpriteStyles>* styles = nullptr;
 };
 // the key scripts and the styles of an effect kind (FireEffectKind; none for the kinds without a sprite)
 KindSprites spritesOf(uint8_t kind) {
     switch (FireEffectKind(kind)) {
-    case FireEffectKind::SmokePuff: return {&smokeKeys, &smokeStyles};
-    case FireEffectKind::BlastEmber: return {&blastEmberKeys, &blastEmberStyles};
-    case FireEffectKind::Debris: return {&debrisKeys, &debrisStyles};
-    case FireEffectKind::Ember: return {&emberKeys, &emberStyles};
+    case FireEffectKind::SmokePuff: return {[](size_t v) { return smokeKeys[v]; }, &smokeStyles};
+    case FireEffectKind::BlastEmber: return {[](size_t v) { return blastEmberKeys[v]; }, &blastEmberStyles};
+    case FireEffectKind::Debris: return {[](size_t v) { return debrisKeys[v]; }, &debrisStyles};
+    case FireEffectKind::Ember: return {[](size_t v) { return emberKeys[v]; }, &emberStyles};
     default: return {};
     }
 }
@@ -99,7 +99,7 @@ void fireEffectDraw(fx::DrawContext& c, const fx::State&, uint32_t actor, uint32
     const KindSprites sprites = spritesOf(e.subtype);
     if (!sprites.keys || FireEffectState(e.state) == FireEffectState::Start) return;
     const FireEffectFields& fx = classState<FireEffectFields>(effectActorAt(actor));
-    const KeyScript keys = (*sprites.keys)[e.variant];
+    const KeyScript keys = sprites.keys(e.variant);
     uint32_t f = fx.key;
     if (f > 0 && fx.keyTicks == keys[f].ticks) --f; // just advanced: the draw read the previous key
     const SpriteKey key = keys[f];

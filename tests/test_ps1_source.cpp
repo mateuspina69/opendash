@@ -28,12 +28,14 @@ struct Event {
 
 class Recorder final : public od::DataSource {
 public:
-    explicit Recorder(const od::DataSource& in) : in_(in) {}
+    explicit Recorder(const od::DataSource& in, uint32_t tableBytes = 0) : in_(in), tableBytes_(tableBytes) {}
     mutable std::vector<Event> events;
     bool hasFile(const std::string& n) const override { return in_.hasFile(n); }
     od::GameFile gameFile(const std::string& n) const override { return in_.gameFile(n); }
     bool hasTable(od::TableKey k) const override { return in_.hasTable(k); }
-    od::TableReader table(od::TableKey k, uint32_t n) const override { return keep('T', in_.table(k, n)); }
+    od::TableReader table(od::TableKey k, uint32_t n) const override {
+        return keep('T', in_.table(k, tableBytes_ ? std::min(n, tableBytes_) : n));
+    }
     uint32_t stateAddress(od::TableKey k) const override { return in_.stateAddress(k); }
     uint32_t routineStateValue(od::RoutineId id) const override { return in_.routineStateValue(id); }
 
@@ -62,6 +64,7 @@ private:
         return od::TableReader(*this, std::move(b));
     }
     const od::DataSource& in_;
+    uint32_t tableBytes_;
 };
 
 // the PS1 source's pointer words: its routine values and its data addresses
@@ -112,6 +115,47 @@ int main(int argc, char** argv) {
     od::content::registerAll();
     const od::PcDataSource pc(argv[2], argv[1]);
     const od::Ps1DataSource ps1(std::make_shared<const od::DiscImage>(argv[3]));
+    { // These native objects end before the old eager readers' guessed array bounds.
+        for (const auto [id, bytes] : {std::pair{od::TableId::CrashLandingScriptBurnRecords, 0x18u},
+                                      std::pair{od::TableId::TownNpcSpeeds, 0x250u},
+                                      std::pair{od::TableId::HingedDoorViews, 0x40u},
+                                      std::pair{od::TableId::FireSmokeKeys, 0x3c0u},
+                                      std::pair{od::TableId::FireBlastEmberKeys, 0xc0u},
+                                      std::pair{od::TableId::FireDebrisKeys, 0x240u},
+                                      std::pair{od::TableId::FireEmberKeys, 0xc0u}}) {
+            bool found = false;
+            for (const od::TableUse& use : od::tableUses()) {
+                if (use.id != id) continue;
+                found = true;
+                Recorder bounded(ps1, bytes);
+                const od::ScopedDataSource bound(bounded);
+                bool loaded = false;
+                try {
+                    use.load({id, 0});
+                    loaded = true;
+                } catch (const od::DataSourceError& e) {
+                    std::fprintf(stderr, "%s: %s\n", od::tableName(id), e.what());
+                }
+                CHECK(loaded);
+                break;
+            }
+            CHECK(found);
+        }
+    }
+    { // A null data pointer must fail on dereference, as it does in the PC source.
+        for (const od::DataSource* source : {static_cast<const od::DataSource*>(&pc),
+                                           static_cast<const od::DataSource*>(&ps1)}) {
+            const auto null = source->stateData(0, 4);
+            CHECK(null.empty());
+            bool threw = false;
+            try {
+                (void)null.u32(0);
+            } catch (const od::DataSourceError&) {
+                threw = true;
+            }
+            CHECK(threw);
+        }
+    }
     for (const od::TableId id : {od::TableId::TextLogicHandlers, od::TableId::TextLayoutHandlers,
                                od::TableId::OpeningScriptSteps, od::TableId::OpeningCastCrewVariants,
                                od::TableId::ArrivalDescentSteps, od::TableId::ArrivalDescentCameraScript,

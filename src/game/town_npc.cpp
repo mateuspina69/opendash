@@ -104,7 +104,7 @@ struct NpcSpeeds : DataRecord {
         return rec;
     }
 };
-const DataTable<RecordTable<NpcSpeeds, 0x100, 8>> npcSpeeds{TableId::TownNpcSpeeds};
+const DataTable<RecordTable<NpcSpeeds, 74, 8>> npcSpeeds{TableId::TownNpcSpeeds};
 const DataTable<ScalarTable<int16_t, 16>> pauseTicks{TableId::TownNpcPauseTicks};
 const DataTable<ScalarTable<uint8_t, 8>> fidgetLooks{TableId::TownNpcFidgetLooks};
 const DataTable<ScalarTable<uint16_t, 8>> fidgetLookTicks{TableId::TownNpcFidgetLookTicks};

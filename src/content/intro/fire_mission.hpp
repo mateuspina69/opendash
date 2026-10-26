@@ -280,19 +280,20 @@ private:
     const SpriteKey* first_;
 };
 // a kind's key scripts (exe data, by variant)
-struct KeyScripts : DataRecord {
-    static constexpr uint32_t kBytes = kSpriteVariants * kKeyScriptStride;
-    RecordTable<SpriteKey, kSpriteVariants * kKeysPerScript, 0xc> keys;
+template <size_t Variants> struct KeyScripts : DataRecord {
+    static constexpr uint32_t kBytes = Variants * kKeyScriptStride;
+    RecordTable<SpriteKey, Variants * kKeysPerScript, 0xc> keys;
     KeyScript operator[](size_t variant) const {
-        if (variant >= kSpriteVariants) tableIndexError(variant, kSpriteVariants);
+        if (variant >= Variants) tableIndexError(variant, Variants);
         return KeyScript(&keys.records[variant * kKeysPerScript]);
     }
-    static constexpr size_t size() { return kSpriteVariants; }
+    static constexpr size_t size() { return Variants; }
     static KeyScripts load(const TableReader& r) { return {{}, decltype(keys)::load(r)}; }
 };
 // each kind's key scripts (by variant)
-const DataTable<KeyScripts> smokeKeys{TableId::FireSmokeKeys}, blastEmberKeys{TableId::FireBlastEmberKeys},
-    debrisKeys{TableId::FireDebrisKeys}, emberKeys{TableId::FireEmberKeys};
+const DataTable<KeyScripts<5>> smokeKeys{TableId::FireSmokeKeys};
+const DataTable<KeyScripts<1>> blastEmberKeys{TableId::FireBlastEmberKeys}, emberKeys{TableId::FireEmberKeys};
+const DataTable<KeyScripts<3>> debrisKeys{TableId::FireDebrisKeys};
 // each kind's sprite styles (exe data, 8-byte records by variant): the texture page, the CLUT, semi-transparent (bit 0)
 struct SpriteStyle : DataRecord {
     uint16_t tpage = 0, clut = 0, semi = 0;
