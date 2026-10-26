@@ -8,7 +8,10 @@ namespace od {
 namespace {
 const DataSource* g_bound = nullptr;
 std::atomic<uint64_t> g_serials{0};
+std::string g_debugTableName;
 } // namespace
+
+std::string& debugTableName() { return g_debugTableName; }
 
 std::string describe(TableKey key) {
     char b[24];
@@ -50,8 +53,9 @@ RoutineRef TableReader::routine(size_t o) const {
 
 const uint8_t* TableReader::at(size_t o, size_t n) const {
     if (o + n > size_ || !bytes_) {
-        char b[96];
-        std::snprintf(b, sizeof b, "data source: a read of %zu bytes at +0x%zx of a %zu-byte table", n, o, size_);
+        char b[160];
+        std::snprintf(b, sizeof b, "data source: a read of %zu bytes at +0x%zx of a %zu-byte table (%s)", n, o, size_,
+                      g_debugTableName.empty() ? "no table" : g_debugTableName.c_str());
         throw DataSourceError(b);
     }
     return bytes_->data() + offset_ + o;

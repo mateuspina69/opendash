@@ -463,6 +463,7 @@ size_t Ps1DataSource::voicePart(TableKey key, const Located& table) const {
 }
 
 TableReader Ps1DataSource::table(TableKey key, uint32_t bytes) const {
+    debugTableName() = describe(key); // a diagnostic for TableReader's error
     if (std::getenv("OPENDASH_TRACE_DATA")) lastTableKey_ = describe(key);
     const auto it = tables_.find(key);
     if (it == tables_.end()) throw DataSourceError("data source (PS1): the disc has no table " + describe(key));
