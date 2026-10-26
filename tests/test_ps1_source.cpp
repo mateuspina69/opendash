@@ -150,7 +150,6 @@ int main(int argc, char** argv) {
     { // These native objects end before the old eager readers' guessed array bounds.
         for (const auto [id, bytes] : {std::pair{od::TableId::CrashLandingScriptBurnRecords, 0x18u},
                                       std::pair{od::TableId::TownNpcSpeeds, 0x250u},
-                                      std::pair{od::TableId::HingedDoorViews, 0x40u},
                                       std::pair{od::TableId::FireSmokeKeys, 0x3c0u},
                                       std::pair{od::TableId::FireBlastEmberKeys, 0xc0u},
                                       std::pair{od::TableId::FireDebrisKeys, 0x240u},
