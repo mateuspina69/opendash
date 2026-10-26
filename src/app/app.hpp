@@ -213,7 +213,8 @@ struct App {
     Input input;
     uint64_t simTicks = 0, accumulator = 0, last = 0, titleAt = 0;
     bool running = true;
-    int frames = 0;
+    int frames = 0;    // the frames drawn (--shot counts them)
+    int fpsFrames = 0; // the frames since the window title's last fps
     bool windowFocused = true, escReleased = false, playCapture = false, captureClick = false; // mouse capture in play mode (see below)
     // this frame (App::frame): its clock, the step's length, the blend of the last two ticks, the camera's source
     uint64_t now = 0;

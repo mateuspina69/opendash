@@ -808,11 +808,11 @@ void App::present() {
         renderer->draw(drawCam, nullptr, overlay);
     }
 
-    ++frames;
+    ++fpsFrames;
     if (now - titleAt >= 1'000'000'000ull) {
-        const double fps = double(frames) * 1e9 / double(now - titleAt);
+        const double fps = double(fpsFrames) * 1e9 / double(now - titleAt);
         if (fpsLog) SDL_Log("fps %.1f (%.2f ms/frame)", fps, 1000.0 / fps);
-        frames = 0;
+        fpsFrames = 0;
         char title[160];
         std::snprintf(title, sizeof title, "OpenDash (M1) ST%02X sub %d - %.0f fps - F1 cenarios - cam %.0f %.0f %.0f",
                       stage, sub, fps, cam.eye[0], cam.eye[1], cam.eye[2]);
