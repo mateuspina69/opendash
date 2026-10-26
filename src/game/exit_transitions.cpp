@@ -113,7 +113,7 @@ const LeafOffsets slidingPairLeafOffsets{TableId::SlidingPairLeafOffsets}; // ex
 // the kinds' state tables (the named routines, engine/routines.csv)
 const DataTable<RoutineTable<3>> passageStates{TableId::PassageStates};         // exe 0x88c7c8
 const DataTable<RoutineTable<3>> walkOffStates{TableId::WalkOffStates};         // exe 0x88c890
-const DataTable<RoutineTable<5>> doorActorStates{TableId::DoorActorStates};     // exe 0x88c968
+const DataTable<RoutineTable<3>> doorActorStates{TableId::DoorActorStates};     // exe 0x88c968
 const DataTable<RoutineTable<3>> hingedStates{TableId::HingedDoorStates};       // exe 0x88c5b8
 const DataTable<RoutineTable<3>> doubleStates{TableId::DoubleDoorStates};       // exe 0x88c620
 const DataTable<RoutineTable<3>> slidingPairStates{TableId::SlidingPairStates}; // exe 0x88c680
