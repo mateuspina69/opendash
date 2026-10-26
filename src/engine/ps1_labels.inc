@@ -9072,6 +9072,9 @@ static constexpr Ps1Label kPs1Labels[] = {
     {"DAT/ST03T.BIN", 0x800f5754u, 0x20},
     {"DAT/ST03T.BIN", 0x800f5f00u, 0x8},
     {"COMMON/SUBSCN.BIN", 0x801e3a54u, 0x4},
+    {"DAT/ST08T.BIN", 0x800f1f50u, 0x8},
+    {"DAT/ST3CT.BIN", 0x800fd724u, 0x4},
+    {"DAT/ST3C01T.BIN", 0x800fd724u, 0x4},
 };
 static constexpr Ps1LabelSlot kPs1LabelSlots[] = {
     {6377, 0x0, SlotKind::Data, RoutineId::None, 0x0},
@@ -21237,6 +21240,9 @@ static constexpr Ps1LabelSlot kPs1LabelSlots[] = {
     {9052, 0xc, SlotKind::Function, RoutineId::None, 0x0},
     {9052, 0x10, SlotKind::Function, RoutineId::None, 0x0},
     {9052, 0x14, SlotKind::Function, RoutineId::None, 0x0},
+    {9065, 0x0, SlotKind::Data, RoutineId::None, 0x0},
+    {9066, 0x0, SlotKind::Data, RoutineId::None, 0x0},
+    {9067, 0x0, SlotKind::Data, RoutineId::None, 0x0},
 };
 static constexpr Ps1LabelTable kPs1LabelTables[] = {
     {TableId::AbandonedMineExitCameraScript, 0x0, 5225, false, 0},
@@ -24769,6 +24775,7 @@ static constexpr Ps1LabelTable kPs1LabelTables[] = {
     {TableId::StageStaticClasses, 0x5a, 6201, false, 0},
     {TableId::StageStaticClasses, 0x5b, 6210, false, 0},
     {TableId::StageStaticClasses, 0x5c, 6224, false, 0},
+    {TableId::StageTownRoutes, 0x8, 9065, false, 0},
     {TableId::StageTownRoutes, 0x9, 1147, false, 0},
     {TableId::StageTownRoutes, 0xd, 6423, true, 0},
     {TableId::StageTownRoutes, 0x15, 6488, true, 0},
@@ -24782,6 +24789,8 @@ static constexpr Ps1LabelTable kPs1LabelTables[] = {
     {TableId::StageTownRoutes, 0x29, 7972, false, 0},
     {TableId::StageTownRoutes, 0x2a, 6652, true, 0},
     {TableId::StageTownRoutes, 0x3b, 4616, false, 0},
+    {TableId::StageTownRoutes, 0x3c, 9066, false, 0},
+    {TableId::StageTownRoutes, 0x3c, 9067, false, 0},
     {TableId::StageTownRoutes, 0x3d, 4750, false, 0},
     {TableId::StageTownRoutes, 0x3e, 4782, false, 0},
     {TableId::StageTownRoutes, 0x3f, 4826, false, 0},
