@@ -9150,6 +9150,7 @@ static constexpr Ps1Label kPs1Labels[] = {
     {"DAT/ST4DT.BIN", 0x8010115cu, 0x2c},
     {"DAT/ST4DT.BIN", 0x80102958u, 0x38},
     {"COMMON/GAME.BIN", 0x800dc2c4u, 0x28},
+    {"DAT/ST4ET.BIN", 0x8010058cu, 0x20},
 };
 static constexpr Ps1LabelSlot kPs1LabelSlots[] = {
     {6319, 0x0, SlotKind::Data, RoutineId::None, 0x0},
@@ -20828,6 +20829,14 @@ static constexpr Ps1LabelSlot kPs1LabelSlots[] = {
     {9140, 0x20, SlotKind::Data, RoutineId::None, 0x0},
     {9140, 0x24, SlotKind::Data, RoutineId::None, 0x0},
     {9140, 0x28, SlotKind::Data, RoutineId::None, 0x0},
+    {9143, 0x0, SlotKind::Data, RoutineId::None, 0x0},
+    {9143, 0x4, SlotKind::Data, RoutineId::None, 0x0},
+    {9143, 0x8, SlotKind::Data, RoutineId::None, 0x0},
+    {9143, 0xc, SlotKind::Data, RoutineId::None, 0x0},
+    {9143, 0x10, SlotKind::Data, RoutineId::None, 0x0},
+    {9143, 0x14, SlotKind::Data, RoutineId::None, 0x0},
+    {9143, 0x18, SlotKind::Data, RoutineId::None, 0x0},
+    {9143, 0x1c, SlotKind::Data, RoutineId::None, 0x0},
 };
 static constexpr Ps1LabelTable kPs1LabelTables[] = {
     {TableId::AbandonedMineExitCameraScript, 0x0, 5198, false, 0},
@@ -24737,6 +24746,7 @@ static constexpr Ps1LabelTable kPs1LabelTables[] = {
     {TableId::EncounterLayoutTable, 0x6, 9140, true, 0},
     {TableId::St4dLayoutAHandlers, 0x0, 9141, true, 0},
     {TableId::St4eRoomHandlers, 0x0, 9142, true, 0},
+    {TableId::EncounterLayoutTable, 0x19, 9143, true, 0},
 };
 // kPs1StateTables: {the table, its index, the engine's address of it, its bytes}: the tables in the
 // program's state (built at run time, initially zero); kEngineState: the engine's state addresses.
