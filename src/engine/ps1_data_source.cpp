@@ -32,6 +32,7 @@ struct Ps1Table {
 constexpr Ps1Table kPs1Tables[] = {
 #include "engine/ps1_tables.inc"
 };
+#include "engine/ps1_stage_tables.inc"
 
 struct TableRegion {
     TableId id;
@@ -424,7 +425,19 @@ TableReader Ps1DataSource::regionBytes(size_t part, uint32_t address, uint32_t n
     return TableReader(*this, std::move(b));
 }
 
-bool Ps1DataSource::hasTable(TableKey key) const { return tables_.count(key) != 0; }
+bool Ps1DataSource::hasTable(TableKey key) const {
+    const auto column = std::find(std::begin(kPs1StageTableIds), std::end(kPs1StageTableIds), key.id);
+    if (column != std::end(kPs1StageTableIds)) {
+        // The setup's null assignments are real absences. A non-null assignment requires a placement, even
+        // when the placement generator has not found it; silently returning false would clear that global.
+        if (key.index >= std::size(kPs1StageTables) ||
+            kPs1StageTables[key.index][column - std::begin(kPs1StageTableIds)] == 0)
+            return false;
+        if (tables_.count(key) == 0)
+            throw DataSourceError("data source (PS1): the disc has no table " + describe(key));
+    }
+    return tables_.count(key) != 0;
+}
 
 size_t Ps1DataSource::voicePart(TableKey key, const Located& table) const {
     std::lock_guard lock(lock_);

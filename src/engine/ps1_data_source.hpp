@@ -14,8 +14,9 @@
 // The tables the game reads by address (ps1_labels.inc: scripts, spawn records, cameras ...): at their PS1 address, the
 // pointer slots in their extent translated the same way on every read that meets them.
 // The room parameters: their PS1 records, 0x24 bytes (the PS1's colour; the PC's D3D fog range past them reads as
-// zero: no fog range). A table the disc has no copy of (not found whole, or changed by the PC) is no table of this
-// source: hasTable false, table() throws DataSourceError naming it.
+// zero: no fog range). Fixed stage tables have an independent address inventory (ps1_stage_tables.inc): hasTable
+// returns false for a null setup assignment and throws for a non-null assignment with no placement. Other tables
+// without a placement return hasTable false; table() throws DataSourceError naming any missing table.
 #pragma once
 
 #include <map>

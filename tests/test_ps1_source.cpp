@@ -115,6 +115,38 @@ int main(int argc, char** argv) {
     od::content::registerAll();
     const od::PcDataSource pc(argv[2], argv[1]);
     const od::Ps1DataSource ps1(std::make_shared<const od::DiscImage>(argv[3]));
+    { // Stage setup writes include null assignments. Every non-null table must be placed independently of the
+      // PS1 placement list, which cannot itself tell us that the generator missed a required stage global.
+        size_t required = 0, missing = 0;
+        for (const od::TableId id : {od::TableId::StageAnimatedClasses, od::TableId::StageStaticClasses,
+                                    od::TableId::StageProjectileClasses, od::TableId::StageEffectClasses,
+                                    od::TableId::StageControllerClasses, od::TableId::StageEncounterZones,
+                                    od::TableId::StageEncounterGroups, od::TableId::StageEncounterField,
+                                    od::TableId::StageEncounterEnemyGroups, od::TableId::StageClutAnimations,
+                                    od::TableId::StageGroundKinds, od::TableId::StageTownRoutes,
+                                    od::TableId::StageTransitionHandlers, od::TableId::StageVoices,
+                                    od::TableId::StageSecondVoices}) {
+            for (uint32_t stage = 0; stage < od::kStageCount; ++stage) {
+                const od::TableKey key{id, stage};
+                const bool expected = pc.hasTable(key);
+                if (expected) ++required;
+                bool matches = false;
+                try {
+                    matches = ps1.hasTable(key) == expected;
+                    if (expected && matches) matches = ps1.stateAddress(key) != 0;
+                } catch (const od::DataSourceError& e) {
+                    std::fprintf(stderr, "%s\n", e.what());
+                }
+                if (!matches) {
+                    std::fprintf(stderr, "stage setup table %s: expected %s\n", od::describe(key).c_str(),
+                                 expected ? "a placed table" : "no fixed table");
+                    ++missing;
+                }
+                CHECK(matches);
+            }
+        }
+        std::printf("stage setup tables: %zu required, %zu mismatches\n", required, missing);
+    }
     { // These native objects end before the old eager readers' guessed array bounds.
         for (const auto [id, bytes] : {std::pair{od::TableId::CrashLandingScriptBurnRecords, 0x18u},
                                       std::pair{od::TableId::TownNpcSpeeds, 0x250u},
@@ -258,11 +290,15 @@ int main(int argc, char** argv) {
     std::set<od::TableKey> done;
     for (const od::TableUse& u : od::tableUses()) {
         auto check = [&](od::TableKey key) {
-            if (!ps1.hasTable(key) || !done.insert(key).second || madeTable(key.id)) return;
+            if (!done.insert(key).second || madeTable(key.id)) return;
             ++tables;
             Recorder a(pc), b(ps1);
             std::string why;
             try {
+                if (!ps1.hasTable(key)) {
+                    --tables;
+                    return;
+                }
                 od::bindDataSource(&a);
                 u.load(key);
                 od::bindDataSource(&b);
