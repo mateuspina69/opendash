@@ -99,8 +99,8 @@ std::string upper(std::string s) {
     return s;
 }
 
-// the PS1 record's byte count of a table whose PS1 records are shorter than the PC's (0: the PC's): the bytes past it
-// read as zero -- the room parameters' D3D fog range (+0x24 / +0x28, the PC's), none on the PS1
+// the PS1 record's byte count of a table whose PS1 records are shorter than the PC's (0: the PC's): a read gives the
+// PS1's bytes -- the room parameters have no D3D fog range (+0x24 / +0x28, the PC port's)
 uint32_t ps1RecordBytes(TableId id) { return id == TableId::RoomParams ? 0x24 : 0; }
 
 void put32(std::vector<uint8_t>& b, size_t o, uint32_t v) {
@@ -505,11 +505,7 @@ TableReader Ps1DataSource::table(TableKey key, uint32_t bytes) const {
             const size_t have = pt.data->size() - (address - pt.base);
             if (have >= own) {
                 (void)virtualOf(p, address, Region{key, 0});
-                TableReader r = regionBytes(p, address, own, Region{key, 0});
-                if (own == bytes) return r;
-                std::vector<uint8_t> b(bytes, 0);
-                std::memcpy(b.data(), r.bytes(0, own).data(), own);
-                return TableReader(*this, std::move(b));
+                return regionBytes(p, address, own, Region{key, 0}); // a shorter PS1 record: its own bytes
             }
         }
     }
@@ -531,6 +527,15 @@ uint32_t Ps1DataSource::stateAddress(TableKey key) const {
         if (address >= pt.base && address - pt.base < pt.data->size()) return virtualOf(p, address, Region{key, 0});
     }
     throw DataSourceError("data source (PS1): " + describe(key) + " is in no block of " + file);
+}
+
+std::vector<std::string> Ps1DataSource::tableFiles(TableKey key) const {
+    std::vector<std::string> out;
+    const auto it = tables_.find(key);
+    if (it == tables_.end() || it->second.made || it->second.state) return out;
+    out.push_back(it->second.file);
+    for (const auto& c : it->second.copies) out.push_back(c.first);
+    return out;
 }
 
 std::pair<std::string, uint32_t> Ps1DataSource::placeOf(const Located& t) const {

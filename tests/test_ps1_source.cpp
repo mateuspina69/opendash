@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <functional>
 #include <memory>
+#include <map>
 #include <set>
 
 #include "check.hpp"
@@ -331,7 +332,7 @@ int main(int argc, char** argv) {
             CHECK(ps1.gameFile(name).has(od::FilePart::Kind::Vram));
         }
     }
-    { // the room parameters: the PS1's 0x24-byte records, the PC's from +0x3 on, no fog range past them
+    { // the room parameters: the PS1's 0x24-byte records (no D3D fog range), the PC's from +0x3 on
         size_t rooms = 0, same = 0;
         for (int stage = 0; stage < od::kStageCount; ++stage)
             for (int room = 0; room < 256; ++room) {
@@ -339,7 +340,7 @@ int main(int argc, char** argv) {
                 if (!ps1.hasTable(key) || !pc.hasTable(key)) continue;
                 ++rooms;
                 const od::TableReader a = pc.table(key, 0x2c), b = ps1.table(key, 0x2c);
-                bool equal = b.f32(0x24) == 0.0f && b.f32(0x28) == 0.0f;
+                bool equal = b.size() == 0x24; // the PS1's record: no D3D fog range
                 for (uint32_t o = 3; o < 0x24; ++o) equal = equal && a.u8(o) == b.u8(o);
                 same += equal;
             }
@@ -401,6 +402,46 @@ int main(int argc, char** argv) {
         std::printf("%zu tables read by address the PS1's own, read whole\n", own);
         CHECK(n > 0 && same == n);
         CHECK(own == ownTables);
+    }
+    { // a table the PS1 keeps in several files is read from the one loaded last: every copy reads as the game reads it
+        std::map<std::string, std::vector<std::pair<const od::TableUse*, od::TableKey>>> byFile;
+        for (const od::TableUse& u : od::tableUses()) {
+            auto add = [&](od::TableKey key) {
+                if (!ps1.hasTable(key)) return;
+                const std::vector<std::string> files = ps1.tableFiles(key);
+                if (files.size() > 1)
+                    for (const std::string& f : files) byFile[f].push_back({&u, key});
+            };
+            if (!u.family) add({u.id, u.index});
+            else
+                for (int stage = 0; stage < od::kStageCount; ++stage) {
+                    add({u.id, uint32_t(stage)});
+                    for (int room = 0; room < 256; ++room) add({u.id, od::roomIndex(stage, room)});
+                }
+        }
+        size_t reads = 0, failed = 0;
+        for (const auto& [file, uses] : byFile) {
+            std::string name = file.substr(file.rfind('/') + 1);
+            name.resize(name.rfind('.'));
+            if (!ps1.hasFile(name + ".DAT")) { // a placement in a file the disc does not have
+                ++failed;
+                std::fprintf(stderr, "%s: no such file on the disc (%zu tables)\n", file.c_str(), uses.size());
+                continue;
+            }
+            (void)ps1.gameFile(name + ".DAT"); // the copy in this file is the one read now
+            const od::ScopedDataSource bound(ps1);
+            for (const auto& [use, key] : uses) {
+                ++reads;
+                try {
+                    use->load(key);
+                } catch (const std::exception& e) {
+                    ++failed;
+                    std::fprintf(stderr, "%s (copy in %s): %s\n", od::describe(key).c_str(), file.c_str(), e.what());
+                }
+            }
+        }
+        std::printf("%zu reads of the tables' copies, %zu failed\n", reads, failed);
+        CHECK(failed == 0);
     }
     std::printf("%zu tables on the disc: %zu read as the PC's\n", tables, equal);
     CHECK(tables > 0 && equal == tables);

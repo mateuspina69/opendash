@@ -13,8 +13,8 @@
 // engine's four-byte {file, track} records (ps1_voice_tables.inc, engine/ps1_xa), including the five built-in voices.
 // The tables the game reads by address (ps1_labels.inc: scripts, spawn records, cameras ...): at their PS1 address, the
 // pointer slots in their extent translated the same way on every read that meets them.
-// The room parameters: their PS1 records, 0x24 bytes (the PS1's colour; the PC's D3D fog range past them reads as
-// zero: no fog range). Fixed stage tables have an independent address inventory (ps1_stage_tables.inc): hasTable
+// The room parameters: their PS1 records, 0x24 bytes (no D3D fog range, the PC port's: the PS1's fog is the GTE's
+// depth cue, SLUS 0x800268d0: SetFarColor(+0..+2), SetFogNear(+4, 0x180)). Fixed stage tables have an independent address inventory (ps1_stage_tables.inc): hasTable
 // returns false for a null setup assignment and throws for a non-null assignment with no placement. Other tables
 // without a placement return hasTable false; table() throws DataSourceError naming any missing table.
 #pragma once
@@ -63,6 +63,9 @@ public:
     // the bytes from a pointer of this source to the end of the address-read table it lies in (0: none; a PS1 table the
     // PC keeps several copies of: the bytes all of them have)
     uint32_t tableBytesFrom(uint32_t pointer) const;
+    // the disc files a table is read from (its copies' too: the one read is in the file loaded last); none for a made
+    // table or the program's state
+    std::vector<std::string> tableFiles(TableKey key) const;
 
 protected:
     TableReader pointee(uint32_t pointer, uint32_t n) const override;
