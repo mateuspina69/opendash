@@ -458,6 +458,9 @@ struct Ps1MusicPlayer::Impl {
         default: break;
         }
     }
+    // The voices' sum, brought to the level of the PC's recordings of the same tracks (their RMS over the first
+    // minute of 16 tracks: the synth's is 7.9 dB louder), so the music sits under the effects and voices as there
+    static constexpr float kLevel = 0.4f;
     bool next(float& l, float& r) {
         l = r = 0;
         while (!ended && event < seq.events.size() && seq.events[event].frame + cycleOffset <= clock) {
@@ -493,7 +496,7 @@ struct Ps1MusicPlayer::Impl {
         // retain their own tail so stopping/replacing one slot cannot corrupt another slot's music.
         if (ended && !active && reverb.used) ++tailFrames;
         ++clock;
-        l = std::clamp(l, -1.0f, 1.0f); r = std::clamp(r, -1.0f, 1.0f);
+        l = std::clamp(l * kLevel, -1.0f, 1.0f); r = std::clamp(r * kLevel, -1.0f, 1.0f);
         return !ended || active || (reverb.used && tailFrames < kRate * 3);
     }
 };

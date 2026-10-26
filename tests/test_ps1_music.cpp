@@ -60,7 +60,7 @@ void synthetic() {
     float l = 0, r = 0, peak = 0;
     uint64_t count = 0;
     while (p.next(l, r) && count < 44100) { peak = std::max(peak, std::abs(l)); ++count; }
-    CHECK(peak > 0.01f);
+    CHECK(peak > 0.004f);
     CHECK(count >= 22050 && count < 23000); // real key-off release, then the stream ends
     p.rewind();
     for (int i = 0; i < 100; ++i) CHECK(p.next(l, r));
@@ -79,7 +79,7 @@ void synthetic() {
         CHECK(looping.next(l, r));
         if (i > 45000) latePeak = std::max(latePeak, std::abs(l));
     }
-    CHECK(latePeak > 0.01f);
+    CHECK(latePeak > 0.004f);
     od::Ps1MusicPlayer once(packets[0], false);
     count = 0; while (once.next(l, r) && count < 50000) ++count;
     CHECK(count >= 22050 && count < 23000);
