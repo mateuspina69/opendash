@@ -44,6 +44,7 @@ public:
     explicit Ps1DataSource(std::shared_ptr<const DiscImage> disc);
 
     bool hasFile(const std::string& name) const override;
+    bool isPs1() const override { return true; }
     GameFile gameFile(const std::string& name) const override;
 
     bool hasTable(TableKey key) const override;

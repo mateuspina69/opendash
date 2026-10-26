@@ -63,8 +63,20 @@ constexpr RoutineId kEmptyHandlerA = RoutineId::EmptyRoomHandler, kEmptyHandlerB
 
 // the stage's case of exe 0x512890's dispatch (null: the stage has none)
 const RoomScriptCase* roomScriptCase(uint8_t stage) {
-    for (const RoomScriptCase& c : kRoomScriptCases)
-        if (c.stage == stage) return &c;
+    for (const RoomScriptCase& c : kRoomScriptCases) {
+        if (c.stage != stage) continue;
+        // The PS1 ST13 case is a by-room table (ST13T 0x800e7210); the PC one keeps a story table, which
+        // this data source cannot resolve (a handler pointer would be read as a sub-table).
+        if (stage == 0x13 && c.kind == RoomScriptCaseKind::StoryTable && dataSource().isPs1()) {
+            static const RoomScriptCase ps1 = [&c] {
+                RoomScriptCase x = c;
+                x.kind = RoomScriptCaseKind::SubTable;
+                return x;
+            }();
+            return &ps1;
+        }
+        return &c;
+    }
     return nullptr;
 }
 // the case picks its handler from a table (by story then sub-room, or by sub-room)
@@ -117,7 +129,17 @@ bool roomScriptHandler() {
         content().subruinRoomScripts.run();
         return true;
     }
-    const RoomScriptCase* c = roomScriptCase(stage);
+    const RoomScriptCase* base = roomScriptCase(stage);
+    RoomScriptCase ps1Case;
+    const RoomScriptCase* c = base;
+    // The PS1 ST13 case is a by-room table (ST13T 0x800e7210); the PC one keeps a story table, which this data
+    // source cannot resolve (a handler pointer would be read as a sub-table).
+    if (base && base->stage == 0x13 && base->kind == RoomScriptCaseKind::StoryTable &&
+        dataSource().isPs1()) {
+        ps1Case = *base;
+        ps1Case.kind = RoomScriptCaseKind::SubTable;
+        c = &ps1Case;
+    }
     if (c && (c->kind == RoomScriptCaseKind::InlineCase || c->kind == RoomScriptCaseKind::OwnRoutine)) {
         roomHandler(c->routine, true);
         return true;

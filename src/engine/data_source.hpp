@@ -140,6 +140,8 @@ public:
 
     // ---- the game's files, by the game's names ("ST09.DAT", "PL00P000.DAT" ...)
     virtual bool hasFile(const std::string& name) const = 0;
+    // whether this source reads the PS1 disc (a few stage cases keep the PS1's table shape, not the PC's)
+    virtual bool isPs1() const { return false; }
     // the file's parts (engine/game_file), in the source's own formats; throws DataSourceError when the source has
     // no such file
     virtual GameFile gameFile(const std::string& name) const = 0;
