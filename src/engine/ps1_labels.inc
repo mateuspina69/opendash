@@ -9162,6 +9162,9 @@ static constexpr Ps1Label kPs1Labels[] = {
     {"SLUS_011.40", 0x80073024u, 0x10},
     {"DAT/ST1ET.BIN", 0x800f0ba8u, 0xc},
     {"DAT/ST03T.BIN", 0x800f5f30u, 0xc},
+    {"DAT/ST02T.BIN", 0x800f2740u, 0x8},
+    {"DAT/ST03T.BIN", 0x800fed94u, 0x10},
+    {"DAT/ST03T.BIN", 0x800febe0u, 0x10},
 };
 static constexpr Ps1LabelSlot kPs1LabelSlots[] = {
     {6319, 0x0, SlotKind::Data, RoutineId::None, 0x0},
@@ -24789,6 +24792,9 @@ static constexpr Ps1LabelTable kPs1LabelTables[] = {
     {TableId::BusterArmHandlers, 0x0, 9152, true, 0},
     {TableId::FlutterFireEmberBox, 0x0, 9153, true, 0},
     {TableId::St03AttractCastLightsBox, 0x0, 9154, true, 0},
+    {TableId::St02AttractScriptShutterImage, 0x0, 9155, true, 0},
+    {TableId::St03AttractScriptCueRecord, 0x0, 9156, true, 0},
+    {TableId::St03AttractScriptSparklePathA, 0x0, 9157, true, 0},
 };
 // kPs1StateTables: {the table, its index, the engine's address of it, its bytes}: the tables in the
 // program's state (built at run time, initially zero); kEngineState: the engine's state addresses.
