@@ -55,9 +55,10 @@ struct RoomParamsRecord : DataRecord {
     static constexpr uint32_t kBytes = 0x2c;
     std::array<uint8_t, 3> fogColour{};
     uint8_t coordinateShift = 0;
+    uint16_t fogDistance = 0; // +0x4: the PS1 record's fog distance (the PC's D3D start/end are past its 0x24 bytes)
     float fogStart = 0.0f, fogEnd = 0.0f;
     static RoomParamsRecord load(const TableReader& r) {
-        return {{}, {r.u8(0), r.u8(1), r.u8(2)}, r.u8(3), r.f32(0x24), r.f32(0x28)};
+        return {{}, {r.u8(0), r.u8(1), r.u8(2)}, r.u8(3), r.u16(0x4), r.f32(0x24), r.f32(0x28)};
     }
 };
 
