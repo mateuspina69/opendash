@@ -1,0 +1,14 @@
+# a2's end save (ST25 sub 0, story 4): exit 1 -> ST24 sub 1 -> the door of the ruin gate house (exit 1 = ST24 sub 2,
+# kind 1: on the doorway's axis + circle) -> the ruin gate (exit 0 of sub 2, use: handler 0x581a40 sets flag 0x580)
+# -> ST24 sub 1: handler 0x5819f0 sets 0x581 and runs script 0x14 -> the Manda ruin hall (ST12 sub 0)
+calm
+exit 1
+go 3450 736 64
+go 3584 800 24
+exit 1 use
+exit 0 use
+mash
+# TODO (not authored): the blue card (chest of ST12 sub 5, flag 0x3e4) -> the terminal (0, -0x110, -0x7a0) of
+# ST12 sub 0 (message 0x16 -> flag 0x5b6 -> script 0xf) -> ST13. On the original at story 4 the hall's exits 1
+# (door to sub 2) and 2 (to sub 4) only raise an event (ev 1) and exit 0 leads to sub 1 (a long room towards ST13
+# sub 0) -- the way to sub 5 is not found yet.

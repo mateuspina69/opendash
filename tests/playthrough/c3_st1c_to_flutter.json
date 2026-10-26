@@ -1,0 +1,26 @@
+{
+  "title": "c2's end save (the Flutter ST3E sub 3, story 2): the door -> ST3E sub 0",
+  "start": "segment:c2_elephant_fight",
+  "god": true,
+  "route": "c3_st1c_to_flutter.route",
+  "pad": "c3_st1c_to_flutter.pad",
+  "expect": [
+    {
+      "label": "ST3E sub 3 in control (the load)",
+      "stage": "3e",
+      "sub": 3,
+      "calm": true
+    },
+    {
+      "label": "through the door: ST3E sub 0",
+      "stage": "3e",
+      "sub": 0,
+      "calm": true
+    }
+  ],
+  "end": {
+    "stage": "3e",
+    "sub": 0,
+    "story": 2
+  }
+}

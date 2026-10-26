@@ -1,0 +1,9 @@
+# save 00 (story 1, Forbidden Island ST1D sub 1): walk up to the crystal's pedestal and use it
+calm
+go 512 4300 48
+go 512 4400 24
+tap circle
+wait 4
+tap circle
+# script 0x28: the floor gives way, the fall into the arena (ST1D sub 2), the elephant wakes
+mash

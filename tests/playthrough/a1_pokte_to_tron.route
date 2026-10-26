@@ -1,0 +1,4 @@
+# save 02 (story 3, Pokte Village ST24 sub 0): walk through the village gate (exit 0 -> ST25 sub 5)
+calm
+exit 0
+# script 0x1b (Tron Bonne's cutscene, ~4600 ticks, no input needed) ends in ST25 sub 6 with control back

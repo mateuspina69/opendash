@@ -1,0 +1,38 @@
+{
+  "title": "Manda ruin (god mode): hall -> ST12 sub 1's door -> ST13 sub 1 guardian (flag 0x5b1) -> ST13 2/4/5 -> the east ledge switch (flag 5) -> ST12 2/3/4 (switch, flag 6) -> sub 5 chest (blue card 0x3e4) + guardian (0x5b3) -> the terminal (0x5b6, script 0xf, the bridge) -> ST13 6/8/9/10 -> ST14 0..4 guardian (0x5b5) -> the key (0x3d0) -> ST24 sub 1",
+  "start": "segment:a3_pokte_to_manda_terminal",
+  "route": "b1_manda_ruin_key.route",
+  "pad": "b1_manda_ruin_key.pad",
+  "god": true,
+  "expect": [
+    {
+      "label": "ST13 sub 1: the first guardian (script 9)",
+      "stage": "13",
+      "sub": 1,
+      "script": 1
+    },
+    {
+      "label": "ST14 sub 4: the second guardian (script 0x1a)",
+      "stage": "14",
+      "sub": 4,
+      "script": 1
+    },
+    {
+      "label": "out to Pokte (ST24 sub 1)",
+      "stage": "24",
+      "sub": 1,
+      "calm": true
+    }
+  ],
+  "end": {
+    "stage": "24",
+    "sub": 1,
+    "story": 4,
+    "flags": [
+      "0x5b1",
+      "0x5b5",
+      "0x3d0"
+    ]
+  },
+  "note": "the blue card is not needed to reach ST13 (a3 ends in the hall; ST12 sub 1's door actor leads to ST13 sub 0), but it is needed for ST13 sub 6: the hall's west ledge exit 4 is only reachable over the bridge script 0xf raises. The card's room (ST12 sub 5) is behind the hall door 0x711 (flag 5: event volume message 0x10 on the east ledge, reached through ST13 sub 5) and sub 4 (flag 6: message 0x13). Authored on dash2emu 2026-10-20"
+}

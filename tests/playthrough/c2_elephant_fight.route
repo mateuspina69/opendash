@@ -1,0 +1,15 @@
+# save 00 (as c1_crystal_to_elephant) (story 1, Forbidden Island ST1D sub 1): walk up to the crystal's pedestal and use it
+calm
+go 512 4300 48
+go 512 4400 24
+tap circle
+wait 4
+tap circle
+# script 0x28: the floor gives way, the fall into the arena (ST1D sub 2), the elephant wakes
+mash
+# the elephant (ST1D sub 2): lock-on on the boss (aim) + buster until flag 0x682; script 0x29 -> ST1C sub 0.
+# The segment starts from save 00 again (the crystal, as c1): a save made in the arena does not restart the fight
+# on load (the original: no elephant, nothing to lock on, 6000 ticks idle).
+calm
+fight 0x682 8000 aim
+mash

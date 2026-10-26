@@ -1,0 +1,41 @@
+{
+  "title": "save 02 (god mode): Pokte gate -> Tron Bonne's tank (ST25 sub 6) destroyed -> script 0x1c -> Pokte at story 4 (ST25 sub 0)",
+  "start": "game:02",
+  "route": "a2_tron_fight.route",
+  "pad": "a2_tron_fight.pad",
+  "expect": [
+    {
+      "label": "the fight (ST25 sub 6) in control",
+      "stage": "25",
+      "sub": 6,
+      "calm": true
+    },
+    {
+      "label": "the tank down: script 0x1c",
+      "stage": "25",
+      "sub": 6,
+      "script_run": true
+    },
+    {
+      "label": "Pokte village at story 4 (ST25 sub 0)",
+      "stage": "25",
+      "sub": 0,
+      "story": 4,
+      "calm": true
+    }
+  ],
+  "end": {
+    "stage": "25",
+    "sub": 0,
+    "story": 4,
+    "flags": [
+      "0x4ab",
+      "0x4ac",
+      "0x55b",
+      "0x55c",
+      "0x55d"
+    ],
+    "note": "flags the original sets over this segment (dash2emu, 2026-10-11); 0x589 (the old guess) stays clear"
+  },
+  "god": true
+}

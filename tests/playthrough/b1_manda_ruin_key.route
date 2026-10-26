@@ -1,0 +1,294 @@
+calm
+# a3's end save: the Manda ruin hall (ST12 sub 0, story 4). God mode (docs/playthrough.md): the boss fights and the
+# small enemies are cleared with the Shining Laser (r2 lock-on + triangle). No blue card is needed to reach ST13:
+# the hall's exit 0 -> the long room ST12 sub 1 -> its door actor (static type 0x19 at (-3584, -192, -6144); kind-0
+# doors open only for a player standing still, facing them, pressing circle) -> ST13 sub 0.
+# Classic controls: the d-pad strafes relative to the facing (+0x2a), l1 / r1 turn (accelerating), so the jumps out
+# of the trenches (hold DIR+cross) and the turns before doors / event volumes (hold l1|r1 N) are fixed for this run.
+# ---- ST12 sub 0 (hall) -> sub 1 -> ST13 sub 0
+exit 0 use
+go 1536 6000 48
+go 1536 3650 48
+hold left+cross 25
+go -1536 3050 48
+go -1536 -300 48
+hold left+cross 25
+go -3584 -1000 48
+go -3584 -4400 48
+hold left+cross 25
+go -3584 -6000 48
+go -3584 -6195 16
+hold l1 26
+wait 6
+wait 10
+tap circle
+wait 8
+tap circle
+wait 8
+tap circle
+wait 8
+tap circle
+wait 8
+until 13 0 - 300
+calm
+# ---- ST13 sub 0 -> sub 1 (guardian)
+# ST13 sub 1: script 9, the guardian 0x484e00 (flag 0x5b1), script 10
+go -2560 -3300 48
+hold r2+triangle 120
+go -2560 -500 48
+go -512 -500 48
+go -512 2800 48
+hold r2+triangle 120
+go -512 4600 48
+go 2560 4600 48
+exit 0 use
+fight 0x5b1 4000 aim
+mash
+# ---- ST13 sub 1 -> 2 -> 4 -> 5 -> ST12 sub 0 east ledge
+exit 1 use
+go 1900 512 48
+go 2400 512 48
+hold up+cross 25
+exit 2 use
+go 700 350 40
+hold left+cross 25
+exit 1 use
+go 2560 -544 40
+hold up+cross 22
+go 2560 420 40
+hold up+cross 22
+go 2560 1250 48
+go 2200 2000 40
+hold left+cross 22
+go -1200 2000 48
+hold r2+triangle 120
+exit 1 use
+# ---- the ledge switch (message 0x10 -> flag 5: the hall's door 0x711 to sub 2)
+# (the event volume (2256, -2064, 368), flags 0xc610: the probe point 0x40 ahead, facing yaw ~0x800 = +z)
+go 2288 300 24
+hold r1 26
+wait 10
+hold circle 3
+wait 5
+mash
+# ---- the ledge -> the hall floor -> door 0x711 (exit 1) -> ST12 sub 2 -> 3 -> 4
+go 1800 0 48
+go 1300 1000 64
+go 0 2200 48
+exit 1 use
+go -4096 -2100 32
+hold up+cross 22
+go -4096 -100 40
+hold up+cross 22
+go -4096 1950 40
+hold up+cross 22
+go -4096 3700 64
+go -1150 3700 40
+hold right+cross 22
+go 800 3700 48
+hold r2+triangle 120
+go 944 3850 32
+go 2900 3850 48
+hold r2+triangle 120
+go 4096 3700 64
+exit 1 use
+go 0 200 48
+hold r2+triangle 150
+exit 1 use
+go 2048 -400 48
+hold r2+triangle 150
+go 2048 -1000 48
+hold r2+triangle 120
+go -2208 -1000 32
+# ST12 sub 4 switch: event volume (-2208, -192, -808), message 0x13 -> flag 6 (door 0x712: sub 4 <-> the hall)
+hold r1 27
+wait 8
+go -2208 -880 24
+wait 6
+hold circle 3
+wait 5
+mash
+go 2048 -1000 48
+exit 2 use
+# ---- ST12 sub 5: the chest (flag 0x3e4, the blue card) -> script 0xb -> the guardian (flag 0x5b3) -> script 0xc
+go 0 -330 24
+wait 6
+hold circle 3
+wait 5
+mash
+fight 0x5b3 4000 aim
+mash
+# ---- back through sub 4 and door 0x712 to the hall; the terminal (message 0x16 -> flag 0x5b6 -> script 0xf)
+exit 0 use
+go 2048 -1000 48
+go -2200 -1000 48
+exit 1 use
+go 640 -2300 48
+go 0 -2300 24
+go 0 -1830 20
+hold r1 26
+wait 8
+wait 6
+hold circle 3
+wait 5
+mash
+# ---- the hall -> sub 1 -> ST13 sub 0 again (the tumbling blocks run since flag 0x5b6)
+go -1000 -1500 48
+go -1000 1000 48
+exit 0 use
+go 1536 6000 48
+go 1536 4100 48
+hold r2+triangle 100
+go 1536 3650 48
+hold down+cross 25
+go -1536 3050 48
+go -1536 2900 32
+hold r2+triangle 100
+go -1536 -300 48
+hold up+cross 25
+go -3584 -1000 48
+hold r2+triangle 100
+go -3584 -4400 48
+hold up+cross 25
+go -3584 -6000 48
+go -3584 -6195 16
+wait 10
+tap circle
+wait 8
+tap circle
+wait 8
+tap circle
+wait 8
+tap circle
+wait 8
+until 13 0 - 300
+calm
+go -2560 -3300 48
+hold r2+triangle 120
+go -2560 -500 48
+go -512 -500 48
+go -512 2800 48
+hold r2+triangle 120
+go -512 4600 48
+go 2560 4600 48
+go 2560 4200 48
+hold r2+triangle 120
+exit 0 use
+# ST13 sub 1 again: an encounter (5 x type 0x22) on re-entry, cleared before the door to sub 2
+go -512 300 48
+hold r2+triangle 150
+hold r2+triangle 150
+hold r2+triangle 150
+hold l1 28
+wait 6
+exit 1 use
+go 2400 512 48
+hold up+cross 25
+exit 2 use
+go 700 350 40
+hold left+cross 25
+exit 1 use
+go 2560 -544 40
+hold up+cross 22
+go 2560 420 40
+hold up+cross 22
+go 2560 1250 48
+go 2200 2000 40
+hold left+cross 22
+go -1200 2000 48
+hold r2+triangle 120
+exit 1 use
+# ---- the raised bridge (y -2064) across the hall -> exit 4 -> ST13 sub 6
+# (script 0xf raised the five cells of row 0x3f: the bridge between the two y -2064 ledges)
+hold triangle 150
+go 1500 0 16
+go 1000 0 16
+go 500 0 16
+go 0 0 16
+go -500 0 16
+go -1000 0 16
+go -1500 0 16
+go -2000 0 16
+exit 4 use
+# ---- ST13 sub 6 -> 8 -> 9 -> 10 -> (the door) ST14 sub 0
+go 0 -2900 48
+go 0 1800 48
+hold r2+triangle 120
+go 0 2450 32
+hold down+cross 25
+go 0 3072 48
+go 1300 3072 48
+exit 2 use
+go -1000 0 48
+hold r2+triangle 150
+hold r2+triangle 150
+go 1500 0 48
+exit 1 use
+go 0 0 48
+hold r2+triangle 150
+exit 1 use
+go 1400 -1024 40
+hold up+cross 25
+go 2300 -1024 32
+go 2610 -1024 24
+wait 10
+tap circle
+wait 8
+tap circle
+wait 8
+tap circle
+wait 8
+tap circle
+wait 8
+until 14 0 - 300
+calm
+# ---- ST14 sub 0 -> 1 -> 2 -> 3 -> 4
+go 3800 1024 40
+go 700 1024 40
+hold up+cross 25
+go -1200 1024 40
+hold r2+triangle 150
+go -3500 1024 40
+hold up+cross 25
+exit 1 use
+hold r2+triangle 150
+hold r2+triangle 150
+hold r2+triangle 150
+# ST14 sub 1: the swinging hazards (statics type 0x18) -- crossed on this timing
+wait 40
+go -990 0 24
+hold up+cross 25
+go -1900 0 24
+hold l1 7
+wait 6
+exit 1 use
+go -1000 0 48
+hold r2+triangle 150
+hold r2+triangle 150
+go -1536 -500 24
+hold l1 19
+wait 6
+exit 1 use
+go -2560 -2048 48
+go 1500 -2048 40
+hold l1 26
+wait 6
+exit 1 use
+# ---- ST14 sub 4: script 0x1a, the guardian (flag 0x5b5), script 0xe
+go 1300 0 40
+hold up+cross 25
+go 2400 0 40
+hold up 30
+mash
+fight 0x5b5 6000 aim
+mash
+# ---- the key (static 0x5b12c0 at (512, -192, 0), jump into it): flag 0x3d0, messages 0x16 / 0x17 -> ST24 sub 1
+go 512 120 16
+hold l1 20
+wait 8
+go 512 120 16
+hold up 5
+hold up+cross 10
+wait 30
+mash
+mash

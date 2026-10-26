@@ -1,0 +1,13 @@
+{
+  "title": "save 02: Pokte Village gate -> Tron Bonne's cutscene (script 0x1b) -> the tank fight starts",
+  "start": "game:02",
+  "route": "a1_pokte_to_tron.route",
+  "pad": "a1_pokte_to_tron.pad",
+  "expect": [
+    {"label": "Pokte village gate (ST24 sub 0) in control", "stage": "24", "sub": 0, "calm": true},
+    {"label": "through the gate: script 0x1b in the cockpit (ST25 sub 5)", "stage": "25", "sub": 5, "script": 1},
+    {"label": "the tank lands in the village (ST25 sub 6)", "stage": "25", "sub": 6, "script": 1},
+    {"label": "cutscene over, control back for the fight", "stage": "25", "sub": 6, "calm": true}
+  ],
+  "end": {"stage": "25", "sub": 6, "story": 3, "near": [0, -993, 128]}
+}

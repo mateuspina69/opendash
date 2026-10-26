@@ -1,0 +1,42 @@
+{
+  "title": "Pokte (story 4) -> ST24 sub 1 -> the gate house (sub 2) -> the ruin gate (script 0x14) -> the Manda ruin hall (ST12 sub 0). The card / terminal / ST13 part is not authored yet (see the route)",
+  "start": "segment:a2_tron_fight",
+  "route": "a3_pokte_to_manda_terminal.route",
+  "pad": "a3_pokte_to_manda_terminal.pad",
+  "expect": [
+    {
+      "label": "ST24 sub 1 (village side of the ruin gate)",
+      "stage": "24",
+      "sub": 1,
+      "calm": true
+    },
+    {
+      "label": "ST24 sub 2, the gate house",
+      "stage": "24",
+      "sub": 2,
+      "calm": true
+    },
+    {
+      "label": "script 0x14 in ST24 sub 1",
+      "stage": "24",
+      "sub": 1,
+      "script_run": true
+    },
+    {
+      "label": "the Manda ruin hall (ST12 sub 0) in control",
+      "stage": "12",
+      "sub": 0,
+      "calm": true
+    }
+  ],
+  "end": {
+    "stage": "12",
+    "sub": 0,
+    "story": 4,
+    "flags": [
+      "0x580",
+      "0x581"
+    ]
+  },
+  "god": true
+}

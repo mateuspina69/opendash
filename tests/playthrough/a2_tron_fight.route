@@ -1,0 +1,10 @@
+# save 02 (as a1_pokte_to_tron) (story 3, Pokte Village ST24 sub 0): walk through the village gate (exit 0 -> ST25 sub 5)
+calm
+exit 0
+# script 0x1b (Tron Bonne's cutscene, ~4600 ticks, no input needed) ends in ST25 sub 6 with control back
+# the tank fight (ST25 sub 6, god mode): lock-on on the boss (aim) + buster until flag 0x589. The segment starts
+# from save 02 again (as a1): a save made in the arena does not restart the fight on load (see c2).
+calm
+fight 0x589 8000 aim
+# script 0x1c (the wreck, Tron thrown out) -> ST25 sub 0 at story 4
+mash

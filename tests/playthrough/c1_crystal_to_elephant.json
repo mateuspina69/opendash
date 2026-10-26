@@ -1,0 +1,13 @@
+{
+  "title": "save 00: the Forbidden Island crystal (ST1D sub 1) -> script 0x28 -> the elephant's arena (ST1D sub 2), fight starts",
+  "start": "game:00",
+  "route": "c1_crystal_to_elephant.route",
+  "pad": "c1_crystal_to_elephant.pad",
+  "expect": [
+    {"label": "ST1D sub 1 in control", "stage": "1d", "sub": 1, "calm": true},
+    {"label": "the crystal used: script 0x28 runs", "stage": "1d", "sub": 1, "script": 5},
+    {"label": "the fall into the arena (ST1D sub 2)", "stage": "1d", "sub": 2},
+    {"label": "control back in the arena (the fight)", "stage": "1d", "sub": 2, "calm": true}
+  ],
+  "end": {"stage": "1d", "sub": 2, "story": 1, "near": [512, 1338, 256]}
+}

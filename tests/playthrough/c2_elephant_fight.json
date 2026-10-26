@@ -1,0 +1,40 @@
+{
+  "title": "save 00 (god mode): the crystal -> the giant elephant reaverbot (ST1D sub 2) destroyed -> script 0x29 -> ST1C: script 0x13 (mash) -> ST3E sub 3 at story 2, in control",
+  "start": "game:00",
+  "route": "c2_elephant_fight.route",
+  "pad": "c2_elephant_fight.pad",
+  "expect": [
+    {
+      "label": "the arena (ST1D sub 2) in control, the fight",
+      "stage": "1d",
+      "sub": 2,
+      "calm": true
+    },
+    {
+      "label": "the elephant down: script 0x29 (0xa725a0 = 0x21)",
+      "stage": "1d",
+      "sub": 2,
+      "script_run": true
+    },
+    {
+      "label": "ST1C sub 0: script 0x13",
+      "stage": "1c",
+      "sub": 0,
+      "script_run": true
+    },
+    {
+      "label": "ST3E sub 3 at story 2, in control",
+      "stage": "3e",
+      "sub": 3,
+      "story": 2,
+      "calm": true
+    }
+  ],
+  "end": {
+    "stage": "3e",
+    "sub": 3,
+    "story": 2,
+    "note": "the chapter change (story 1 -> 2) clears the chapter's flags (0x680 / 0x683 / 0x580 / 0x59x ... on the original), so no end flag is asserted"
+  },
+  "god": true
+}
