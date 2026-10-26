@@ -10800,6 +10800,7 @@ static constexpr Ps1Label kPs1Labels[] = {
     {"DAT/ST2502T.BIN", 0x800fc130u, 0xc},
     {"DAT/ST25T.BIN", 0x800fc130u, 0xc},
     {"DAT/ST48T.BIN", 0x800fbe1cu, 0xc},
+    {"COMMON/GAME.BIN", 0x800dc8c4u, 0x10},
 };
 static constexpr Ps1LabelSlot kPs1LabelSlots[] = {
     {6917, 0x0, SlotKind::Data, RoutineId::None, 0x0},
@@ -27535,6 +27536,7 @@ static constexpr Ps1LabelTable kPs1LabelTables[] = {
     {TableId::PlayerIdleTablesA, 0x0, 101, false, 0},
     {TableId::PlayerIdleTablesB, 0x0, 6849, true, 0},
     {TableId::PlayerInputHandlers, 0x0, 98, false, 0},
+    {TableId::PlayerLocomotionRunStartAnims, 0x0, 10793, false, 0},
     {TableId::PlayerMotionHandlers, 0x0, 97, false, 0},
     {TableId::PlayerPartBlocks, 0x0, 6822, false, 0},
     {TableId::PlayerStateHandlers, 0x0, 96, false, 0},
