@@ -11,6 +11,7 @@
 #include <system_error>
 
 #include "app/ui/prim_painter.hpp"
+#include "app/ui/vector_ui.hpp"
 #include "engine/dat.hpp"
 #include "engine/data_source.hpp"
 #include "engine/lang.hpp"
@@ -196,9 +197,7 @@ void MessageUi::ps1Bitmap(ui::Canvas& cv, int g, float x, float y, float s, ui::
 
 void MessageUi::loadHd(od::Renderer& r) {
     hdTried = true;
-    const char* base = SDL_GetBasePath(); // opendash/build/<config>/ -> opendash/assets/fonts
-    const auto path = std::filesystem::path(base ? base : "").parent_path().parent_path().parent_path() / "assets" /
-                      "fonts" / "MPLUSRounded1c-Medium-Latin.ttf";
+    const auto path = assetsDir() / "fonts" / "MPLUSRounded1c-Medium-Latin.ttf";
     if (!hd.load(path)) {
         SDL_Log("hd text: no font at %s (PS1 bitmaps)", path.string().c_str());
         return;

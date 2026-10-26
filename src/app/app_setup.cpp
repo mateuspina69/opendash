@@ -282,9 +282,9 @@ int App::init() {
     ptView = &playerView;
     classicControls = classicArg; // F1: the original tank controls + the game's follow camera
     try {
-        if (cfg.langDir.empty()) { // the language packs live in opendash/lang; the exe is in opendash/build/<config>
+        if (cfg.langDir.empty()) { // the language packs: lang/ next to the executable unless lang_dir= says otherwise
             const char* base = SDL_GetBasePath();
-            cfg.langDir = std::filesystem::path(base ? base : "").parent_path().parent_path().parent_path() / "lang"; // build/<config>/ -> opendash/lang
+            cfg.langDir = std::filesystem::path(base ? base : "") / "lang";
         }
         if (!cfg.disc.empty()) // the PS1 disc image: the English pack (engine/lang_pack), the data with data=disc
             playerView.disc = std::make_shared<const od::DiscImage>(cfg.disc);

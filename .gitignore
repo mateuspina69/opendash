@@ -1,7 +1,8 @@
 /build/
 /build-linux/
 /third_party/
-/tools/
+/tools/*
+!/tools/fetch_sdks.py
 /tests/data/
 /lang/
 /screenshots/

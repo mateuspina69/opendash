@@ -11,7 +11,7 @@ namespace {
 #ifdef _WIN32
 constexpr const char* kDefaultDatDir = "C:/Program Files (x86)/Capcom/Dash2/dat";
 #endif
-constexpr const char* kDefaultLangDir = ""; // empty: opendash/lang next to the build (the app resolves it from the exe)
+constexpr const char* kDefaultLangDir = ""; // empty: lang/ next to the executable (the app resolves it from the exe)
 
 std::string trim(std::string s) {
     const auto b = s.find_first_not_of(" \t\r\n");

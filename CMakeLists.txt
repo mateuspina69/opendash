@@ -117,6 +117,8 @@ if(WIN32)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:opendash> $<TARGET_FILE_DIR:opendash>
         COMMAND_EXPAND_LISTS)
 endif()
+add_custom_command(TARGET opendash POST_BUILD # the fonts, UI art and captions the app reads from <exe dir>/assets
+    COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different ${CMAKE_SOURCE_DIR}/assets $<TARGET_FILE_DIR:opendash>/assets)
 add_custom_command(TARGET opendash POST_BUILD # seed saves/ from the Debug dir (other configs)
     COMMAND ${CMAKE_COMMAND} -DSRC=${CMAKE_BINARY_DIR}/Debug -DDST=$<TARGET_FILE_DIR:opendash>
             -P ${CMAKE_SOURCE_DIR}/cmake/sync_runtime_data.cmake)

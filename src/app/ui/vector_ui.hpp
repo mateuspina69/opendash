@@ -19,7 +19,7 @@
 
 namespace od::app {
 
-// opendash/assets (the exe is in opendash/build/<config>)
+// assets/ next to the executable (the build copies opendash/assets there)
 std::filesystem::path assetsDir();
 
 struct VectorUi {

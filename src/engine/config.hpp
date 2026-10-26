@@ -10,7 +10,7 @@ struct Config {
     std::filesystem::path exePath; // dash2.exe (per-stage tables); default <datDir>/../dash2.exe
     std::string aa = "auto";          // aa= auto|none|dlss|fsr|xess|nis
     std::string aaQuality = "native"; // aa_quality= native|quality|balanced|performance
-    std::filesystem::path langDir; // lang_dir= / OPENDASH_LANG_DIR: language packs, default opendash/lang (resolved from the exe: <exe dir>/../../lang)
+    std::filesystem::path langDir; // lang_dir= / OPENDASH_LANG_DIR: language packs, default <exe dir>/lang
     std::string lang = "jp";       // lang= jp|en|ptbr / OPENDASH_LANG (--lang overrides)
     std::filesystem::path disc;    // disc= / OPENDASH_DISC: the PS1 disc image (.cue); the English pack is read off it
     std::string data = "pc";       // data= pc|disc / OPENDASH_DATA: the game's files and tables from the PC install or

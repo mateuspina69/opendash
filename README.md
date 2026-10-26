@@ -7,23 +7,38 @@ and the game itself — its data files and its executable — must come from a c
 **This repository contains no game data, no executable code and no assets of the original game.** OpenDash reads
 the `.DAT` files and the per-stage tables of your own installed PC copy at run time.
 
+## Status
+
+- **PC version:** the game can be played from start to finish on OpenDash with the data of the PC version.
+- **PS1 disc:** support for running from the USA PS1 disc (`.cue`/`.bin`) is in progress. It already starts
+  without the PC installation, but parts of the game are still missing; see [PS1 disc](#ps1-disc).
+
+## Download
+
+Windows builds are on the [Releases](https://github.com/mateuspina69/opendash/releases) page. Unzip the folder
+anywhere and run `opendash.exe`; it needs a DirectX 12 GPU and the
+[Microsoft Visual C++ Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe). The game's own
+files still come from your copy (see below).
+
 ## Requirements
 
 - An installed copy of the PC version of *Mega Man Legends 2* (the `dat/` folder and `dash2.exe`).
 - Windows 10/11, Visual Studio 2026 (C++ workload), CMake 3.28+, [vcpkg](https://vcpkg.io) (manifest mode); or
   Linux with GCC 13+ / Clang 17+, CMake 3.28+, Ninja, SDL3, stb, NanoSVG, DXC and a Vulkan 1.3 driver.
-- Python 3.11+ for the tools.
+- Python 3.11+ (the build and `tools/fetch_sdks.py`), and Git with Git LFS for the upscaler SDKs.
 
 ## Building
 
 ```
 cd opendash
+python tools/fetch_sdks.py
 cmake --preset vs2026
 cmake --build --preset release
 ```
 
-The first configure fetches the pinned upscaler SDKs (DLSS, FSR, XeSS, NIS) into `third_party/`. Every build
-includes all four; each one is offered at run time when its DLL is next to the exe and the GPU supports it.
+`tools/fetch_sdks.py` downloads the pinned upscaler SDKs (DLSS, FSR, XeSS, NIS) into `third_party/` (not in git);
+the Windows configure stops if they are missing. Every build includes all four; each one is offered at run time
+when its DLL is next to the exe and the GPU supports it.
 
 On Linux (Arch: `pacman -S cmake ninja sdl3 stb nanosvg directx-shader-compiler vulkan-icd-loader`; NVRHI, Dear ImGui
 and DirectXMath are fetched by the configure at pinned versions):
@@ -39,10 +54,13 @@ depth buffer is D32 with the scene's depth written at D24 precision, so coplanar
 On its first start, if the game is not installed in `C:/Program Files (x86)/Capcom/Dash2` (on Linux, the same path in
 `~/.wine`), OpenDash asks for the game's folder (the one with `dash2.exe`, `dat/` and `snd/`) and remembers it as
 `dat_dir=` / `exe=` in `opendash.ini` next to the executable. The environment variables `OPENDASH_DAT_DIR` / `OPENDASH_EXE` override
-it. The tests take `OPENDASH_DAT_DIR`, `OPENDASH_EXE` and `OPENDASH_GAME_DIR` from the CMake cache.
+it. Every setting of `opendash.ini` is described in [docs/configuration.md](docs/configuration.md). The tests take `OPENDASH_DAT_DIR`, `OPENDASH_EXE` and `OPENDASH_GAME_DIR` from the CMake cache.
 
-An experimental USA PS1 disc data source is also available with `data=disc`, `disc=<path to .cue>` and
-`lang=en` in `opendash.ini`. It can start without the PC installation, but has known gameplay gaps; see
+## PS1 disc
+
+Running from the USA PS1 disc (`SLUS_011.40`, a `.cue` with its raw `.bin` tracks) is a work in progress. Set
+`data=disc`, `disc=<path to .cue>` and `lang=en` in `opendash.ini`. It starts without the PC installation, but
+it cannot yet play through the whole game; see
 [PS1 setup and current limitations](docs/ps1_disc.md#running-the-disc-data-source-2026-10-25).
 
 ## Tests
@@ -52,12 +70,14 @@ is never committed (`tests/data/` is ignored), so it must be generated locally b
 
 ## Layout
 
-- `opendash/src/engine/` — platform, data loading, rendering.
-- `opendash/src/game/` — game systems, one file per system.
-- `opendash/src/content/<area>/` — the scripts, rooms and actors of each area.
-- `opendash/src/app/` — window, renderer host, debug UI.
--  — Python reference implementations of the data formats.
--  — records reference data from your copy of the game for the tests.
+- `src/engine/` — platform, data loading (PC installation and PS1 disc).
+- `src/render/` — renderer, shaders, upscalers.
+- `src/audio/` — sound effects, music and voices.
+- `src/game/` — game systems, one file per system.
+- `src/content/<area>/` — the scripts, rooms and actors of each area.
+- `src/app/` — window, renderer host, debug UI.
+- `src/net/` — netplay (see `docs/netplay.md`).
+- `tests/` — the tests; `docs/` — design notes.
 
 ## Legal
 
@@ -70,4 +90,4 @@ The OpenDash source code is released under the BSD 2-Clause license (see `LICENS
 original work of the OpenDash contributors; it grants no rights to the original game, its code, its data or Capcom's
 trademarks. Bundled third-party files keep
 their own licenses (the M PLUS Rounded 1c fonts are under the SIL Open Font License, see
-`opendash/assets/fonts/OFL.txt`).
+`assets/fonts/OFL.txt`).

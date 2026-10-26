@@ -18,7 +18,7 @@ using SP = od::port::ScreenPrim;
 
 std::filesystem::path assetsDir() {
     const char* base = SDL_GetBasePath();
-    return std::filesystem::path(base ? base : "").parent_path().parent_path().parent_path() / "assets";
+    return std::filesystem::path(base ? base : "") / "assets";
 }
 
 namespace {
