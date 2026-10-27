@@ -4,6 +4,7 @@
 #include <limits>
 #include <map>
 #include <stdexcept>
+#include <string>
 
 namespace od {
 
@@ -45,7 +46,10 @@ uint16_t ps1XaTrack(std::span<const uint8_t, 8> descriptor, uint32_t fileLba, st
         const uint32_t first = clip.sectors.front() - fileLba;
         if (first < start || first >= end) continue;
         if (clip.sectors.back() - fileLba >= end)
-            throw std::runtime_error("PS1 XA: voice range cuts a clip short");
+            throw std::runtime_error("PS1 XA: voice range " + std::to_string(start) + ".." + std::to_string(end) +
+                                     " (channel " + std::to_string(channel) + ") cuts a clip short (sectors " +
+                                     std::to_string(first) + ".." + std::to_string(clip.sectors.back() - fileLba) +
+                                     ")");
         if (track != clips.size()) throw std::runtime_error("PS1 XA: voice range contains several clips");
         track = i;
     }
