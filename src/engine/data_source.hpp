@@ -36,7 +36,7 @@
 
 namespace od {
 
-// The table the data source last read (the TableReader error names it; a diagnostic only).
+// The table the data source last read on this thread (the TableReader error names it; a diagnostic only).
 std::string& debugTableName();
 
 // Which table: its id and, for a table the game keeps one of per stage / per room, which one (index)

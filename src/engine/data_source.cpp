@@ -8,7 +8,7 @@ namespace od {
 namespace {
 const DataSource* g_bound = nullptr;
 std::atomic<uint64_t> g_serials{0};
-std::string g_debugTableName;
+thread_local std::string g_debugTableName; // per thread: the game logic and the renderer read tables at once
 } // namespace
 
 std::string& debugTableName() { return g_debugTableName; }
