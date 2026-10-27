@@ -84,8 +84,15 @@ public:
 void registerAll() {
     bindings.clear();
     Register r;
-    // first, so that every later binding of an address wins: the retired states (a slot's pointer can still name a
-    // member of its previous occupant's state, its box: the exe keeps the word)
+    // first, so that every later binding of an address wins: the states the held ones replaced (game/actor_state
+    // replacedClassState), then the retired states (a slot's pointer can still name a member of its previous
+    // occupant's state, its box: the exe keeps the word)
+    const auto replaced = [&r](auto& pool) {
+        for (size_t i = 0; i < pool.size(); ++i)
+            if (ActorClassState* state = pool[i].replacedClassState()) classLayout(r, pool[i].at, *state);
+    };
+    replaced(shotPool()); replaced(animatedPool()); replaced(projectilePool());
+    replaced(staticPool()); replaced(effectPool()); replaced(controllerPool());
     for (const ActorHeader* slot : retired)
         if (ActorClassState* held = slot->heldClassState()) classLayout(r, slot->at, *held);
     actorPoolsLayout(r);

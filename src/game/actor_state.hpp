@@ -567,6 +567,9 @@ struct ActorHeader {
     bool classStateCurrent() const { return classStateCurrent_; }
     // the class state held (nullptr: none yet)
     ActorClassState* heldClassState() const { return classState_.get(); }
+    // the state the held one replaced (nullptr: none): kept while the slot lives, as the exe's slot keeps the bytes a
+    // pointer of the new occupant can still name (its collision box left on the previous class's own box)
+    ActorClassState* replacedClassState() const { return replacedClassState_.get(); }
     // the slot's class block cleared (exe 0x40dc40 over it): the state's members in that range zeroed
     void clearClassStateBlock() {
         if (classState_) classState_->clearBlock();
@@ -584,6 +587,7 @@ struct ActorHeader {
 
 private:
     mutable std::unique_ptr<ActorClassState> classState_;
+    mutable std::unique_ptr<ActorClassState> replacedClassState_; // the state classState_ replaced (replacedClassState)
     mutable bool classStateCurrent_ = false; // the state held was created or used in the current occupant's lifetime
 };
 
@@ -606,6 +610,7 @@ template <class T, class S> T& classState(S& slot) {
     h.classState_ = std::move(fresh);
     h.classStateCurrent_ = true;
     if (ClassStateObserver* o = classStateObserver()) o->created(h, previous.get(), state);
+    if (previous) h.replacedClassState_ = std::move(previous);
     return state;
 }
 // ... read through a const slot (a class state is the slot's own: asking for it may create it)
