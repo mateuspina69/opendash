@@ -648,7 +648,7 @@ void knockedBack(AnimatedActor& actor, CritterFields& f) {
         actor.velocity.y = kBounceLift;
         actor.velocity.z = kBouncePush;
         actor.anim = 4;
-        f.heading = int16_t(f.hitYaw & 0xfff);
+        f.heading = int16_t(uint16_t(f.hit.contact.x) & 0xfff);
         ++actor.step;
         break;
     case 1:

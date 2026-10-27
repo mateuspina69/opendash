@@ -142,7 +142,7 @@ int herdHit(AnimatedActor& actor, HerdFields& f) {
     f.bits = b;
     if (!(box & 0x1c0000) || dmg == 0) return 0;
     f.bits = uint8_t(b | kHerdHit);
-    if (f.frontHitArmed != 0 && uint32_t(yawDiff(actor, f.hitYaw) + 0x100) < 0x200u) {
+    if (f.frontHitArmed != 0 && uint32_t(yawDiff(actor, f.hit.contact.x) + 0x100) < 0x200u) {
         f.lastDamage = uint16_t(dmg);
         return 2;
     }

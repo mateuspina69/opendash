@@ -15,8 +15,7 @@ struct HerdFields : ActorClassState {
     uint8_t& pensFoundTaken;
     uint8_t& watchesPlayer;
     uint8_t& frontHitArmed;
-    HitBoxHead hit;
-    int16_t hitYaw = 0;
+    HitBox hit; // its contact motion (x: the yaw of the hit, the hit list's output) read by the front-hit test
     int16_t heading = 0;
     int8_t cooldown = 0; // counts up to 0
     union {
@@ -28,7 +27,6 @@ struct HerdFields : ActorClassState {
 
     void clearBlock() override {
         hit = {};
-        hitYaw = 0;
         heading = 0;
         cooldown = 0;
         timer = 0;

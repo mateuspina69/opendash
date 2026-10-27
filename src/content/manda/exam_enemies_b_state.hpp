@@ -137,7 +137,7 @@ struct HatchFields : ActorClassState {
         : cellX0(actor.params[0]), cellX1(actor.params[1]), cellZ0(actor.params[2]), cellZ1(actor.params[3]),
           mode(actor.hopperBytes[1]) {}
     FieldAlias<int8_t, uint8_t> cellX0, cellX1, cellZ0, cellZ1;
-    HitBoxHead hitBox;
+    HitBox hitBox; // its shape asks for the contact motion: the hit list writes it after the head
     PartField<uint8_t, int16_t> scriptMark{hitBox.previousX, 0};
     uint16_t blinkTicks = 0;
     uint16_t releaseTimer = 0;

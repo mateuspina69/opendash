@@ -14,8 +14,7 @@ struct CritterFields : ActorClassState {
     uint8_t& bits;
     uint8_t& animKey;
     uint8_t& hits;
-    HitBoxHead hit;
-    uint16_t hitYaw = 0;
+    HitBox hit; // its contact motion (x: the yaw of the hit, the hit list's output) turns the critter
     uint16_t timer = 0;
     int16_t heading = 0;
     uint8_t coin = 0;
@@ -26,7 +25,6 @@ struct CritterFields : ActorClassState {
 
     void clearBlock() override {
         hit = {};
-        hitYaw = 0;
         timer = 0;
         heading = 0;
         coin = 0;
