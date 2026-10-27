@@ -36,6 +36,7 @@
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/spark_emitter.hpp"
+#include "game/spark_emitter_state.hpp"
 #include "game/story.hpp"
 #include "game/story_flags.hpp"
 #include "game/vectors.hpp"
@@ -84,7 +85,7 @@ void smokePuff(const int16_t point[3], uint8_t variant, int16_t life) {
     smoke.pos.x.whole = point[0];
     smoke.pos.y.whole = point[1];
     smoke.pos.z.whole = point[2];
-    SparkEmitterParams& params = classState<SparkEmitterParams>(staticActorAt(slot));
+    spark_emitter_state::SparkEmitterFields& params = classState<spark_emitter_state::SparkEmitterFields>(staticActorAt(slot));
     params.driftX = 0;
     params.driftZ = 0;
     params.lifetime = life;

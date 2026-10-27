@@ -18,6 +18,7 @@
 #include "game/random.hpp"
 #include "game/script_state.hpp"
 #include "game/spark_emitter.hpp"
+#include "game/spark_emitter_state.hpp"
 #include "game/story.hpp"
 
 namespace od::port {
@@ -133,7 +134,7 @@ void boneSpark(const AnimatedActor& actor, uint32_t bone) {
     const uint32_t slot = allocActor60(kActorStageClass);
     if (!slot) return;
     StaticActor& spark = staticActorAt(slot);
-    SparkEmitterParams& params = classState<SparkEmitterParams>(staticActorAt(slot));
+    spark_emitter_state::SparkEmitterFields& params = classState<spark_emitter_state::SparkEmitterFields>(staticActorAt(slot));
     spark.flags = kActorLive;
     spark.type = kSparkEmitterStageType;
     spark.variant = kSparkVariant;

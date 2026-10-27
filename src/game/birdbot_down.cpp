@@ -27,6 +27,7 @@
 #include "game/random.hpp"
 #include "game/shadows.hpp"
 #include "game/spark_emitter.hpp"
+#include "game/spark_emitter_state.hpp"
 #include "game/stage_state.hpp"
 #include "game/visibility.hpp"
 
@@ -143,7 +144,7 @@ void bounced(AnimatedActor& a, DownFields& f) { // exe 0x492710: bounced along i
                 s.pos.x.whole = a.pos.x.whole;
                 s.pos.y.whole = a.pos.y.whole;
                 s.pos.z.whole = a.pos.z.whole;
-                SparkEmitterParams& sp = classState<SparkEmitterParams>(s);
+                SparkEmitterParams& sp = classState<spark_emitter_state::SparkEmitterFields>(s);
                 sp.driftX = 0;
                 sp.driftZ = 0;
                 sp.lifetime = 4;

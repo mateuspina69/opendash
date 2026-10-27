@@ -35,6 +35,7 @@
 #include "game/random.hpp"
 #include "game/shockwave.hpp"
 #include "game/spark_emitter.hpp"
+#include "game/spark_emitter_state.hpp"
 #include "game/table_records.hpp"
 #include "game/vectors.hpp"
 
@@ -1048,7 +1049,7 @@ void lowHpSparks(AnimatedActor& a) {
     s.pos.x.whole = p.x;
     s.pos.y.whole = p.y;
     s.pos.z.whole = p.z;
-    SparkEmitterParams& sp = classState<SparkEmitterParams>(s);
+    SparkEmitterParams& sp = classState<spark_emitter_state::SparkEmitterFields>(s);
     sp.driftX = 0;
     sp.driftZ = 0;
     sp.lifetime = 0xf;

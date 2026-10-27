@@ -32,6 +32,7 @@
 #include "game/projection.hpp"
 #include "game/random.hpp"
 #include "game/spark_emitter.hpp"
+#include "game/spark_emitter_state.hpp"
 #include "game/story.hpp"
 
 namespace od::port {
@@ -449,7 +450,7 @@ void smoke(const AnimatedActor& actor, TurretFields& turret) {
     if (rngStep() & 7) return;
     if (const uint32_t slot = allocActor60(kActorStageClass)) { // exe 0x46c5a0
         StaticActor& puff = staticActorAt(slot);
-        SparkEmitterParams& params = classState<SparkEmitterParams>(staticActorAt(slot));
+        spark_emitter_state::SparkEmitterFields& params = classState<spark_emitter_state::SparkEmitterFields>(staticActorAt(slot));
         puff.flags = kActorLive;
         puff.loopFlags |= kActorSweepGroup2;
         puff.type = kSparkEmitterStageType;

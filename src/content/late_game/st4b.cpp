@@ -34,6 +34,7 @@
 #include "game/script_state.hpp"
 #include "game/shockwave.hpp"
 #include "game/spark_emitter.hpp"
+#include "game/spark_emitter_state.hpp"
 #include "game/story.hpp"
 #include "game/story_flags.hpp"
 
@@ -449,7 +450,7 @@ void spawnTrail(AnimatedActor& actor, uint8_t spawnByte, uint8_t variant) {
     trail.type = kSparkEmitterStageType;
     trail.loopFlags |= kActorSweepGroup2;
     trail.setParamsWord(0xa0000);
-    classState<SparkEmitterParams>(staticActorAt(slot)).parent = &actor;
+    classState<spark_emitter_state::SparkEmitterFields>(staticActorAt(slot)).parent = &actor;
 }
 // exe 0x4baaa0: a blast (global static type 7, variant 0) at the boss, size 0x200
 void blastAtBoss(const AnimatedActor& actor) {
@@ -1406,7 +1407,7 @@ void pieceTrail(StaticActor& actor) {
     const uint32_t slot = allocActor60(kActorStageClass); // exe 0x5e12f0
     if (!slot) return;
     StaticActor& trail = staticActorAt(slot);
-    SparkEmitterParams& params = classState<SparkEmitterParams>(staticActorAt(slot));
+    spark_emitter_state::SparkEmitterFields& params = classState<spark_emitter_state::SparkEmitterFields>(staticActorAt(slot));
     trail.flags = kActorLive;
     trail.loopFlags |= kActorSweepGroup2;
     trail.type = kSparkEmitterStageType;

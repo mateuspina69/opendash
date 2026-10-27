@@ -71,6 +71,7 @@
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/spark_emitter.hpp"
+#include "game/spark_emitter_state.hpp"
 #include "game/story.hpp"
 #include "game/table_records.hpp"
 #include "game/transition.hpp"
@@ -376,7 +377,7 @@ int towerTimeline() {
         x.pos.x.whole = e.point.x;
         x.pos.y.whole = e.point.y;
         x.pos.z.whole = e.point.z;
-        SparkEmitterParams& params = classState<SparkEmitterParams>(staticActorAt(address));
+        spark_emitter_state::SparkEmitterFields& params = classState<spark_emitter_state::SparkEmitterFields>(staticActorAt(address));
         params.driftX = e.driftX;
         params.driftZ = e.driftZ;
         params.lifetime = e.lifetime;
@@ -401,7 +402,7 @@ int towerTimeline() {
                     e.pos.x.whole = int16_t(jitter(x));
                     e.pos.y.whole = int16_t(jitter(y));
                     const uint32_t rz = crtRand();
-                    SparkEmitterParams& params = classState<SparkEmitterParams>(staticActorAt(address));
+                    spark_emitter_state::SparkEmitterFields& params = classState<spark_emitter_state::SparkEmitterFields>(staticActorAt(address));
                     params.driftX = 0;
                     params.driftZ = 0;
                     params.lifetime = kGridLifetime;

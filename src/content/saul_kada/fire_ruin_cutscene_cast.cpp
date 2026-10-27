@@ -18,6 +18,7 @@
 #include "game/port_gap.hpp"
 #include "game/script_state.hpp"
 #include "game/spark_emitter.hpp"
+#include "game/spark_emitter_state.hpp"
 #include "game/story.hpp"
 
 namespace od::port {
@@ -371,7 +372,7 @@ void dropProp(AnimatedActor& actor) {
         spark.pos.x.whole = point[0];
         spark.pos.y.whole = point[1];
         spark.pos.z.whole = point[2];
-        SparkEmitterParams& params = classState<SparkEmitterParams>(staticActorAt(slot));
+        spark_emitter_state::SparkEmitterFields& params = classState<spark_emitter_state::SparkEmitterFields>(staticActorAt(slot));
         params.driftX = 0;
         params.driftZ = 0;
         params.lifetime = 0;

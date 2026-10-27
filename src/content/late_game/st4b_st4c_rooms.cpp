@@ -30,6 +30,7 @@
 #include "game/script_engine.hpp"
 #include "game/script_state.hpp"
 #include "game/spark_emitter.hpp"
+#include "game/spark_emitter_state.hpp"
 #include "game/spawn.hpp"
 #include "game/stage_files.hpp"
 #include "game/stage_state.hpp"
@@ -174,7 +175,7 @@ void sceneSmoke(uint32_t point) {
     if (!slot) return;
     const ScenePoint p = dataRecord<ScenePoint>(point, ScenePoint::kBytes);
     StaticActor& a = staticActorAt(slot);
-    SparkEmitterParams& params = classState<SparkEmitterParams>(staticActorAt(slot));
+    spark_emitter_state::SparkEmitterFields& params = classState<spark_emitter_state::SparkEmitterFields>(staticActorAt(slot));
     a.flags = kActorLive;
     a.type = kSparkEmitterStageType;
     a.variant = 0x18;

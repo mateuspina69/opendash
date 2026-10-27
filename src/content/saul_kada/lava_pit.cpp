@@ -35,6 +35,7 @@
 #include "game/random.hpp"
 #include "game/rewards.hpp"
 #include "game/spark_emitter.hpp"
+#include "game/spark_emitter_state.hpp"
 #include "game/story.hpp"
 #include "game/story_flags.hpp"
 #include "game/table_records.hpp"
@@ -280,7 +281,7 @@ void creatureSub(StaticActor& actor, CreatureFields& creature, CreatureSub sub) 
             creature.hidden = 0;
             if (const uint32_t slot = allocActor60(kActorStageClass)) {
                 StaticActor& splash = staticActorAt(slot);
-                SparkEmitterParams& params = classState<SparkEmitterParams>(staticActorAt(slot));
+                spark_emitter_state::SparkEmitterFields& params = classState<spark_emitter_state::SparkEmitterFields>(staticActorAt(slot));
                 splash.flags = kActorLive;
                 splash.loopFlags |= kActorSweepGroup2;
                 splash.type = kSparkEmitterStageType;

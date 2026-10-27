@@ -44,6 +44,7 @@
 #include "game/random.hpp"
 #include "game/room_grid.hpp"
 #include "game/spark_emitter.hpp"
+#include "game/spark_emitter_state.hpp"
 #include "game/story.hpp"
 #include "game/visibility.hpp"
 
@@ -777,7 +778,7 @@ void run(const PlayerEnv& env, AnimatedActor& actor, TankFields& tank) {
     smoke.pos.x = actor.pos.x;
     smoke.pos.y = int32_t(uint32_t(actor.pos.y) - 0x800000u);
     smoke.pos.z = actor.pos.z;
-    SparkEmitterParams& params = classState<SparkEmitterParams>(staticActorAt(slot));
+    spark_emitter_state::SparkEmitterFields& params = classState<spark_emitter_state::SparkEmitterFields>(staticActorAt(slot));
     params.driftX = 0;
     params.driftZ = 0;
     params.lifetime = 7;

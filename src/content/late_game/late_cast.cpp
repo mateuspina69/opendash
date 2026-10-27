@@ -52,6 +52,7 @@
 #include "game/script_state.hpp"
 #include "game/skid_sparks.hpp"
 #include "game/spark_emitter.hpp"
+#include "game/spark_emitter_state.hpp"
 #include "game/state_array.hpp"
 #include "game/story.hpp"
 
@@ -357,7 +358,7 @@ void spawnTrail(AnimatedActor& actor, uint8_t bone) {
     trail.type = kSparkEmitterStageType;
     trail.variant = 0x1d;
     trail.loopFlags |= kActorSweepGroup2;
-    classState<SparkEmitterParams>(staticActorAt(slot)).parent = &actor;
+    classState<spark_emitter_state::SparkEmitterFields>(staticActorAt(slot)).parent = &actor;
 }
 // the flight (scene 1 of variant 0 / every tick of variant 1): along the waypoints (a new row every 0x29 ticks of the
 // counter; the 5th row -> coasting), forward 0x2000 a tick, a puff (a blast, variant 0x10) while the counter is 4 or

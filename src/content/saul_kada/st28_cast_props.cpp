@@ -14,6 +14,7 @@
 #include "game/port_gap.hpp"
 #include "game/script_state.hpp"
 #include "game/spark_emitter.hpp"
+#include "game/spark_emitter_state.hpp"
 #include "game/story.hpp"
 
 namespace od::port {
@@ -49,7 +50,7 @@ void dropEmitter(const StaticActor& prop, int dx, int dz) {
     const uint32_t slot = allocActor60(kActorStageClass); // exe 0x5e12f0
     if (!slot) return;
     StaticActor& emitter = staticActorAt(slot);
-    SparkEmitterParams& params = classState<SparkEmitterParams>(staticActorAt(slot));
+    spark_emitter_state::SparkEmitterFields& params = classState<spark_emitter_state::SparkEmitterFields>(staticActorAt(slot));
     emitter.flags = kActorLive;
     emitter.type = kSparkEmitterStageType;
     emitter.variant = kEmitterVariant;

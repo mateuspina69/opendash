@@ -27,6 +27,7 @@
 #include "game/script_engine.hpp"
 #include "game/script_state.hpp"
 #include "game/spark_emitter.hpp"
+#include "game/spark_emitter_state.hpp"
 #include "game/spawn.hpp"
 #include "game/stage_files.hpp"
 #include "game/stage_state.hpp"
@@ -217,7 +218,7 @@ uint32_t ember(uint8_t variant, int16_t x, int16_t y, int16_t z, bool sweepGroup
     return slot;
 }
 void emberParams(uint32_t slot, int16_t lifetime) {
-    SparkEmitterParams& params = classState<SparkEmitterParams>(staticActorAt(slot));
+    spark_emitter_state::SparkEmitterFields& params = classState<spark_emitter_state::SparkEmitterFields>(staticActorAt(slot));
     params.driftX = 0;
     params.driftZ = 0;
     params.lifetime = lifetime;

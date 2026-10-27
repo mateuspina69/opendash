@@ -49,6 +49,7 @@
 #include "game/script_engine.hpp"
 #include "game/script_state.hpp"
 #include "game/spark_emitter.hpp"
+#include "game/spark_emitter_state.hpp"
 #include "game/spawn.hpp"
 #include "game/stage_state.hpp"
 #include "game/story.hpp"
@@ -655,7 +656,7 @@ void sparkEmitterAt(uint32_t point, uint8_t v, int16_t lifetime) {
     if (slot == 0) return;
     const ShortVec3 p = dataShortVec3(point);
     StaticActor& e = staticActorAt(slot);
-    SparkEmitterParams& params = classState<SparkEmitterParams>(staticActorAt(slot));
+    spark_emitter_state::SparkEmitterFields& params = classState<spark_emitter_state::SparkEmitterFields>(staticActorAt(slot));
     e.variant = v;
     e.loopFlags |= kActorSweepGroup2;
     e.flags = kActorLive;

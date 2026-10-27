@@ -32,6 +32,7 @@
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/spark_emitter.hpp"
+#include "game/spark_emitter_state.hpp"
 #include "game/story.hpp"
 #include "game/visibility.hpp"
 
@@ -215,7 +216,7 @@ void dying(const PlayerEnv& env, AnimatedActor& a, HoverFields& f) {
     if (!(uint16_t(f.timer) & 1)) {
         if (const uint32_t address = allocActor60(kActorStageClass)) { // exe 0x5e12f0
             StaticActor& smoke = staticActorAt(address);
-            SparkEmitterParams& params = classState<SparkEmitterParams>(smoke);
+            spark_emitter_state::SparkEmitterFields& params = classState<spark_emitter_state::SparkEmitterFields>(smoke);
             smoke.flags = kActorLive;
             smoke.type = kSparkEmitterStageType;
             smoke.variant = 8;

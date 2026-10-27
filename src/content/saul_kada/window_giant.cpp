@@ -31,6 +31,7 @@
 #include "game/port_gap.hpp"
 #include "game/room_grid.hpp"
 #include "game/spark_emitter.hpp"
+#include "game/spark_emitter_state.hpp"
 #include "game/story.hpp"
 #include "game/story_flags.hpp"
 #include "game/wall_debris.hpp"
@@ -121,7 +122,7 @@ void wallDebris(const GiantFields& giant) {
         spark.pos.x.whole = debris.pos.x.whole;
         spark.pos.y.whole = debris.pos.y.whole;
         spark.pos.z.whole = debris.pos.z.whole;
-        SparkEmitterParams& params = classState<SparkEmitterParams>(staticActorAt(sparkSlot));
+        spark_emitter_state::SparkEmitterFields& params = classState<spark_emitter_state::SparkEmitterFields>(staticActorAt(sparkSlot));
         params.driftX = 0;
         params.driftZ = 0;
         params.lifetime = 1;

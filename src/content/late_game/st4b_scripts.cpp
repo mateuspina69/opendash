@@ -34,6 +34,7 @@
 #include "game/script_engine.hpp"
 #include "game/script_state.hpp"
 #include "game/spark_emitter.hpp"
+#include "game/spark_emitter_state.hpp"
 #include "game/spawn.hpp"
 #include "game/story.hpp"
 #include "game/transition.hpp"
@@ -539,7 +540,7 @@ void bossTrail(AnimatedActor& actor, uint8_t spawnByte, uint8_t variant) {
     const uint32_t slot = allocActor60(kActorStageClass); // exe 0x5e12f0
     if (slot == 0) return;
     StaticActor& trail = staticActorAt(slot);
-    SparkEmitterParams& params = classState<SparkEmitterParams>(staticActorAt(slot));
+    spark_emitter_state::SparkEmitterFields& params = classState<spark_emitter_state::SparkEmitterFields>(staticActorAt(slot));
     trail.pos.x.whole = 0;
     trail.variant = variant;
     trail.spawnByte = spawnByte;
