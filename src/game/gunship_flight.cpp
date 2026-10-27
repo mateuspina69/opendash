@@ -196,6 +196,11 @@ void dropBomb(const StaticActor& actor, int16_t v) {
     soundPlayAtPos(kBombSound, actor.pos);
 }
 
+bool gunshipHitTaken(const StaticActor& actor) {
+    const uint32_t v = classState<GunshipFields>(const_cast<StaticActor&>(actor)).hitBox.result;
+    return (v & kHitDamageMask) != 0 && (v & kHitByPlayerOrStrong) != 0;
+}
+
 GunshipHit gunshipHits(StaticActor& actor) {
     GunshipFields& ship = classState<GunshipFields>(actor);
     const uint32_t v = ship.hitBox.result, n = v & kHitDamageMask;

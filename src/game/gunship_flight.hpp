@@ -109,6 +109,9 @@ void dropBomb(const StaticActor& actor, int16_t v);
 // exe 0x59e0e0: the hits of the box -- a strong one (or one of a quarter of the hit points) rocks it; out of hit points:
 // Dead
 GunshipHit gunshipHits(StaticActor& actor);
+// ... whether it takes its hit branch this tick (damage from the player or a strong push): the stack it leaves differs
+// then (game/... classes read it as stale stack)
+bool gunshipHitTaken(const StaticActor& actor);
 // exe 0x5a28e0 / 0x5a2380 (with minFall 0x100) / 0x59f380 (with the drops): shot down -- spins and falls (0x5a ticks or
 // a wall), then a blast and gone; smoke every other tick
 void gunshipCrash(const PlayerEnv& env, StaticActor& actor, int16_t minFall, bool drops);

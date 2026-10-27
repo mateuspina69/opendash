@@ -129,13 +129,14 @@ struct MissionGunshipKind {
     int16_t leaveStep;
     int goneDistance;            // freed beyond this from the player
     int burstNear;               // the cruise's burst within this (<)
+    uint16_t veerCallReturn;     // the low half of the veer's return address from exe 0x5e3690 (see PointLows)
 };
 constexpr MissionGunshipKind kSt15Gunship = {TableId::MissionGunshipsSt15GunshipBox, TableId::MissionGunshipsSt15GunshipProbeBox, 0x1c00, TableId::MissionGunshipsSt15GunshipCruiseTicks, TableId::MissionGunshipsSt15GunshipMargins, TableId::MissionGunshipsSt15GunshipRunTicks, TableId::MissionGunshipsSt15GunshipBurstTicks,
                                              0x200, 0x10, 0x400, 0x18, 0x400, 0x20, 0x40, TableId::MissionGunshipsSt15GunshipReinforcements,
-                                             -0x3800, 0x200, 0x10, 0x1c00, 0xbb9};
+                                             -0x3800, 0x200, 0x10, 0x1c00, 0xbb9, 0xd9e8};
 constexpr MissionGunshipKind kWaveGunship = {TableId::MissionGunshipsWaveGunshipBox, TableId::MissionGunshipsWaveGunshipProbeBox, 0x3800, TableId::MissionGunshipsWaveGunshipCruiseTicks, TableId::MissionGunshipsWaveGunshipMargins, TableId::MissionGunshipsWaveGunshipRunTicks, TableId::MissionGunshipsWaveGunshipBurstTicks,
                                              0x300, 0x18, 0x280, 0x10, 0x600, 0x30, 0x30, TableId::MissionGunshipsWaveGunshipReinforcements,
-                                             -0x7000, 0x300, 0x18, 0x3800, 0xbb9};
+                                             -0x7000, 0x300, 0x18, 0x3800, 0xbb9, 0x0ea8};
 
 constexpr int16_t kSpeedStep = -0x20, kVeerSpeedStep = -0x40, kLandSpeedStep = -0x40;
 constexpr int8_t kLevelPitch = 0x30;
@@ -182,12 +183,25 @@ void enterSub(StaticActor& actor, MissionGunshipSub s) {
     actor.enterStep(0);
 }
 
-// exe 0x5e3bc0 on the point {x << 16, ., z << 16}: the bearing from it to the ship. The exe's point (a stack local of
-// 0x59d650) holds only the whole halves: its low words are stale stack, not reproducible; OpenDash takes them as 0 -- a
-// deliberate deviation: on a tick the bearing lands at a whole number's edge the steer dead zone differs (spin.y 0x10)
-int angleFromPoint(const StaticActor& actor, int16_t px, int16_t pz) {
-    return angleOf(int32_t(uint32_t(uint16_t(px)) << 16), int32_t(uint32_t(uint16_t(pz)) << 16), actor.pos.x,
-                   actor.pos.z);
+// The low halves of a sub-state's point. The exe builds {x << 16, ., z << 16} in a stack local writing only the whole
+// halves; the angle 0x5e3bc0 reads the whole dwords (the distance 0x5e3b00 only the whole halves), so the fractions are
+// what the calls before it left at that depth (A = the actor's address):
+//  * sub-states dispatched by the main state (0x59d520 / 0x5a09d0) right after the hits 0x59e0e0 (push ebx / esi /
+//    edi): x = (A + 0xbc) & 0xffff (edi, the update's lea edi, [esi + 0xbc]), z = 0 (ebx, the frame loop's)
+//  * the cruise entered through the start's tail call: z = (A + 0xbc) & 0xffff; x = A & 0xffff when the hits took
+//    the hit branch (0x59e13f push edi), else a previous pool slot's leftover (not reproducible: 0)
+//  * the attack 0x59df60 / 0x5a15a0 from the veer: x = the veer's return address from 0x5e3690 (kind.veerCallReturn),
+//    z = 0 (its push 0); from the cruise: z = A & 0xffff (0x5e3690's push esi), x = an uninitialised local of
+//    0x5e38d0 (not reproducible: 0)
+struct PointLows {
+    uint16_t x = 0, z = 0;
+};
+PointLows dispatchedLows(const StaticActor& actor) { return {uint16_t(actor.at + 0xbc), 0}; }
+
+// exe 0x5e3bc0 on the point {x << 16 | lows.x, ., z << 16 | lows.z}: the bearing from it to the ship
+int angleFromPoint(const StaticActor& actor, int16_t px, int16_t pz, PointLows lows) {
+    return angleOf(int32_t(uint32_t(uint16_t(px)) << 16 | lows.x), int32_t(uint32_t(uint16_t(pz)) << 16 | lows.z),
+                   actor.pos.x, actor.pos.z);
 }
 // exe 0x5e3b00(position, point): the planar distance to the point
 int planarToPoint(const StaticActor& actor, int16_t px, int16_t pz) {
@@ -195,13 +209,13 @@ int planarToPoint(const StaticActor& actor, int16_t px, int16_t pz) {
     return planarDistance(actor.pos, point);
 }
 // exe 0x5a1c30(actor, point, lim, acc): steerRate toward the point's bearing
-int steerToPoint(StaticActor& actor, int16_t px, int16_t pz, int lim, int16_t acc) {
-    return steerRate(actor, uint32_t(angleFromPoint(actor, px, pz)), lim, acc);
+int steerToPoint(StaticActor& actor, int16_t px, int16_t pz, PointLows lows, int lim, int16_t acc) {
+    return steerRate(actor, uint32_t(angleFromPoint(actor, px, pz, lows)), lim, acc);
 }
 // exe 0x59e4e0(actor, point, lim, acc): the turn rate toward the point, no dead zone
-void steerAlways(StaticActor& actor, int16_t px, int16_t pz, int lim, int16_t acc) {
+void steerAlways(StaticActor& actor, int16_t px, int16_t pz, PointLows lows, int lim, int16_t acc) {
     MissionGunshipFields& ship = classState<MissionGunshipFields>(actor);
-    const int d = angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angleFromPoint(actor, px, pz)));
+    const int d = angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angleFromPoint(actor, px, pz, lows)));
     ship.turnStep = 0;
     if (d < 0) ship.turnStep = int16_t(-acc);
     if (d > 0) ship.turnStep = acc;
@@ -284,10 +298,11 @@ void gunnerAttack(MissionGunshipFields& ship, const MissionGunshipKind& kind, in
 
 // exe 0x59df60 / 0x5a15a0: the attack of the variant (& 0xf) toward the point: 0 bombs (count * 4), 1 lands near it,
 // 2 shoots bursts
-void missionGunshipAttack(StaticActor& actor, MissionGunshipFields& ship, const MissionGunshipKind& kind) {
+void missionGunshipAttack(StaticActor& actor, MissionGunshipFields& ship, const MissionGunshipKind& kind,
+                          PointLows lows) {
     const int16_t px = ship.pointX, pz = ship.pointZ;
     const int d = planarToPoint(actor, px, pz);
-    const int diff = angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angleFromPoint(actor, px, pz)));
+    const int diff = angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angleFromPoint(actor, px, pz, lows)));
     switch (actor.variant & 0xf) {
     case 0: {
         const uint8_t c = ship.burst;
@@ -315,7 +330,7 @@ void missionGunshipAttack(StaticActor& actor, MissionGunshipFields& ship, const 
 // exe 0x59d650 / 0x5a0b10: the cruise -- a run's length and steering margin picked, a cruise (facing the player near:
 // sound 0x189, a burst), the burst (the guns every 4th tick), a straight run, a pause; steered to the point but on a
 // straight run; a wall ahead during a straight run -> the veer; the attack; told to leave -> fly off
-void missionCruise(StaticActor& actor, MissionGunshipFields& ship, const MissionGunshipKind& kind) {
+void missionCruise(StaticActor& actor, MissionGunshipFields& ship, const MissionGunshipKind& kind, PointLows lows) {
     const int16_t px = ship.pointX, pz = ship.pointZ;
     switch (CruiseStep(actor.step)) {
     case CruiseStep::Init:
@@ -382,19 +397,19 @@ void missionCruise(StaticActor& actor, MissionGunshipFields& ship, const Mission
     default: break;
     }
     if ((ship.behaviour & kBehaveStraight) ||
-        steerToPoint(actor, px, pz, ship.turnMargin + kind.steerLimit, kind.steerStep) == 0)
+        steerToPoint(actor, px, pz, lows, ship.turnMargin + kind.steerLimit, kind.steerStep) == 0)
         steerDamp(actor, kind.steerStep);
     cruiseMove(actor, kind.cruiseSpeed);
     if ((ship.behaviour & kBehaveStraight) && (ship.contact & (kContactWallLeft | kContactWallRight))) {
         enterSub(actor, MissionGunshipSub::Veer);
         ship.turnMargin = int8_t(ship.contact);
     }
-    missionGunshipAttack(actor, ship, kind);
+    missionGunshipAttack(actor, ship, kind, {0, uint16_t(actor.at)});
     leaveIfTold(actor, ship);
 }
 
 // exe 0x59d610 / 0x5a0ad0: the level pitch, the cruise speed, the rates cleared, then the cruise
-void missionStart(StaticActor& actor, MissionGunshipFields& ship, const MissionGunshipKind& kind) {
+void missionStart(StaticActor& actor, MissionGunshipFields& ship, const MissionGunshipKind& kind, bool hitBranch) {
     ship.pitchTarget = kLevelPitch;
     actor.velocity.setXY(0, 0);
     actor.velocity.z = int16_t(-kind.cruiseSpeed);
@@ -402,11 +417,11 @@ void missionStart(StaticActor& actor, MissionGunshipFields& ship, const MissionG
     actor.spin.x = 0;
     actor.spin.y = 0;
     enterSub(actor, MissionGunshipSub::Cruise);
-    missionCruise(actor, ship, kind);
+    missionCruise(actor, ship, kind, {uint16_t(hitBranch ? actor.at : 0), uint16_t(actor.at + 0xbc)});
 }
 
 // exe 0x59d910 / 0x5a0dd0: a wall ahead (the walls seen: on the right) -> turn away for a while
-void missionVeer(StaticActor& actor, MissionGunshipFields& ship, const MissionGunshipKind& kind) {
+void missionVeer(StaticActor& actor, MissionGunshipFields& ship, const MissionGunshipKind& kind, PointLows lows) {
     const uint8_t b = uint8_t(ship.behaviour | kBehaveLevelA);
     ship.behaviour = b;
     if (actor.step == 0) {
@@ -419,14 +434,14 @@ void missionVeer(StaticActor& actor, MissionGunshipFields& ship, const MissionGu
     const int off = (uint8_t(ship.turnMargin) & kContactWallRight) ? 0x600 : -0x600;
     int16_t dx, dz;
     angleVector(int(int16_t(uint16_t(actor.rotation.y) + off)), 0x400, dx, dz);
-    if (steerToPoint(actor, int16_t(actor.pos.x.whole + dx), int16_t(actor.pos.z.whole + dz), kind.veerLimit,
+    if (steerToPoint(actor, int16_t(actor.pos.x.whole + dx), int16_t(actor.pos.z.whole + dz), lows, kind.veerLimit,
                      kind.veerStep) == 0)
         steerDamp(actor, kind.veerStep);
     cruiseMove(actor, kind.veerSpeed);
     const uint8_t c = uint8_t(ship.timer - 1);
     ship.timer = c;
     if (c == 0) enterSub(actor, MissionGunshipSub::Cruise);
-    missionGunshipAttack(actor, ship, kind);
+    missionGunshipAttack(actor, ship, kind, {kind.veerCallReturn, 0});
     leaveIfTold(actor, ship);
 }
 
@@ -501,7 +516,7 @@ uint32_t dropReinforcement(const StaticActor& actor, uint8_t v) {
 
 // exe 0x59da20 / 0x5a0ee0: brake near the point, descend, drop the count's reinforcements (the row's), climb back, fly
 // off
-void missionLand(StaticActor& actor, MissionGunshipFields& ship, const MissionGunshipKind& kind) {
+void missionLand(StaticActor& actor, MissionGunshipFields& ship, const MissionGunshipKind& kind, PointLows lows) {
     switch (LandStep(actor.step)) {
     case LandStep::Init: {
         ship.flight = 0;
@@ -575,13 +590,13 @@ void missionLand(StaticActor& actor, MissionGunshipFields& ship, const MissionGu
         break;
     default: break;
     }
-    steerAlways(actor, ship.pointX, ship.pointZ, 0x60, 4); // exe 0x59e4e0
+    steerAlways(actor, ship.pointX, ship.pointZ, lows, 0x60, 4); // exe 0x59e4e0
     integrateVelocity(actor, 0, actor.velocity.y, actor.velocity.z);
 }
 
 // exe 0x59dca0 / 0x5a1160: away along the heading (the kind's distance out); out of the far draw distance: no lock-on;
 // far from the player -> freed
-void missionFlyOff(StaticActor& actor, MissionGunshipFields& ship, const MissionGunshipKind& kind) {
+void missionFlyOff(StaticActor& actor, MissionGunshipFields& ship, const MissionGunshipKind& kind, PointLows lows) {
     if (actor.step == 0) {
         ship.mode = kLanded;
         int16_t dx, dz;
@@ -593,7 +608,7 @@ void missionFlyOff(StaticActor& actor, MissionGunshipFields& ship, const Mission
         actor.acceleration.z = kSpeedStep;
         actor.enterStep(1);
     }
-    if (steerToPoint(actor, ship.pointX, ship.pointZ, kind.leaveLimit, kind.leaveStep) == 0)
+    if (steerToPoint(actor, ship.pointX, ship.pointZ, lows, kind.leaveLimit, kind.leaveStep) == 0)
         steerDamp(actor, kind.leaveStep);
     cruiseMove(actor, 0x500);
     const int d = planarDistance(actor.pos, player().pos);
@@ -675,7 +690,7 @@ void st15GunshipInit(StaticActor& actor, MissionGunshipFields& ship) {
     actor.collisionBox.pointAt(kSt15Gunship.box);
     actor.airborne = 1;
     followPlayer(ship);
-    ship.leaveHeading = int8_t(uint8_t(angleFromPoint(actor, ship.pointX, ship.pointZ) >> 4));
+    ship.leaveHeading = int8_t(uint8_t(angleFromPoint(actor, ship.pointX, ship.pointZ, {}) >> 4)); // whole dwords
     ship.homeHeight = int32_t(actor.pos.y.whole) + kHomeAbove;
     actor.clearClassBlock(); // exe 0x40dc40
     actor.enterState(uint8_t(MissionGunshipState::Alive));
@@ -684,17 +699,18 @@ void st15GunshipInit(StaticActor& actor, MissionGunshipFields& ship) {
 // exe 0x59d520
 void st15GunshipAlive(const PlayerEnv& env, StaticActor& actor, MissionGunshipFields& ship) {
     followPlayer(ship);
+    const bool hitBranch = gunshipHitTaken(actor); // before 0x59e0e0 reads the box
     if (missionHits(actor, ship)) {
         actor.enterState(uint8_t(MissionGunshipState::Crash));
         gunshipCrash(env, actor, 0x200, false);
         return;
     }
     switch (MissionGunshipSub(actor.subState)) {
-    case MissionGunshipSub::Start: missionStart(actor, ship, kSt15Gunship); break;
-    case MissionGunshipSub::Cruise: missionCruise(actor, ship, kSt15Gunship); break;
-    case MissionGunshipSub::Veer: missionVeer(actor, ship, kSt15Gunship); break;
-    case MissionGunshipSub::Land: missionLand(actor, ship, kSt15Gunship); break;
-    case MissionGunshipSub::FlyOff: missionFlyOff(actor, ship, kSt15Gunship); break;
+    case MissionGunshipSub::Start: missionStart(actor, ship, kSt15Gunship, hitBranch); break;
+    case MissionGunshipSub::Cruise: missionCruise(actor, ship, kSt15Gunship, dispatchedLows(actor)); break;
+    case MissionGunshipSub::Veer: missionVeer(actor, ship, kSt15Gunship, dispatchedLows(actor)); break;
+    case MissionGunshipSub::Land: missionLand(actor, ship, kSt15Gunship, dispatchedLows(actor)); break;
+    case MissionGunshipSub::FlyOff: missionFlyOff(actor, ship, kSt15Gunship, dispatchedLows(actor)); break;
     case MissionGunshipSub::Rocked: missionRocked(actor, ship); break;
     default: notPortedAt(kStoryPort, "static 0x59d310 sub-state", actor.subState);
     }
@@ -836,7 +852,7 @@ void dropGlydeKey(StaticActor& actor) {
         carrier.pos = actor.pos;
         carrier.params[0] = 3;
         carrier.rotation.x = 0;
-        carrier.rotation.y = int16_t(angleFromPoint(actor, 0, kKeyPointZ)); // exe 0x5e3bc0({0, y, 0x500}, a + 0x10)
+        carrier.rotation.y = int16_t(angleFromPoint(actor, 0, kKeyPointZ, {})); // exe 0x5e3bc0({0, y, 0x500}, a + 0x10)
         carrier.rotation.z = 0;
         carrier.velocity.x = 0;
         carrier.velocity.y = -0x100;
@@ -950,7 +966,7 @@ void waveInit(StaticActor& actor, MissionGunshipFields& ship) {
     actor.velocity.setXY(0, 0);
     actor.velocity.z = 0;
     followPlayer(ship);
-    ship.leaveHeading = int8_t(uint8_t(angleFromPoint(actor, ship.pointX, ship.pointZ) >> 4));
+    ship.leaveHeading = int8_t(uint8_t(angleFromPoint(actor, ship.pointX, ship.pointZ, {}) >> 4)); // whole dwords
     ship.homeHeight = int32_t(actor.pos.y.whole) + kHomeAbove;
     actor.clearClassBlock(); // exe 0x40dc40
     actor.enterState(uint8_t(MissionGunshipState::Alive));
@@ -964,17 +980,18 @@ void waveInit(StaticActor& actor, MissionGunshipFields& ship) {
 // exe 0x5a09d0
 void waveAlive(const PlayerEnv& env, StaticActor& actor, MissionGunshipFields& ship) {
     followPlayer(ship);
+    const bool hitBranch = gunshipHitTaken(actor);
     if (missionHits(actor, ship)) { // exe 0x59e0e0
         actor.enterState(uint8_t(MissionGunshipState::Crash));
         waveCrash(env, actor, ship);
         return;
     }
     switch (MissionGunshipSub(actor.subState)) {
-    case MissionGunshipSub::Start: missionStart(actor, ship, kWaveGunship); break;
-    case MissionGunshipSub::Cruise: missionCruise(actor, ship, kWaveGunship); break;
-    case MissionGunshipSub::Veer: missionVeer(actor, ship, kWaveGunship); break;
-    case MissionGunshipSub::Land: missionLand(actor, ship, kWaveGunship); break;
-    case MissionGunshipSub::FlyOff: missionFlyOff(actor, ship, kWaveGunship); break;
+    case MissionGunshipSub::Start: missionStart(actor, ship, kWaveGunship, hitBranch); break;
+    case MissionGunshipSub::Cruise: missionCruise(actor, ship, kWaveGunship, dispatchedLows(actor)); break;
+    case MissionGunshipSub::Veer: missionVeer(actor, ship, kWaveGunship, dispatchedLows(actor)); break;
+    case MissionGunshipSub::Land: missionLand(actor, ship, kWaveGunship, dispatchedLows(actor)); break;
+    case MissionGunshipSub::FlyOff: missionFlyOff(actor, ship, kWaveGunship, dispatchedLows(actor)); break;
     case MissionGunshipSub::Rocked: missionRocked(actor, ship); break; // 0x5a1280 = 0x59dda0 byte for byte
     case MissionGunshipSub::Entry: waveEntry(env, actor, ship); break;
     default: notPortedAt(kStoryPort, "static 0x5a07b0 sub-state", actor.subState);

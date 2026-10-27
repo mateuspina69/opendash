@@ -469,16 +469,21 @@ struct Runner {
         out = int16_t(uint16_t(lo | hi << 8));
         return true;
     }
-    // The exe's stale stack the port takes as 0 (a documented deviation, not reproducible): the mission gunships
-    // (static type 0x1b, content/nino/mission_gunships angleFromPoint): on a tick their bearing lands at a whole number's
-    // edge the steer dead zone differs: spin.y +0x4a 0 against +-0x10
+    // The exe's stale stack where it is not reproducible (content/nino/mission_gunships PointLows): the gunships' (static
+    // type 0x1b) cruise entered from the start without a hit and their attack from the cruise read a fraction a previous
+    // pool slot or an uninitialised local left; on a tick the bearing lands at a whole number's edge their steer differs
+    // by one step: spin.y +0x4a and the turn step +0x4e within 0x18 of the golden's
     std::vector<std::pair<uint32_t, uint32_t>> staleStackSkips(const Rec& want) const {
         std::vector<std::pair<uint32_t, uint32_t>> out; // [from, to)
         for (uint32_t i = 0; i < 64; ++i) {
             const uint32_t a = 0xa67860 + i * 0xcc;
-            int16_t w;
-            if (m.u8(a + 4) != 0x1b || !goldenS16(want, a + 0x4a, w) || w != 0) continue;
-            if (m.s16(a + 0x4a) == 0x10 || m.s16(a + 0x4a) == -0x10) out.push_back({a + 0x4a, a + 0x4c});
+            if (m.u8(a + 4) != 0x1b) continue;
+            for (const uint32_t off : {0x4au, 0x4eu}) {
+                int16_t w;
+                if (!goldenS16(want, a + off, w)) continue;
+                const int d = int(m.s16(a + off)) - int(w);
+                if (d != 0 && d >= -0x18 && d <= 0x18) out.push_back({a + off, a + off + 2});
+            }
         }
         return out;
     }
