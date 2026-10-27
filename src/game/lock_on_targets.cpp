@@ -5,6 +5,7 @@
 #include "game/game_state.hpp"
 #include "game/geometry_scratch.hpp"
 #include "game/hit_list.hpp"
+#include "game/modern_play.hpp"
 #include "game/player/player_state.hpp"
 #include "game/projection.hpp"
 #include "game/projection_state.hpp"
@@ -182,8 +183,8 @@ void selectLockOnTargets(uint32_t count, uint32_t groupMask) {
             p.lockAimPoint = s.nearestInReach;
             p.lockHeldTicks = 0;
         } else if (const ActorRef<ActorHeader> t = p.lockedActor;
-                   t && (actorLayoutOf(*t).flags & kActorLive) && actorLayoutOf(*t).slot == remembered &&
-                   p.lockHeldTicks < kLockHoldTicks) {
+                   modernPlay() && t && (actorLayoutOf(*t).flags & kActorLive) &&
+                   actorLayoutOf(*t).slot == remembered && p.lockHeldTicks < kLockHoldTicks) {
             // OpenDash (modern aim, not the exe): a locked target that is alive but submitted no lock-on point this
             // frame (a boss between phases, a part swapping its hit boxes) keeps the lock a moment -- aimed at the
             // actor's position -- instead of dropping it and turning Megaman / his shots away while the lock button

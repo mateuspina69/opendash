@@ -17,6 +17,7 @@
 #include "game/fixed_point.hpp"
 #include "game/game_state.hpp"
 #include "game/hit_list.hpp"
+#include "game/modern_play.hpp"
 #include "game/player/moving_fire.hpp"
 #include "game/player/player_animation.hpp"
 #include "game/player/player_carry.hpp"
@@ -227,7 +228,7 @@ void updateLockOn(Player& p, uint16_t held) {
         }
         p.lockTicks = 0;
     } else {
-        if (p.lockTarget != 0 && p.lockSuspended != 0 &&
+        if (modernPlay() && p.lockTarget != 0 && p.lockSuspended != 0 &&
             (p.sub() == PlayerSub::KnockBack || p.sub() == PlayerSub::RunningJump)) {
             // OpenDash (modern aim, not the exe): knocked back by a hit (the knock-back suspends the lock, then the
             // recovery's landing), the lock stays on its target -- no turning while hurt, but no drop / re-acquire either

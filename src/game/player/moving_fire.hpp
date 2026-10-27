@@ -9,6 +9,7 @@
 // button, kArmSpecial: charge, fire on release, stop to use ...) keep the exe's behaviour untouched.
 #pragma once
 
+#include "game/modern_play.hpp"
 #include "game/player/player_state.hpp"
 #include "game/player/player_weapons.hpp"
 
@@ -18,7 +19,7 @@ namespace od::port {
 // queued special shot / refire, a carry). Not the kick: the town's buster (weapon mode town / special, its kick
 // animation) cancels the walk as in the exe.
 inline bool busterFiring(const Player& p) {
-    if (p.activeBuster == kTownBuster) return false;
+    if (!modernPlay() || p.activeBuster == kTownBuster) return false; // the exe's gameplay (game/modern_play): no change
     const uint16_t f = p.armFlags;
     if (f & kArmBuster) return true;
     if ((f & (kArmSpecialRefire | kArmSpecialQueued | kArmSpecial)) || p.holds(PlayerButton::Special) ||
