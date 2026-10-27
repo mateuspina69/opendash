@@ -601,8 +601,12 @@ std::vector<Ps1DataSource::AddressTable> Ps1DataSource::addressTables() {
         for (uint32_t room = 0; room * t.stride < kPs1Labels[t.label].bytes; ++room)
             out.push_back({{t.id, roomIndex(int(t.index), int(room))}, t.stride, t.own});
     }
-    for (const VoiceTable& v : kVoiceTables)
+    for (const VoiceTable& v : kVoiceTables) { // the complete array, as the source reads it (voiceBytes_)
         if (seen.insert({v.id, v.index}).second) out.push_back({{v.id, v.index}, v.count * 4, true});
+        else
+            for (AddressTable& t : out)
+                if (t.key == TableKey{v.id, v.index}) t.bytes = std::max(t.bytes, v.count * 4);
+    }
     return out;
 }
 
