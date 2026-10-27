@@ -30,5 +30,7 @@ bool subruinRoomHelper(RoutineId fn, bool run);
 // says beforehand).
 bool subruinRoomScripts();
 bool subruinRoomScriptsKnown();
+// a room handler of the content's chain (game/room_scripts): exe 0x58b830, which ST14 reaches too
+bool subruinLockRoomHandler(RoutineId fn, bool run);
 
 } // namespace od::port

@@ -251,6 +251,14 @@ CurrentHandler currentHandler() {
 
 } // namespace
 
+// exe 0x58b830, the lock flag cleared: ST14's room-script table (its stories 10..) points at it too, so it is a handler
+// of the content's chain as well
+bool subruinLockRoomHandler(RoutineId fn, bool run) {
+    if (fn != RoutineId::St4dSub8Lock) return false;
+    if (run) runHandler(RoutineRef(fn, 0));
+    return true;
+}
+
 bool subruinRoomHelper(RoutineId fn, bool run) {
     switch (fn) {
     case RoutineId::St4DRoomHelper: // ST4D: sub 0 -> its visit flag

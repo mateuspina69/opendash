@@ -167,6 +167,7 @@ void registerStageSetup(ContentRegistry& r) {
         &pokteRoomHandler,        // ST24 / ST25 (manda/pokte_rooms)
         &mandaRuinRoomHandler,    // ST12 / ST13 / ST14 (manda/manda_rooms)
         &st51RoomHandler,         // ST51 (subruins/st51_rooms)
+        &subruinLockRoomHandler,  // the sub-ruins' lock handler, ST14's too (subruins/subruin_rooms)
         &islandVisitRoomHandler,  // forbidden_island/island_visit
         &ch2RoomHandler,          // nino/ch2_rooms
         &ch3RoomHandler,          // calbania/ch3_story
