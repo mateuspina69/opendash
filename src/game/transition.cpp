@@ -112,10 +112,10 @@ void roomScripts() {
         return;
     }
     // the shop stages: the clerk's message sets flag 0x6ff -> exe 0x5112b0(8) = the stage callback *0xa6bb80 (the shop
-    // menu exe 0x5d1e30, game/shop); ST29 only after story 0xc (evidence: the cases 0x57cce0, 0x580040, 0x5800a0,
-    // 0x581b10, 0x583730)
-    const bool shopStage =
-        st == 0x0a || st == 0x1a || st == 0x1b || st == 0x25 || (st == 0x29 && story > kST29ShopStory);
+    // menu exe 0x5d1e30, game/shop); ST29 only after story 0xc, ST3F (the Sulphur-Bottom's junk shop) only in room 1
+    // (evidence: the cases 0x57cce0, 0x580040, 0x5800a0, 0x581b10, 0x583730, 0x589060's 0x5890a9)
+    const bool shopStage = st == 0x0a || st == 0x1a || st == 0x1b || st == 0x25 ||
+                           (st == 0x29 && story > kST29ShopStory) || (st == 0x3f && room == 1);
     if (shopStage && storyFlag(kShopFlag)) scriptStart(kShopScript);
 }
 

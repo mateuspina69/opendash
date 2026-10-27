@@ -246,10 +246,10 @@ void spawnOnce(uint32_t listA, uint32_t nA, uint32_t listB, uint32_t nB) {
 }
 
 // ---- ST0B: the licence exam office ------------------------------------------------------------------------------------
-// by story: the sub-rooms' handlers (exe table 0x8c5b78: a pointer per story to the handlers by sub-room, named by the
-// source)
+// by story: the sub-rooms' handlers (exe table 0x8c5b78: a pointer per story 0..0x14 to its two sub-rooms' handlers,
+// windows into one list 0x8c5b58; the exe reads [[table + story * 4] + sub * 4] only; named by the source)
 struct StoryHandlerTables : DataRecord {
-    static constexpr size_t kStories = 0x20, kSubs = 0x10;
+    static constexpr size_t kStories = 0x15, kSubs = 2;
     static constexpr uint32_t kBytes = kStories * 4;
     std::array<std::array<RoutineRef, kSubs>, kStories> handlers{};
     const RoutineRef& handler(size_t story, size_t sub) const {
