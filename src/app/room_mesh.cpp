@@ -410,8 +410,8 @@ RoomMesh loadRoom(int stage, int sub) {
     const auto floor = od::parseFloor(block, od::port::floorUvTables[uint32_t(stage)].uv, od::port::floorOrientationTable->orient,
                                       roomShift, sub < 0 ? 0 : sub);
     quads.insert(quads.end(), floor.begin(), floor.end());
-    SDL_Log("%s sub %d/%zu: shift %d, %zu scenery quads (%d segments, %d skipped faces, %d unowned), %zu floor quads",
-            name, sub, od::roomGrids(block).size(), roomShift, sceneryQuads, stats.segments, stats.skippedFaces,
+    SDL_Log("%s sub %d/%d: shift %d, %zu scenery quads (%d segments, %d skipped faces, %d unowned), %zu floor quads",
+            name, sub, stageRoomCount(stage, od::roomGrids(block).size()), roomShift, sceneryQuads, stats.segments, stats.skippedFaces,
             stats.ambiguousGrid, floor.size());
 
     // the exe never clears VRAM: a play load starts from the live VRAM (every earlier stage / script / player file,
@@ -631,6 +631,12 @@ RoomMesh loadRoom(int stage, int sub) {
     buildTrackStrip(mesh, roomShift, warps); // the room's exits (the data source's)
     SDL_Log("%s: %zu triangles, %d texture slices", name, mesh.tris.size() / 3, mesh.sliceCount);
     return mesh;
+}
+
+int stageRoomCount(int stage, size_t grids) {
+    int n = int(grids);
+    while (n > 0 && !od::port::roomParamsRecords.has(od::roomIndex(stage, n - 1))) --n;
+    return n;
 }
 
 } // namespace od::app

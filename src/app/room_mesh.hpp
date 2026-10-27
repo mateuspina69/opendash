@@ -215,5 +215,8 @@ od::Fog fogFor(const RoomMesh& mesh, od::FogMode mode, float distance, FogSource
 // Loads ST{stage}.DAT geometry + floor, textures from INIT/GAME/ST{stage}T, and flattens quads into
 // one triangle list (game Y-down -> Y-up).
 RoomMesh loadRoom(int stage, int sub);
+// The rooms of a stage whose room block has `grids` grids: its last grids without room params (ST0F 13, ST4F 14: on
+// the PC and the PS1, no exit leads there) are not rooms
+int stageRoomCount(int stage, size_t grids);
 
 } // namespace od::app

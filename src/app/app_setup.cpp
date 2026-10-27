@@ -60,7 +60,7 @@ std::vector<StageInfo> scanStages() {
         if (!od::dataSource().hasFile(name)) continue;
         try {
             const od::GameFile st = od::dataSource().gameFile(name);
-            const int subs = int(od::roomGrids(od::roomBlock(st)).size());
+            const int subs = stageRoomCount(n, od::roomGrids(od::roomBlock(st)).size());
             if (subs > 0) out.push_back({n, subs});
         } catch (const std::exception&) {
         }
