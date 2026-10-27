@@ -74,6 +74,7 @@
 #include "translator/game_memory.hpp"
 #include "game/camera.hpp"
 #include "game/actor_movement.hpp"
+#include "game/modern_play.hpp"
 #include "game/player/player_state.hpp"
 #include "game/player/player_update.hpp"
 #include "engine/room.hpp"
@@ -266,6 +267,7 @@ int main(int argc, char** argv) {
     if (argc < 4) return 2;
     const fs::path datDir = argv[1], exe = argv[2], data = argv[3];
     od::bindTestDataSource(exe);
+    od::port::setModernPlay(false); // the goldens hold the exe's gameplay (game/modern_play)
     const int maxReports = argc > 4 ? std::stoi(argv[4]) : 3;
     std::vector<fs::path> files;
     for (const auto& de : fs::directory_iterator(data))

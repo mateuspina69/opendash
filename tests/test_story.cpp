@@ -255,6 +255,7 @@ static LONG CALLBACK traceThrow(EXCEPTION_POINTERS* e) {
 #include "translator/game_memory.hpp"
 #include "game/hud.hpp"
 #include "game/message.hpp"
+#include "game/modern_play.hpp"
 #include "game/text_script.hpp"
 #include "game/player/player_model.hpp"
 #include "game/player/player_state.hpp"
@@ -511,6 +512,7 @@ int main(int argc, char** argv) {
 #endif
     const fs::path datDir = argv[1], exe = argv[2], data = argv[3];
     od::bindTestDataSource(exe);
+    od::port::setModernPlay(false); // the goldens hold the exe's gameplay (game/modern_play)
     const int maxReports = argc > 4 ? std::stoi(argv[4]) : 3;
     // filter: comma-separated substrings, a golden runs when its name contains any of them (CMakeLists registers one
     // test per golden group with the group's file names, so ctest -j runs the groups in parallel)
