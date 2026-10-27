@@ -18,6 +18,8 @@
 //     buffer as a network peer
 //   --ghost-look <costume> <variant> <weapon>: with --ghost-mirror, that ghost's look (Megaman body PL00P costume /
 //     variant, special weapon > 2 = its PL00R arm) instead of the local player's
+//   OD_TRACE_THROW=1 (environment, dev): the call stack of every C++ throw on stderr (named with a build that has
+//     symbols, RelWithDebInfo)
 #include "app/app.hpp"
 #include "app/log_file.hpp"
 #include "app/ui/prompts.hpp"
@@ -31,6 +33,35 @@
 #include "game/audio_logic.hpp"
 #include "game/display.hpp"
 #include "content/registry.hpp"
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#include <dbghelp.h>
+#include <cstdio>
+#include <cstdlib>
+#pragma comment(lib, "dbghelp.lib")
+namespace {
+// OD_TRACE_THROW: a vectored handler runs before the unwind, so it sees the thrower's frames
+LONG CALLBACK traceThrow(EXCEPTION_POINTERS* e) {
+    if (e->ExceptionRecord->ExceptionCode != 0xE06D7363) return EXCEPTION_CONTINUE_SEARCH; // a C++ throw
+    void* frames[24];
+    const USHORT n = CaptureStackBackTrace(0, 24, frames, nullptr);
+    HANDLE p = GetCurrentProcess();
+    alignas(SYMBOL_INFO) char buf[sizeof(SYMBOL_INFO) + 256];
+    for (USHORT i = 0; i < n; ++i) {
+        auto* s = reinterpret_cast<SYMBOL_INFO*>(buf);
+        s->SizeOfStruct = sizeof(SYMBOL_INFO);
+        s->MaxNameLen = 255;
+        DWORD64 d = 0;
+        if (SymFromAddr(p, DWORD64(frames[i]), &d, s))
+            std::fprintf(stderr, "      %s+0x%llx\n", s->Name, (unsigned long long)d);
+    }
+    return EXCEPTION_CONTINUE_SEARCH;
+}
+} // namespace
+#endif
 
 namespace od::app {
 
@@ -198,6 +229,12 @@ void App::shutdown() {
 } // namespace od::app
 
 int main(int argc, char** argv) {
+#ifdef _WIN32
+    if (std::getenv("OD_TRACE_THROW")) {
+        SymInitialize(GetCurrentProcess(), nullptr, TRUE);
+        AddVectoredExceptionHandler(1, traceThrow);
+    }
+#endif
     od::app::startLogFile(); // opendash.log next to the executable, however the game was started
     od::content::registerAll(); // the game code dispatches into the content through its registry
     od::app::App app;

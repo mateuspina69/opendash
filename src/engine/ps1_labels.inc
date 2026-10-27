@@ -12975,6 +12975,7 @@ static constexpr Ps1Label kPs1Labels[] = {
     {"DAT/ST3AT.BIN", 0x800f5874u, 0xc},
     {"DAT/ST3AT.BIN", 0x800f56b8u, 0xc},
     {"DAT/ST1CT.BIN", 0x800f4864u, 0x18},
+    {"DAT/ST1CT.BIN", 0x800f3d68u, 0x8},
 };
 static constexpr Ps1LabelSlot kPs1LabelSlots[] = {
     {6981, 0x0, SlotKind::Data, RoutineId::None, 0x0},
@@ -17977,7 +17978,6 @@ static constexpr Ps1LabelSlot kPs1LabelSlots[] = {
     {2650, 0xc, SlotKind::Function, RoutineId::St1cRisingPropCue2, 0x0},
     {2651, 0x4, SlotKind::Function, RoutineId::St1cRisingPropCue3, 0x0},
     {2651, 0xc, SlotKind::Function, RoutineId::St1cRisingPropCue4, 0x0},
-    {2652, 0x0, SlotKind::Data, RoutineId::None, 0x0},
     {2653, 0x0, SlotKind::Function, RoutineId::St1cFidgetingFigureCue1, 0x0},
     {2653, 0x4, SlotKind::Function, RoutineId::St1cFidgetingFigureCue2, 0x0},
     {2654, 0x0, SlotKind::Function, RoutineId::St1cFidgetingFigureFidgetCue, 0x0},
@@ -29242,6 +29242,8 @@ static constexpr Ps1LabelSlot kPs1LabelSlots[] = {
     {12967, 0xc, SlotKind::Function, RoutineId::St1cShipCue2, 0x0},
     {12967, 0x10, SlotKind::Function, RoutineId::St1cShipCue3, 0x0},
     {12967, 0x14, SlotKind::Function, RoutineId::St1cShipCue4, 0x0},
+    {12968, 0x0, SlotKind::Data, RoutineId::None, 0x0},
+    {12968, 0x4, SlotKind::Data, RoutineId::None, 0x0},
 };
 static constexpr Ps1LabelTable kPs1LabelTables[] = {
     {TableId::AbandonedMineExitCameraScript, 0x0, 5731, false, 0},
@@ -33902,7 +33904,7 @@ static constexpr Ps1LabelTable kPs1LabelTables[] = {
     {TableId::St1cCastPosingFigureCues, 0x0, 2604, false, 0},
     {TableId::St1cCastPosingFigureFirstTracks, 0x0, 2614, false, 0},
     {TableId::St1cCastPosingFigureSecondTracks, 0x0, 2633, false, 0},
-    {TableId::St1cCastRisingPropCues, 0x0, 2652, false, 0},
+    {TableId::St1cCastRisingPropCues, 0x0, 12968, true, 0},
     {TableId::St1cCastSecondStillModelCues, 0x0, 12459, false, 0},
     {TableId::St1cCastStillModelCues, 0x0, 12458, false, 0},
     {TableId::St1cCastVanishingWalkerCue1FirstKeys, 0x0, 12074, false, 0},

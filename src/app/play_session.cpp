@@ -1637,8 +1637,10 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
         // load wait for it, the cutscene skip reads it
         od::port::display().drawBuffer ^= 1u;
         // the field frame body / draw pass: not in game mode 5 (Maybe_GameModeStatusMenu 0x541bf0 runs only the
-        // sub-screen, Maybe_ProcessDrawCommands and the play time); the field picture stays the last frame's
-        if (game.gameMode() != od::port::GameMode::StatusMenu) {
+        // sub-screen, Maybe_ProcessDrawCommands and the play time); the field picture stays the last frame's. Nor in
+        // mode 1 (the stage's files loading): the pools still hold the last stage's actors, the class tables are
+        // already the next stage's (a game over's way to the title backdrop, ST51)
+        if (game.gameMode() != od::port::GameMode::StatusMenu && game.gameMode() != od::port::GameMode::StageLoad) {
             hud.tick(); // FUN_00415fe0 (presentation: own state, reads the game's)
             hud.tickEnemyGauges(); // its type-3 elements (boss gauges) live in the game state
             overlayPrims = od::hud::overlayDrawPass(); // FUN_005f2690 (draw pass): the scripted sprite banner
@@ -1675,7 +1677,7 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
             SDL_Log("fxtex: %zu effect textures, rebuilding the room's slices", g_fxTextures.entries().size());
             assetsDirty = true;
         }
-        logEffects();
+        if (game.gameMode() != od::port::GameMode::StageLoad) logEffects(); // (the last stage's actors: see above)
         { // scripted-run evidence: the storm's element counts whenever they change
             ++stormLogTick;
             size_t n = 0;
