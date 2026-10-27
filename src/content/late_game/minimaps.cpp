@@ -19,7 +19,7 @@ namespace {
 constexpr int kPanelShift = 6, kPictureShift = 9;
 
 // ---- ST40: a picture per sub-room (sub 1: its own, unscrolled by the grid, 1 / 64 of the units) ------------------
-constexpr uint32_t kSt40Pictures = 12;
+constexpr uint32_t kSt40Pictures = 14;
 const DataTable<RecordTable<MinimapPicture, kSt40Pictures, 8>> st40Pictures{TableId::St40MinimapPictures};
 constexpr uint8_t kSt40OwnPictureArea = 1;
 constexpr uint16_t kSt40Mode = 0x1a, kSt40Clut = 0x7fc0;
