@@ -363,18 +363,9 @@ struct Runner {
         for (const uint32_t a : ported) {
             ++compared;
             if (ph.pool == ActorPool::Animated) {
-                // Glyde's tank (type 0x40 sub 1): its turret yaw +0x2e may be off by one, the exe's aim point having
-                // stale stack fractions (content/calbania/glyde_base_tank aimTurret); then its pose is too
-                bool turretOff = false;
-                if (uint8_t lo, hi; m.u8(a + 4) == 0x40 && m.u8(a + 5) == 1 && want(after, a + 0x2e, lo) &&
-                                    want(after, a + 0x2f, hi)) {
-                    const int d = int(m.s16(a + 0x2e)) - int(int16_t(uint16_t(lo | hi << 8)));
-                    turretOff = d == 1 || d == -1;
-                }
-                diffs += compareRange(ph.name, before.tick, a, ph.stride, after, turretOff ? +[](uint32_t o) {
-                    return (o >= 0x86 && o < 0x94) || o == 0x2e || o == 0x2f;
-                } : +[](uint32_t o) { return o >= 0x86 && o < 0x94; });
-                for (int k = 0; !turretOff && k < 8; ++k) { // the actor's bone blocks
+                diffs += compareRange(ph.name, before.tick, a, ph.stride, after,
+                                      [](uint32_t o) { return o >= 0x86 && o < 0x94; });
+                for (int k = 0; k < 8; ++k) { // the actor's bone blocks
                     int left = k + 1;
                     uint32_t blk = 0;
                     const uint32_t mask = m.u32(a + 0xcc);

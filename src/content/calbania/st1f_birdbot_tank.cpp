@@ -18,8 +18,8 @@
 // head (0x4be800), the ground and slope (0x4bdf60: probes 0x4be000 / 0x4be1c0 / 0x4be390), the tilt (0x4bdeb0); walls
 // / territory -> TurnBack; below a quarter of its hit points, smoke (static stage type 3) at random.
 //
-// Deviations: the low halves of the 16.16 target points of 0x4bd7f0 / 0x4be4b0 / 0x4be800 (stack locals the exe
-// leaves uninitialised) are taken as 0; the probe height of 0x4be390 (an uninitialised stack word passed to exe
+// Deviations: the low halves of the 16.16 target points of 0x4bd7f0 / 0x4be4b0 (stack locals the exe leaves
+// uninitialised) are taken as 0 (0x4be800's are modelled, see tankHead); the probe height of 0x4be390 (an uninitialised stack word passed to exe
 // 0x40f1c0) is the actor's own height.
 // notPorted where the exe would read through a null pointer (a missing bone point) or index past a dispatch table.
 #include "content/calbania/st1f_birdbot_tank.hpp"
@@ -338,8 +338,9 @@ void enterSlopeGait(BirdbotTankFields& f, TankGait g) {
     f.pitchStep = 4;
     f.pitchGrowth = 2;
 }
-// exe 0x4be670: the gait by the slope's pitch
-void tankGait(AnimatedActor& actor, BirdbotTankFields& f) {
+// exe 0x4be670: the gait by the slope's pitch; true when it asked the speed step (exe 0x5e55a0)
+bool tankGait(AnimatedActor& actor, BirdbotTankFields& f) {
+    bool asked = false;
     auto level = [&]() {
         if (!(f.gaitBits & kGaitHold)) actor.acceleration.z = kTankAccel;
         if (f.slopePitch <= -0x41) enterSlopeGait(f, TankGait::Uphill);
@@ -350,53 +351,59 @@ void tankGait(AnimatedActor& actor, BirdbotTankFields& f) {
     case TankGait::Level:
         if (f.gaitBits & kGaitHold) {
             if (f.slopePitch <= -0x41) enterSlopeGait(f, TankGait::Uphill);
-            if (f.slopePitch <= 0x40) return;
+            if (f.slopePitch <= 0x40) return asked;
             enterSlopeGait(f, TankGait::Downhill);
-            return;
+            return asked;
         }
         actor.acceleration.z = kTankAccel;
-        if (speedToward(actor, 0xe0)) {
+        if (asked = true; speedToward(actor, 0xe0)) {
             actor.velocity.z = int16_t(0xff20);
             f.gaitBits |= kGaitLevelSpeed;
         }
         level();
-        return;
-    case TankGait::Settled: level(); return;
+        return asked;
+    case TankGait::Settled: level(); return asked;
     case TankGait::Uphill:
         if (!(f.gaitBits & (kGaitHold | kGaitUphillSpeed))) {
             actor.acceleration.z = kTankAccel;
-            if (speedToward(actor, 0x120)) {
+            if (asked = true; speedToward(actor, 0x120)) {
                 actor.velocity.z = int16_t(0xfee0);
                 f.gaitBits |= kGaitUphillSpeed;
             }
         }
-        if (f.slopePitch <= -1) return;
+        if (f.slopePitch <= -1) return asked;
         f.gait = uint8_t(TankGait::Level);
         f.gaitBits |= kGaitFromUphill;
-        return;
+        return asked;
     case TankGait::Downhill:
         if (!(f.gaitBits & (kGaitHold | kGaitDownhillSpeed))) {
             actor.acceleration.z = kTankAccel;
-            if (speedToward(actor, 0xa0)) {
+            if (asked = true; speedToward(actor, 0xa0)) {
                 actor.velocity.z = int16_t(0xff60);
                 f.gaitBits |= kGaitDownhillSpeed;
             }
         }
-        if (f.slopePitch >= 1) return;
+        if (f.slopePitch >= 1) return asked;
         f.gait = uint8_t(TankGait::Level);
         f.gaitBits |= kGaitFromDownhill;
-        return;
-    default: return;
+        return asked;
+    default: return asked;
     }
 }
-// exe 0x4be800: the turret's yaw toward the target's position one tick ahead (+-0x20 a tick)
-void tankHead(AnimatedActor& actor, BirdbotTankFields& f) {
+// exe 0x4be800: the turret's yaw toward the target's position one tick ahead (+-0x20 a tick). The exe writes only the
+// whole halves of its 16.16 aim point (a stack local); the fractions are what the calls before it left there: z the
+// actor's address (0x4be670's saved esi), x the actor's address when the gait asked the speed step (its argument to
+// 0x5e55a0), else 0 (the territory's 0x5e6ab0 saved ebx, the tank's zero register, exe 0x4bd3a6). With
+// kTankNoTerritory the x fraction is the sub-state handler's frame, not modelled: taken as 0
+void tankHead(AnimatedActor& actor, BirdbotTankFields& f, bool gaitAsked) {
     uint32_t t;
     tankTarget(actor, f, t);
     const Actor& target = actorAt(t);
     const int32_t px = int32_t(uint32_t(uint16_t(t16(target.pos.x.whole * 0x11 + target.prevPos.x.whole * -0x10))) << 16);
     const int32_t pz = int32_t(uint32_t(uint16_t(t16(target.pos.z.whole * 0x11 + target.prevPos.z.whole * -0x10))) << 16);
-    const int ang = angleOf(px, pz, actor.pos.x, actor.pos.z);
+    const uint32_t self = actor.at & 0xffff;
+    const int ang = angleOf(int32_t(uint32_t(px) | (gaitAsked ? self : 0)), int32_t(uint32_t(pz) | self), actor.pos.x,
+                            actor.pos.z);
     const int d = angleDiff(uint32_t(int(f.headYaw) + actor.rotation.y), uint32_t(ang));
     if (uint32_t(d + 0x20) <= 0x40u) {
         f.headYaw = int16_t(angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(ang)));
@@ -774,8 +781,7 @@ void tankMain(AnimatedActor& actor, BirdbotTankFields& f) {
     default: notPortedAt(kEnemyPort, "0x4bd080 state 1 sub-state (table 0x894a6c has 8)", actor.subState);
     }
     tankTerritory(actor, f);
-    tankGait(actor, f);
-    tankHead(actor, f);
+    tankHead(actor, f, tankGait(actor, f));
     tankGround(actor, f);
     tankTilt(actor, f);
     if ((f.contact & (kTankWall | kTankTerritory)) && !(f.mode & kTankNoTurnBack)) enterSub(actor, TankSub::TurnBack);

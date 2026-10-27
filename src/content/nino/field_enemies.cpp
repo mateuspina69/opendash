@@ -31,8 +31,6 @@
 // freed), 8 0x4d2610 flinch), exe 0x4d2d70 the collision. exe 0x4d2a90 picks the next sub-state (7 when sent home /
 // variant 3; the nearest free box of the box spawner -> 2; else 5).
 //
-// Deviation: the low halves of the 16.16 target points of 0x4d1b60 / 0x4d2580 (stack locals the exe leaves
-// uninitialised) are written 0.
 // A port gap where the exe would read through a null pointer (a missing bone point, a null class row or bone block) or
 // index past a dispatch table.
 #include "content/nino/field_enemies.hpp"
@@ -944,10 +942,13 @@ void carrierBind(AnimatedActor& actor, CarrierFields& carrier) {
     actor.enterState(uint8_t(CarrierState::Main));
 }
 
-// the 16.16 target {x << 16, -, z << 16} of 0x4d1b60 / 0x4d2580 (the low halves uninitialised in the exe: 0)
-void pointAt(int16_t x, int16_t z, int32_t out[3]) {
-    out[0] = int32_t(uint32_t(uint16_t(x)) << 16);
-    out[1] = 0;
+// the 16.16 target {x << 16, -, z << 16} of 0x4d1b60 / 0x4d2580: the exe writes only its whole halves, the rest is what
+// the hit check 0x4d2de0 (called before at the same depth) pushed there: the x fraction its saved edi (the actor's
+// address + 0x10, exe 0x4d1711), the y its saved esi (the actor's address), the z fraction its saved ebx (the frame
+// loop's, 0)
+void pointAt(const AnimatedActor& actor, int16_t x, int16_t z, int32_t out[3]) {
+    out[0] = int32_t(uint32_t(uint16_t(x)) << 16 | ((actor.at + 0x10) & 0xffff));
+    out[1] = int32_t(actor.at);
     out[2] = int32_t(uint32_t(uint16_t(z)) << 16);
 }
 // the walks' first step (0x4d1b60 / 0x4d2580): the carry bits, the turn rate, the speed step, the brake distance
@@ -963,7 +964,7 @@ void startWalk(AnimatedActor& actor, CarrierFields& carrier, uint8_t carry) {
 // exe 0x4d1b60: walks to its target with the riders, then drops them (or picks the next)
 void toTarget(AnimatedActor& actor, CarrierFields& carrier) {
     int32_t pt[3];
-    pointAt(carrier.targetX, carrier.targetZ, pt);
+    pointAt(actor, carrier.targetX, carrier.targetZ, pt);
     if (actor.step == 0) startWalk(actor, carrier, kCarrierRiders);
     if (moveTo(actor, carrier, pt, kWalkSpeed) != kArrived) return;
     carrierSub(actor, CarrierSub::Unload);
@@ -1235,7 +1236,7 @@ void grab(AnimatedActor& actor, CarrierFields& carrier) {
 // exe 0x4d2580: walks home, then freed (state 3)
 void walkHome(AnimatedActor& actor, CarrierFields& carrier) {
     int32_t pt[3];
-    pointAt(carrier.homeX, carrier.homeZ, pt);
+    pointAt(actor, carrier.homeX, carrier.homeZ, pt);
     if (actor.step == 0) startWalk(actor, carrier, 0);
     if (moveTo(actor, carrier, pt, kWalkSpeed) == kMoving) return;
     actor.enterState(uint8_t(CarrierState::Gone));

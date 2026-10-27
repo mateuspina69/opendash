@@ -516,14 +516,16 @@ void enterSlopeGait(GlydeTankFields& f, TankGait g) {
     f.pitchStep = 4;
     f.pitchGrowth = 2;
 }
-// exe 0x4bff70: the speed by the slope's pitch (the gait)
-void gaitStep(AnimatedActor& actor, GlydeTankFields& f) {
+// exe 0x4bff70: the speed by the slope's pitch (the gait); true when it asked the speed step (exe 0x5e55a0)
+bool gaitStep(AnimatedActor& actor, GlydeTankFields& f) {
     const TankGait g = TankGait(f.gait);
+    bool asked = false;
     switch (g) {
     case TankGait::Level:
     case TankGait::Settled:
         if (g == TankGait::Level && !(f.gaitBits & kGaitHold)) {
             actor.acceleration.z = kTankAccel;
+            asked = true;
             if (speedToward(actor, 0xe0) != 0) {
                 actor.velocity.z = int16_t(0xff20);
                 f.gaitBits |= kGaitLevelSpeed;
@@ -532,10 +534,11 @@ void gaitStep(AnimatedActor& actor, GlydeTankFields& f) {
         if (!(f.gaitBits & kGaitHold)) actor.acceleration.z = kTankAccel;
         if (f.slopePitch < -0x40) enterSlopeGait(f, TankGait::Uphill);
         if (f.slopePitch > 0x40) enterSlopeGait(f, TankGait::Downhill);
-        return;
+        return asked;
     case TankGait::Uphill:
         if (!(f.gaitBits & (kGaitHold | kGaitUphillSpeed))) {
             actor.acceleration.z = kTankAccel;
+            asked = true;
             if (speedToward(actor, 0x120) != 0) {
                 actor.velocity.z = int16_t(0xfee0);
                 f.gaitBits |= kGaitUphillSpeed;
@@ -545,10 +548,11 @@ void gaitStep(AnimatedActor& actor, GlydeTankFields& f) {
             f.gait = uint8_t(TankGait::Level);
             f.gaitBits |= kGaitFromUphill;
         }
-        return;
+        return asked;
     case TankGait::Downhill:
         if (!(f.gaitBits & (kGaitHold | kGaitDownhillSpeed))) {
             actor.acceleration.z = kTankAccel;
+            asked = true;
             if (speedToward(actor, 0xa0) != 0) {
                 actor.velocity.z = int16_t(0xff60);
                 f.gaitBits |= kGaitDownhillSpeed;
@@ -558,19 +562,22 @@ void gaitStep(AnimatedActor& actor, GlydeTankFields& f) {
             f.gait = uint8_t(TankGait::Level);
             f.gaitBits |= kGaitFromDownhill;
         }
-        return;
-    default: return;
+        return asked;
+    default: return asked;
     }
 }
 // exe 0x4c0100: the turret's yaw toward the player's position one tick ahead (+-0x20 a tick). The exe writes only the
-// whole halves of its 16.16 aim point: the fractions are stale stack (the frames of 0x4bff70 / 0x4be620 called before
-// it), not reproducible; OpenDash takes them as 0 -- a deliberate deviation, the yaw off by one (1/4096 turn) when the
-// angle lands at a whole number's edge
-void aimTurret(AnimatedActor& actor, GlydeTankFields& f) {
+// whole halves of its 16.16 aim point (a stack local); the fractions are what the calls before it left in that stack:
+// z the actor's address (0x4bff70's saved esi), x the actor's address when the gait asked the speed step (0x4bff70's
+// argument to 0x5e55a0), else 0 (the territory's 0x5e6ab0 saved ebx, the tank's zero register). With kTankNoTerritory
+// the x fraction is the state handler's frame, not modelled: taken as 0 (the yaw may differ by one there)
+void aimTurret(AnimatedActor& actor, GlydeTankFields& f, bool gaitAsked) {
     const Player& p = player();
     const uint16_t px = uint16_t(uint32_t(uint16_t(p.pos.x.whole)) * 17u - (uint32_t(uint16_t(p.prevPos.x.whole)) << 4));
     const uint16_t pz = uint16_t(uint32_t(uint16_t(p.pos.z.whole)) * 17u - (uint32_t(uint16_t(p.prevPos.z.whole)) << 4));
-    const int ang = angleOf(int32_t(uint32_t(px) << 16), int32_t(uint32_t(pz) << 16), actor.pos.x, actor.pos.z);
+    const uint32_t self = actor.at & 0xffff;
+    const uint32_t fx = gaitAsked ? self : 0, fz = self;
+    const int ang = angleOf(int32_t(uint32_t(px) << 16 | fx), int32_t(uint32_t(pz) << 16 | fz), actor.pos.x, actor.pos.z);
     const int d = angleDiff(uint32_t(int32_t(f.turretYaw) + int32_t(actor.rotation.y)), uint32_t(ang));
     if (uint32_t(d + 0x20) > 0x40u) {
         f.turretYaw = int16_t(uint16_t(f.turretYaw) + (d > 0 ? 0x20u : 0xffe0u));
@@ -751,8 +758,7 @@ void mainState(const PlayerEnv& env, AnimatedActor& actor, GlydeTankFields& f) {
     default: notPortedAt(kTankPort, "class 0x4bedc0 sub-state", actor.subState);
     }
     territory(actor, f);
-    gaitStep(actor, f);
-    aimTurret(actor, f);
+    aimTurret(actor, f, gaitStep(actor, f));
     ground(env, actor, f);
     tilt(actor, f);
     if ((f.contact & (kTankWall | kTankTerritory)) && !(f.mode & kTankNoTurnBack)) enterSub(actor, TankSub::TurnBack);
