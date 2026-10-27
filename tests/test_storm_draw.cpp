@@ -321,60 +321,68 @@ int runDc(const std::filesystem::path& exe, const std::filesystem::path& file, i
             return c;
         };
         if (op == 0xf8) {
-            if (pk.size() / 13 != out.size()) {
-                std::snprintf(msg, sizeof msg, "0xf8: game %zu GT4, port %zu", pk.size() / 13, out.size());
-                fail(msg);
-                continue;
-            }
-            for (size_t i = 0; i < out.size(); ++i) {
+            // OpenDash draws every segment, both sides (game/draw_command_decode decodeF8); the exe links the ones its
+            // NCLIPs keep, in the same order: each of its GT4s is the next port segment that matches
+            size_t pi = 0;
+            for (size_t i = 0; i < pk.size() / 13; ++i) {
                 const uint32_t* g = &pk[i * 13];
-                const od::fx::Prim& p = out[i];
-                const od::fx::Texture& t = tex.entries()[size_t(p.texture)];
-                if (t.clut != uint16_t(g[3] >> 16) || t.tpage != uint16_t(g[6] >> 16)) fail("0xf8 texture");
-                for (int k = 0; k < 4; ++k) {
-                    int16_t v[3];
-                    for (int q = 0; q < 3; ++q)
-                        v[q] = int16_t(std::lround((p.centre[q] + p.v[k].off[q]) * float(1 << sh)));
-                    const od::port::CameraPoint cp = od::port::cameraPoint(v);
-                    const uint32_t xy = g[2 + k * 3], uv = g[3 + k * 3], col = g[1 + k * 3] & 0xffffff;
-                    const int gx = int16_t(xy), gy = int16_t(xy >> 16);
-                    const int pu = int(p.v[k].u - 0.5f), pv = int(p.v[k].v - 0.5f);
-                    if (std::abs(gx - cp.sx) > 1 || std::abs(gy - cp.sy) > 1 || pu != int(uv & 0xff) ||
-                        pv != int((uv >> 8) & 0xff) || colourOf(p.v[k], 128.0f) != col) {
-                        std::snprintf(msg, sizeof msg,
-                                      "0xf8 quad %zu v%d: game (%d, %d) uv %02x %02x col %06x, port (%d, %d) uv %02x %02x "
-                                      "col %06x", i, k, gx, gy, uv & 0xff, (uv >> 8) & 0xff, col, cp.sx, cp.sy, pu, pv,
-                                      colourOf(p.v[k], 128.0f));
-                        fail(msg);
-                        i = out.size();
-                        break;
+                auto matches = [&](const od::fx::Prim& p) {
+                    const od::fx::Texture& t = tex.entries()[size_t(p.texture)];
+                    if (t.clut != uint16_t(g[3] >> 16) || t.tpage != uint16_t(g[6] >> 16)) return false;
+                    for (int k = 0; k < 4; ++k) {
+                        int16_t v[3];
+                        for (int q = 0; q < 3; ++q)
+                            v[q] = int16_t(std::lround((p.centre[q] + p.v[k].off[q]) * float(1 << sh)));
+                        const od::port::CameraPoint cp = od::port::cameraPoint(v);
+                        const uint32_t xy = g[2 + k * 3], uv = g[3 + k * 3], col = g[1 + k * 3] & 0xffffff;
+                        const int pu = int(p.v[k].u - 0.5f), pv = int(p.v[k].v - 0.5f);
+                        if (std::abs(int16_t(xy) - cp.sx) > 1 || std::abs(int16_t(xy >> 16) - cp.sy) > 1 ||
+                            pu != int(uv & 0xff) || pv != int((uv >> 8) & 0xff) || colourOf(p.v[k], 128.0f) != col)
+                            return false;
                     }
+                    return true;
+                };
+                while (pi < out.size() && !matches(out[pi])) ++pi;
+                if (pi == out.size()) {
+                    std::snprintf(msg, sizeof msg, "0xf8: game GT4 %zu of %zu has no port segment (port %zu)", i,
+                                  pk.size() / 13, out.size());
+                    fail(msg);
+                    break;
                 }
+                ++pi;
             }
-            checked += int(out.size());
+            checked += int(pk.size() / 13);
         } else if (op == 0xf0) {
-            if (pk.size() / 9 != out.size()) {
-                std::snprintf(msg, sizeof msg, "0xf0: game %zu G4, port %zu", pk.size() / 9, out.size());
+            // OpenDash keeps the ring's widest segment range, the ones the exe skips collapsed (game/draw_command_decode
+            // ringSegments): the exe's G4s are the shown ones, start + 1 .. end - 1
+            const int s = int((words[4] >> 16) & 0x1f);
+            const int start = (int(words[0] & 0xff) - 0x10) >> s, end = ((int((words[0] >> 8) & 0xff) - 0x10) >> s) + 1;
+            const int lo = ((0 - 0x10) >> s) + 1;
+            std::vector<od::fx::Prim> shown;
+            for (size_t i = 0; i < out.size(); ++i)
+                if (const int j = lo + int(i); j > start && j < end) shown.push_back(out[i]);
+            if (pk.size() / 9 != shown.size()) {
+                std::snprintf(msg, sizeof msg, "0xf0: game %zu G4, port %zu", pk.size() / 9, shown.size());
                 fail(msg);
                 continue;
             }
-            for (size_t i = 0; i < out.size(); ++i) {
+            for (size_t i = 0; i < shown.size(); ++i) {
                 const uint32_t* g = &pk[i * 9];
                 for (int k = 0; k < 4; ++k) {
                     float x, y;
-                    planar(out[i], k, x, y);
+                    planar(shown[i], k, x, y);
                     const uint32_t xy = g[2 + k * 2], col = g[1 + k * 2] & 0xffffff;
                     if (std::fabs(float(int16_t(xy)) - x) > 2.0f || std::fabs(float(int16_t(xy >> 16)) - y) > 2.0f ||
-                        colourOf(out[i].v[k], 255.0f) != col) {
+                        colourOf(shown[i].v[k], 255.0f) != col) {
                         std::snprintf(msg, sizeof msg, "0xf0 seg %zu v%d: game (%d, %d) %06x, port (%.1f, %.1f) %06x", i,
-                                      k, int16_t(xy), int16_t(xy >> 16), col, x, y, colourOf(out[i].v[k], 255.0f));
+                                      k, int16_t(xy), int16_t(xy >> 16), col, x, y, colourOf(shown[i].v[k], 255.0f));
                         fail(msg);
-                        i = out.size();
+                        i = shown.size();
                         break;
                     }
                 }
             }
-            checked += int(out.size());
+            checked += int(shown.size());
         } else if (op == 0x2c) {
             const bool drawn = (after[0] >> 24) == 9;
             if (drawn != (out.size() == 1)) {
