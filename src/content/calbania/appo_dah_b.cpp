@@ -147,9 +147,18 @@ const DataTable<ScalarTable<int16_t, 2>> script1fZ{TableId::AppoDahBScript1fZ};
 uint16_t voiceOf(const AnimatedActor& actor, uint16_t appo, uint16_t dah) { return actor.variant == 0 ? appo : dah; }
 void shadow(const AnimatedActor&) {} // exe 0x5f20f0(actor, 0x30, 0x160, 0): the shadow list entry (render output)
 void sound(uint16_t id, const AnimatedActor& actor) { soundPlayAtPos(id, actor.pos); } // exe 0x5d5380
-// exe 0x5e3bc0 with a stack point whose 16.16 fractions are left unset (taken as 0): the actor seen from (x, z)
-int angleFromPoint(int16_t x, int16_t z, const Fixed16Vec3& to) {
-    return angleOf(int32_t(uint32_t(uint16_t(x)) << 16), int32_t(uint32_t(uint16_t(z)) << 16), to.x, to.z);
+// The low halves of a walk's point (exe 0x4c1fd0 / 0x4c22d0 / 0x4c24f0 / 0x4c3b10 build it in a stack local writing
+// only the whole halves): what the hit check 0x4c4790, run before at the same depth, pushed there -- x its saved edi
+// (the actor's address + 0x14c, exe 0x4c1b4b), z its saved ebx (the frame loop's, 0). When the check does not run
+// (blinking, kFightNoHits) they are a previous pool slot's leftover, not reproducible: 0
+struct PointLows {
+    uint16_t x = 0, z = 0;
+};
+PointLows hitCheckLows(const AnimatedActor& actor) { return {uint16_t(actor.at + 0x14c), 0}; }
+// exe 0x5e3bc0 on the point {x << 16 | lows.x, ., z << 16 | lows.z}: the actor seen from it
+int angleFromPoint(int16_t x, int16_t z, const Fixed16Vec3& to, PointLows lows) {
+    return angleOf(int32_t(uint32_t(uint16_t(x)) << 16 | lows.x), int32_t(uint32_t(uint16_t(z)) << 16 | lows.z), to.x,
+                   to.z);
 }
 // the dust puff of the slides (on the odd frames: pool 0xa0 type 0 variant 3 at the actor)
 void dust(const AnimatedActor& actor) {
@@ -363,7 +372,7 @@ void fightStart(AnimatedActor& actor, AppoDahFightFields& f) {
 }
 // the waypoint walks exe 0x4c1fd0 / 0x4c22d0: Pick picks the next waypoint of its row, the walks go until its x is
 // passed; true when exe 0x4c2260 ran (0x4c22d0 returns there)
-bool walkWaypoint(AnimatedActor& actor, AppoDahFightFields& f) {
+bool walkWaypoint(AnimatedActor& actor, AppoDahFightFields& f, PointLows lows) {
     const WaypointRow target = waypointRow(f.nextWaypoint);
     const int16_t tx = target.x[actor.variant], tz = target.z[actor.variant];
     switch (WaypointStep(actor.step)) {
@@ -377,14 +386,14 @@ bool walkWaypoint(AnimatedActor& actor, AppoDahFightFields& f) {
         f.nextWaypoint = int8_t(row.next[idx]);
         const WaypointRow next = waypointRow(f.nextWaypoint);
         const int16_t nx = next.x[actor.variant], nz = next.z[actor.variant];
-        const int ang = angleFromPoint(nx, nz, actor.pos);
+        const int ang = angleFromPoint(nx, nz, actor.pos, lows);
         actor.step = uint8_t(nx <= actor.pos.x.whole ? WaypointStep::WalkLeft : WaypointStep::WalkRight);
         turnYawTo(actor.rotation.y, uint32_t(ang), 0x40);
         moveForward(actor);
         return false;
     }
     case WaypointStep::WalkRight:
-        turnYawTo(actor.rotation.y, uint32_t(angleFromPoint(tx, tz, actor.pos)), 0x20);
+        turnYawTo(actor.rotation.y, uint32_t(angleFromPoint(tx, tz, actor.pos, lows)), 0x20);
         moveForward(actor);
         if (tx < actor.pos.x.whole) {
             nextWaypoint(actor, f);
@@ -392,7 +401,7 @@ bool walkWaypoint(AnimatedActor& actor, AppoDahFightFields& f) {
         }
         return false;
     case WaypointStep::WalkLeft:
-        turnYawTo(actor.rotation.y, uint32_t(angleFromPoint(tx, tz, actor.pos)), 0x20);
+        turnYawTo(actor.rotation.y, uint32_t(angleFromPoint(tx, tz, actor.pos, lows)), 0x20);
         moveForward(actor);
         if (tx > actor.pos.x.whole) {
             nextWaypoint(actor, f);
@@ -403,8 +412,8 @@ bool walkWaypoint(AnimatedActor& actor, AppoDahFightFields& f) {
     }
 }
 // exe 0x4c1fd0: walks the waypoints; an enemy within 0x800 -> a throw (1 in 4) or the run-off
-void fightWalk(AnimatedActor& actor, AppoDahFightFields& f) {
-    walkWaypoint(actor, f);
+void fightWalk(AnimatedActor& actor, AppoDahFightFields& f, PointLows lows) {
+    walkWaypoint(actor, f, lows);
     int32_t slot, dist, angle;
     if (nearestEnemy(actor, slot, dist, angle) == 0 && dist < 0x800) {
         if ((rngStep() & 3) == 0) enterSub(actor, FightSub::Throw);
@@ -412,14 +421,14 @@ void fightWalk(AnimatedActor& actor, AppoDahFightFields& f) {
     }
 }
 // exe 0x4c24f0: walks back along the route (the waypoint - 1 every 0x1b ticks, 1 in 4 a next waypoint)
-void fightWalkBack(AnimatedActor& actor, AppoDahFightFields& f) {
+void fightWalkBack(AnimatedActor& actor, AppoDahFightFields& f, PointLows lows) {
     if (actor.step == 0) {
         f.flags = 0;
         actor.anim = kAnimWalk;
         actor.velocity.z = int16_t(0xfe00);
         const WaypointRow target = waypointRow(f.nextWaypoint);
         const int16_t tx = target.x[actor.variant], tz = target.z[actor.variant];
-        const int ang = angleFromPoint(tx, tz, actor.pos);
+        const int ang = angleFromPoint(tx, tz, actor.pos, lows);
         actor.step = uint8_t(tx <= actor.pos.x.whole ? WaypointStep::WalkLeft : WaypointStep::WalkRight);
         turnYawTo(actor.rotation.y, uint32_t(ang), 0x40);
         moveForward(actor);
@@ -429,7 +438,7 @@ void fightWalkBack(AnimatedActor& actor, AppoDahFightFields& f) {
     if (actor.step > 2) return;
     const WaypointRow target = waypointRow(f.nextWaypoint);
     const int16_t tx = target.x[actor.variant], tz = target.z[actor.variant];
-    turnYawTo(actor.rotation.y, uint32_t(angleFromPoint(tx, tz, actor.pos)), 0x40);
+    turnYawTo(actor.rotation.y, uint32_t(angleFromPoint(tx, tz, actor.pos, lows)), 0x40);
     moveForward(actor);
     f.timer = int16_t(uint16_t(f.timer) - 1u);
     if (f.timer != 0) return;
@@ -935,7 +944,7 @@ void gateStart(AnimatedActor& actor, AppoDahFightFields& f) {
 }
 enum class ArriveStep : uint8_t { Start = 0, GetUp = 1, Walk = 2, Arrived = 3 };
 // exe 0x4c3b10: arrived -- the gate flags, walks to the gate place
-void gateArrive(AnimatedActor& actor, AppoDahFightFields& f) {
+void gateArrive(AnimatedActor& actor, AppoDahFightFields& f, PointLows lows) {
     switch (ArriveStep(actor.step)) {
     case ArriveStep::Start: {
         f.flags = kFightRunning;
@@ -963,7 +972,7 @@ void gateArrive(AnimatedActor& actor, AppoDahFightFields& f) {
     case ArriveStep::Walk: {
         const uint32_t k = gatePlace(actor);
         const int16_t tx = gateX[k], tz = gateZ[k];
-        turnYawTo(actor.rotation.y, uint32_t(angleFromPoint(tx, tz, actor.pos)), 0x100);
+        turnYawTo(actor.rotation.y, uint32_t(angleFromPoint(tx, tz, actor.pos, lows)), 0x100);
         integrateVelocity(actor, 0, 0, actor.velocity.z); // exe 0x5e3690
         if (uint16_t(uint16_t(actor.pos.x.whole) - uint16_t(tx) + 0x10) < 0x20 &&
             uint16_t(uint16_t(actor.pos.z.whole) - uint16_t(tz) + 0x10) < 0x20)
@@ -1244,12 +1253,12 @@ void fightInit(AnimatedActor& actor, AppoDahFightFields& f) {
 }
 void gateIdleState(AnimatedActor& actor, AppoDahFightFields& f);
 // state 1's sub-state
-void fightSub(AnimatedActor& actor, AppoDahFightFields& f) {
+void fightSub(AnimatedActor& actor, AppoDahFightFields& f, PointLows lows) {
     switch (FightSub(actor.subState)) {
     case FightSub::Start: fightStart(actor, f); return;
-    case FightSub::Walk: fightWalk(actor, f); return;
-    case FightSub::WalkOn: walkWaypoint(actor, f); return;
-    case FightSub::WalkBack: fightWalkBack(actor, f); return;
+    case FightSub::Walk: fightWalk(actor, f, lows); return;
+    case FightSub::WalkOn: walkWaypoint(actor, f, lows); return;
+    case FightSub::WalkBack: fightWalkBack(actor, f, lows); return;
     case FightSub::Stand: fightStand(actor, f); return;
     case FightSub::Throw: fightThrow(actor, f); return;
     case FightSub::RunOff: fightRunOff(actor, f); return;
@@ -1272,6 +1281,7 @@ bool liftCheck(AnimatedActor& actor, AppoDahFightFields& f) {
 void fightState(AnimatedActor& actor, AppoDahFightFields& f) {
     applyGrey(actor, f);
     const uint8_t blink = f.blinkTicks;
+    const PointLows lows = blink == 0 && !(f.flags & kFightNoHits) ? hitCheckLows(actor) : PointLows{};
     if (blink != 0) {
         const uint8_t n = uint8_t(blink - 1u);
         f.blinkTicks = n;
@@ -1295,7 +1305,7 @@ void fightState(AnimatedActor& actor, AppoDahFightFields& f) {
             enterSub(actor, (h & 2) ? FightSub::Pushed : FightSub::KnockedBack);
         }
     }
-    fightSub(actor, f);
+    fightSub(actor, f, lows);
     if (f.blinkTicks != 0) f.flags |= kFightNoHitEntry;
     if (collide(actor, f)) {
         actor.airborne = 1;
@@ -1337,11 +1347,12 @@ void gateIdleState(AnimatedActor& actor, AppoDahFightFields& f) {
 // exe 0x4c3930: at the gate
 void atGateState(AnimatedActor& actor, AppoDahFightFields& f) {
     applyGrey(actor, f);
+    const PointLows lows = !(f.flags & kFightNoHits) ? hitCheckLows(actor) : PointLows{};
     if (!(f.flags & kFightNoHits) && hitsTaken(actor, f) != 0) enterSub(actor, AtGateSub::Hit);
     switch (AtGateSub(actor.subState)) {
     case AtGateSub::Start: gateStart(actor, f); break;
     case AtGateSub::Placed: gatePlaced(actor, f); break;
-    case AtGateSub::Arrive: gateArrive(actor, f); break;
+    case AtGateSub::Arrive: gateArrive(actor, f, lows); break;
     case AtGateSub::Fall: gateFallDown(actor, f); break;
     case AtGateSub::Hit: gateHit(actor, f); break;
     default: notPortedAt(kStoryPort, "class 0x4c1b30 state 3 sub", actor.subState);
