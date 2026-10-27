@@ -6,6 +6,7 @@
 #include "game/actor_state.hpp"
 #include "game/encounter.hpp"
 
+#include <algorithm>
 #include <array>
 
 #include "engine/data_source.hpp"
@@ -15,6 +16,7 @@
 #include "game/camera_state.hpp"
 #include "game/distances.hpp"
 #include "game/event_state.hpp"
+#include "game/game_state.hpp"
 #include "game/matrix.hpp"
 #include "game/player/player_state.hpp"
 #include "game/port_gap.hpp"
@@ -120,76 +122,15 @@ struct EncounterRecord : DataRecord {
 };
 constexpr uint8_t kRecordYawFlip = 0x80;
 constexpr uint32_t kGroupRecordSize = 0x18;
-constexpr uint32_t kClassRecordSize = 0xc;
-
-// A formation (0xc bytes)
-struct Formation : DataRecord {
-    static constexpr uint32_t kBytes = 0xc;
-    uint32_t classes = 0; // +0x0: its class list: s8 indices of the class records (negative ends it)
-    uint16_t mode = 0; // +0x4: kFormationNoPause, the turn (& kFormationTurnMask), the tracked kind bits
-    int16_t distance = 0; // +0x6: its offset ahead of the anchor
-    int16_t keepRadius = 0; // +0x8: its enemies are kept within this of the player
-    uint16_t keepTicks = 0; // +0xa: ... and this long out of sight; also their enemy id
-    template <class R> static Formation load(const R& r) {
-        Formation v;
-        v.classes = r.template read<uint32_t>(0x0);
-        v.mode = r.template read<uint16_t>(0x4);
-        v.distance = r.template read<int16_t>(0x6);
-        v.keepRadius = r.template read<int16_t>(0x8);
-        v.keepTicks = r.template read<uint16_t>(0xa);
-        return v;
-    }
-};
-constexpr uint32_t kFormationSize = 0xc;
-constexpr uint16_t kFormationNoPause = 0x1;  // no pause roll between two positions
-constexpr uint16_t kFormationTurnMask = 0x3; // 0: turned by the roll's yaw, 1: by the player's rotation, else none
-constexpr uint16_t kFormationTurnRoll = 0, kFormationTurnPlayer = 1;
-constexpr uint16_t kFormationKindBits = 0xc; // ORed into the tracked kind (the keep test's mode)
-constexpr uint32_t kFormationPositionShift = 4;
-// A position set (8 bytes)
-struct PositionSet : DataRecord {
-    static constexpr uint32_t kBytes = 0x6;
-    uint32_t positions = 0; // +0x0: FormationPosition list
-    uint8_t waveOddsRow = 0; // +0x4
-    uint8_t unreadByte = 0; // +0x5: copied out (its reader is not traced)
-    template <class R> static PositionSet load(const R& r) {
-        PositionSet v;
-        v.positions = r.template read<uint32_t>(0x0);
-        v.waveOddsRow = r.template read<uint8_t>(0x4);
-        v.unreadByte = r.template read<uint8_t>(0x5);
-        return v;
-    }
-};
-// A position of a set (8 bytes): the offset from the anchor and the yaw (a negative yaw ends the set)
-struct FormationPosition : DataRecord {
-    static constexpr uint32_t kBytes = 0x8;
-    ShortVec4 point; // +0x0
-    int16_t yaw = 0; // +0x6
-    template <class R> static FormationPosition load(const R& r) {
-        FormationPosition v;
-        v.point = {r.template read<int16_t>(0x0), r.template read<int16_t>(0x2), r.template read<int16_t>(0x4), r.template read<int16_t>(0x6)};
-        v.yaw = r.template read<int16_t>(0x6);
-        return v;
-    }
-};
-constexpr uint32_t kPositionSize = 8;
-// one entry of a formation's class list
-struct ClassListEntry : DataRecord {
-    static constexpr uint32_t kBytes = 0x1;
-    int8_t classIndex = 0; // +0x0
-    template <class R> static ClassListEntry load(const R& r) {
-        ClassListEntry v;
-        v.classIndex = r.template read<int8_t>(0x0);
-        return v;
-    }
-};
-constexpr uint32_t kPositionSetsPerKind = 4; // a kind's sets: one per quarter turn of the roll's facing
 
 // the field encounters' odds (exe data): the cells per walk stage, the odds by level + stage (bit r & 0x1f of the
 // word), the wave-end odds by row (r & 0x1e shift: 2 bits)
 const DataTable<ScalarTable<uint8_t, 8>> fieldStageCells{TableId::EncounterFieldStageCells};
 const DataTable<ScalarTable<uint32_t, 0x10>> fieldOdds{TableId::EncounterFieldOdds};
 const DataTable<ScalarTable<uint32_t, 0x10>> waveEndOdds{TableId::EncounterWaveEndOdds}; // 2-bit odds packed in words
+// the stage's field encounter table through its typed load (the lists the exe reads by pointer)
+const TableFamily<FieldEncounterData> fieldTables{TableId::StageEncounterField};
+const FieldEncounterData& fieldEncounterData() { return fieldTables[uint32_t(gameState().stage)]; }
 
 // the keep test (exe 0x510ad0): the screen, how far a seen enemy may be, the facing window of mode 4
 constexpr uint16_t kScreenWidth = 0x140, kScreenHeight = 0xf0;
@@ -259,6 +200,14 @@ bool trackActor(uint8_t kind, const ActorHeader& actor, uint16_t id) {
 
 // exe 0x50fd20(actor, record): the flags, the run / loop flags ORed, the type and parameter words
 void applyRecord(ActorHeader& a, const EncounterRecord& r) {
+    a.flags = r.flags;
+    a.runFlags |= r.runFlags;
+    a.loopFlags |= r.loopFlags;
+    a.setTypeWord(r.typeWord);
+    a.setParamsWord(r.paramsWord);
+}
+// the same for a field encounter's class record (the 0xc bytes fieldWave reads)
+void applyRecord(ActorHeader& a, const FieldClassRecord& r) {
     a.flags = r.flags;
     a.runFlags |= r.runFlags;
     a.loopFlags |= r.loopFlags;
@@ -402,24 +351,26 @@ int areaBlocked(int32_t x, int32_t z) {
     default: return -1;
     }
 }
-// exe 0x510c00: an RNG step picks the formation
+// exe 0x510c00: an RNG step picks the formation. The typed load's picks are the table's; a stage's spawner may rewrite
+// the table's pick pointer (game/patched_data), then the picks are that list's (the exe reads [table + 8]).
 uint32_t pickFormation() {
     const uint32_t r = rngStep();
-    const FieldEncounterTable t = recordAt<FieldEncounterTable>(encounterState().fieldTable);
-    const DataArray<uint8_t> pick(t.formationPick);
-    return t.formations + uint32_t(pick[r & 0x1f]) * kFormationSize;
+    const FieldEncounterData& t = fieldEncounterData();
+    const FieldEncounterTable raw = recordAt<FieldEncounterTable>(encounterState().fieldTable);
+    const uint32_t i = r & 0x1f;
+    const uint32_t pick = raw.formationPick == t.formationPickAddress ? t.formationPick[i]
+                                                                      : dataScalar<uint8_t>(raw.formationPick + i);
+    return t.formationsAddress + pick * kFormationSize;
 }
 // exe 0x510c40(kind, yaw): an RNG step picks the position set of the kind ({base, count}: base + (r & 0xffff) % count),
 // its quarter by the roll's facing
 uint32_t pickPositions(uint32_t kind, int32_t yaw) {
-    const FieldEncounterTable t = recordAt<FieldEncounterTable>(encounterState().fieldTable);
-    const DataArray<uint8_t> range(t.positionRanges + kind * 2);
-    const uint32_t base = range[0];
+    const FieldEncounterData& t = fieldEncounterData();
+    const auto [base, n] = t.positionRange(kind);
     rngStep();
-    const uint32_t n = range[1];
     if (n == 0) notPorted(kEncounterPort, "a field position kind of count 0 (the exe divides by zero)");
     const uint32_t q = uint32_t(uint16_t(rngLastValue())) % n;
-    return t.positionSets + ((uint32_t((yaw + 0x200) >> 10) & 3u) + (q + base) * kPositionSetsPerKind) * 8u;
+    return t.positionSetsAddress + ((uint32_t((yaw + 0x200) >> 10) & 3u) + (q + base) * kPositionSetsPerKind) * kPositionSize;
 }
 // exe 0x5101a0(slot): a formation and a position set picked (the class and position cursors), the scratch transform
 // turned for it (by the roll's yaw, by the player's rotation with the pitch at most level and lifted, or kept) and the
@@ -427,13 +378,13 @@ uint32_t pickPositions(uint32_t kind, int32_t yaw) {
 uint32_t pickFieldFormation(EncounterSlot& slot) {
     EncounterState& e = encounterState();
     ProjectionScratch& s = projectionScratch();
+    const FieldEncounterData& t = fieldEncounterData();
     const uint32_t fa = pickFormation();
-    const Formation f = dataRecord<Formation>(fa, Formation::kBytes);
+    const Formation& f = t.formationAt(fa);
     e.formation = fa;
     e.classCursor = f.classes;
     const uint32_t setAt = pickPositions(uint32_t(f.mode) >> kFormationPositionShift, slot.rollMoveYaw);
-    const PositionSet set = dataRecord<PositionSet>(setAt, PositionSet::kBytes);
-    e.positionCursor = set.positions;
+    e.positionCursor = t.positionSetAt(setAt).positions;
     s.transform.setIdentityWords();
     switch (f.mode & kFormationTurnMask) {
     case kFormationTurnRoll:
@@ -474,11 +425,15 @@ void fieldWave(EncounterSlot& slot) {
     loadProjectionMatrix(s.transform);
     loadProjectionTranslation(s.transform);
     const int16_t x = slot.anchor.x, y = slot.anchor.y, z = slot.anchor.z;
-    const Formation f = dataRecord<Formation>(e.formation, Formation::kBytes);
+    const FieldEncounterData& t = fieldEncounterData();
+    const size_t fi = t.formationIndex(e.formation);
+    const Formation& f = t.formations[fi];
+    const std::vector<int8_t>& classList = t.classLists[fi];
     const uint8_t kind = uint8_t((f.mode & kFormationKindBits) | slot.kind);
-    uint32_t list = e.classCursor, posAt = e.positionCursor;
+    uint32_t posAt = e.positionCursor, listIndex = e.classCursor - f.classes;
+    if (listIndex >= classList.size()) tableIndexError(listIndex, classList.size());
     for (;;) {
-        const FormationPosition pos = dataRecord<FormationPosition>(posAt, FormationPosition::kBytes);
+        const FormationPosition& pos = t.positionAt(posAt);
         loadProjectionPoint(pos.point);
         transformProjectionPoint();
         storeProjectionPoint(s.transformed);
@@ -488,8 +443,7 @@ void fieldWave(EncounterSlot& slot) {
         s.pointYaw = int16_t((uint32_t(uint16_t(pos.yaw)) - uint16_t(slot.rollMoveYaw) + uint16_t(slot.rollYaw) -
                               uint32_t(kHalfTurn)) &
                              kAngleMask);
-        const EncounterRecord rec = dataRecord<EncounterRecord>(recordAt<FieldEncounterTable>(e.fieldTable).classes +
-                                  uint32_t(int32_t(dataRecord<ClassListEntry>(list, ClassListEntry::kBytes).classIndex) * int32_t(kClassRecordSize)), EncounterRecord::kBytes);
+        const FieldClassRecord& rec = t.classRecord(classList[listIndex]);
         if (areaBlocked(s.point.x, s.point.z) == 0) {
             e.battleMusicRequest = kBattleMusicFight;
             const uint8_t pool = rec.pool;
@@ -506,8 +460,8 @@ void fieldWave(EncounterSlot& slot) {
                 ++slot.alive;
             }
         }
-        ++list;
-        if (pos.yaw < 0 || dataRecord<ClassListEntry>(list, ClassListEntry::kBytes).classIndex < 0) {
+        ++listIndex;
+        if (pos.yaw < 0 || listIndex >= classList.size() || classList[listIndex] < 0) {
             if (slot.alive != 0) {
                 slot.enterState(uint8_t(FieldState::LastWave));
             } else {
@@ -523,7 +477,7 @@ void fieldWave(EncounterSlot& slot) {
         slot.pause = uint16_t(v);
         if (v != 0) {
             slot.waveStep = uint8_t(FieldWaveStep::Pause);
-            e.classCursor = list;
+            e.classCursor = f.classes + listIndex;
             e.positionCursor = posAt;
             return;
         }
@@ -553,7 +507,7 @@ void fieldStart(EncounterSlot& slot) {
     slot.anchor.z = int16_t(uint32_t(z) + uint16_t(uint32_t(s.transformed[2])));
     slot.alive = 0;
     slot.lost = 0;
-    const PositionSet set = dataRecord<PositionSet>(setAt, PositionSet::kBytes);
+    const PositionSet& set = fieldEncounterData().positionSetAt(setAt);
     e.waveOddsRow = set.waveOddsRow;
     e.positionSetByte = set.unreadByte;
     fieldWave(slot);
@@ -610,7 +564,7 @@ uint8_t fieldTrack(EncounterSlot& slot) {
     const ViewTransform& camera = cameraTransform().view;
     loadProjectionMatrix(camera);
     loadProjectionTranslation(camera);
-    const Formation f = dataRecord<Formation>(e.formation, Formation::kBytes);
+    const Formation& f = fieldEncounterData().formationAt(e.formation);
     const uint16_t ticks = f.keepTicks;
     const int32_t rad = f.keepRadius;
     const uint32_t radius2 = uint32_t(rad) * uint32_t(rad);
@@ -849,6 +803,77 @@ void dropFreedTracked(EncounterSlot& slot) {
 }
 
 } // namespace
+
+// The typed load of a stage's field encounter table (TableId::StageEncounterField): every list the encounter routines
+// can read, followed to its real extent. The pick list names at most 0x20 formations (exe 0x510c00: r & 0x1f); the
+// highest pick bounds the formation array; a formation's mode >> 4 bounds the position kind, whose {base, count}
+// bounds the sets (four per kind); a set's positions and a formation's classes end at a negative yaw / index. The class
+// records are the 0xc-byte records fieldWave reads (exe 0x5102d0 / 0x50fd20), not a group record's 0x18.
+FieldEncounterData FieldEncounterData::load(const TableReader& r) {
+    constexpr const char* kArea = "field encounter typed load";
+    constexpr uint32_t kMaxClassList = 0x80, kMaxPositionList = 0x80;
+    FieldEncounterData t;
+    t.classesAddress = r.u32(0);
+    t.formationsAddress = r.u32(4);
+    t.formationPickAddress = r.u32(8);
+    t.positionSetsAddress = r.u32(0xc);
+    t.positionRangesAddress = r.u32(0x10);
+    const TableReader picks = r.follow(8, kPickCount);
+    for (size_t i = 0; i < kPickCount; ++i) t.formationPick[i] = picks.u8(i);
+    uint32_t maxPick = 0;
+    for (const uint8_t p : t.formationPick)
+        if (p > maxPick) maxPick = p;
+    const TableReader forms = r.follow(4, (maxPick + 1) * kFormationSize);
+    t.formations.resize(maxPick + 1);
+    t.classLists.resize(maxPick + 1);
+    uint32_t maxKind = 0;
+    int32_t maxClass = -1;
+    for (size_t i = 0; i <= maxPick; ++i) {
+        t.formations[i] = Formation::load(forms.sub(i * kFormationSize, kFormationSize));
+        maxKind = std::max<uint32_t>(maxKind, uint32_t(t.formations[i].mode) >> kFormationPositionShift);
+        for (uint32_t n = 1;; ++n) {
+            if (n > kMaxClassList) notPortedAt(kArea, "a class list with no terminator, formation", uint32_t(i));
+            const TableReader list = forms.follow(i * kFormationSize, n);
+            const int8_t c = list.s8(n - 1);
+            t.classLists[i].push_back(c);
+            if (c < 0) break;
+            if (c > maxClass) maxClass = c;
+        }
+    }
+    const size_t kinds = size_t(maxKind) + 1;
+    const TableReader ranges = r.follow(0x10, uint32_t(kinds * 2));
+    t.positionRanges.resize(kinds * 2);
+    uint32_t maxSet = 0;
+    for (size_t k = 0; k < kinds; ++k) {
+        t.positionRanges[k * 2] = ranges.u8(k * 2);
+        t.positionRanges[k * 2 + 1] = ranges.u8(k * 2 + 1);
+        maxSet = std::max<uint32_t>(maxSet, uint32_t(t.positionRanges[k * 2]) + t.positionRanges[k * 2 + 1]);
+    }
+    const size_t setCount = size_t(maxSet) * kPositionSetsPerKind;
+    t.positionSets.resize(setCount);
+    t.positions.resize(setCount);
+    if (setCount != 0) {
+        const TableReader sets = r.follow(0xc, uint32_t(setCount * kPositionSize));
+        for (size_t s = 0; s < setCount; ++s) {
+            t.positionSets[s] = PositionSet::load(sets.sub(s * kPositionSize, kPositionSize));
+            for (uint32_t n = 1;; ++n) {
+                if (n > kMaxPositionList) notPortedAt(kArea, "a position list with no terminator, set", uint32_t(s));
+                const TableReader list = sets.follow(s * kPositionSize, n * kPositionSize);
+                const FormationPosition pos = FormationPosition::load(list.sub((n - 1) * kPositionSize, kPositionSize));
+                t.positions[s].push_back(pos);
+                if (pos.yaw < 0) break;
+            }
+        }
+    }
+    const size_t classCount = maxClass >= 0 ? size_t(maxClass) + 1 : 0;
+    t.classes.resize(classCount);
+    if (classCount != 0) {
+        const TableReader records = r.follow(0, uint32_t(classCount * FieldClassRecord::kBytes));
+        for (size_t i = 0; i < classCount; ++i)
+            t.classes[i] = FieldClassRecord::load(records.sub(i * FieldClassRecord::kBytes, FieldClassRecord::kBytes));
+    }
+    return t;
+}
 
 void encounterSlotsSetup(uint32_t kinds) {
     EncounterState& e = encounterState();

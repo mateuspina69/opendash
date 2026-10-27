@@ -6,8 +6,11 @@
 // stepped exactly where the exe steps it.
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <span>
+#include <utility>
+#include <vector>
 
 #include "engine/routine_ids.hpp"
 #include "game/loaded_data.hpp"
@@ -18,6 +21,7 @@
 #include "game/vectors.hpp"
 #include "game/stage_globals.hpp"
 #include "game/patched_data.hpp"
+#include "game/port_gap.hpp"
 
 namespace od::port {
 
@@ -167,6 +171,148 @@ struct FieldEncounterTable : DataRecord {
         storeLe(out, 8, formationPick);
         storeLe(out, 0xc, positionSets);
         storeLe(out, 0x10, positionRanges);
+    }
+};
+
+// ---- the field encounter table's lists -------------------------------------------------------------------------------
+// A formation (0xc bytes)
+struct Formation : DataRecord {
+    static constexpr uint32_t kBytes = 0xc;
+    uint32_t classes = 0; // +0x0: its class list: s8 indices of the class records (negative ends it)
+    uint16_t mode = 0; // +0x4: kFormationNoPause, the turn (& kFormationTurnMask), the tracked kind bits
+    int16_t distance = 0; // +0x6: its offset ahead of the anchor
+    int16_t keepRadius = 0; // +0x8: its enemies are kept within this of the player
+    uint16_t keepTicks = 0; // +0xa: ... and this long out of sight; also their enemy id
+    template <class R> static Formation load(const R& r) {
+        Formation v;
+        v.classes = r.template read<uint32_t>(0x0);
+        v.mode = r.template read<uint16_t>(0x4);
+        v.distance = r.template read<int16_t>(0x6);
+        v.keepRadius = r.template read<int16_t>(0x8);
+        v.keepTicks = r.template read<uint16_t>(0xa);
+        return v;
+    }
+};
+constexpr uint32_t kFormationSize = 0xc;
+constexpr uint16_t kFormationNoPause = 0x1;  // no pause roll between two positions
+constexpr uint16_t kFormationTurnMask = 0x3; // 0: turned by the roll's yaw, 1: by the player's rotation, else none
+constexpr uint16_t kFormationTurnRoll = 0, kFormationTurnPlayer = 1;
+constexpr uint16_t kFormationKindBits = 0xc; // ORed into the tracked kind (the keep test's mode)
+constexpr uint32_t kFormationPositionShift = 4;
+// A position set (8 bytes)
+struct PositionSet : DataRecord {
+    static constexpr uint32_t kBytes = 0x6;
+    uint32_t positions = 0; // +0x0: FormationPosition list
+    uint8_t waveOddsRow = 0; // +0x4
+    uint8_t unreadByte = 0; // +0x5: copied out (its reader is not traced)
+    template <class R> static PositionSet load(const R& r) {
+        PositionSet v;
+        v.positions = r.template read<uint32_t>(0x0);
+        v.waveOddsRow = r.template read<uint8_t>(0x4);
+        v.unreadByte = r.template read<uint8_t>(0x5);
+        return v;
+    }
+};
+// A position of a set (8 bytes): the offset from the anchor and the yaw (a negative yaw ends the set)
+struct FormationPosition : DataRecord {
+    static constexpr uint32_t kBytes = 0x8;
+    ShortVec4 point; // +0x0
+    int16_t yaw = 0; // +0x6
+    template <class R> static FormationPosition load(const R& r) {
+        FormationPosition v;
+        v.point = {r.template read<int16_t>(0x0), r.template read<int16_t>(0x2), r.template read<int16_t>(0x4), r.template read<int16_t>(0x6)};
+        v.yaw = r.template read<int16_t>(0x6);
+        return v;
+    }
+};
+constexpr uint32_t kPositionSize = 8;
+constexpr uint32_t kPositionSetsPerKind = 4; // a kind's sets: one per quarter turn of the roll's facing
+// A field encounter's class record (0xc bytes): the first 0xc bytes of a group record (EncounterRecord, exe 0x50fd20).
+// fieldWave reads only these (exe 0x5102d0 reads the class list's index * 0xc; applyRecord reads +0..+0xb).
+struct FieldClassRecord : DataRecord {
+    static constexpr uint32_t kBytes = 0xc;
+    uint8_t flags = 0; // +0x0: the actor's +0
+    uint8_t runFlags = 0; // +0x1: ORed into the actor's +1 (kRecordYawFlip: may face the other way)
+    uint8_t pool = 0; // +0x2: 0x20 / 0x60 / 0xa0 / 0xe0 (any other: skipped)
+    uint8_t loopFlags = 0; // +0x3: ORed into the actor's +3
+    uint32_t typeWord = 0; // +0x4
+    uint32_t paramsWord = 0; // +0x8
+    template <class R> static FieldClassRecord load(const R& r) {
+        FieldClassRecord v;
+        v.flags = r.template read<uint8_t>(0x0);
+        v.runFlags = r.template read<uint8_t>(0x1);
+        v.pool = r.template read<uint8_t>(0x2);
+        v.loopFlags = r.template read<uint8_t>(0x3);
+        v.typeWord = r.template read<uint32_t>(0x4);
+        v.paramsWord = r.template read<uint32_t>(0x8);
+        return v;
+    }
+};
+
+// The stage's field encounter table through its typed load (TableId::StageEncounterField): the table's five pointers
+// (the addresses the exe keeps in EncounterState::formation / classCursor / positionCursor) and every list they lead
+// to, followed to the extents the encounter code reads -- the picks; the formations the picks can name; each
+// formation's class list to its negative terminator; the position ranges of the kinds the formations ask for; the
+// position sets those ranges cover and each set's positions to their negative terminator; the class records the lists
+// name (the exe's real 0xc-byte extent, not the 0x18 of a group record).
+struct FieldEncounterData : DataRecord {
+    static constexpr uint32_t kBytes = FieldEncounterTable::kBytes;
+    static constexpr uint32_t kPickCount = 0x20;
+    uint32_t classesAddress = 0; // +0x0
+    uint32_t formationsAddress = 0; // +0x4
+    uint32_t formationPickAddress = 0; // +0x8
+    uint32_t positionSetsAddress = 0; // +0xc
+    uint32_t positionRangesAddress = 0; // +0x10
+    std::array<uint8_t, kPickCount> formationPick{}; // the roll & 0x1f names a formation (an index)
+    std::vector<Formation> formations; // max pick index + 1
+    std::vector<std::vector<int8_t>> classLists; // per formation: its indices, the negative terminator included
+    std::vector<FieldClassRecord> classes; // max class index + 1
+    std::vector<uint8_t> positionRanges; // {base, count} pairs, kinds 0..max (formation mode >> 4)
+    std::vector<PositionSet> positionSets; // (max base + count) * kPositionSetsPerKind
+    std::vector<std::vector<FormationPosition>> positions; // per set: its positions, the negative-yaw terminator included
+
+    static FieldEncounterData load(const TableReader& r);
+
+    // the formation a pick names
+    const Formation& formation(size_t pick) const {
+        if (pick >= formations.size()) tableIndexError(pick, formations.size());
+        return formations[pick];
+    }
+    // the index of the formation at an exe address (EncounterState::formation; a picked / kept address)
+    size_t formationIndex(uint32_t address) const {
+        const uint32_t off = address - formationsAddress;
+        const size_t i = size_t(off / kFormationSize);
+        if (off % kFormationSize != 0 || i >= formations.size()) tableIndexError(i, formations.size());
+        return i;
+    }
+    // the formation at an exe address
+    const Formation& formationAt(uint32_t address) const { return formations[formationIndex(address)]; }
+    // the position set at an exe address (pickFieldFormation's return)
+    const PositionSet& positionSetAt(uint32_t address) const {
+        const uint32_t off = address - positionSetsAddress;
+        const size_t i = size_t(off / kPositionSize);
+        if (off % kPositionSize != 0 || i >= positionSets.size()) tableIndexError(i, positionSets.size());
+        return positionSets[i];
+    }
+    // the position at an exe address (EncounterState::positionCursor: a set's list entry)
+    const FormationPosition& positionAt(uint32_t address) const {
+        for (size_t s = 0; s < positionSets.size(); ++s) {
+            const uint32_t off = address - positionSets[s].positions;
+            const size_t i = size_t(off / kPositionSize);
+            if (off % kPositionSize != 0 || i >= positions[s].size()) continue;
+            return positions[s][i];
+        }
+        notPortedAt("field encounter typed load", "a position outside the sets' lists", address);
+    }
+    // the {base, count} of a position kind (a formation's mode >> 4)
+    std::pair<uint8_t, uint8_t> positionRange(size_t kind) const {
+        if (kind * 2 + 1 >= positionRanges.size()) tableIndexError(kind, positionRanges.size() / 2);
+        return {positionRanges[kind * 2], positionRanges[kind * 2 + 1]};
+    }
+    // a class record a class list names (the caller stops at the list's negative terminator)
+    const FieldClassRecord& classRecord(int8_t index) const {
+        if (index < 0 || size_t(index) >= classes.size()) tableIndexError(size_t(index), classes.size());
+        return classes[size_t(index)];
     }
 };
 

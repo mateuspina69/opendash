@@ -8,6 +8,7 @@
 #include <memory>
 #include <map>
 #include <set>
+#include <vector>
 
 #include "check.hpp"
 #include "content/registry.hpp"
@@ -18,6 +19,7 @@
 #include "engine/ps1_data_source.hpp"
 #include "engine/ps1_exe_banks.hpp"
 #include "game/dat_names.hpp"
+#include "game/encounter.hpp"
 
 namespace {
 
@@ -147,6 +149,57 @@ int main(int argc, char** argv) {
             }
         }
         std::printf("stage setup tables: %zu required, %zu mismatches\n", required, missing);
+    }
+    { // every stage with a field encounter table: the typed load walks every list the encounter routines can read --
+      // the formation picks, each formation's class list and the class records it names, each position set and its
+      // positions -- through the same exe addresses EncounterState keeps (formation / classCursor / positionCursor)
+        size_t stages = 0, formations = 0, classes = 0, sets = 0, positions = 0;
+        for (uint32_t stage = 0; stage < od::kStageCount; ++stage) {
+            const od::TableKey key{od::TableId::StageEncounterField, stage};
+            if (!pc.hasTable(key)) continue;
+            ++stages;
+            CHECK(ps1.hasTable(key));
+            if (!ps1.hasTable(key)) continue;
+            bool ok = true;
+            try {
+                const od::port::FieldEncounterData& t = ps1.load<od::port::FieldEncounterData>(key);
+                for (const uint8_t pick : t.formationPick) CHECK(pick < t.formations.size());
+                for (size_t fi = 0; fi < t.formations.size(); ++fi) {
+                    const od::port::Formation& form = t.formations[fi];
+                    const uint32_t at = t.formationsAddress + uint32_t(fi) * od::port::kFormationSize;
+                    CHECK(t.formationAt(at).classes == form.classes);
+                    ++formations;
+                    const std::vector<int8_t>& list = t.classLists[fi];
+                    CHECK(!list.empty() && list.back() < 0);
+                    for (const int8_t c : list) {
+                        if (c < 0) break;
+                        (void)t.classRecord(c);
+                        ++classes;
+                    }
+                    const auto [base, count] = t.positionRange(uint32_t(form.mode) >> od::port::kFormationPositionShift);
+                    CHECK(size_t(base) + count <= t.positionSets.size() / od::port::kPositionSetsPerKind);
+                }
+                for (size_t s = 0; s < t.positionSets.size(); ++s) {
+                    const od::port::PositionSet& set = t.positionSets[s];
+                    const uint32_t at = t.positionSetsAddress + uint32_t(s) * od::port::kPositionSize;
+                    CHECK(t.positionSetAt(at).positions == set.positions);
+                    ++sets;
+                    const std::vector<od::port::FormationPosition>& ps = t.positions[s];
+                    CHECK(!ps.empty() && ps.back().yaw < 0);
+                    for (size_t i = 0; i < ps.size(); ++i) {
+                        CHECK(t.positionAt(set.positions + uint32_t(i) * od::port::kPositionSize).yaw == ps[i].yaw);
+                        ++positions;
+                    }
+                }
+            } catch (const std::exception& e) {
+                std::fprintf(stderr, "%s: %s\n", od::describe(key).c_str(), e.what());
+                ok = false;
+            }
+            CHECK(ok);
+        }
+        std::printf("%zu field tables: %zu formations, %zu class names, %zu position sets, %zu positions walked\n",
+                    stages, formations, classes, sets, positions);
+        CHECK(stages > 0);
     }
     { // These native objects end before the old eager readers' guessed array bounds.
         for (const auto [id, bytes] : {std::pair{od::TableId::CrashLandingScriptBurnRecords, 0x18u},
