@@ -4,6 +4,7 @@
 // the ring); each tick the blade tests the room along its length (the breakable walls take its attack) and is a capsule
 // in the hit list.
 #include "game/actor_state.hpp"
+#include "game/patched_data.hpp"
 #include "game/shots/blade_arm.hpp"
 
 #include "engine/data_source.hpp"
@@ -34,7 +35,7 @@ inline constexpr const char* kBladeArea = "blade arm";
 // [0x8c4a1c]
 enum class BladeState : uint8_t { Spawn = 0, Swing = 1 }; // exe 0x56ee30 / 0x56f010
 
-const DataTable<CollisionBoxRecord> bladeBox{TableId::BladeArmBox}; // exe data, resized by every wall test step
+PatchedRecord<BoxExtents> bladeBox{TableId::BladeArmBox}; // exe data, resized by every wall test step
 constexpr int kBladeRoot = -0x160;     // the blade's root: this far from the hand along the forearm
 constexpr uint32_t kWallTestSteps = 8;
 constexpr uint16_t kSwingSound = 0xfd, kSwingBackSound = 0xfe;
@@ -81,7 +82,7 @@ void spawn(ShotActor& shot, BladeFields& fields) { // exe 0x56ee30
     if (weaponLevel(p, player().activeSpecial, WeaponStat::Energy) < kFreeEnergyLevel)
         paySpecialEnergy(player()); // the swing costs energy
     for (uint32_t i = 0; i < kBladeRingSize; ++i) ringEntry(fields, i);
-    shot.collisionBox.pointAt(bladeBox.stateAddress());
+    shot.collisionBox.pointTo(*bladeBox);
     shot.actorHit = 0;
     soundPlayAtPlayer(kSwingSound);
     ++shot.state;

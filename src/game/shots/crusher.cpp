@@ -4,6 +4,7 @@
 // crackling rings around its projected point (ordering-table polygons) and three textured rings turning around it.
 #include "engine/data_source.hpp"
 #include "game/actor_state.hpp"
+#include "game/patched_data.hpp"
 #include "game/shots/crusher_state.hpp"
 #include "game/shots/player_shots.hpp"
 
@@ -44,7 +45,7 @@ enum class OrbState : uint8_t {
     Held = 1,  // exe 0x567120: carried by the shot until it bursts
     Burst = 2, // exe 0x5671f0
 };
-const DataTable<CollisionBoxRecord> orbBox{TableId::CrusherOrbBox};
+PatchedRecord<BoxExtents> orbBox{TableId::CrusherOrbBox}; // the blast-wall probe resizes it, as the exe does its record
 constexpr int16_t kOrbIdleWidth = 0x50;
 constexpr int16_t kOrbSizePerLevel = 0x60, kOrbBaseSize = 0xe0;
 constexpr uint32_t kOrbBaseTicks = 0x20; // << the weapon's extra level
@@ -256,7 +257,7 @@ void orbStart(StaticActor& actor, EnergyOrbFields& f) {
     const int w = p.activeSpecial;
     f.attack = uint16_t(weaponAttack(p, w));
     f.level = int16_t(weaponLevel(p, w, WeaponStat::Attack));
-    actor.collisionBox.pointAt(orbBox.stateAddress());
+    actor.collisionBox.pointTo(*orbBox);
     actor.actorHit = 0;
     orbIdleDraw(actor);
     actor.state += 1u;

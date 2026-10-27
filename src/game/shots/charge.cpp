@@ -4,6 +4,7 @@
 // global type 0x17, exe 0x56aae0: a ring growing with its time on the ground, breaking the walls and hurting what it
 // reaches; drawn as a ring of quads around its projected point and textured bands).
 #include "engine/data_source.hpp"
+#include "game/patched_data.hpp"
 #include "game/shots/charge_state.hpp"
 #include "game/actor_state.hpp"
 #include "game/shots/player_shots.hpp"
@@ -175,7 +176,7 @@ void chargeTick(StaticActor& actor, ChargeMarkerFields& f) {
 
 // [0x8c48a4]
 enum class ShockWaveState : uint8_t { Start = 0, Grow = 1 }; // exe 0x56ab00 / 0x56ab90
-const DataTable<CollisionBoxRecord> waveBox{TableId::ChargeWaveBox};
+PatchedRecord<BoxExtents> waveBox{TableId::ChargeWaveBox}; // the blast-wall probe resizes it, as the exe does its record
 constexpr uint16_t kWaveSound = 0x10c;
 constexpr uint32_t kWaveShape = hitGroup(kHitGroupPlayerAttacks);
 constexpr uint32_t kWaveAttack = kHitAttackByPlayer | kHitAttackStrongPush;
@@ -266,7 +267,7 @@ void waveStart(StaticActor& actor, ShockWaveFields& f) {
     f.size = int16_t(full >> 2);
     f.life = int16_t(lv);
     f.ticks = int16_t(lv);
-    actor.collisionBox.pointAt(waveBox.stateAddress());
+    actor.collisionBox.pointTo(*waveBox);
     actor.actorHit = 0;
     waveDraw(actor, f);
     soundPlayAtPlayer(kWaveSound);

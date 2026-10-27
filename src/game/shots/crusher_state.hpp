@@ -35,7 +35,7 @@ struct EnergyOrbFields : ActorClassState {
     PartField<int16_t, int32_t> fullSize;
     PartField<int16_t, int32_t> size;
     BytesField<uint32_t, 4> paramsWord_;
-    HitBoxHead hitBox;
+    HitBox hitBox; // its shape asks for the contact output: the hit list writes it after the head
     StateArray<ShortVec3, kOrbRings> rings{};
     void clearParams() {
         burst = 0;

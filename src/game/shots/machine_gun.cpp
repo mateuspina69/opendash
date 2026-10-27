@@ -348,11 +348,12 @@ void drawMuzzleFlash(const EffectActor& muzzle) {
 struct ImpactFields {
     explicit ImpactFields(const EffectActor& actor) : ImpactFields(const_cast<EffectActor&>(actor)) {}
     explicit ImpactFields(EffectActor& actor)
-        : ticks(actor.params[0]), rayAngles(actor.trail, 0), rayLengths(actor.trail, 8), discTicks(actor.trail, 0),
-          discAngles(actor.trail, 4), discLengths(actor.trail, 10) {}
+        : ticks(actor.params[0]), rayAngles(actor.trail, 0), rayLengths(actor.trail, 8), rayBytes(actor.trail, 0),
+          discTicks(actor.trail, 0), discAngles(actor.trail, 4), discLengths(actor.trail, 10) {}
     uint8_t& ticks;
     ArrayFields<uint8_t, 8, int16_t, 8> rayAngles;
     ArrayFields<uint8_t, 8, int16_t, 8> rayLengths;
+    ArrayFields<uint8_t, 16, int16_t, 8> rayBytes; // the whole block (the angles, then the lengths): the grey rays read it
     ArrayField<uint32_t, int16_t, 8> discTicks;
     ArrayFields<uint8_t, 6, int16_t, 8> discAngles;
     ArrayFields<uint8_t, 6, int16_t, 8> discLengths;
@@ -413,7 +414,7 @@ void drawImpactRays(EffectActor& impact) {
     const uint32_t g = uint32_t(t) << 4;
     const uint32_t grey = ((g | 0x2600u) << 8 | g) << 8 | g;
     for (uint32_t m = 0; m < 0x10; ++m) {
-        const int32_t rr = ((int32_t(fields.rayAngles[m] & 0xf) * w * 3) >> 9) + 1;
+        const int32_t rr = ((int32_t(fields.rayBytes[m] & 0xf) * w * 3) >> 9) + 1;
         float off[4][2] = {};
         pixelOffset(int16_t(cos64(m * 4) * rr >> 12), int16_t(sin64(m * 4) * rr >> 12), units, off[0]);
         pixelOffset(int16_t(cos64(m * 4 + 4) * rr >> 12), int16_t(sin64(m * 4 + 4) * rr >> 12), units, off[1]);

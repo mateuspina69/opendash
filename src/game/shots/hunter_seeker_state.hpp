@@ -22,7 +22,7 @@ struct HunterFields : ActorClassState {
 struct CrystalFields : ActorClassState {
     explicit CrystalFields(StaticActor&) {}
     ShotStats stats;
-    HitBoxHead hitBox;
+    HitBox hitBox; // its shape asks for the contact output: the hit list writes it after the head
 };
 
 } // namespace od::port::hunter_seeker_state
