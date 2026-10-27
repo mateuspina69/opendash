@@ -203,6 +203,7 @@ public:
     virtual bool rayTracingSupported() const = 0;
     // anti-aliasing backend + quality; an unavailable backend falls back to Auto (DLSS, else FSR, else none)
     virtual void setAntiAliasing(AaBackend backend, AaQuality quality) = 0;
+    virtual void setVsync(bool on) = 0; // off: MAILBOX / IMMEDIATE (Vulkan), tearing allowed (D3D12)
     virtual std::vector<AaBackend> availableBackends() = 0; // probed once (compiled in + DLL + GPU support)
     virtual AaBackend activeBackend() const = 0;
     // renders the static scene from a, then b (previous = a), and compares the motion vectors with the

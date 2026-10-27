@@ -121,6 +121,7 @@ struct App {
     bool motionSelfTest = false; // --motion-selftest: render two camera poses, check the motion vectors, exit
     bool resizeTest = false;     // --resize-test: in --shot mode, resize to 640x360, 1x1, back, reset history
     std::string aaArg, aaQualityArg; // --aa / --aa-quality override opendash.ini
+    int vsyncArg = -1;               // --vsync 0|1 overrides vsync=
     std::string langArg;             // --lang jp|en|ptbr overrides opendash.ini lang=
     bool audioDeviceArg = false;     // --audio-device 1: scripted runs open the real audio device (shutdown test)
     std::string voiceTestArg;        // --voice-test xa10_18.dat:3 -- play one voice-pack track (silent mixer), log it
@@ -209,6 +210,7 @@ struct App {
     bool paced() const { return titleScreen.active || titleScreen.inGame; }
     od::AaBackend aaBackend = od::AaBackend::Auto;
     od::AaQuality aaQuality = od::AaQuality::NativeAA;
+    bool vsync = true;
     SDL_Gamepad* pad = nullptr; // the first gamepad (opened in the loop)
     bool showMenu = false;
     bool softReset = false;

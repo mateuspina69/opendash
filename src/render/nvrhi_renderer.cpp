@@ -485,6 +485,8 @@ public:
         setAntiAliasing(wanted_, quality_); // recreates the upscaler and the targets at the new size
     }
 
+    void setVsync(bool on) override { vsync_ = on; }
+
     void setAntiAliasing(AaBackend backend, AaQuality quality) override {
         nvrhi::IDevice* d = dev_.device();
         d->waitForIdle();
@@ -753,7 +755,7 @@ public:
         cl_->close();
         d->executeCommandList(cl_);
         if (readback) readBack(staging, *readback);
-        dev_.present(true);
+        dev_.present(vsync_);
     }
 
 private:
@@ -1439,6 +1441,7 @@ private:
     uint64_t grabId_ = 0;
     int grabX_ = 0, grabY_ = 0, grabW_ = 0, grabH_ = 0;
     bool grabPending_ = false;
+    bool vsync_ = true;
     nvrhi::CommandListHandle cl_;
     nvrhi::BufferHandle frameCb_, vbuf_, skyBuf_, dynBuf_;
     nvrhi::SamplerHandle pointClamp_, linearClamp_;

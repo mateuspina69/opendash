@@ -192,6 +192,10 @@ void App::drawDebugMenu() {
                     renderer->setAntiAliasing(aaBackend, aaQuality);
                 }
             }
+            if (ImGui::Checkbox("vsync", &vsync)) {
+                renderer->setVsync(vsync);
+                od::saveConfigValue("vsync", vsync ? "1" : "0");
+            }
             {
                 static const char* kViews[] = {"final", "cor", "movimento", "normais", "profundidade", "reativo"};
                 if (ImGui::Combo("debug view", &debugView, kViews, 6))

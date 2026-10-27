@@ -85,6 +85,7 @@ Config loadConfig() {
             if (key == "display") cfg.display = trim(line.substr(eq + 1));
             if (key == "window") cfg.window = trim(line.substr(eq + 1));
             if (key == "fullscreen_mode") cfg.fullscreenMode = trim(line.substr(eq + 1));
+            if (key == "vsync") cfg.vsync = trim(line.substr(eq + 1)) != "0";
             if (key == "fog") cfg.fog = trim(line.substr(eq + 1));
             if (key == "fog_source") cfg.fogSource = trim(line.substr(eq + 1));
             if (key == "water") cfg.water = trim(line.substr(eq + 1));

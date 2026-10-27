@@ -25,6 +25,7 @@ struct Config {
     std::string display = "windowed";
     std::string window;
     std::string fullscreenMode;
+    bool vsync = true; // vsync= 0|1 (F1 Video, --vsync): presents wait for the display's refresh
     std::string keys, pad, mouse;
     // fog= remaster|classic|off (F1 Visual), fog_distance= scale of the remaster fog's distance
     std::string fog = "remaster";
