@@ -340,7 +340,6 @@
 {TableId::BarsAndGateSt17BarBox, 0x0, "DAT/ST0E01T.BIN", 0x800fd954u},
 {TableId::BarsAndGateSt17LeverGrabBox, 0x0, "DAT/ST16T.BIN", 0x80105ab8u},
 {TableId::BarsAndGateSt17LiftBox, 0x0, "DAT/ST0E01T.BIN", 0x800fd5b0u},
-{TableId::BarsAndGateBox, 0x0, "SLUS_011.40", 0x80071228u},
 {TableId::St25TronScenesBox, 0x0, "DAT/ST2502T.BIN", 0x800f9fd8u},
 {TableId::St25TronScenesTankBox, 0x0, "DAT/ST2502T.BIN", 0x800fa204u},
 {TableId::St25TronScenesWreckBox, 0x0, "DAT/ST2502T.BIN", 0x800fa204u},

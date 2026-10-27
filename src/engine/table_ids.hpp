@@ -450,8 +450,6 @@ namespace od {
     /* ---- content/forbidden_island/st3e_reports */                                                                   \
     X(St3eReportsFloatingModelBox)                                                                                     \
     /* ---- content/forbidden_island/st11_script2a */                                                                  \
-    X(St11ArrivalFlashTickCases)                                                                                       \
-    X(St11ArrivalCastTickCases)                                                                                        \
     /* ---- content/intro/burning_data */                                                                              \
     X(BurningDataAnimCells)                                                                                            \
     X(BurningDataBox)                                                                                                  \
@@ -2978,7 +2976,6 @@ namespace od {
     X(St4bWalkInFirstTracks)                                                                                        \
     X(St4bWalkInSecondTracks)                                                                                       \
     X(St4bTauntMessages)                                                                                            \
-    X(St4bBossMovePicks)                                                                                            \
     /* ---- content/late_game/st4b_fx */                                                                            \
     X(St4bFxVolleyBox)                                                                                              \
     /* ---- content/late_game/st4b_scripts */                                                                       \

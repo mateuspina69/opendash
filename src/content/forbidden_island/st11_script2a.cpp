@@ -40,9 +40,6 @@ using namespace st11_script2a_state;
 
 namespace {
 
-// the tick's case of the switches exe 0x5259f0 (its byte table, exe 0x525a04) and exe 0x4b5a44 (exe 0x4b5a58)
-const DataTable<ScalarTable<uint8_t, 0x8d>> flashTickCases{TableId::St11ArrivalFlashTickCases};
-const DataTable<ScalarTable<uint8_t, 0x47>> castTickCases{TableId::St11ArrivalCastTickCases};
 
 constexpr uint32_t kSweepScriptActors = 0xefe, kSweepKeep = 0x80; // exe 0x5e05d0's arguments of the scene
 constexpr uint32_t kVoiceFadeStep = 8;
@@ -134,20 +131,19 @@ constexpr uint16_t kSoundArrival = 0x1e;
 void stepFlashes(int32_t t) {
     ScriptState& s = block();
     if (s.subState == 0) {
-        if (uint32_t(t - 0x28) > 0x8c) return;
-        // the tick's case of the switch exe 0x5259f0 (its byte table, exe 0x525a04)
+        // the switch exe 0x5259f0 by the tick (the PC's byte table exe 0x525a04; the PS1 compares the ticks)
         const auto cue = [&s](uint8_t c) { (*s.actors[0]).params[0] = c; }; // the script's actor 0
-        switch (flashTickCases[uint32_t(t - 0x28)]) {
-        case 0:
+        switch (t) {
+        case 0x28: case 0x2d: case 0x37: case 0x3c: case 0x50: case 0x55: case 0x5a: // a flash
             spawnScreenFlash();
             cue(kCastCueFlash);
             return;
-        case 1: cue(kCastCueNone); return;
-        case 2:
+        case 0x2a: case 0x2f: case 0x39: case 0x3e: case 0x52: case 0x57: case 0x5c: cue(kCastCueNone); return;
+        case 0x78:
             spawnScreenFlash();
             cue(kCastCueSecondFlash);
             return;
-        case 3: ++s.subState; return;
+        case 0xb4: ++s.subState; return;
         default: return;
         }
     }
@@ -349,13 +345,12 @@ void runCast(const PlayerEnv& env, AnimatedActor& a, ArrivalCastFields& fields) 
         }
         return;
     case ArrivalCastPhase::Watch: {
-        if (uint32_t(t - 0xbe) > 0x46) return;
-        // the tick's case of the switch exe 0x4b5a44 (its byte table, exe 0x4b5a58)
-        switch (castTickCases[uint32_t(t - 0xbe)]) {
-        case 0: a.anim = 4; return;
-        case 1: fields.animating = 0; return;
-        case 2: fields.animating = 1; return;
-        case 3:
+        // the switch exe 0x4b5a44 by the tick (the PC's byte table exe 0x4b5a58; the PS1 compares the ticks)
+        switch (t) {
+        case 0xbe: a.anim = 4; return;
+        case 0xd1: fields.animating = 0; return;
+        case 0xe5: fields.animating = 1; return;
+        case 0x104:
             a.step = 0;
             ++a.subState;
             return;

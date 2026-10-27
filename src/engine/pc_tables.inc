@@ -403,8 +403,6 @@
 // content/forbidden_island/st3e_reports
 {TableId::St3eReportsFloatingModelBox, 0x8d06c8u},
 // content/forbidden_island/st11_script2a
-{TableId::St11ArrivalFlashTickCases, 0x525a04u},
-{TableId::St11ArrivalCastTickCases, 0x4b5a58u},
 // content/intro/burning_data
 {TableId::BurningDataAnimCells, 0x831978u},
 {TableId::BurningDataBox, 0x896470u},
@@ -2915,7 +2913,6 @@
 {TableId::St4bWalkInFirstTracks, 0x88e638u},
 {TableId::St4bWalkInSecondTracks, 0x88e648u},
 {TableId::St4bTauntMessages, 0x894864u},
-{TableId::St4bBossMovePicks, 0x4b9768u},
 // content/late_game/st4b_fx
 {TableId::St4bFxVolleyBox, 0x8d1830u},
 // content/late_game/st4b_scripts
