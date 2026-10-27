@@ -182,7 +182,9 @@ void enterSub(StaticActor& actor, MissionGunshipSub s) {
     actor.enterStep(0);
 }
 
-// exe 0x5e3bc0 on the point {x << 16, ., z << 16}: the bearing from it to the ship
+// exe 0x5e3bc0 on the point {x << 16, ., z << 16}: the bearing from it to the ship. The exe's point (a stack local of
+// 0x59d650) holds only the whole halves: its low words are stale stack, not reproducible; OpenDash takes them as 0 -- a
+// deliberate deviation: on a tick the bearing lands at a whole number's edge the steer dead zone differs (spin.y 0x10)
 int angleFromPoint(const StaticActor& actor, int16_t px, int16_t pz) {
     return angleOf(int32_t(uint32_t(uint16_t(px)) << 16), int32_t(uint32_t(uint16_t(pz)) << 16), actor.pos.x,
                    actor.pos.z);

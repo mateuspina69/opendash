@@ -451,8 +451,64 @@ struct Runner {
         }
         return false;
     }
+    // the golden's byte at a (false: not recorded)
+    bool goldenU8(const Rec& want, uint32_t a, uint8_t& out) const {
+        size_t o = 0;
+        for (const Range& rg : g.ranges) {
+            if (a >= rg.addr && a < rg.addr + rg.size) {
+                out = want.blob[o + (a - rg.addr)];
+                return true;
+            }
+            o += rg.size;
+        }
+        return false;
+    }
+    bool goldenS16(const Rec& want, uint32_t a, int16_t& out) const {
+        uint8_t lo, hi;
+        if (!goldenU8(want, a, lo) || !goldenU8(want, a + 1, hi)) return false;
+        out = int16_t(uint16_t(lo | hi << 8));
+        return true;
+    }
+    // The exe's stale stack the port takes as 0 (documented deviations, never reproducible):
+    //  * the tanks (pool 20 type 0x40: ST1F sub 0, content/calbania/st1f_birdbot_tank tankHead; Glyde's sub 1,
+    //    glyde_base_tank aimTurret): the turret yaw +0x2e off by one; then that actor's pose (its bone blocks) and a
+    //    shell it fires (pool 40 yaw +0x2a, +-1) follow it
+    //  * the mission gunships (static type 0x1b, content/nino/mission_gunships angleFromPoint): on the tick the
+    //    bearing lands at a whole number's edge the steer dead zone differs: spin.y +0x4a 0 against +-0x10
+    std::vector<std::pair<uint32_t, uint32_t>> staleStackSkips(const Rec& want) const {
+        std::vector<std::pair<uint32_t, uint32_t>> out; // [from, to)
+        bool turret = false;
+        for (uint32_t i = 0; i < 24; ++i) {
+            const uint32_t a = 0xa6e3a0 + i * 0x16c;
+            int16_t w;
+            if (m.u8(a + 4) != 0x40 || m.u8(a + 5) > 1 || !goldenS16(want, a + 0x2e, w)) continue;
+            const int d = int(m.s16(a + 0x2e)) - int(w);
+            if (d != 1 && d != -1) continue;
+            turret = true;
+            out.push_back({a + 0x2e, a + 0x30});
+            const uint32_t mask = m.u32(a + 0xcc);
+            for (int k = 31; k >= 0; --k)
+                if (mask & (1u << k)) out.push_back({0xa72660 + uint32_t(31 - k) * 0xb0, 0xa72660 + uint32_t(32 - k) * 0xb0});
+        }
+        if (turret)
+            for (uint32_t i = 0; i < 32; ++i) {
+                const uint32_t a = 0xa78420 + i * 0xdc;
+                int16_t w;
+                if (!goldenS16(want, a + 0x2a, w)) continue;
+                const int d = int(m.s16(a + 0x2a)) - int(w);
+                if (d == 1 || d == -1) out.push_back({a + 0x2a, a + 0x2c});
+            }
+        for (uint32_t i = 0; i < 64; ++i) {
+            const uint32_t a = 0xa67860 + i * 0xcc;
+            int16_t w;
+            if (m.u8(a + 4) != 0x1b || !goldenS16(want, a + 0x4a, w) || w != 0) continue;
+            if (m.s16(a + 0x4a) == 0x10 || m.s16(a + 0x4a) == -0x10) out.push_back({a + 0x4a, a + 0x4c});
+        }
+        return out;
+    }
     int compare(const Rec& want, const char* step) {
         od::test::storeNativeState(m);
+        const auto stale = staleStackSkips(want);
         int diffs = 0;
         size_t o = 0;
         for (const Range& rg : g.ranges) {
@@ -460,6 +516,8 @@ struct Runner {
                 const uint32_t a = rg.addr + k;
                 const uint8_t got = m.u8(a), w = want.blob[o + k];
                 if (got == w || ignored(a) || (skip && skip(a))) continue;
+                if (std::any_of(stale.begin(), stale.end(), [a](const auto& r) { return a >= r.first && a < r.second; }))
+                    continue;
                 if (a >= 0xa67860 && a < 0xa67860 + 64 * 0xcc && m.u8(0xa6d190) == 0x14 &&
                     m.u8(a - (a - 0xa67860) % 0xcc + 4) == 0x2c) {
                     // the ST14 beam's segments (0x5ab210): +0x86 the pad short Maybe_MulMatrix3x3 0x40bc90 copies
