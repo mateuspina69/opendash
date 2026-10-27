@@ -12976,6 +12976,8 @@ static constexpr Ps1Label kPs1Labels[] = {
     {"DAT/ST1CT.BIN", 0x800f4864u, 0x18},
     {"DAT/ST1CT.BIN", 0x800f3d68u, 0x8},
     {"DAT/ST5CT.BIN", 0x800f9010u, 0xd0},
+    {"DAT/ST2AT.BIN", 0x800f0c98u, 0x20},
+    {"DAT/ST3BT.BIN", 0x800fe5a0u, 0x20},
 };
 static constexpr Ps1LabelSlot kPs1LabelSlots[] = {
     {6981, 0x0, SlotKind::Data, RoutineId::None, 0x0},
@@ -29246,6 +29248,14 @@ static constexpr Ps1LabelSlot kPs1LabelSlots[] = {
     {12968, 0xac, SlotKind::Function, RoutineId::BossBeamUpdate, 0x0},
     {12968, 0xc8, SlotKind::Function, RoutineId::StompShotUpdate, 0x0},
     {12968, 0xcc, SlotKind::Function, RoutineId::ChargeBallUpdate, 0x0},
+    {12969, 0x4, SlotKind::Data, RoutineId::None, 0x0},
+    {12969, 0x8, SlotKind::Data, RoutineId::None, 0x0},
+    {12969, 0x14, SlotKind::Data, RoutineId::None, 0x0},
+    {12969, 0x18, SlotKind::Data, RoutineId::None, 0x0},
+    {12970, 0x4, SlotKind::Data, RoutineId::None, 0x0},
+    {12970, 0x8, SlotKind::Data, RoutineId::None, 0x0},
+    {12970, 0x14, SlotKind::Data, RoutineId::None, 0x0},
+    {12970, 0x18, SlotKind::Data, RoutineId::None, 0x0},
 };
 static constexpr Ps1LabelTable kPs1LabelTables[] = {
     {TableId::AbandonedMineExitCameraScript, 0x0, 5731, false, 0},
@@ -33027,6 +33037,8 @@ static constexpr Ps1LabelTable kPs1LabelTables[] = {
     {TableId::ServbotFidgetLooks, 0x0, 11951, false, 0},
     {TableId::ServbotFidgetPatterns, 0x0, 11952, false, 0},
     {TableId::ServbotFidgetPatterns, 0x0, 11953, false, 0},
+    {TableId::ServbotLookSets, 0x0, 12969, true, 0},
+    {TableId::ServbotLookSets, 0x0, 12970, true, 0},
     {TableId::ServbotPauseTicks, 0x0, 11280, false, 0},
     {TableId::ServbotPauseTicks, 0x0, 11281, false, 0},
     {TableId::ServbotPauseTicks, 0x0, 11282, false, 0},
