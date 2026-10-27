@@ -45,6 +45,9 @@ constexpr uint64_t kSimStepNs = 1'000'000'000ull / 30; // game logic runs at 30 
 // --playscript wait markers (no real pad state has every bit set): see parsePlayScript / ptNextPad
 constexpr uint16_t kPtCalm = 0xffff, kPtMash = 0xfffe;
 constexpr int kPtWaitLimit = 30000;
+// "talk N *": the class word of every live pool-0x20 actor in turn, and the bot frames one gets before the next
+constexpr uint32_t kTalkEach = 0xffffffffu;
+constexpr size_t kTalkEachTicks = 600;
 
 struct StageInfo {
     int stage;
@@ -93,6 +96,8 @@ struct App {
     float orbitTilt = 0.0f;  // --orbit-tilt r: the same for the pitch (dev: the camera aim evidence)
     std::vector<uint16_t> playScript; // scripted PS1 buttons per tick (--playscript)
     size_t playScriptPos = 0;
+    size_t talkEachSlot = 0, talkEachTicks = 0; // "talk N *": the pool-0x20 slot talked to, its bot frames
+    bool talkEachWasBusy = false;               // its talk ran (the next idle frame moves on)
     // "tp X Y Z YAW" steps of --playscript: the player teleported (position + previous position, yaw) before the
     // script tick at that index
     std::map<size_t, std::array<int, 4>> playScriptTeleports;

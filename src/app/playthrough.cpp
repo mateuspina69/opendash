@@ -132,13 +132,14 @@ void App::parsePlayScript(const std::string& text) {
             playScriptAims.push_back(std::move(seg));
             continue;
         }
-        if (w == "talk") { // "talk N CLASS [VAR]": walk to the pool-0x20 actor CLASS (variant VAR), face it, tap circle
+        if (w == "talk") { // "talk N CLASS [VAR]": walk to the pool-0x20 actor CLASS (variant VAR), face it, tap circle;
+                           // CLASS "*": every live pool-0x20 actor in slot order, each until its talk ends
             int n = 0;
             ss >> n;
             AimSeg seg{playScript.size(), playScript.size() + size_t(std::max(0, n)), {}};
             std::string c;
             ss >> c;
-            seg.cls.push_back(uint32_t(std::stoul(c, nullptr, 16)));
+            seg.cls.push_back(c == "*" ? kTalkEach : uint32_t(std::stoul(c, nullptr, 16)));
             seg.tgt[0] = -1;
             if (std::string v; ss >> v) seg.tgt[0] = std::stoi(v, nullptr, 0);
             seg.talk = true;
@@ -252,12 +253,29 @@ void App::botStep(bool& aimApproach, bool& aimBack, uint16_t& aimSide, uint16_t&
         if (seg.talk) {
             const bool busy = !gameIdle();
             if (busy) {
+                talkEachWasBusy = true;
                 aimPad = (playScriptPos % 10 == 1) ? 0x2000 : 0; // advance the messages
+                // "talk N *": a talk that runs on (a shop's or a save point's menu) is left with cross (back)
+                if (seg.cls[0] == kTalkEach && ++talkEachTicks > kTalkEachTicks / 2 && playScriptPos % 10 == 6)
+                    aimPad = 0x4000;
                 continue;
             }
             uint32_t npc = 0;
             int64_t nd = INT64_MAX;
-            for (uint32_t i = 0; i < 24; ++i) {
+            if (seg.cls[0] == kTalkEach) { // the next live actor from talkEachSlot on; a talk ended or no reach in
+                                           // kTalkEachTicks moves on to the one after
+                if (talkEachWasBusy || talkEachTicks > kTalkEachTicks) ++talkEachSlot, talkEachTicks = 0;
+                talkEachWasBusy = false;
+                ++talkEachTicks;
+                while (talkEachSlot < 24 &&
+                       !od::port::actorHeaderAt(od::port::kAnimatedPool + uint32_t(talkEachSlot) * 0x16c).live())
+                    ++talkEachSlot;
+                if (talkEachSlot >= 24) continue;
+                npc = od::port::kAnimatedPool + uint32_t(talkEachSlot) * 0x16c;
+                const int64_t dx = actorX(npc) - pl.pos.x.whole, dz = actorZ(npc) - pl.pos.z.whole;
+                nd = dx * dx + dz * dz;
+            }
+            for (uint32_t i = 0; i < 24 && seg.cls[0] != kTalkEach; ++i) {
                 const uint32_t a = od::port::kAnimatedPool + i * 0x16c;
                 if (!isScriptClass(od::port::fieldActorHandler(od::port::actorHeaderAt(a), od::port::ActorPool::Animated), seg.cls[0])) continue;
                 if (seg.tgt[0] >= 0 && od::port::actorHeaderAt(a).variant != uint32_t(seg.tgt[0])) continue;
