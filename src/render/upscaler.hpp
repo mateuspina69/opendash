@@ -1,4 +1,4 @@
-// Temporal AA / upscaler backends behind one interface (DLSS, FSR, XeSS, NIS, none). See ADR 0004.
+// Temporal AA / upscaler backends behind one interface (DLSS, FSR, XeSS, NIS, SSAA, MSAA, none). See ADR 0004.
 #pragma once
 
 #include <nvrhi/nvrhi.h>
@@ -35,6 +35,7 @@ public:
     // a run-time failure (feature creation / dispatch): the backend copied the colour this frame and the renderer
     // switches to the next candidate
     virtual bool failed() const { return false; }
+    virtual int sampleCount() const { return 1; } // > 1: the scene targets are multisampled (MSAA)
 };
 
 // every backend is built in; init() says whether it runs here (its DLL, the GPU)

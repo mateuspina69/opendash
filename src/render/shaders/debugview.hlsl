@@ -1,4 +1,5 @@
 // Debug views of the scene targets (F1 / --view) and the raw depth copy used by the motion self-test.
+// OD_MSAA: the multisampled depth (aa=msaa) -- its sample 0 at the pixel (render size = output size).
 struct Params {
     int mode; // 0 colour, 1 motion, 2 normal, 3 depth, 4 reactive, 5 raw depth (R32F copy)
     int pad[3];
@@ -7,7 +8,11 @@ struct Params {
 [[vk::push_constant]]
 #endif
 ConstantBuffer<Params> params : register(b0);
+#ifdef OD_MSAA
+Texture2DMS<float> src : register(t0);
+#else
 Texture2D<float4> src : register(t0);
+#endif
 SamplerState pointClamp : register(s0);
 
 struct VSOut {
@@ -23,7 +28,11 @@ VSOut vs_main(uint id : SV_VertexID) {
 }
 
 float4 ps_main(VSOut i) : SV_Target {
+#ifdef OD_MSAA
+    const float4 v = float4(src.Load(int2(i.pos.xy), 0), 0.0, 0.0, 0.0);
+#else
     const float4 v = src.SampleLevel(pointClamp, i.uv, 0);
+#endif
     switch (params.mode) {
     case 1: return float4(saturate(0.5 + v.xy / 32.0), 0.5, 1.0); // 16 px of motion = full scale
     case 2: return float4(v.rgb, 1.0);

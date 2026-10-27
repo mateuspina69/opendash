@@ -45,7 +45,8 @@ namespace {
 
 // the video row's anti-aliasing choices (aa=), in its order
 constexpr od::AaBackend kAaBackends[] = {od::AaBackend::Auto, od::AaBackend::None, od::AaBackend::Dlss,
-                                        od::AaBackend::Fsr,  od::AaBackend::Xess, od::AaBackend::Nis};
+                                        od::AaBackend::Fsr,  od::AaBackend::Xess, od::AaBackend::Nis,
+                                        od::AaBackend::Msaa, od::AaBackend::Ssaa};
 int aaIndex(od::AaBackend b) {
     const auto it = std::find(std::begin(kAaBackends), std::end(kAaBackends), b);
     return it == std::end(kAaBackends) ? 0 : int(it - std::begin(kAaBackends));

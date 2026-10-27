@@ -172,7 +172,8 @@ void motionPixels(const float cur[16], const float prv[16], const float p[3], in
 namespace {
 constexpr std::pair<AaBackend, const char*> kBackends[] = {
     {AaBackend::Auto, "auto"}, {AaBackend::None, "none"}, {AaBackend::Dlss, "dlss"},
-    {AaBackend::Fsr, "fsr"},   {AaBackend::Xess, "xess"}, {AaBackend::Nis, "nis"}};
+    {AaBackend::Fsr, "fsr"},   {AaBackend::Xess, "xess"}, {AaBackend::Nis, "nis"},
+    {AaBackend::Ssaa, "ssaa"}, {AaBackend::Msaa, "msaa"}};
 constexpr std::pair<AaQuality, const char*> kQualities[] = {{AaQuality::NativeAA, "native"},
                                                             {AaQuality::Quality, "quality"},
                                                             {AaQuality::Balanced, "balanced"},

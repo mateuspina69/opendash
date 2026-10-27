@@ -84,7 +84,7 @@ struct VSIn {
 };
 struct VSOut {
     float4 pos : SV_Position;
-    float3 uvs : TEXCOORD0;
+    centroid float3 uvs : TEXCOORD0; // MSAA: an edge pixel samples inside its triangle, not past it into VRAM
     float shade : TEXCOORD1;
     float cull : TEXCOORD2;
     float depth : TEXCOORD3;

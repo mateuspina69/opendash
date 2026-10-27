@@ -24,6 +24,7 @@
 #include "renderer.hpp"
 #include "upscaler.hpp"
 
+#include "g_debugview_ms_ps.h"
 #include "g_debugview_ps.h"
 #include "g_debugview_vs.h"
 #include "g_output_ps.h"
@@ -264,6 +265,8 @@ public:
         debugLayout_ = d->createBindingLayout(dl);
         debugVs_ = d->createShader({nvrhi::ShaderType::Vertex, "", "vs_main"}, g_debugview_vs, sizeof(g_debugview_vs));
         debugPs_ = d->createShader({nvrhi::ShaderType::Pixel, "", "ps_main"}, g_debugview_ps, sizeof(g_debugview_ps));
+        debugMsPs_ = d->createShader({nvrhi::ShaderType::Pixel, "", "ps_main"}, g_debugview_ms_ps,
+                                     sizeof(g_debugview_ms_ps));
         previewVs_ = d->createShader({nvrhi::ShaderType::Vertex, "", "vs_main"}, g_preview_vs, sizeof(g_preview_vs));
         previewPs_ = d->createShader({nvrhi::ShaderType::Pixel, "", "ps_main"}, g_preview_ps, sizeof(g_preview_ps));
         {
@@ -515,7 +518,8 @@ public:
     std::vector<AaBackend> availableBackends() override {
         if (available_.empty()) {
             dev_.device()->waitForIdle();
-            for (AaBackend b : {AaBackend::Dlss, AaBackend::Fsr, AaBackend::Xess, AaBackend::Nis, AaBackend::None}) {
+            for (AaBackend b : {AaBackend::Dlss, AaBackend::Fsr, AaBackend::Xess, AaBackend::Nis, AaBackend::Msaa,
+                                AaBackend::Ssaa, AaBackend::None}) {
                 std::unique_ptr<Upscaler> u = createUpscaler(b);
                 if (u && u->init(dev_.device(), dev_.width(), dev_.height(), AaQuality::NativeAA)) available_.push_back(b);
             }
@@ -731,6 +735,12 @@ public:
         clearTargets();
         jitter_ = up_->temporal() ? jitterAt(frameIndex_++, up_->phaseCount(t_.renderW, t_.outW)) : Jitter{0.0f, 0.0f};
         if (vbuf_ && sceneSet_) drawScene(cam);
+        if (t_.samples > 1) { // aa=msaa: the samples resolved (averaged) into the render-size targets
+            cl_->resolveTexture(t_.color, nvrhi::AllSubresources, t_.msColor, nvrhi::AllSubresources);
+            cl_->resolveTexture(t_.motion, nvrhi::AllSubresources, t_.msMotion, nvrhi::AllSubresources);
+            cl_->resolveTexture(t_.normal, nvrhi::AllSubresources, t_.msNormal, nvrhi::AllSubresources);
+            cl_->resolveTexture(t_.reactive, nvrhi::AllSubresources, t_.msReactive, nvrhi::AllSubresources);
+        }
         if (view_ == DebugView::Final) {
             upscale(cam);
             drawOutput(t_.upscaled, back);
@@ -807,12 +817,17 @@ private:
 
     struct Targets {
         nvrhi::TextureHandle color, motion, normal, reactive, depth, upscaled;
+        // aa=msaa: the scene draws into these (and a multisampled depth), resolved into color..reactive
+        nvrhi::TextureHandle msColor, msMotion, msNormal, msReactive;
+        int samples = 1;
         nvrhi::FramebufferHandle scene;
         int renderW = 0, renderH = 0, outW = 0, outH = 0;
     };
 
-    nvrhi::TextureHandle makeTarget(int w, int h, nvrhi::Format f, const char* name, bool depth = false) {
+    nvrhi::TextureHandle makeTarget(int w, int h, nvrhi::Format f, const char* name, bool depth = false, int samples = 1) {
         nvrhi::TextureDesc td;
+        td.sampleCount = uint32_t(samples);
+        if (samples > 1) td.dimension = nvrhi::TextureDimension::Texture2DMS;
         td.width = uint32_t(w);
         td.height = uint32_t(h);
         td.format = f;
@@ -830,7 +845,9 @@ private:
         nvrhi::IDevice* d = dev_.device();
         d->waitForIdle();
         const int ow = dev_.width(), oh = dev_.height();
+        const int prevSamples = t_.samples, samples = up_ ? up_->sampleCount() : 1;
         t_ = {};
+        t_.samples = samples;
         t_.renderW = rw;
         t_.renderH = rh;
         t_.outW = ow;
@@ -839,7 +856,13 @@ private:
         t_.motion = makeTarget(rw, rh, nvrhi::Format::RG16_FLOAT, "motion");
         t_.normal = makeTarget(rw, rh, nvrhi::Format::R10G10B10A2_UNORM, "normal");
         t_.reactive = makeTarget(rw, rh, nvrhi::Format::R8_UNORM, "reactive");
-        t_.depth = makeTarget(rw, rh, kDepthFormat, "depth", true);
+        t_.depth = makeTarget(rw, rh, kDepthFormat, "depth", true, samples);
+        if (samples > 1) {
+            t_.msColor = makeTarget(rw, rh, nvrhi::Format::RGBA16_FLOAT, "ms color", false, samples);
+            t_.msMotion = makeTarget(rw, rh, nvrhi::Format::RG16_FLOAT, "ms motion", false, samples);
+            t_.msNormal = makeTarget(rw, rh, nvrhi::Format::R10G10B10A2_UNORM, "ms normal", false, samples);
+            t_.msReactive = makeTarget(rw, rh, nvrhi::Format::R8_UNORM, "ms reactive", false, samples);
+        }
         {
             nvrhi::TextureDesc ud;
             ud.width = uint32_t(ow);
@@ -852,12 +875,14 @@ private:
             ud.debugName = "upscaled";
             t_.upscaled = d->createTexture(ud);
         }
+        const bool ms = samples > 1;
         t_.scene = d->createFramebuffer(nvrhi::FramebufferDesc()
-                                            .addColorAttachment(t_.color)
-                                            .addColorAttachment(t_.motion)
-                                            .addColorAttachment(t_.normal)
-                                            .addColorAttachment(t_.reactive)
+                                            .addColorAttachment(ms ? t_.msColor : t_.color)
+                                            .addColorAttachment(ms ? t_.msMotion : t_.motion)
+                                            .addColorAttachment(ms ? t_.msNormal : t_.normal)
+                                            .addColorAttachment(ms ? t_.msReactive : t_.reactive)
                                             .setDepthAttachment(t_.depth));
+        if (samples != prevSamples) opaque_ = nullptr; // the scene pipelines carry the sample count
         outSets_.clear();
         debugSets_.clear();
         backFbs_.clear();
@@ -974,10 +999,12 @@ private:
         // and the blur never blend a black void into the edges of the room (the output pass paints the gradient)
         if (waveRemaster_ && wave_[0] > 0.0f && !heatOpenSky())
             (waveHeat_ ? heatMedium : waterMedium)(waveTint_, std::sin(camPitch_), clear);
-        cl_->clearTextureFloat(t_.color, nvrhi::AllSubresources, nvrhi::Color(clear[0], clear[1], clear[2], 1.0f));
-        cl_->clearTextureFloat(t_.motion, nvrhi::AllSubresources, nvrhi::Color(0.0f));
-        cl_->clearTextureFloat(t_.normal, nvrhi::AllSubresources, nvrhi::Color(0.0f));
-        cl_->clearTextureFloat(t_.reactive, nvrhi::AllSubresources, nvrhi::Color(0.0f));
+        const bool ms = t_.samples > 1;
+        cl_->clearTextureFloat(ms ? t_.msColor : t_.color, nvrhi::AllSubresources,
+                               nvrhi::Color(clear[0], clear[1], clear[2], 1.0f));
+        cl_->clearTextureFloat(ms ? t_.msMotion : t_.motion, nvrhi::AllSubresources, nvrhi::Color(0.0f));
+        cl_->clearTextureFloat(ms ? t_.msNormal : t_.normal, nvrhi::AllSubresources, nvrhi::Color(0.0f));
+        cl_->clearTextureFloat(ms ? t_.msReactive : t_.reactive, nvrhi::AllSubresources, nvrhi::Color(0.0f));
         cl_->clearDepthStencilTexture(t_.depth, nvrhi::AllSubresources, true, 1.0f, kDepthHasStencil, 0);
         depthFresh_ = false;
     }
@@ -985,12 +1012,14 @@ private:
     // fullscreen debugview pass of src (mode, see debugview.hlsl) into fb
     void debugPass(nvrhi::ITexture* src, int mode, nvrhi::IFramebuffer* fb, float w, float h) {
         const nvrhi::FramebufferInfo& info = fb->getFramebufferInfo();
-        nvrhi::GraphicsPipelineHandle& pipe = debugPipes_[info.colorFormats.empty() ? 0 : int(info.colorFormats[0])];
+        const bool ms = src->getDesc().sampleCount > 1; // the MSAA depth: debugview.hlsl OD_MSAA
+        nvrhi::GraphicsPipelineHandle& pipe =
+            debugPipes_[(info.colorFormats.empty() ? 0 : int(info.colorFormats[0])) * 2 + (ms ? 1 : 0)];
         if (!pipe) {
             nvrhi::GraphicsPipelineDesc pd;
             pd.primType = nvrhi::PrimitiveType::TriangleList;
             pd.VS = debugVs_;
-            pd.PS = debugPs_;
+            pd.PS = ms ? debugMsPs_ : debugPs_;
             pd.bindingLayouts = {debugLayout_};
             pd.renderState.rasterState.setCullNone();
             pd.renderState.depthStencilState.depthTestEnable = false;
@@ -1465,14 +1494,14 @@ private:
     nvrhi::BindingLayoutHandle sceneLayout_, outLayout_;
     nvrhi::BindingSetHandle sceneSet_;
     nvrhi::GraphicsPipelineHandle opaque_, sky_pipe_, semi_[4], outPipe_;
-    nvrhi::ShaderHandle debugVs_, debugPs_;
+    nvrhi::ShaderHandle debugVs_, debugPs_, debugMsPs_;
     nvrhi::ShaderHandle previewVs_, previewPs_; // renderPreview
     nvrhi::InputLayoutHandle previewInput_;
     nvrhi::BindingLayoutHandle previewLayout_;
     nvrhi::GraphicsPipelineHandle previewPipe_;
     PreviewSlot preview_[4];
     nvrhi::BindingLayoutHandle debugLayout_;
-    std::unordered_map<int, nvrhi::GraphicsPipelineHandle> debugPipes_; // per target format
+    std::unordered_map<int, nvrhi::GraphicsPipelineHandle> debugPipes_; // per target format, x2 + multisampled source
     std::unordered_map<nvrhi::ITexture*, nvrhi::BindingSetHandle> debugSets_;
     nvrhi::TextureHandle depthCopy_;
     nvrhi::FramebufferHandle depthCopyFb_;

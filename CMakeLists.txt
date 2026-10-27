@@ -87,7 +87,8 @@ add_custom_target(od_build_id
 # --- app ---
 file(GLOB_RECURSE od_app_sources CONFIGURE_DEPENDS src/app/*.cpp)
 add_executable(opendash WIN32 ${od_app_sources} src/audio/mixer.cpp src/audio/music_loops.cpp
-    src/render/nvrhi_renderer.cpp src/render/imgui_nvrhi.cpp src/render/ui_pass.cpp src/render/upscaler_none.cpp)
+    src/render/nvrhi_renderer.cpp src/render/imgui_nvrhi.cpp src/render/ui_pass.cpp src/render/upscaler_none.cpp
+    src/render/upscaler_builtin.cpp)
 target_include_directories(opendash PRIVATE src)
 target_sources(opendash PRIVATE ${OD_BUILD_ID_CPP})
 add_dependencies(opendash od_build_id)
@@ -118,6 +119,9 @@ od_add_shader(TARGET opendash FILE src/render/shaders/scene.hlsl ENTRY vs_main P
 od_add_shader(TARGET opendash FILE src/render/shaders/scene.hlsl ENTRY ps_main PROFILE ps_6_0 NAME g_scene_ps)
 od_add_shader(TARGET opendash FILE src/render/shaders/scene.hlsl ENTRY ps_main PROFILE ps_6_5 NAME g_scene_rt_ps
               DEFINES OD_RT=1)
+od_add_shader(TARGET opendash FILE src/render/shaders/debugview.hlsl ENTRY ps_main PROFILE ps_6_0 NAME g_debugview_ms_ps
+              DEFINES OD_MSAA=1)
+od_add_shader(TARGET opendash FILE src/render/shaders/ssaa.hlsl ENTRY cs_main PROFILE cs_6_0 NAME g_ssaa_cs)
 if(WIN32)
     add_custom_command(TARGET opendash POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:opendash> $<TARGET_FILE_DIR:opendash>

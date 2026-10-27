@@ -130,6 +130,8 @@ static void aa_names() {
     CHECK(parseAaQuality("native", q) && q == AaQuality::NativeAA);
     CHECK(!parseAaQuality("ultra", q));
     CHECK(std::string_view(aaBackendName(AaBackend::Xess)) == "xess");
+    CHECK(parseAaBackend("ssaa", b) && b == AaBackend::Ssaa);
+    CHECK(parseAaBackend("msaa", b) && b == AaBackend::Msaa);
 }
 
 static void backend_order() {

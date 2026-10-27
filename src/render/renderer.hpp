@@ -61,7 +61,7 @@ struct StaticUvPatch {
 };
 
 // Anti-aliasing / upscaling
-enum class AaBackend { Auto, None, Dlss, Fsr, Xess, Nis };
+enum class AaBackend { Auto, None, Dlss, Fsr, Xess, Nis, Ssaa, Msaa };
 enum class AaQuality { NativeAA, Quality, Balanced, Performance };
 
 // what the output pass shows (F1 / --view): the final image or one scene target

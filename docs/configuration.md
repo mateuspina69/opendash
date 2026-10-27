@@ -25,8 +25,9 @@ game's folder, and writes back the settings changed in the game's options.
 | `display` | `windowed`, `borderless`, `exclusive` | `windowed` |
 | `window` | the window's size, `WxH` (pixels) | 1280x720 |
 | `fullscreen_mode` | the exclusive full screen's mode, `WxH@Hz` | the desktop's |
-| `aa` | `auto`, `none`, `dlss`, `fsr`, `xess`, `nis` (each upscaler only when its DLL is next to the exe and the GPU supports it) | `auto` |
+| `aa` | `auto`, `none`, `dlss`, `fsr`, `xess`, `nis` (each upscaler only when its DLL is next to the exe and the GPU supports it; outside Windows FSR 3.1 is built from the SDK), `msaa` (4x), `ssaa` (2x2 supersampling; both on any GPU, `aa_quality` has no say) | `auto` |
 | `aa_quality` | `native`, `quality`, `balanced`, `performance` | `native` |
+| `vsync` | `1`: frames wait for the display's refresh; `0`: as fast as the GPU goes (tearing; the game's speed is unchanged) | `1` |
 | `fog` | `remaster`, `classic`, `off` | `remaster` |
 | `fog_distance` | the remaster fog's distance scale, 0.25 to 4 | `1` |
 | `water` | `remaster`, `classic` (the original screen wave in the flooded rooms) | `remaster` |
@@ -52,7 +53,7 @@ See [netplay.md](netplay.md).
 ## Overrides
 
 Environment variables win over the file: `OPENDASH_DATA`, `OPENDASH_DAT_DIR`, `OPENDASH_EXE`, `OPENDASH_DISC`,
-`OPENDASH_LANG` and `OPENDASH_LANG_DIR`. Command-line options win over both: `--lang`, `--aa`, `--aa-quality`,
+`OPENDASH_LANG` and `OPENDASH_LANG_DIR`. Command-line options win over both: `--lang`, `--aa`, `--aa-quality`, `--vsync`,
 `--host`, `--join`, `--net-name` and `--net-key`.
 
 ## Examples

@@ -7,6 +7,8 @@ std::unique_ptr<Upscaler> createFsrUpscaler();
 std::unique_ptr<Upscaler> createDlssUpscaler();
 std::unique_ptr<Upscaler> createXessUpscaler();
 std::unique_ptr<Upscaler> createNisUpscaler();
+std::unique_ptr<Upscaler> createSsaaUpscaler(); // upscaler_builtin.cpp
+std::unique_ptr<Upscaler> createMsaaUpscaler();
 
 namespace {
 
@@ -45,6 +47,8 @@ std::unique_ptr<Upscaler> createUpscaler(AaBackend b) {
     case AaBackend::Dlss: return createDlssUpscaler();
     case AaBackend::Xess: return createXessUpscaler();
     case AaBackend::Nis: return createNisUpscaler();
+    case AaBackend::Ssaa: return createSsaaUpscaler();
+    case AaBackend::Msaa: return createMsaaUpscaler();
     default: return nullptr;
     }
 }
