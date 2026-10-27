@@ -12978,6 +12978,8 @@ static constexpr Ps1Label kPs1Labels[] = {
     {"DAT/ST5CT.BIN", 0x800f9010u, 0xd0},
     {"DAT/ST2AT.BIN", 0x800f0c98u, 0x20},
     {"DAT/ST3BT.BIN", 0x800fe5a0u, 0x20},
+    {"DAT/ST03T.BIN", 0x800f5d4cu, 0xc},
+    {"DAT/ST03T.BIN", 0x800f5d58u, 0x4},
 };
 static constexpr Ps1LabelSlot kPs1LabelSlots[] = {
     {6981, 0x0, SlotKind::Data, RoutineId::None, 0x0},
@@ -29256,6 +29258,7 @@ static constexpr Ps1LabelSlot kPs1LabelSlots[] = {
     {12970, 0x8, SlotKind::Data, RoutineId::None, 0x0},
     {12970, 0x14, SlotKind::Data, RoutineId::None, 0x0},
     {12970, 0x18, SlotKind::Data, RoutineId::None, 0x0},
+    {12972, 0x0, SlotKind::Function, RoutineId::St03CastBlinkerMoves, 0x0},
 };
 static constexpr Ps1LabelTable kPs1LabelTables[] = {
     {TableId::AbandonedMineExitCameraScript, 0x0, 5731, false, 0},
@@ -33471,7 +33474,8 @@ static constexpr Ps1LabelTable kPs1LabelTables[] = {
     {TableId::St03AttractCastBarrelBox, 0x0, 12013, false, 0},
     {TableId::St03AttractCastBarrelVariants, 0x0, 12730, false, 0},
     {TableId::St03AttractCastBlinkSequence, 0x0, 883, false, 0},
-    {TableId::St03AttractCastBlinkerBox, 0x0, 12016, false, 0},
+    {TableId::St03AttractCastBlinkerBox, 0x0, 12971, false, 0},
+    {TableId::St03AttractCastBlinkerVariants, 0x0, 12972, true, 0},
     {TableId::St03AttractCastBodyBox, 0x0, 885, false, 0},
     {TableId::St03AttractCastBodyEyes, 0x0, 892, false, 0},
     {TableId::St03AttractCastBodyMouth, 0x0, 898, false, 0},
