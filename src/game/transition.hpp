@@ -27,7 +27,8 @@ struct TransitionHooks {
                                              // flag-0x700 door test; OpenDash: game/room_scripts roomScriptHandler when
                                              // the room was spawned by the port)
     std::function<void()> roomScripts;       // after the room scripts
-    std::function<void()> render;            // the draw pass (exe 0x5422f0; its minimap step exe 0x4155b0 is
+    std::function<void()> render;            // the draw pass's entry, drawing or not (exe 0x5422f0, which returns while
+                                             // display().drawingOff; its minimap step exe 0x4155b0 is
                                              // game/minimap's, the HUD elements' draw exe 0x416010 the host's)
 };
 

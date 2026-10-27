@@ -271,8 +271,8 @@ void fieldMode(const PlayerEnv& env, TransitionHooks& hooks, FadeTask& fade) {
     const FadeState& f = fadeState();
     const uint8_t step = g.modeStep;
     auto render = [&]() { // exe 0x5422f0: the draw pass (nothing while the frame draws nothing): the host's, then
+        if (hooks.render) hooks.render(); // at the pass's entry, before its drawingOff test (the host checks it too)
         if (display().drawingOff != 0) return;
-        if (hooks.render) hooks.render();
         minimapDrawPass(); // exe 0x4155b0 (after the sprite banner 0x5f2690)
     };
     auto run = [&]() { // exe 0x542280; 0x5422f0; 0x5426e0

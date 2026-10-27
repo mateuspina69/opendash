@@ -250,6 +250,7 @@ static LONG CALLBACK traceThrow(EXCEPTION_POINTERS* e) {
 #include "game/audio_logic.hpp"
 #include "game/breakable_walls.hpp"
 #include "game/camera.hpp"
+#include "game/display.hpp"
 #include "game/encounter.hpp"
 #include "translator/game_memory.hpp"
 #include "game/hud.hpp"
@@ -647,7 +648,8 @@ int main(int argc, char** argv) {
             // the draw pass (point 25 -> 26): only its sprite banner FUN_005f2690 (game/hud overlayDrawPass, the
             // animation state 0xa6bdb0..) is ported and compared; the rest of the pass is render output
             run.load(run.expect(25, "draw pass", false));
-            od::hud::overlayDrawPass();
+            // exe 0x5422f0 returns at once while drawing is off: no banner, point 26 still comes after the pass
+            if (od::port::display().drawingOff == 0) od::hud::overlayDrawPass();
             run.skip = [](uint32_t a) { return a < 0xa6bdb0 || a >= 0xa6beb0; };
             run.load(run.expect(26, "draw pass sprite banner 0x5f2690"));
             run.skip = nullptr;
