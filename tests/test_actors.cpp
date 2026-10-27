@@ -97,7 +97,7 @@
 //                       --every 100)
 //   act_ST30_gunship_bomb.bin --from x1_900.bin --combat --psx $W --range 0x8f5cf8 0x40 --teleport -1024 0 600 --yaw 0
 //                       --script "120 -" (the gunship static 0x59f880 variant 3 over the player: FUN_0059ff00 bombs
-//                       every 4th tick for 0x10 ticks (static type 0x22, class 0x5a7330 not ported), then the cooldown
+//                       every 4th tick for 0x10 ticks (static type 0x22, the bomb 0x5a7330: game/bomb), then the cooldown
 //                       0xf0)
 //   act_ST16_birdbot_hit.bin --from st16_500.bin --combat --psx $W --range 0x8e25c8 0x40 --teleport 1000 -2048 1500
 //   --yaw 2048
