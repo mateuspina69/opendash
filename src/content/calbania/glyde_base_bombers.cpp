@@ -94,9 +94,9 @@ void holdBomb(AnimatedActor& actor, GlydeBomberFields& f) {
     b.rotation.y = actor.rotation.y;
     int16_t v[3] = {0, 0xa, 0};
     int16_t p2[3], p3[3];
-    bonePointOffset(actor, kBoneLeftHand, v, p2); // exe 0x5e1970
+    bonePointOffsetShorts(actor, kBoneLeftHand, v, p2); // exe 0x5e1970 shifts v in place: the second call sees y 0x50
     v[0] = -10;
-    bonePointOffset(actor, kBoneRightHand, v, p3);
+    bonePointOffsetShorts(actor, kBoneRightHand, v, p3);
     b.pos.x.whole = int16_t((int(p3[0]) + int(p2[0])) >> 1);
     b.pos.y.whole = int16_t((int(p3[1]) + int(p2[1])) >> 1);
     b.pos.z.whole = int16_t((int(p3[2]) + int(p2[2])) >> 1);
