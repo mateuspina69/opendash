@@ -341,22 +341,22 @@ struct PlayerView {
     static float rayHit(const RoomMesh& mesh, const float* o, const float* d);
     void trackPosition(bool snapNow);
     // ---- lock-on camera (modern mode; OpenDash's own, the game keeps its camera in classic mode) -------------
-    // While the player is locked on (+0x174) the camera sits behind the player on the player -> target axis and
-    // looks between the player and the target (both framed, the target's height included). It follows per rendered
-    // frame from the interpolated positions with an exponential ease (framerate independent); orbitYaw /
-    // orbitPitch ARE its state, so on release the orbit camera continues from where the lock left it.
+    // While the player is locked on (+0x174): a group-framing camera (app/cameras orbitCamera), eased in / out from
+    // the orbit view by lockBlend; orbitYaw / orbitPitch follow it, so on release the orbit continues from there.
     uint32_t lockTarget = 0;
     float tgtPrev[3]{}, tgtCur[3]{};
     float lockBlend = 0.0f; // 0 = orbit view, 1 = lock view (the view pitch toward the aim point eases with it)
-    float lockYawVel = 0.0f, lockPitchVel = 0.0f; // smoothDamp velocities (radians / s)
-    // framing (OpenDash): while locked on, the player's and the target's drawn bodies (BodyBox) are always within
-    // kFrameEdge of the screen edges, from the lock's first frame, seen from the real eye (pulled in by walls) at
-    // the window's aspect. In order: the yaw turns toward the axis, the eye backs off up to 2.5 x the follow
-    // distance (lockDist), the pitch frames both; what still does not fit widens the FOV at once (lockFovTan), which
-    // eases back once they fit again
+    float lockYawVel = 0.0f; // smoothDamp velocity (radians / s)
+    // the frame's safe area (kFrameEdge of the edges), the game's FOV; lockDist eases the orbit's distance back to 1
+    // after a lock; lockFovTan the FOV the lock view widened to (a wall pulled the eye in), easing back
     static constexpr float kFrameEdge = 0.85f, kTanHalfFov = 120.0f / 384.0f;
     float lockDist = 1.0f, lockDistVel = 0.0f;
     float lockFovTan = kTanHalfFov; // tan(half the vertical FOV) of the lock view (>= kTanHalfFov)
+    // the lock view's state: its yaw, its aim point (render units), its eye distance (render units: grows at once,
+    // comes back slowly)
+    float lockYaw = 0.0f, lockBack = 0.0f;
+    float lockCentre[3]{};
+    bool lockCentreValid = false;
     // a drawn body's extent around its position (render units: the built model's vertices minus the position), per
     // tick from the geometry the frame draws; invalid = nothing drawn (the position alone is framed)
     struct BodyBox {
@@ -364,12 +364,16 @@ struct PlayerView {
         float lo[3]{}, hi[3]{};
     };
     BodyBox playerBody, targetBody;
+    static constexpr float kBodyShrink = 0.05f; // a kept BodyBox moves this much a tick toward a smaller pose
     uint32_t targetBodyOf = 0; // the lock target targetBody belongs to
     // measures playerBody (object kKindPlayer 0) and, while locked on, targetBody from the tick's built objects
     void measureBodies(const RoomMesh& mesh, const std::vector<od::DynamicObject>& objects);
     // the drawn objects of the actor at `address` (animated pool: kKindActor slot, any blend; static / shot /
     // projectile pools: kKindPoolModel)
     static bool objectOfActor(uint32_t address, uint32_t id);
+    // the see-through's characters in focus (renderer FocusBody, drawn-scene units with the travel offset): the
+    // player whenever drawn, the lock-on target while the lock view holds it (eased with lockBlend); none in cutscenes
+    void focusBodies(const RoomMesh& mesh, float alpha, std::vector<od::FocusBody>& out) const;
     // critically damped spring toward `target` (Game Programming Gems 4, 1.10): framerate independent; returns the
     // step to add to `current`
     static float smoothDamp(float current, float target, float& vel, float smoothTime, float dt);

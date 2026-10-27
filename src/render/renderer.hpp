@@ -76,6 +76,16 @@ struct SunLight {
     float strength = 0.45f;
 };
 
+// A character in focus (OpenDash, the Baldur's Gate style see-through): the scenery between the camera and it
+// dissolves in a dithered hole around it on screen. World units of the drawn scene
+struct FocusBody {
+    float centre[3]{};
+    float radius = 0.0f;   // the hole's radius around the centre (the body's half size and a margin)
+    float feet = 0.0f;     // the body's lowest y: the floor it stands on never dissolves
+    float strength = 1.0f; // 0..1: how open the hole is (a focus that appears / leaves eases it)
+};
+constexpr size_t kMaxFocusBodies = 2;
+
 // Fog of the world geometry. Classic: the original's D3D linear table fog on camera depth (start..end, fully fogged
 // at end). Remaster: exponential fog on the view distance from `start` on (density per world unit), thinner above the
 // eye and thicker below (heightFalloff per world unit, the analytic integral along the ray), never more opaque than
@@ -200,6 +210,8 @@ public:
     virtual void setDebugView(DebugView view) = 0;
     // sun shadows; ignored when the GPU has no ray queries (DXR 1.1)
     virtual void setSun(const SunLight& sun) = 0;
+    // the characters in focus this frame (at most kMaxFocusBodies; none: nothing dissolves)
+    virtual void setFocus(const std::vector<FocusBody>& bodies) = 0;
     virtual bool rayTracingSupported() const = 0;
     // anti-aliasing backend + quality; an unavailable backend falls back to Auto (DLSS, else FSR, else none)
     virtual void setAntiAliasing(AaBackend backend, AaQuality quality) = 0;

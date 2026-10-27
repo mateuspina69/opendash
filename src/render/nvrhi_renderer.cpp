@@ -49,8 +49,12 @@ struct GpuVertex {
     float prevPos[3];
     float faceN[3];
     float pairN[3];
+    float surface; // bits: kSurfaceModel a model's face (actors, the player, bank models), clipped at the game's near
+                   // plane; kSurfaceScenery the scenery (room, segments, doors, static objects), dissolved around a focus
 };
-static_assert(sizeof(RenderVertex) == 48 && sizeof(GpuVertex) == 96);
+static_assert(sizeof(RenderVertex) == 48 && sizeof(GpuVertex) == 100);
+constexpr uint32_t kSurfaceModel = 1, kSurfaceScenery = 2;
+constexpr uint32_t kStaticPoolModels = 0x60; // kKindPoolModel index >> 8 of the static pool's objects (liveScene)
 
 // scene.hlsl cbuffer Frame
 struct FrameConstants {
@@ -70,7 +74,8 @@ struct FrameConstants {
     float sunStrength;
     float shadowMode;
     float semiPass; // a semi-transparent range: 1 its opaque texels (no STP bit), 2 its blended ones; 0 any draw else
-    float pad1[2];
+    float modelNear; // the game's near plane (world units): a model's face is clipped there (scene.hlsl)
+    float pad1;
     float fogMode; // 0 off, 1 classic (linear on depth), 2 remaster (exponential height fog), 3 the PS1's depth cue
     float fogDensity;
     float fogHeightFalloff;
@@ -81,6 +86,10 @@ struct FrameConstants {
     float water[4];     // remaster medium look: on, clock (seconds), sky draw, kind (0 water, 1 hot air)
     float waterTint[4]; // the room's water colour
     XMFLOAT4X4 skyRay;  // screen-space sky: NDC -> view direction (inverse of the unjittered rotation-only viewProj)
+    float focus[kMaxFocusBodies][4];      // a focus body: NDC x, y of its centre, its radius in NDC y, its view depth
+    float focusWorld[kMaxFocusBodies][4]; // ... its feet (world y), its strength
+    float focusCount;
+    float pad3[3];
 };
 
 // Same projection and 24-bit depth as the former D3D11 renderer (ADR 0002): the room data has coplanar faces
@@ -112,7 +121,9 @@ XMMATRIX withJitter(XMMATRIX p, float jx, float jy, int rw, int rh) {
 // whole buffer, an effect's hundreds of coincident corners made this quadratic (the ST4B sub 5 clash: 1.5 s a frame)
 // and one object took its neighbours' normals.
 void toGpu(const std::vector<RenderVertex>& tris, const float* prevPos, std::vector<GpuVertex>& out,
-           const std::vector<std::pair<size_t, size_t>>* smoothRanges = nullptr) {
+           const std::vector<std::pair<size_t, size_t>>* smoothRanges = nullptr,
+           const std::vector<std::pair<size_t, size_t>>* surfaceRanges = nullptr,
+           const std::vector<uint32_t>* surfaceBits = nullptr) {
     out.resize(tris.size());
     const size_t faces = tris.size() / 3;
     std::vector<float> fn(faces * 3);
@@ -149,7 +160,12 @@ void toGpu(const std::vector<RenderVertex>& tris, const float* prevPos, std::vec
         std::memcpy(out[k].faceN, own, sizeof out[k].faceN);
         std::memcpy(out[k].pairN, &fn[pf * 3], sizeof out[k].pairN);
         std::memcpy(out[k].prevPos, prevPos ? prevPos + k * 3 : tris[k].pos, sizeof out[k].prevPos);
+        out[k].surface = 0.0f;
     }
+    if (surfaceRanges)
+        for (size_t r = 0; r < surfaceRanges->size(); ++r)
+            for (size_t k = (*surfaceRanges)[r].first; k < (*surfaceRanges)[r].second; ++k)
+                out[k].surface = float((*surfaceBits)[r]);
 }
 
 // ray-tracing attributes per vertex: (u, v, slice, 0) -- what the shadow rays' alpha test reads
@@ -235,7 +251,7 @@ public:
             attr("CULL", nvrhi::Format::R32_FLOAT, 28),      attr("LAYER", nvrhi::Format::R32_FLOAT, 32),
             attr("COLOR", nvrhi::Format::RGB32_FLOAT, 36),   attr("NORMAL", nvrhi::Format::RGB32_FLOAT, 48),
             attr("PREVPOS", nvrhi::Format::RGB32_FLOAT, 60), attr("FACEN", nvrhi::Format::RGB32_FLOAT, 72),
-            attr("PAIRN", nvrhi::Format::RGB32_FLOAT, 84)};
+            attr("PAIRN", nvrhi::Format::RGB32_FLOAT, 84),   attr("SURFACE", nvrhi::Format::R32_FLOAT, 96)};
         inputLayout_ = d->createInputLayout(attrs, uint32_t(std::size(attrs)), sceneVs_);
 
         nvrhi::BindingLayoutDesc bl;
@@ -318,7 +334,9 @@ public:
         if (tris.empty() || sliceCount <= 0) return true;
 
         std::vector<GpuVertex> gv;
-        toGpu(tris, nullptr, gv);
+        const std::vector<std::pair<size_t, size_t>> room{{0, tris.size()}};
+        const std::vector<uint32_t> roomBits{kSurfaceScenery};
+        toGpu(tris, nullptr, gv, nullptr, &room, &roomBits);
         nvrhi::BufferDesc bd;
         bd.byteSize = gv.size() * sizeof(GpuVertex);
         bd.isVertexBuffer = true;
@@ -369,6 +387,9 @@ public:
     }
 
     void setSun(const SunLight& sun) override { sun_ = sun; }
+    void setFocus(const std::vector<FocusBody>& bodies) override {
+        focus_.assign(bodies.begin(), bodies.begin() + std::ptrdiff_t(std::min(bodies.size(), kMaxFocusBodies)));
+    }
     bool rayTracingSupported() const override { return rt_; }
 
     void updateSlice(int slice, const std::vector<uint8_t>& rgba) override {
@@ -461,15 +482,29 @@ public:
         dyn_.clear();
         dynStart_.fill(0);
         std::vector<std::pair<size_t, size_t>> models; // the objects' vertex ranges, smoothed per object
+        // the surface bits by object: the model draws (exe 0x5f4980 / 0x5f3820) and the scenery (the room's segments
+        // and doors, the static pool's objects)
+        std::vector<std::pair<size_t, size_t>> surfaces;
+        std::vector<uint32_t> surfaceBits;
         for (const DynamicObject& o : sorted) {
             const int b = std::min<int>(o.blend, 4);
             for (int m = b; m < 5; ++m) dynStart_[m] += uint32_t(o.tris.size());
-            if ((o.id >> 24) != kKindEffect) // effects: particles / rings / billboards keep their face normals
+            const uint32_t kind = o.id >> 24;
+            if (kind != kKindEffect) // effects: particles / rings / billboards keep their face normals
                 models.push_back({dyn_.size(), dyn_.size() + o.tris.size()});
+            uint32_t bits = 0;
+            if (kind == kKindActor || kind == kKindPlayer || kind == kKindPoolModel || kind == kKindWalker)
+                bits |= kSurfaceModel;
+            if (kind == kKindLive || (kind == kKindPoolModel && ((o.id & 0xffffffu) >> 8) == kStaticPoolModels))
+                bits |= kSurfaceScenery;
+            if (bits) {
+                surfaces.push_back({dyn_.size(), dyn_.size() + o.tris.size()});
+                surfaceBits.push_back(bits);
+            }
             dyn_.insert(dyn_.end(), o.tris.begin(), o.tris.end());
         }
         history_.apply(sorted, dynPrev_);
-        toGpu(dyn_, dynPrev_.data(), dynGpu_, &models);
+        toGpu(dyn_, dynPrev_.data(), dynGpu_, &models, &surfaces, &surfaceBits);
     }
 
     void resetHistory() override {
@@ -1258,6 +1293,13 @@ private:
             f.fogColor[c] = fog_.color[c];
         }
         f.cullSign = cullSign;
+        f.modelNear = nearZ_;
+        f.focusCount = float(focusShown_);
+        for (uint32_t k = 0; k < focusShown_; ++k)
+            for (int c = 0; c < 4; ++c) {
+                f.focus[k][c] = focusNdc_[k][c];
+                f.focusWorld[k][c] = focusWorld_[k][c];
+            }
         f.fogStart = fog_.start;
         f.fogEnd = fog_.end;
         f.fogMode = fog ? float(int(fog_.mode)) : 0.0f;
@@ -1314,6 +1356,22 @@ private:
         }
         float fwdv[3];
         for (int c = 0; c < 3; ++c) fwdv[c] = XMVectorGetByIndex(fwd, c);
+        // the focus bodies through the unjittered camera: the hole's centre and radius on screen, the body's depth
+        focusShown_ = 0;
+        for (const FocusBody& b : focus_) {
+            const XMVECTOR c = XMVectorSet(b.centre[0], b.centre[1], b.centre[2], 1.0f);
+            const float depth = XMVectorGetX(XMVector3Dot(XMVectorSubtract(c, eye), fwd));
+            if (depth <= cam.nearZ || b.strength <= 0.0f) continue;
+            const XMVECTOR ndc = XMVector3TransformCoord(c, vp);
+            float* n = focusNdc_[focusShown_];
+            n[0] = XMVectorGetX(ndc);
+            n[1] = XMVectorGetY(ndc);
+            n[2] = b.radius / (depth * std::tan(cam.fovY * 0.5f));
+            n[3] = depth;
+            focusWorld_[focusShown_][0] = b.feet;
+            focusWorld_[focusShown_][1] = b.strength;
+            ++focusShown_;
+        }
 
         // streamed geometry: sky (dome previous positions follow the eye) and dynamic actors
         std::vector<float> skyPrev(sky_.size() * 3);
@@ -1544,6 +1602,10 @@ private:
     // sun shadows (ray queries)
     bool rt_ = false;
     SunLight sun_;
+    std::vector<FocusBody> focus_;
+    float focusNdc_[kMaxFocusBodies][4]{}; // drawScene: the focus bodies through this frame's camera (FrameConstants)
+    float focusWorld_[kMaxFocusBodies][4]{};
+    uint32_t focusShown_ = 0;
     nvrhi::rt::AccelStructHandle tlas_, staticBlas_, dynBlas_;
     uint64_t dynBlasBytes_ = 0; // size of the dynBuf_ the actors' BLAS was made for
     nvrhi::BufferHandle staticAttr_, dynAttr_, indices_;

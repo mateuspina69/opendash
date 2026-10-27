@@ -138,6 +138,8 @@ std::vector<od::RenderVertex> PlayerView::liveScene(const RoomMesh& mesh, size_t
             const uint32_t a = od::port::kStaticPool + i * 0xcc;
             const od::port::StaticActor& act = od::port::staticActorAt(a);
             if (!(act.flags & act.runFlags & od::port::kActorDrawn) || act.state == 0 || !actorLive(a, false)) continue;
+            const int16_t centre[3] = {act.pos.x.whole, act.pos.y.whole, act.pos.z.whole};
+            if (!od::port::modelCentreDrawn(act.flags, centre)) continue; // the whole model culled (exe 0x5f4600..)
             const RoomMesh::AltBank* alt = nullptr;
             const uint32_t model = act.model;
             const int entry = modelEntry(model, alt);
@@ -168,6 +170,8 @@ std::vector<od::RenderVertex> PlayerView::liveScene(const RoomMesh& mesh, size_t
             const od::port::MeshActor& act = od::port::meshActorAt(a);
             if ((act.flags & act.runFlags & kDrawnMesh) != kDrawnMesh || !actorLive(a, false))
                 continue;
+            const int16_t centre[3] = {act.pos.x.whole, act.pos.y.whole, act.pos.z.whole};
+            if (!od::port::modelCentreDrawn(act.flags, centre)) continue; // the whole model culled (exe 0x5f4600..)
             const bool projectile = base == od::port::kProjectilePool;
             const od::port::ActorPool pool = projectile ? od::port::ActorPool::Projectiles : od::port::ActorPool::Shots;
             const RoomMesh::AltBank* alt = nullptr;
@@ -228,6 +232,8 @@ std::vector<od::DynamicObject> PlayerView::liveActors(const RoomMesh& mesh) cons
         const size_t first = out.size();
         out.push_back(od::DynamicObject{od::objectId(od::kKindActor, i), {}});
         if (!(act.flags & act.runFlags & od::port::kActorDrawn)) continue; // hidden
+        const int16_t centre[3] = {act.pos.x.whole, act.pos.y.whole, act.pos.z.whole};
+        if (!od::port::modelCentreDrawn(act.flags, centre)) continue; // the whole model culled (exe 0x5f4160)
         // FUN_005f4160's semi-transparency: draw word 0x6d00e0 |= +0xeb << 20 for the whole actor, or with
         // +0xeb & 1 per part the bone block's byte +0xa3 + (ref & 3) * 4 << 20 (after & 0xfd9fffff); the packet
         // writer 0x5f5500 turns bit 25 into the GP0 semi bit and bits 21..22 into the tpage ABR. The semi parts
@@ -246,7 +252,6 @@ std::vector<od::DynamicObject> PlayerView::liveActors(const RoomMesh& mesh) cons
         // translation 0x6d003c, 0x40c410; its OTZ) and part colour (+0xe6, or
         // per part the bone block's +0x86): game/model_colour. The semi parts of the Master's dissolve (ST52 sub 2,
         // +0xeb 0x22 with +0xe6 0x18c6) are the texture at 0x30 / 0x80 added, not at full brightness
-        const int16_t centre[3] = {act.pos.x.whole, act.pos.y.whole, act.pos.z.whole};
         const uint32_t drawFlags =
             od::port::modelDrawFlags(act.flags, od::port::modelOtz(od::port::actorCentreViewZ(centre)));
         const uint16_t ownColour = act.tint;

@@ -324,9 +324,10 @@ void App::updateCamera() {
             axis = std::fmod(std::atan2(dx, dz) + 6.2831853f, 6.2831853f);
             (void)t;
         }
-        SDL_Log("lockcam frame tick %llu: %s yaw %.4f axis %.4f pitch %.4f blend %.2f eye %.0f %.0f %.0f fov %.3f dist %.2f",
+        SDL_Log("lockcam frame tick %llu: %s yaw %.4f axis %.4f pitch %.4f blend %.2f eye %.0f %.0f %.0f fov %.3f dist %.2f back %.0f",
                 (unsigned long long)simTicks, camSource, std::fmod(std::fmod(cam.yaw, 6.2831853f) + 6.2831853f, 6.2831853f),
-                axis, cam.pitch, playerView.lockBlend, cam.eye[0], cam.eye[1], cam.eye[2], cam.fovY, playerView.lockDist);
+                axis, cam.pitch, playerView.lockBlend, cam.eye[0], cam.eye[1], cam.eye[2], cam.fovY, playerView.lockDist,
+                playerView.lockBack);
     }
 }
 
@@ -342,6 +343,11 @@ void App::updateScene() {
     const float* travel = playerView.renderOffset;
     drawCam = cam;
     for (int c = 0; c < 3; ++c) drawCam.eye[c] += travel[c];
+    { // the see-through's characters in focus (renderer FocusBody)
+        std::vector<od::FocusBody> focus;
+        if (dissolve) playerView.focusBodies(current, alpha, focus);
+        renderer->setFocus(focus);
+    }
     {
         const float aspect = float(width) / float(std::max(height, 1));
         std::vector<od::RenderVertex> skyV;

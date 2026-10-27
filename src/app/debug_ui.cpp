@@ -212,6 +212,11 @@ void App::drawDebugMenu() {
             else
                 ImGui::TextDisabled("Sol: GPU sem ray tracing");
             if (!current.sky.empty()) ImGui::Checkbox("ceu 3D (desmarcado = 2D original)", &skyDome);
+            if (ImGui::Checkbox("dissolver o cenario na frente do foco", &dissolve))
+                od::saveConfigValue("dissolve", dissolve ? "1" : "0");
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("O cenario entre a camera e o Megaman (e o alvo da mira) se desfaz em volta deles,\n"
+                                  "como no Baldur's Gate 3.");
             {
                 bool precisePoses = od::precise::enabled();
                 if (ImGui::Checkbox("animacoes suaves (desmarcado = tremido original do PS1)", &precisePoses))

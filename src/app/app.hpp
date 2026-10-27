@@ -216,6 +216,7 @@ struct App {
     bool softReset = false;
     size_t animTick = 0, shownTick = 0;
     bool skyDome = true; // sky layers on a sphere (default) or the original 2D screen-space scroll
+    bool dissolve = true; // F1 Visual / dissolve=: the scenery between the camera and the characters in focus dissolves
     int browseStage = 0;
 
     Input input;

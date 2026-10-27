@@ -18,7 +18,8 @@ cbuffer Frame : register(b0) {
     float sunStrength; // darkening of a pixel the sun cannot reach
     float shadowMode;  // 1: this draw receives sun shadows (opaque world / actors); 0: sky, blended effects, sun off
     float semiPass;    // a semi-transparent range: 1 its opaque texels (no STP bit), 2 its blended ones; 0 any draw else
-    float2 pad1;
+    float modelNear;  // the game's near plane: a model's face is clipped there (surface kSurfaceModel)
+    float pad1;
     float fogMode;          // 0 off, 1 classic (the original's linear table fog), 2 remaster (exponential height fog), 3 the PS1's depth cue
     float fogDensity;       // remaster: extinction per world unit
     float fogHeightFalloff; // remaster: density e-folds per world unit of height above the eye
@@ -30,6 +31,10 @@ cbuffer Frame : register(b0) {
                             // (cave) / 2 hot air under an open sky (waterTint = the sky colour)
     float4 waterTint;       // the room's water colour (the game's wave tint / 0x80)
     float4x4 skyRay;        // screen-space sky: NDC -> view direction (inverse unjittered rotation-only viewProj)
+    float4 focus[2];        // the characters in focus (OpenDash's see-through): NDC x, y, radius in NDC y, view depth
+    float4 focusWorld[2];   // ... their feet (world y), their strength (0..1)
+    float focusCount;
+    float3 pad3;
 };
 Texture2DArray pages : register(t0);
 SamplerState pointClamp : register(s0);
@@ -81,6 +86,7 @@ struct VSIn {
     float3 prevPos : PREVPOS;
     float3 faceN : FACEN; // winding normal of this triangle
     float3 pairN : PAIRN; // ... and of the quad's other half (cull 2..5)
+    float surface : SURFACE; // bits: 1 a model's face (actors, the player, bank models), 2 the scenery
 };
 struct VSOut {
     float4 pos : SV_Position;
@@ -95,6 +101,7 @@ struct VSOut {
     float3 world : TEXCOORD6; // before the decal push
     nointerpolation float3 faceN : TEXCOORD7;
     nointerpolation float3 pairN : TEXCOORD8;
+    nointerpolation float surface : TEXCOORD9;
 };
 
 VSOut vs_main(VSIn i) {
@@ -114,6 +121,7 @@ VSOut vs_main(VSIn i) {
     o.world = i.pos;
     o.faceN = i.faceN;
     o.pairN = i.pairN;
+    o.surface = i.surface;
     return o;
 }
 
@@ -290,6 +298,31 @@ struct PSOut {
 };
 
 PSOut ps_main(VSOut i, bool front : SV_IsFrontFace) {
+    // a model's face is clipped at the game's near plane (focal / 5): the exe's model draws (0x5f4980 / 0x5f3820)
+    // drop a face whose vertices all lie before it (0x40d0c0) and clip the others there (0x40d670), so a model
+    // pressed against a cutscene camera vanishes (ST08 sub 1, Joe's lab). The room draws are not clipped (the
+    // renderer keeps depth clip off)
+    const uint surface = uint(round(i.surface));
+    if ((surface & 1u) && i.depth < modelNear) discard;
+    // the see-through (OpenDash, Baldur's Gate style): the scenery between the camera and a character in focus,
+    // above its feet and around it on screen, dissolves in an ordered dither (a soft edge, the floor kept)
+    if ((surface & 2u) && focusCount > 0.5) {
+        static const float kBayer[16] = {0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5};
+        const uint2 px = uint2(i.pos.xy) & 3u;
+        const float threshold = (kBayer[px.y * 4 + px.x] + 0.5) / 16.0;
+        const float2 here = i.curClip.xy / i.curClip.w;
+        const float aspect = renderSize.x / renderSize.y;
+        // a surface facing up (the floor, a step, a table top) is never dissolved: only walls, pillars, ceilings
+        float3 up = normalize(cross(ddy(i.world), ddx(i.world)));
+        if (dot(up, eye - i.world) < 0) up = -up;
+        float open = 0.0;
+        for (int f = 0; f < int(focusCount + 0.5) && up.y < 0.6; ++f) {
+            if (i.depth >= focus[f].w || i.world.y <= focusWorld[f].x) continue;
+            const float d = length(float2((here.x - focus[f].x) * aspect, here.y - focus[f].y)) / focus[f].z;
+            open = max(open, saturate((1.35 - d) / 0.35) * focusWorld[f].y);
+        }
+        if (open > threshold) discard;
+    }
     // culling (RenderVertex::cull): 1 the triangle's own facing; quads by both halves: the other half's facing from its
     // winding normal, with the sign that relates this triangle's winding normal to its raster facing
     const int cullMode = int(round(i.cull));

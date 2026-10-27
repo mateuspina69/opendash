@@ -33,6 +33,9 @@ struct Config {
     float fogDistance = 1.0f;
     // water= remaster|classic (F1 Video): the flooded rooms' underwater look (OpenDash's or the PS1 / PSP screen wave)
     std::string water = "remaster";
+    // dissolve= 0|1 (F1 Visual): the scenery between the camera and the characters in focus (the player, the lock-on
+    // target) dissolves around them, Baldur's Gate style
+    bool dissolve = true;
     // netplay (app/netplay, docs/netplay.md): net= off|host|join, net_port= the host's UDP port (unset / 0: 27460;
     // a client binds any free port), net_join= the host's ip:port, net_name= this player's name, net_key= the session key (the host refuses
     // a player whose key differs; only its hash travels). --host / --join / --net-name / --net-key override them.

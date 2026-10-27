@@ -76,6 +76,11 @@ int32_t cameraPointDepth(const CameraPoint& c);
 // exe 0x5f4160's centre: the camera matrix 0x6d0014 with the eye offset 0x6d003c (exe 0x40c3c0 / 0x40c410): the view z
 // of an s16 point (exe 0x40c6a0 / 0x40c860)
 int32_t actorCentreViewZ(const int16_t v[3]);
+// exe 0x5f4160 (animated models) / exe 0x5f4600.. (bank models): a model is drawn, the whole of it, when its centre
+// through the same camera has a depth (OTZ = SZ >> 2) within 0x10 .. the stage's depth range and its screen point
+// within -0x160 .. 0x2a0 / -0x88 .. 0x378; with flags byte 0 & 0x40, whenever it is nearer than the range. A model
+// pressed against the camera, behind it or far off screen is not drawn (the cutscene cameras inside the rooms)
+bool modelCentreDrawn(uint8_t flags, const int16_t centre[3]);
 // The effects' depth / screen tests of a camera point (the exe's projected effects): view z within 0x30 .. the stage's
 // effects far * 4, the screen point within -0x160 .. 0x2a0 / -0x88 .. 0x378
 bool effectDepthVisible(const CameraPoint& c);

@@ -327,6 +327,7 @@ int App::init() {
             fogDistance = std::clamp(cfg.fogDistance, 0.25f, 4.0f);
             fogSource = cfg.fogSource == "ps1" ? FogSource::Ps1 : FogSource::OpenDash;
             waterRemaster = cfg.water != "classic";
+            dissolve = cfg.dissolve;
         }
         if (const auto c = voiceTestArg.find(':'); c != std::string::npos && playerView.mixer) {
             auto& mx = *playerView.mixer;
