@@ -40,7 +40,7 @@
 //   act_ST08_idle.bin  --stage 08 --script "300 -"     (route walker +0xd 0x10)
 //   act_ST19_idle.bin  --stage 19 --sub 1 --script "300 -"   (fidget kind 0x81, partner NPCs)
 //   act_ST19_pause.bin --stage 19 --sub 1 --warmup 600 --script "150 -"   (route step 4: pause, tick 66)
-//   act_ST12_door.bin  --stage 12 --sub 1 --teleport -3584 -192 -6048 --yaw 0
+//   act_ST12_door.bin  --stage 12 --sub 1 --teleport -3584 -192 -6048 --yaw 0 --range 0x7f100080 4 (the CRT seed)
 //                      --script "3 -; 2 circle; 45 -; 1 circle; 60 -"  (door actor FUN_0059ce50: event, "yes")
 //   act_ST1A_platform.bin --stage 1A --script "150 -"  (0x590100 movers)
 //   act_ST24_servbots.bin --stage 24 --save ".../DASH2-02.DAT" --warmup 1 --range 0xa714c0 4 --script "400 -"
@@ -169,8 +169,11 @@
 #include "game/effects_draw.hpp"
 #include "translator/game_memory.hpp"
 #include "game/hit_list.hpp"
+#include "game/modern_play.hpp"
 #include "game/player/player_update.hpp"
 #include "game/fade.hpp"
+#include "game/room_uv_animation.hpp"
+#include "game/stage_state.hpp"
 #include "game/transition.hpp"
 #include "golden_delta.hpp"
 #include "translator/state_translator.hpp"
@@ -281,6 +284,27 @@ struct Runner {
         }
         bindRoom();
         od::test::loadNativeState(m);
+        bindUvAnimations(r);
+    }
+    // goldens recorded without the room's texture animation list (0xa6d0b0 names it, its entries are not captured):
+    // the entries the room setup built from the room's table (game/room_uv_animation, the rooms that have one), once;
+    // their frame / tick start at 0 (they only time the room's texel writes, not captured either). load() keeps them:
+    // it stores the native state before writing the golden's ranges
+    void bindUvAnimations(const Rec& r) {
+        od::port::StageState& s = od::port::stage();
+        uint8_t v;
+        if (s.textureAnimations == 0 || s.textureAnimationCount == 0 || want(r, s.textureAnimations, v) ||
+            od::port::roomUvAnimations().entries[0].steps != 0)
+            return;
+        static constexpr std::pair<od::TableId, od::TableId> kLists[] = {
+            {od::TableId::IntroRoomsSt00UvAnimList, od::TableId::IntroRoomsSt00UvAnimTable},
+            {od::TableId::IntroRoomsSt03UvAnimList, od::TableId::IntroRoomsSt03UvAnimTable},
+            {od::TableId::TownRoomsSt0aUvAnimList, od::TableId::TownRoomsSt0aUvAnimTable}};
+        for (const auto& [list, table] : kLists)
+            if (od::stateAddress(list) == s.textureAnimations) {
+                od::port::roomUvAnimationSetup(s.textureAnimations, od::stateAddress(table));
+                return;
+            }
     }
     // the golden's byte at address a in record r (false: not captured)
     bool want(const Rec& r, uint32_t a, uint8_t& v) const {
@@ -574,6 +598,7 @@ int main(int argc, char** argv) {
     if (argc < 4) return 2;
     const fs::path datDir = argv[1], exe = argv[2], data = argv[3];
     od::bindTestDataSource(exe);
+    od::port::setModernPlay(false); // the goldens hold the exe's gameplay (game/modern_play)
     const int maxReports = argc > 4 ? std::stoi(argv[4]) : 3;
     const std::string only = argc > 5 ? argv[5] : ""; // optional: only goldens whose name contains this
     std::vector<fs::path> files;
