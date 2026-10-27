@@ -150,7 +150,8 @@ void sound(uint16_t id, const AnimatedActor& actor) { soundPlayAtPos(id, actor.p
 // The low halves of a walk's point (exe 0x4c1fd0 / 0x4c22d0 / 0x4c24f0 / 0x4c3b10 build it in a stack local writing
 // only the whole halves): what the hit check 0x4c4790, run before at the same depth, pushed there -- x its saved edi
 // (the actor's address + 0x14c, exe 0x4c1b4b), z its saved ebx (the frame loop's, 0). When the check does not run
-// (blinking, kFightNoHits) they are a previous pool slot's leftover, not reproducible: 0
+// (blinking, kFightNoHits) nothing in the class writes there first: x is 0, z a short earlier code left (measured while
+// blinking: 0xfe15 .. 0xfe3c, changing with the camera), not reproducible: 0
 struct PointLows {
     uint16_t x = 0, z = 0;
 };
