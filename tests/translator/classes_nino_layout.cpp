@@ -719,11 +719,6 @@ void layoutValue(LayoutVisitor& v, uint32_t a, od::port::ruin_swimmers_state::Sm
     layoutValue(v, a + 0x15e, s.startKey);
 }
 
-void layoutValue(LayoutVisitor& v, uint32_t a, od::port::ruin_swimmers_state::TorpedoCompanionFields& s) {
-    using namespace od::port::ruin_swimmers_state;
-    layoutValue(v, a + 0xbc, s.torpedo);
-}
-
 void layoutValue(LayoutVisitor& v, uint32_t a, od::port::ruin_swimmers_state::TorpedoFields& s) {
     using namespace od::port::ruin_swimmers_state;
     layoutValue(v, a + 0xbc, s.shooter);
@@ -912,7 +907,6 @@ bool classes_nino(LayoutVisitor& v, uint32_t a, ActorClassState& s) {
     if (typeid(s) == typeid(od::port::st19_state::MachineFields)) { layoutValue(v, a, static_cast<od::port::st19_state::MachineFields&>(s)); return true; }
     if (typeid(s) == typeid(od::port::ruin_effects_state::BlobFields)) { layoutValue(v, a, static_cast<od::port::ruin_effects_state::BlobFields&>(s)); return true; }
     if (typeid(s) == typeid(od::port::gauge_reaverbots_state::GaugeFields)) { layoutValue(v, a, static_cast<od::port::gauge_reaverbots_state::GaugeFields&>(s)); return true; }
-    if (typeid(s) == typeid(od::port::ruin_swimmers_state::TorpedoCompanionFields)) { layoutValue(v, a, static_cast<od::port::ruin_swimmers_state::TorpedoCompanionFields&>(s)); return true; }
     if (typeid(s) == typeid(od::port::mission_targets_state::SmokeColumnsFields)) { layoutValue(v, a, static_cast<od::port::mission_targets_state::SmokeColumnsFields&>(s)); return true; }
     if (typeid(s) == typeid(od::port::field_spawners_state::St18FightFields)) { layoutValue(v, a, static_cast<od::port::field_spawners_state::St18FightFields&>(s)); return true; }
     if (typeid(s) == typeid(od::port::mission_tank_state::TankFields)) { layoutValue(v, a, static_cast<od::port::mission_tank_state::TankFields&>(s)); return true; }

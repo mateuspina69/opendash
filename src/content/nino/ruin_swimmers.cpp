@@ -13,6 +13,7 @@
 // group's attack. Render output left out as in the other ports: the shadows (exe 0x5f20f0).
 #include "content/nino/ruin_swimmers.hpp"
 #include "content/nino/ruin_swimmers_state.hpp"
+#include "content/yosyonke/ice_ruin_bubble_trail_state.hpp"
 #include "content/nino/water.hpp"
 #include "game/water_splash_state.hpp"
 
@@ -1086,7 +1087,8 @@ void torpedoInit(ProjectileActor& torpedo, TorpedoFields& fields) {
             companion.type = kCompanionType;
             companion.subtype = 0;
             companion.variant = 0;
-            classState<TorpedoCompanionFields>(companion).torpedo = &torpedo;
+            // the ice ruin's bubble trail (content/yosyonke/ice_ruin_bubble_trail): its block's first word
+            classState<ice_ruin_bubble_trail_state::TrailFields>(companion).torpedo = &torpedo;
         }
     }
 }

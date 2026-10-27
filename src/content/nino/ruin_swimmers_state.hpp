@@ -60,16 +60,6 @@ struct SmallSwimmerFields : ActorClassState {
     }
 };
 
-// The companion of ST2F's torpedoes (its stage's static type 0x68): the torpedo it follows
-struct TorpedoCompanionFields : ActorClassState {
-    explicit TorpedoCompanionFields(StaticActor&) {}
-    ActorRef<Actor> torpedo;
-
-    void clearBlock() override {
-        torpedo = nullptr;
-    }
-};
-
 // The torpedo's class block: its shooter, its hit box, its homing ticks, the exhaust's counter
 struct TorpedoFields : ActorClassState {
     explicit TorpedoFields(ProjectileActor&) {}

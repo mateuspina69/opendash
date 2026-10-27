@@ -345,7 +345,6 @@ namespace od::port::ruin_spawners_state { struct SpawnerFields; }
 namespace od::port::ruin_spawners_state { struct St14RespawnFields; }
 namespace od::port::ruin_swimmers_state { struct BigSwimmerFields; }
 namespace od::port::ruin_swimmers_state { struct SmallSwimmerFields; }
-namespace od::port::ruin_swimmers_state { struct TorpedoCompanionFields; }
 namespace od::port::ruin_swimmers_state { struct TorpedoFields; }
 namespace od::port::sand_burrower_state { struct BurrowerFields; }
 namespace od::port::sand_burrower_state { struct BurrowerRecord; }
@@ -910,7 +909,6 @@ void layoutValue(LayoutVisitor&, uint32_t, od::port::ruin_spawners_state::Spawne
 void layoutValue(LayoutVisitor&, uint32_t, od::port::ruin_spawners_state::St14RespawnFields&);
 void layoutValue(LayoutVisitor&, uint32_t, od::port::ruin_swimmers_state::BigSwimmerFields&);
 void layoutValue(LayoutVisitor&, uint32_t, od::port::ruin_swimmers_state::SmallSwimmerFields&);
-void layoutValue(LayoutVisitor&, uint32_t, od::port::ruin_swimmers_state::TorpedoCompanionFields&);
 void layoutValue(LayoutVisitor&, uint32_t, od::port::ruin_swimmers_state::TorpedoFields&);
 void layoutValue(LayoutVisitor&, uint32_t, od::port::sand_burrower_state::BurrowerFields&);
 void layoutValue(LayoutVisitor&, uint32_t, od::port::sand_burrower_state::BurrowerRecord&);
