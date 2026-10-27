@@ -1,5 +1,6 @@
 // The minimap (see minimap.hpp).
 #include "game/minimap.hpp"
+#include "game/status_map.hpp"
 
 #include <cstdio>
 #include <set>
@@ -128,7 +129,10 @@ void line(size_t c, PanelPoint a, PanelPoint b, uint32_t colour) {
 
 } // namespace
 
-void minimapStageReset() { minimap() = MinimapState{}; }
+void minimapStageReset() {
+    minimap() = MinimapState{};
+    statusMap() = StatusMapState{}; // exe 0x415410: the map page's block and viewport
+}
 
 void minimapRoomReset(const Player& player) {
     MinimapState& m = minimap();

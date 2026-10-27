@@ -105,8 +105,9 @@ the ST08 landing/transition into ST04. This is not a complete playthrough. Remai
 * Complete title/attract and story-path coverage; missing tables are still reported rather than substituted.
 * Compose the four status/equipment/options art packs from native images and the host's captions/key prompts.
   `test_lang_pack` retains its existing expectation that `art/GAME.bin` is not yet supplied by the disc pack.
-* The status-menu map page is unported in the current desktop engine, including its PC mode. The strict
-  `test_ps1_gameplay` integration check deliberately reports this gap when its menu script enters that page.
+* The status-menu map page (game/status_map) reads its pictures from the disc's COMMON/SUBMAP.BIN (the containers
+  MAP0..MAP8; MAP2 is the disc's empty one, never requested) and its help banks from COMMON/SUBSCN.BIN;
+  `test_ps1_gameplay`'s menu script enters it.
 * A full campaign, save/load progression and remaining menu-page validation are still required before calling
   disc support complete. The pre-existing `test_storm_draw` has six `drawcmd_a.bin` mismatches in the baseline.
 

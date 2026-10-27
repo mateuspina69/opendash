@@ -82,7 +82,7 @@ void st18TownListUpdate() {
 
 // exe 0x54fc70(packet, list, colour): the list's semi-transparent sprites at the lanes' point plus their offsets
 // (through the corner lanes), in the clut of the lane 0xa2
-void st18SpriteList(size_t c, uint32_t list) {
+void st18SpriteList(size_t c, uint32_t list, uint32_t colour = kSt18Colour, uint8_t code = menu_draw::kSpriteFree | 2) {
     using namespace menu_draw;
     MinimapLanes l = minimapLanes();
     auto draw = [&](const St18Sprite& e) {
@@ -90,7 +90,7 @@ void st18SpriteList(size_t c, uint32_t list) {
         l.cornerY = int16_t(e.dy + l.y.get());
         otSprite(c, l.cornerX.get(), l.cornerY.get(),
                  spriteUv(uint16_t(l.clut.get()), uint8_t(e.uv), uint8_t(e.uv >> 8)), e.size, e.size,
-                 kSt18Colour, uint8_t(kSpriteFree | 2));
+                 colour, code);
     };
     if (list == stateAddress(TableId::St18MinimapPatchedList)) {
         for (const St18Sprite& e : st18TownList->sprites) {
@@ -196,6 +196,9 @@ void st35Minimap() {
 }
 
 } // namespace
+
+void ninoMapTownSpritesUpdate() { st18TownListUpdate(); }
+void ninoMapSpriteListDraw(size_t c, uint32_t list) { st18SpriteList(c, list, menu_draw::kNeutral, menu_draw::kSpriteFree); }
 
 void registerNinoMinimaps(ContentRegistry& r) {
     r.roomCallbacks[RoutineId::NinoRoomsSt18RoomCallback] = &st18Minimap;

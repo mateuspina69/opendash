@@ -20,6 +20,8 @@ MenuBanks exeMenuBanks() {
     b.use = stateAddress(TableId::MenuBankItemUse);
     b.misc = stateAddress(TableId::MenuBankWeaponSwitchMessages);
     b.areas = stateAddress(TableId::MenuBankAreaNames);
+    b.mapHelp = stateAddress(TableId::MenuBankMapHelp);
+    b.mapDisplay = stateAddress(TableId::MenuBankMapDisplay);
     b.optHelp = stateAddress(TableId::MenuBankOptionsHelp);
     b.optCamera = stateAddress(TableId::MenuBankOptionsCamera);
     b.optLock = stateAddress(TableId::MenuBankOptionsLockOn);
@@ -63,6 +65,8 @@ uint32_t langBank(uint32_t bank) {
     if (bank == exe.use) return set.use;
     if (bank == exe.misc) return set.misc;
     if (bank == exe.areas) return set.areas;
+    if (bank == exe.mapHelp) return set.mapHelp;
+    if (bank == exe.mapDisplay) return set.mapDisplay;
     if (bank == exe.optHelp) return set.optHelp;
     if (bank == exe.optCamera) return set.optCamera;
     if (bank == exe.optLock) return set.optLock;

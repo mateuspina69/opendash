@@ -15,6 +15,8 @@ constexpr Ps1ExeBank kBanks[] = {
     {"status_help", TableId::MenuBankPanelHelp, "SLUS_011.40", 0x5cad8, 6},
     {"status_misc", TableId::MenuBankWeaponSwitchMessages, "SLUS_011.40", 0x5ca64, 6},
     {"system", TableId::SaveMenusCardMessageBank, "SLUS_011.40", 0x5cf58, 30},
+    {"map_help", TableId::MenuBankMapHelp, "COMMON/SUBSCN.BIN", 0x350dc, 5},
+    {"map_display", TableId::MenuBankMapDisplay, "COMMON/SUBSCN.BIN", 0x35170, 4},
     {"items_help", TableId::MenuBankItemsHelp, "COMMON/SUBSCN.BIN", 0x353e4, 4},
     {"item_use", TableId::MenuBankItemUse, "COMMON/SUBSCN.BIN", 0x35440, 37},
     {"areas", TableId::MenuBankAreaNames, "SLUS_011.40", 0x60b2c, 117},

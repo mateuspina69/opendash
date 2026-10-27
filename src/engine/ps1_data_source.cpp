@@ -204,9 +204,11 @@ void Ps1DataSource::makeTables() {
             indexOf.emplace(names[i], uint16_t(i));
         }
     }
-    // The disc packs these four independent page containers into one physical file. Give each page its own
-    // otherwise unused logical id, so native code can request the page by name without PC load-index constants.
-    constexpr const char* menuFiles[] = {"SUBSCN01.DAT", "SUBSCN02.DAT", "SUBSCN03.DAT", "SUBSCN06.DAT"};
+    // The disc packs the map textures into SUBMAP and the pages into SUBSCN. Each container gets an otherwise
+    // unused logical id, so native code can request it by name without PC load-index constants.
+    constexpr const char* menuFiles[] = {"MAP0.DAT", "MAP1.DAT", "MAP2.DAT", "MAP3.DAT", "MAP4.DAT", "MAP5.DAT",
+                                       "MAP6.DAT", "MAP7.DAT", "MAP8.DAT", "SUBSCN01.DAT", "SUBSCN02.DAT",
+                                       "SUBSCN03.DAT", "SUBSCN06.DAT"};
     for (size_t i = 0; i < std::size(menuFiles); ++i) {
         const auto id = uint16_t(kLoadIndices - std::size(menuFiles) + i);
         names[id] = menuFiles[i];
@@ -298,6 +300,7 @@ void Ps1DataSource::makeTables() {
 
 std::string Ps1DataSource::discPath(const std::string& name) const {
     if (isPs1MenuFile(name)) return disc_->find("COMMON/SUBSCN.BIN") ? "COMMON/SUBSCN.BIN" : "";
+    if (isPs1MapFile(name)) return disc_->find("COMMON/SUBMAP.BIN") ? "COMMON/SUBMAP.BIN" : "";
     std::string stem = upper(name);
     if (const size_t dot = stem.rfind('.'); dot != std::string::npos) stem.resize(dot);
     for (const char* dir : {"DAT/", "COMMON/"})
@@ -315,6 +318,7 @@ GameFile Ps1DataSource::gameFile(const std::string& name) const {
         loadedAt_[path] = ++loads_;
     }
     if (isPs1MenuFile(name)) return ps1MenuFile(*disc_, name);
+    if (isPs1MapFile(name)) return ps1MapFile(*disc_, name);
     return ps1GameFile(name, disc_->file(path));
 }
 

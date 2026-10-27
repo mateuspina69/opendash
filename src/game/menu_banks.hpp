@@ -16,6 +16,7 @@ struct MenuBanks {
     uint32_t use = 0;       // the items page: "use X?", results, letters (window 1)
     uint32_t misc = 0;      // the weapon switch messages (window 1)
     uint32_t areas = 0;     // the area names (the panel: messages k and 0x20 + k of the area table)
+    uint32_t mapHelp = 0, mapDisplay = 0; // the map page: the rows' help and the minimap switch's question
     // the options page: the rows' help (a pack's is the PS1's: its own nine rows, see status_options) and the rows'
     // banks
     uint32_t optHelp = 0;

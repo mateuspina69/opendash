@@ -31,6 +31,7 @@
 #include "game/status_controls.hpp"
 #include "game/status_equipment.hpp"
 #include "game/status_items.hpp"
+#include "game/status_map.hpp"
 #include "game/status_options.hpp"
 #include "game/status_title.hpp"
 #include "game/transition.hpp"
@@ -302,13 +303,6 @@ void pageHeaderDraw(StatusScreen& s) {
     otSprite(c, 0x68, 0xd0, kMenuBarArt, 0x80, 0x10);
 }
 
-// a page OpenDash does not port: back to the panel's cursor (logged once per open)
-void pageNotPorted(StatusScreen& s, uint8_t page) {
-    std::fprintf(stderr, "status menu: page %u not ported (3 map)\n", page);
-    s.page = uint8_t(StatusPage::Panel);
-    s.state = uint8_t(PanelState::Rows);
-    s.switching = 0;
-}
 // exe 0x5e6f90: page 1, the panel (its rows -> the pages); the panel drawn on every path
 void panel(StatusScreen& s) {
     switch (PanelState(s.state)) {
@@ -354,7 +348,6 @@ void panel(StatusScreen& s) {
         {
             const uint8_t page = panelPages[size_t(panelExeRow(s.cursor))];
             s.enterPage(StatusPage(page));
-            if (page == uint8_t(StatusPage::Map)) pageNotPorted(s, page);
         }
         break;
     default:
@@ -463,6 +456,12 @@ void pageSwitch(StatusScreen& s) {
 } // namespace
 
 void setMenuVram(MenuVramIo io) { gVram = std::move(io); }
+void menuVramMove(const VramArea& area, int16_t x, int16_t y) {
+    if (!gVram) return;
+    std::vector<uint8_t> pixels(area.bytes());
+    gVram(area, pixels, false);
+    gVram({x, y, area.w, area.h}, pixels, true);
+}
 void setMenuPlayerFiles(std::function<void()> f) { gPlayerFiles = std::move(f); }
 void requestPlayerFiles() {
     if (gPlayerFiles) gPlayerFiles();
@@ -541,10 +540,11 @@ int statusScreenFrame(std::vector<ScreenPrim>* draw) {
         break;
     case int8_t(StatusPage::Panel): panel(s); break;
     case int8_t(StatusPage::Closing): closing(s); break;
+    case int8_t(StatusPage::Map): mapPage(s); break;
     case int8_t(StatusPage::Items): itemsPage(s); break;
     case int8_t(StatusPage::Equipment): equipmentPage(s); break;
     case int8_t(StatusPage::Options): optionsPage(s); break;
-    default: pageNotPorted(s, s.page); break;
+    default: throw std::logic_error("status screen: invalid page");
     }
     pageSwitch(s);
     s.cursor = int8_t(s.cursorKept);

@@ -3,7 +3,7 @@
 // title's options (game/title). Its block (StatusScreen) holds the page and the levels of its cursor tree, the page
 // DAT's load, the cursors, the lists and the page switch; the pages are the panel (page 1: the zenny, the time, the
 // life, the area, the rows), the closing (2), the items (4, game/status_items), the equipment (5,
-// game/status_equipment) and the options (6, game/status_options); the map (3) is not ported.
+// game/status_equipment), the map (3, game/status_map) and the options (6, game/status_options).
 #pragma once
 
 #include <cstdint>
@@ -25,7 +25,7 @@ enum class StatusPage : uint8_t {
     Start = 0,     // exe 0x5e6f70: to the panel
     Panel = 1,     // exe 0x5e6f90
     Closing = 2,   // exe 0x5e7200
-    Map = 3,       // exe 0x5e86a0 (not ported)
+    Map = 3,       // exe 0x5e86a0
     Items = 4,     // exe 0x5e9f50
     Equipment = 5, // exe 0x5eb180
     Options = 6,   // exe 0x5edb70
@@ -178,6 +178,8 @@ struct VramArea {
 };
 using MenuVramIo = std::function<void(const VramArea& area, std::span<uint8_t> pixels, bool toVram)>;
 void setMenuVram(MenuVramIo io);
+// exe 0x401470: a rect of VRAM moved to (x, y), through the host's VRAM transfers.
+void menuVramMove(const VramArea& area, int16_t x, int16_t y);
 // exe 0x5d5c40 (the closing page, the development room): the host maps the body / weapon files the equipment now asks
 // for (od::playerDatRequest) and rebuilds Megaman's model
 void setMenuPlayerFiles(std::function<void()> f);

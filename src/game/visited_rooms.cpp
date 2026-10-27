@@ -163,6 +163,9 @@ void routeTo(uint32_t stage, uint32_t sub) {
 
 } // namespace
 
+void mapRouteTo(uint32_t stage, uint32_t sub) { routeTo(stage, sub); }
+bool mapRoomVisited(uint32_t stage, uint32_t sub) { return roomVisited(stage, sub); }
+
 uint32_t roomListEntry(const VisitedRoomBlock& block, uint32_t key) {
     const uint32_t n = block.roomCount;
     for (uint32_t i = 0; i < n; ++i) {

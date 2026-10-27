@@ -319,6 +319,22 @@ namespace od {
     X(StatusOptionsLockOnRows)                                                                                         \
     X(StatusOptionsLockOnModes)                                                                                        \
     X(StatusOptionsVolumeRows)                                                                                         \
+    /* ---- game/status_map */                                                                                    \
+    X(StatusMapStageNames)                                                                                        \
+    X(StatusMapBrowseArrows)                                                                                      \
+    X(StatusMapTextureFiles)                                                                                      \
+    X(StatusMapRowStates)                                                                                         \
+    X(StatusMapClutRects)                                                                                         \
+    X(StatusMapSt26Layers)                                                                                        \
+    X(StatusMapSt2DLayers)                                                                                        \
+    X(StatusMapSt0FLayers)                                                                                        \
+    X(StatusMapSt04Areas)                                                                                         \
+    X(StatusMapSt04Sprites)                                                                                       \
+    X(StatusMapSt15Positions)                                                                                     \
+    X(StatusMapSt15FirstSprites)                                                                                  \
+    X(StatusMapSt15SecondSprites)                                                                                 \
+    X(MenuBankMapHelp)                                                                                            \
+    X(MenuBankMapDisplay)                                                                                         \
     /* ---- game/status_screen */                                                                                      \
     /* the sub-screen's pool-0x20 class table (the field's is kept in StageClassTables::fieldAnimated while         \
        it runs) */                                                                                                  \

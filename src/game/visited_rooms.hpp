@@ -109,6 +109,10 @@ uint32_t roomListEntry(const VisitedRoomBlock& block, uint32_t key);
 uint32_t roomLinkRecords(uint32_t stage, uint32_t sub);
 // exe 0x55c560: no route (the map's block without its flags, its target and its next link; no marker)
 void mapRouteReset();
+// exe 0x55c170: a route to a visited room of the island's list, else the route dropped.
+void mapRouteTo(uint32_t stage, uint32_t sub);
+// exe 0x55c610: the room's visited flag is set.
+bool mapRoomVisited(uint32_t stage, uint32_t sub);
 // exe 0x55c580: the route's state
 enum class MapRouteState : uint8_t {
     None = 0,    // no route (or the room set up is its target)

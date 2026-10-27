@@ -95,6 +95,14 @@ struct RowArt : DataRecord {
     int16_t w = 0;
     int16_t h = 0;
     template <class R> static RowArt load(const R& r) { return {{}, r.s16(0), r.s16(2), r.u16(4), r.u16(6), r.s16(8), r.s16(0xa)}; }
+    void save(std::span<uint8_t> out) const {
+        storeLe(out, 0, x);
+        storeLe(out, 2, y);
+        storeLe(out, 4, uv);
+        storeLe(out, 6, clut);
+        storeLe(out, 8, w);
+        storeLe(out, 0xa, h);
+    }
 };
 // a row's picture as a table record (the status screens' fixed tables of rows)
 struct RowArtRecord : DataRecord {
@@ -124,7 +132,7 @@ struct RowTable {
     static constexpr uint32_t kRows = 0xc; // the rows from +0xc, RowArt::kBytes each
     RowArt row(size_t i) const {
         if (i >= 0x10) stateIndexError(i, 0x10);
-        return dataRecord<RowArt>(at + kRows + uint32_t(i) * RowArt::kBytes, RowArt::kBytes);
+        return recordAt<RowArt>(at + kRows + uint32_t(i) * RowArt::kBytes);
     }
     // the table's first 0x40 bytes as dwords (OpenDash's copies: the header is the first three)
     uint32_t word(size_t i) const { return dataScalar<uint32_t>(at + uint32_t(i) * 4); }

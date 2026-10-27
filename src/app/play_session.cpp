@@ -239,6 +239,8 @@ void PlayerView::loadExeBanks() {
         put("item_use", b.use);
         put("status_misc", b.misc);
         put("areas", b.areas);
+        put("map_help", b.mapHelp);
+        put("map_display", b.mapDisplay);
         put("opt_help", b.optHelp);
         put("opt_camera", b.optCamera);
         put("opt_lock", b.optLock);

@@ -18,9 +18,9 @@ constexpr uint32_t kIconFlags = 0xe; // a small semi-transparent icon, column 2
 
 // ---- the square (ST1F, ST21..ST23): a picture per stage, its tpage by area; the picture's corner and the icon
 // through the scratch's lanes
-constexpr uint32_t kSquareAreas = 4;
+constexpr uint32_t kSquareAreas = 11;
 const DataTable<RecordTable<MinimapPicture, kSquareAreas, 8>> squarePictures{TableId::CalbaniaSquareMinimapPictures};
-const DataTable<ScalarTable<uint32_t, kSquareAreas>> squareModes{TableId::CalbaniaSquareMinimapModes};
+const DataTable<ScalarTable<uint32_t, 4>> squareModes{TableId::CalbaniaSquareMinimapModes};
 constexpr uint16_t kSquareClut = 0x3fc0;
 // the icon's place: before story 0x11 at the panel's point in area 3, else (0xb3, 0xb7) into the picture; from it on
 // at the panel's point in area 0, else (0x84, 0x4b) into the picture
