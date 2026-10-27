@@ -775,7 +775,6 @@ void PlayerView::setupHooks() {
         od::port::fieldHudFrame(); // exe 0x415560: the radar's beep, the minimap's slide (game/minimap)
         od::port::hitListPass(); // exe 0x5e4260: lock-on + pair tests (game/hit_list)
         od::port::skyLayersTick();
-        doorEventTrack();
     };
     hooks.roomSetup = [this](int param) {
         enterRoomOfState(param);
@@ -850,45 +849,11 @@ bool PlayerView::actorLive(uint32_t a, bool updating) const {
     return h && !actors.disabled.count(h.id()) && od::port::portedActorClass(h.id());
 }
 
-void PlayerView::doorEventTrack() {
-    doorEvent = 0;
-    for (uint32_t i = 0; i < 64; ++i) {
-        const uint32_t a = od::port::kStaticPool + i * 0xcc;
-        const od::port::ActorHeader& door = od::port::actorHeaderAt(a);
-        if ((door.flags & od::port::kActorLive) && door.type == od::port::kDoorActorType && door.state == uint8_t(od::port::DoorState::Talk)) doorEvent = a;
-    }
-}
-
 bool PlayerView::flagSet(uint32_t n) const { return od::port::storyFlag(n); }
 
 void PlayerView::setFlag(uint32_t n, bool on) {
     if (on) od::port::setStoryFlag(n);
     else od::port::clearStoryFlag(n);
-}
-
-void PlayerView::messageFallback(const std::exception& e) {
-    SDL_Log("message system: %s -- event dropped", e.what());
-    // FUN_00543aa0 (the game's own "end the event now"): talk camera back to the saved follow pose (mode 0),
-    // the turned speaker's yaw restored; without it the talk camera (mode 2) stayed on after a dropped event
-    od::port::CameraState& camera = od::port::cameraState();
-    if (od::port::eventState().active != 0) od::port::eventAbort();
-    else if (camera.mode() == od::port::CameraMode::Blend)
-        camera.enterMode(od::port::CameraMode::Follow, od::port::BlendStep::AimAtNode);
-    for (uint32_t w = 0; w < 5; ++w) od::port::messageWindow(w).flags = 0;
-    od::port::messageSystem().openBits = 0;
-    od::port::messageSystem().waitBits = 0;
-    od::port::eventState().active = 0;
-    od::port::player().inputMode = 0;
-    if (doorEvent) {
-        const uint32_t d = doorEvent;
-        doorEvent = 0;
-        od::port::actorHeaderAt(d).state = uint8_t(od::port::DoorState::Closed);
-        if (od::port::transitionRequest().state == od::port::kTransitionNone) {
-            od::port::transitionRequest().kind = 0xe;
-            setFlag(0x700, true);
-            SDL_Log("door %06x: message not ported, taken as yes", d);
-        }
-    }
 }
 
 void PlayerView::logMessages() {
@@ -1439,48 +1404,36 @@ void PlayerView::gameFrame() {
         if (body != g_playerBodyDat || weapon != g_playerWeaponDat) assetsDirty = true;
     });
     if (mode != 5) inStatus = false;
-    try {
-        if (mode == 1) {
-            // Maybe_GameModeStageTransition 0x5411c0's waits (the file loads themselves are OpenDash's loader, done at
-            // once): substate 2 (sound fade-out + arrival placement; both done by stageLoaded / the room bind here) ->
-            // 3 (flip of the type-1 buffers, file requests) -> 4 holds -- no field logic runs -- until the fade / wipe
-            // task is over (0xa72269 == 0), then the stage setup -> mode 2 / 1. Without the wait a wipe started by the
-            // exit (e.g. 0x22 at ST24's gate) ran on into field mode, whose sub-state 0 runs the frame (room scripts,
-            // RNG) while it waits. Substate 4 also waits for the sound fades (Maybe_SoundFadesDone(0xf) 0x5d5900): the
-            // oracle forces them done in mode 1 / 4, so this does not wait for them either.
-            const uint8_t sub = game.modeStep;
-            if (sub <= 2) {
-                game.modeStep = 3;
-            } else if (sub == 3) {
-                game.modeStep = 4;
-            } else if (od::port::fadeState().busy == 0) {
-                od::port::stageLoaded(); // FUN_00542370 + stage bytes -> mode 2 / 1
-                enterRoomOfState();
-            }
-        } else if (mode == 2 || mode == 3) {
-            od::port::gameTick(env, hooks, fadeTask);
-        } else if (mode == 8 && gameOver) { // the player died: game/title gameOverModeFrame (main(): the title)
-            gameOver();
-        } else if (mode == 5) { // the status sub-screen (game/status_screen: Maybe_GameModeStatusMenu 0x541bf0)
-            if (!menuVram.ready) menuVram.reset();
-            if (!inStatus) menuVram.setFieldBase(g_roomVram); // the field's VRAM under the sub-screen's
-            inStatus = true;
-            g_menuVram = &menuVram;
-            menuPrims.clear();
-            od::port::statusModeFrame(&menuPrims);
-        } else {
-            SDL_Log("game mode %d (menus) not ported: back to field play", mode);
-            game.setMode(od::port::GameMode::Field);
-            game.modeStep = uint8_t(od::port::FieldStep::Playing);
+    if (mode == 1) {
+        // Maybe_GameModeStageTransition 0x5411c0's waits (the file loads themselves are OpenDash's loader, done at
+        // once): substate 2 (sound fade-out + arrival placement; both done by stageLoaded / the room bind here) ->
+        // 3 (flip of the type-1 buffers, file requests) -> 4 holds -- no field logic runs -- until the fade / wipe
+        // task is over (0xa72269 == 0), then the stage setup -> mode 2 / 1. Without the wait a wipe started by the
+        // exit (e.g. 0x22 at ST24's gate) ran on into field mode, whose sub-state 0 runs the frame (room scripts,
+        // RNG) while it waits. Substate 4 also waits for the sound fades (Maybe_SoundFadesDone(0xf) 0x5d5900): the
+        // oracle forces them done in mode 1 / 4, so this does not wait for them either.
+        const uint8_t sub = game.modeStep;
+        if (sub <= 2) {
+            game.modeStep = 3;
+        } else if (sub == 3) {
+            game.modeStep = 4;
+        } else if (od::port::fadeState().busy == 0) {
+            od::port::stageLoaded(); // FUN_00542370 + stage bytes -> mode 2 / 1
+            enterRoomOfState();
         }
-    } catch (const std::logic_error& e) {
-        const std::string what = e.what();
-        if (what.find("message") != std::string::npos || what.find("event") != std::string::npos) {
-            messageFallback(e);
-        } else { // a transition variant that is not ported: place the player at the destination directly
-            SDL_Log("%s -- direct placement", e.what());
-            transitionFallback();
-        }
+    } else if (mode == 2 || mode == 3) {
+        od::port::gameTick(env, hooks, fadeTask);
+    } else if (mode == 8 && gameOver) { // the player died: game/title gameOverModeFrame (main(): the title)
+        gameOver();
+    } else if (mode == 5) { // the status sub-screen (game/status_screen: Maybe_GameModeStatusMenu 0x541bf0)
+        if (!menuVram.ready) menuVram.reset();
+        if (!inStatus) menuVram.setFieldBase(g_roomVram); // the field's VRAM under the sub-screen's
+        inStatus = true;
+        g_menuVram = &menuVram;
+        menuPrims.clear();
+        od::port::statusModeFrame(&menuPrims);
+    } else {
+        od::port::notPortedAt("game modes", "game mode (menus)", mode);
     }
     od::port::fadeTick(fadeTask); // task 2
     od::port::displayMaskTick(); // 0x53f500: fade type 0 keeps the display off a few frames
@@ -1536,26 +1489,6 @@ void PlayerView::processDatQueue() {
     od::port::fileLoads().loading = 0;
 }
 
-void PlayerView::transitionFallback() {
-    const bool armed = od::port::transitionRequest().state != od::port::kTransitionNone;
-    od::port::scriptState().clearBlockBytes();
-    setFlag(0x700, false);
-    setFlag(0x701, false);
-    od::port::player().inputMode = 0;
-    od::port::cameraState().setMode(od::port::CameraMode::Follow); // camera back to follow
-    od::port::fadeState().covered = 0;
-    od::port::fadeState().busy = 0;
-    fadeTask = {};
-    if (armed) {
-        od::port::arrivalPlacement();
-        od::port::player().enterState(od::port::PlayerState::Playing);
-        enterRoomOfState();
-    }
-    od::port::transitionRequest().clearBytes();
-    od::port::gameState().setMode(od::port::GameMode::Field);
-    od::port::gameState().modeStep = uint8_t(od::port::FieldStep::Playing);
-}
-
 void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, float lx, float ly) {
     if (!play) return;
     ++logicTicks;
@@ -1595,11 +1528,7 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
         ++game.frame; // 0x54a4dc: the frame counter (u16), before the mode's frame
         gameFrame();
         if (afterFrame) afterFrame(); // FUN_005410b0 (the soft reset, game/title)
-        try { // FUN_005578a0 (WinMain, after the game task): window logic + layout
-            od::port::messageTick();
-        } catch (const std::logic_error& e) {
-            messageFallback(e);
-        }
+        od::port::messageTick(); // FUN_005578a0 (WinMain, after the game task): window logic + layout
         dcPrims.clear(); // the frame's draw commands (Maybe_ProcessDrawCommands 0x5f0580), before the buffer flip
         dcStats = od::dc::decode(g_fxTextures, dcPrims);
         processDatQueue();

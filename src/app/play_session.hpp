@@ -203,17 +203,11 @@ struct PlayerView {
     // updating = false (draw passes): also while frozen (byte 1 bit 0 off: a mission's opening message runs
     // FUN_005e05d0(0xffe, 1)); the exe's Maybe_DrawActorPools 0x5f3fd0 draws by byte 0 & byte 1 & 2 (6), not bit 0
     bool actorLive(uint32_t a, bool updating = true) const;
-    // the door actor (FUN_0059ce50) whose event is running: the message fallback answers "yes" for it
-    void doorEventTrack();
     bool flagSet(uint32_t n) const;
     void setFlag(uint32_t n, bool on);
     // ---- message windows (game/message: logic only, no text rendering yet) ----------------------------------
-    uint32_t doorEvent = 0; // door actor whose event is running (fallback target)
     uint32_t lastPage = 0;  // window 0 page start last logged
     uint32_t lastChoice = 0;
-    // a message whose opcodes are not ported: log, drop the event and its windows; a door event falls back to
-    // the door's "yes" (door state 2: kind 0xe + flag 0x700 for the transition controller)
-    void messageFallback(const std::exception& e);
     void logMessages();
     // Start point of play mode, valid for any room:
     //  1. arrival points of the exits leading into this stage / sub-room (every room's exit table, game/stage_setup
@@ -300,7 +294,6 @@ struct PlayerView {
     // stage DAT load on a stage change, 0x5d5be0, as audioBindRoom does), type 8 to the SFX bank slots; then the queue and the busy word 0xa714c4 cleared
     bool assetsDirty = false;
     void processDatQueue();
-    void transitionFallback();
     // one game tick: pad -> game task frame (game/transition: field mode, transitions, the player / actors /
     // camera frame body) -> message windows
     void playTick(uint16_t ps1Buttons, uint8_t stickX = 0x80, uint8_t stickY = 0x80, float lx = 0.0f, float ly = 0.0f);
