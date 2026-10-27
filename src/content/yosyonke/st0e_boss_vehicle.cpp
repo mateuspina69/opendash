@@ -97,7 +97,7 @@ uint32_t ownerWord(uint8_t slot, const AnimatedActorStats& row, uint32_t shape) 
     return hitOwner(slot) | hitHeightLevel(row.hitHeight) | shape;
 }
 uint8_t watcherSlot(uint32_t watcher) { return controllerActorAt(watcher).slot; }
-void submit(const BonePoint& p, HitBoxHead box, uint32_t owner, uint32_t attack) { hitListSubmit(p.v, box, owner, attack); }
+void submit(const BonePoint& p, HitBoxHead& box, uint32_t owner, uint32_t attack) { hitListSubmit(p.v, box, owner, attack); }
 
 // live pool-0x20 actors among the slots 16..31 (the live mask's low half)
 int liveUpperAnimated() {

@@ -58,7 +58,7 @@ public:
 struct BombFields : ActorClassState {
     explicit BombFields(ProjectileActor& actor) : thrower(actor.hitBox.result) {}
     uint32_t& thrower;
-    HitBoxHead hit;
+    HitBox hit; // its shape asks for the contact output: the hit list writes it after the head
     uint16_t rollSoundTicks = 0;
     StateArray<uint8_t, 18> clearedPad0{}; // bytes the block clear covers (no reader)
     void clearBlockBytes() {

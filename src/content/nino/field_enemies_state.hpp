@@ -48,7 +48,7 @@ struct CarrierFields : BoxCarrierGrip {
     uint8_t& damage;
     uint8_t& group;
     uint8_t& footstepTicks;
-    HitBoxHead hitBox;
+    HitBox hitBox; // its shape asks for the contact output: the hit list writes it after the head
     union {
         int16_t brakeDistance = 0;
         int16_t fallYaw;

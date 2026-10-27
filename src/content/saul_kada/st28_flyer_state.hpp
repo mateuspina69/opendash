@@ -19,7 +19,7 @@ struct FlyerFields : ActorClassState {
     uint8_t& dropsPickups;
     uint8_t& animEntry;
     ShortVec4& velocity; // the slot's velocity (the appearance's byte stores over its x / y / z)
-    HitBoxHead hitBox;
+    HitBox hitBox; // its shape asks for the contact output: the hit list writes it after the head
     uint16_t stunHits = 0;
     int16_t timer = 0;
     int16_t swayAngle = 0;

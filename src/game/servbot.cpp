@@ -784,7 +784,7 @@ void servbot(AnimatedActor& actor) {
     }
     const ShortVec4& point = bonePoint(actor, 0, kServbotPort);
     const int16_t pos[3] = {point.x, point.y, point.z};
-    hitListSubmit(pos, static_cast<HitBoxHead&>(bot.hitBox), param, param2);
+    hitListSubmit(pos, bot.hitBox, param, param2);
     // exe 0x5f20f0(actor, 0x30, 0x160, 0): the shadow list entry (render output)
     if (bot.bits & kServbotMover) {
         actorCollisionSubmitMover(actor); // exe 0x4140b0

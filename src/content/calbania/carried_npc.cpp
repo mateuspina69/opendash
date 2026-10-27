@@ -734,7 +734,7 @@ void carriedNpc(AnimatedActor& actor) {
                 const uint32_t lo = uint32_t(stats.hitSize >> 2) | uint32_t(actor.slot) << 24;
                 const int16_t pos[3] = {point.x, point.y, point.z};
                 if (!(b & kNpcAttackEntry))
-                    hitListSubmit(pos, static_cast<HitBoxHead&>(hit),
+                    hitListSubmit(pos, hit,
                                   lo | hitGroup(kHitGroupLiftable) | kHitCompareHeights | kHitNoLockOn |
                                       kHitContactMotion,
                                   kHitAttackHarmless | kHitAttackSolid | kHitAttackBump);

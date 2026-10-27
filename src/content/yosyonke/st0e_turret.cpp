@@ -128,7 +128,7 @@ TurretStats statsOf(const AnimatedActor& a) { return dataRecord<TurretStats>(sta
 uint32_t ownerWord(uint8_t slot, const AnimatedActorStats& row, uint32_t shape) {
     return hitOwner(slot) | hitHeightLevel(row.hitHeight) | shape;
 }
-void submit(const BonePoint& p, HitBoxHead box, uint32_t owner, uint32_t attack) { hitListSubmit(p.v, box, owner, attack); }
+void submit(const BonePoint& p, HitBoxHead& box, uint32_t owner, uint32_t attack) { hitListSubmit(p.v, box, owner, attack); }
 StaticActor& staticAt(uint32_t address) { return staticActorAt(address); }
 
 // the Servbot spawned flung (pool 0x20 type 0x2d variant 0x41, its mode 6; content/yosyonke/st0e_servbots) from the bone

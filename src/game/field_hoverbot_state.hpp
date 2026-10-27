@@ -17,7 +17,7 @@ struct FieldHoverbotFields : ActorClassState {
     uint8_t& neighbourLow; // the neighbour word's low byte (its side bit, kHoverBumped)
     uint8_t& bits; // kHover* behaviour bits
     uint8_t& cooldown; // ticks before the next shot
-    HitBoxHead hitBox;
+    HitBox hitBox; // its shape asks for the contact output: the hit list writes it after the head
     int16_t timer = 0;
     uint8_t contact = 0; // kHover* contact bits of the dying fall (exe 0x44d290)
     uint16_t neighbour = 0; // game/enemy_neighbours (| kHoverBumped)

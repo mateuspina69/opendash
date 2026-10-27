@@ -55,7 +55,7 @@ struct ShedRollFields : ActorClassState {
     int16_t& headPitch;
     int16_t& headYaw;
     uint8_t& behaviour; // kShed* (the walls reflect kWalkerBounces)
-    HitBoxHead box;
+    HitBox box; // its shape asks for the contact output: the hit list writes it after the head
     uint8_t hits = 0; // kWalk*
 
     void clearBlock() override {

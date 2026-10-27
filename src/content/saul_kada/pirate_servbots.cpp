@@ -61,7 +61,7 @@ void spark(const AnimatedActor& actor) { // exe 0x5e5400
     spawnHitSparkWithoutSize(kSparkLoopFlags, actor.pos.x.whole, actor.pos.y.whole, actor.pos.z.whole);
 }
 // its hit entry at bone 0
-void submitAtRoot(const AnimatedActor& actor, HitBoxHead& box, uint32_t ownerShape, uint32_t attack) {
+template <class Box> void submitAtRoot(const AnimatedActor& actor, Box& box, uint32_t ownerShape, uint32_t attack) {
     const ShortVec4& root = bonePoint(actor, 0, "0x45f240 / 0x464270: bone 0 past its blocks"); // exe 0x5e1810
     const int16_t point[3] = {root.x, root.y, root.z};
     hitListSubmit(point, box, ownerShape, attack); // exe 0x5e4120

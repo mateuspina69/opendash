@@ -12,7 +12,7 @@ namespace od::port::st3b_bomb_turret_state {
 struct TurretFields : ActorClassState {
     explicit TurretFields(AnimatedActor& actor) : timer(actor.shownParts) {}
     uint8_t& timer;
-    HitBoxHead hitBox;
+    HitBox hitBox; // its shape asks for the contact output: the hit list writes it after the head
     int16_t yawOffset = 0;
     int16_t bombHeight = 0;
 

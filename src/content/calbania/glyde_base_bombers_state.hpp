@@ -14,7 +14,7 @@ struct GlydeBomberFields : ActorClassState {
     uint8_t& bits; // kBomber*
     uint8_t& hitsLeft; // the hits before it is knocked back
     int8_t runsLeft = 0; // a variant's throws before it sinks
-    HitBoxHead hitBox;
+    HitBox hitBox; // its shape asks for the contact output: the hit list writes it after the head
     ActorRef<StaticActor> bomb; // the bomb it holds
     uint8_t timer = 0;
     union {
