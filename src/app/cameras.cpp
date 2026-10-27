@@ -3,6 +3,7 @@
 #include <SDL3/SDL.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 #include "game/actor_pools.hpp"
@@ -143,25 +144,6 @@ bool PlayerView::orbitCamera(const RoomMesh& mesh, od::Camera& cam, float alpha,
             orbitYaw += smoothDamp(0.0f, wrapPi(std::atan2(dx, dz) - orbitYaw), lockYawVel, kLockSmooth, dt);
         orbitPitch += smoothDamp(0.0f, kLockElevation - orbitPitch, lockPitchVel, kLockSmooth, dt);
         lockCamShown = true;
-        // the target never leaves the frame sideways: while the yaw lags behind the axis (a strafing / passing
-        // target), turn it just far enough that the target is within the frame edge (eye behind the player)
-        const float w = frameWeight();
-        if (w > 0.0f && dx * dx + dz * dz > 1.0f) {
-            const float back = dist * std::cos(orbitPitch), limit = std::atan(kFrameEdge * kTanHalfFov * (4.0f / 3.0f));
-            auto off = [&](float yaw) { // the target's horizontal angle off the view axis
-                const float ex = t[0] - std::sin(yaw) * back, ez = t[2] - std::cos(yaw) * back;
-                return std::abs(wrapPi(std::atan2(g[0] - ex, g[2] - ez) - yaw));
-            };
-            const float err = wrapPi(std::atan2(dx, dz) - orbitYaw); // on the axis the target is centred
-            if (off(orbitYaw) > limit) {
-                float lo = 0.0f, hi = 1.0f;
-                for (int it = 0; it < 10; ++it) {
-                    const float mid = (lo + hi) * 0.5f;
-                    (off(orbitYaw + err * mid) > limit ? lo : hi) = mid;
-                }
-                orbitYaw += err * hi * w;
-            }
-        }
     }
     if (!locked) lockYawVel = lockPitchVel = 0.0f; // the next lock starts from rest
     lockBlend += ((locked ? 1.0f : 0.0f) - lockBlend) * k;
@@ -170,64 +152,121 @@ bool PlayerView::orbitCamera(const RoomMesh& mesh, od::Camera& cam, float alpha,
         lockAimValid = false;
     }
     skateCamera(locked, dt);
-    cam.yaw = orbitYaw;
-    cam.pitch = -orbitPitch;
     cam.roll = skateRoll;
-    const float fx = std::sin(cam.yaw) * std::cos(cam.pitch), fy = std::sin(cam.pitch),
-                fz = std::cos(cam.yaw) * std::cos(cam.pitch);
     // pulled in front of the first opaque room surface between the player and the eye
     const float from[3] = {tx * scale, ty * scale, tz * scale};
-    auto placeEye = [&](float d, float* eye) {
+    auto placeEye = [&](float yaw, float d, float* eye) {
+        const float fx = std::sin(yaw) * std::cos(orbitPitch), fy = -std::sin(orbitPitch),
+                    fz = std::cos(yaw) * std::cos(orbitPitch);
         const float ray[3] = {-fx * d * scale, -fy * d * scale, -fz * d * scale};
         const float keep = std::max(0.0f, rayHit(mesh, from, ray) - 24.0f / d); // margin: 24 game units before the wall
         for (int i = 0; i < 3; ++i) eye[i] = from[i] + ray[i] * keep;
     };
-    // lock-on framing: the player's feet / pivot and the target's, as vertical angles from the eye along the view
-    // yaw (screen y = tan(angle - pitch), exact for any sideways offset); in frame = within kFrameEdge of the edge
-    const float fh[2] = {std::sin(cam.yaw), std::cos(cam.yaw)};
-    const float pts[4][3] = {{tx * scale, -t[1] * scale, tz * scale}, {from[0], from[1], from[2]},
-                             {g[0] * scale, -g[1] * scale, g[2] * scale},
-                             {g[0] * scale, -(g[1] - height) * scale, g[2] * scale}};
-    auto angles = [&](const float* eye, int first, int last, float& lo, float& hi) {
+    // lock-on framing: the player's drawn body, then the target's (BodyBox corners; feet + pivot when not drawn).
+    // A target taken since the last built tick is measured now, from the same builders the frame draws with
+    if (locked && targetBodyOf != lockTarget) {
+        std::vector<od::DynamicObject> objects = liveActors(mesh);
+        liveScene(mesh, nullptr, &objects, nullptr);
+        measureBodies(mesh, objects);
+    }
+    std::array<std::array<float, 3>, 16> pts;
+    int npts = 0;
+    auto addBody = [&](float x, float feet, float z, const BodyBox& b) { // feet: render y (up)
+        if (!b.valid) {
+            pts[size_t(npts++)] = {x, feet, z};
+            pts[size_t(npts++)] = {x, feet + height * scale, z};
+            return;
+        }
+        for (int c = 0; c < 8; ++c)
+            pts[size_t(npts++)] = {x + (c & 1 ? b.hi : b.lo)[0], feet + (c & 2 ? b.hi : b.lo)[1],
+                                   z + (c & 4 ? b.hi : b.lo)[2]};
+    };
+    addBody(tx * scale, -t[1] * scale, tz * scale, playerBody);
+    const int nplayer = npts;
+    if (lockAimValid) addBody(g[0] * scale, -g[1] * scale, g[2] * scale, targetBody);
+    // the points as vertical angles from the eye along the view yaw (screen y = tan(angle - pitch), exact for any
+    // sideways offset); in frame = within kFrameEdge of the edge
+    auto angles = [&](const float* eye, float yaw, int last, float& lo, float& hi) {
         lo = 1e9f;
         hi = -1e9f;
-        for (int i = first; i < last; ++i) {
-            const float h = (pts[i][0] - eye[0]) * fh[0] + (pts[i][2] - eye[2]) * fh[1];
-            const float a = std::atan2(pts[i][1] - eye[1], h);
+        for (int i = 0; i < last; ++i) {
+            const float h = (pts[size_t(i)][0] - eye[0]) * std::sin(yaw) + (pts[size_t(i)][2] - eye[2]) * std::cos(yaw);
+            const float a = std::atan2(pts[size_t(i)][1] - eye[1], h);
             lo = std::min(lo, a);
             hi = std::max(hi, a);
         }
     };
     const float edge = std::atan(kFrameEdge * kTanHalfFov); // the largest angle off the view axis in frame
-    const float w = locked ? frameWeight() : 0.0f;
-    float want = 1.0f; // the eye distance (x dist) at which player + target fit (the eye backs off to frame them)
-    if (w > 0.0f)
-        for (float s : {1.0f, 1.25f, 1.5f, 2.0f, 2.5f}) {
-            float eye[3], lo, hi;
-            placeEye(dist * s, eye);
-            angles(eye, 0, 4, lo, hi);
-            want = s;
-            if (hi - lo <= 2.0f * edge) break;
-        }
-    lockDist += smoothDamp(lockDist, want, lockDistVel, want > lockDist ? 0.15f : 0.5f, dt);
-    placeEye(dist * lockDist, cam.eye);
-    if (lockAimValid && lockBlend > 0.0f) {
-        // the view looks at the midpoint of the player's pivot and the target's (same pivot height above its
-        // feet), so a jumping / tall enemy stays in frame; blended with the orbit pitch by lockBlend
+    // the view pitch from an eye: the orbit's, eased (lockBlend) toward the midpoint of the player's pivot and the
+    // target's (same pivot height above its feet); locked on, turned to frame both bodies (centred on them when they
+    // are taller than the frame: the FOV takes the rest); easing out of a lock, the player's body alone
+    auto framePitch = [&](const float* eye, float yaw) {
+        float pitch = -orbitPitch;
+        if (!lockAimValid || lockBlend <= 0.0f) return pitch;
         const float aim[3] = {(tx + g[0]) * 0.5f * scale, (ty - (g[1] - height)) * 0.5f * scale,
                               (tz + g[2]) * 0.5f * scale};
-        const float ax = aim[0] - cam.eye[0], ay = aim[1] - cam.eye[1], az = aim[2] - cam.eye[2];
+        const float ax = aim[0] - eye[0], ay = aim[1] - eye[1], az = aim[2] - eye[2];
         const float aimPitch = std::clamp(std::atan2(ay, std::hypot(ax, az)), -0.9f, 0.6f);
-        cam.pitch += (aimPitch - cam.pitch) * lockBlend;
+        pitch += (aimPitch - pitch) * lockBlend;
         float lo, hi;
-        if (w > 0.0f) { // both in frame when they fit at this distance
-            angles(cam.eye, 0, 4, lo, hi);
-            if (hi - lo <= 2.0f * edge) cam.pitch += (std::clamp(cam.pitch, hi - edge, lo + edge) - cam.pitch) * w;
+        angles(eye, yaw, locked ? npts : nplayer, lo, hi);
+        return hi - lo <= 2.0f * edge ? std::clamp(pitch, hi - edge, lo + edge) : (lo + hi) * 0.5f;
+    };
+    // tan(half the vertical FOV) that puts every point within kFrameEdge of the edges (horizontally at the window's
+    // aspect); a point behind the eye fits no FOV
+    constexpr float kNoFit = 1e9f;
+    struct Need {
+        float h = 0.0f, v = 0.0f;
+        float both() const { return std::max(h, v); }
+    };
+    const float aspect = std::max(viewAspect, 0.1f);
+    auto need = [&](const float* eye, float yaw, float pitch) {
+        const float cp = std::cos(pitch), sp = std::sin(pitch), cy = std::cos(yaw), sy = std::sin(yaw);
+        const float f[3] = {sy * cp, sp, cy * cp}, r[3] = {cy, 0.0f, -sy}, u[3] = {-sy * sp, cp, -cy * sp};
+        Need n;
+        for (int i = 0; i < npts; ++i) {
+            const float d[3] = {pts[size_t(i)][0] - eye[0], pts[size_t(i)][1] - eye[1], pts[size_t(i)][2] - eye[2]};
+            const float z = d[0] * f[0] + d[1] * f[1] + d[2] * f[2];
+            if (z <= 1e-3f * std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2])) return Need{kNoFit, kNoFit};
+            n.h = std::max(n.h, std::abs(d[0] * r[0] + d[2] * r[2]) / z / (kFrameEdge * aspect));
+            n.v = std::max(n.v, std::abs(d[0] * u[0] + d[1] * u[1] + d[2] * u[2]) / z / kFrameEdge);
         }
-        angles(cam.eye, 0, 2, lo, hi); // the player first: never out of frame
-        cam.pitch = hi - lo <= 2.0f * edge ? std::clamp(cam.pitch, hi - edge, lo + edge) : (lo + hi) * 0.5f;
+        return n;
+    };
+    float want = 1.0f; // the eye distance (x dist) at which player + target fit (the eye backs off to frame them)
+    if (locked) {
+        float eye[3];
+        auto at = [&](float yaw, float s) {
+            placeEye(yaw, dist * s, eye);
+            return need(eye, yaw, framePitch(eye, yaw));
+        };
+        // sideways (a strafing / passing target, the eye pulled in by a wall): the yaw turns toward the player ->
+        // target axis just far enough (on the axis the target is centred)
+        const float dx = g[0] - t[0], dz = g[2] - t[2];
+        if (dx * dx + dz * dz > 1.0f && at(orbitYaw, lockDist).h > kTanHalfFov) {
+            const float err = wrapPi(std::atan2(dx, dz) - orbitYaw);
+            float lo = 0.0f, hi = 1.0f;
+            for (int it = 0; it < 12; ++it) {
+                const float mid = (lo + hi) * 0.5f;
+                (at(orbitYaw + err * mid, lockDist).h > kTanHalfFov ? lo : hi) = mid;
+            }
+            orbitYaw += err * hi;
+        }
+        for (float s : {1.0f, 1.25f, 1.5f, 2.0f, 2.5f}) {
+            want = s;
+            if (at(orbitYaw, s).both() <= kTanHalfFov) break;
+        }
     }
-    cam.fovY = 2.0f * std::atan(kTanHalfFov) + skateFov;
+    lockDist += smoothDamp(lockDist, want, lockDistVel, want > lockDist ? 0.15f : 0.5f, dt);
+    cam.yaw = orbitYaw;
+    placeEye(cam.yaw, dist * lockDist, cam.eye);
+    cam.pitch = framePitch(cam.eye, cam.yaw);
+    // what the yaw / distance / pitch could not fit (the eye still easing back, a wall behind the player, a body
+    // taller than the frame) widens the FOV on this frame; it eases back to the game's once they fit
+    constexpr float kMaxFovTan = 2.75f; // 140 degrees vertically
+    const float fit = locked ? std::min(need(cam.eye, cam.yaw, cam.pitch).both(), kMaxFovTan) : kTanHalfFov;
+    lockFovTan = std::max({fit, kTanHalfFov, lockFovTan + (kTanHalfFov - lockFovTan) * k});
+    cam.fovY = 2.0f * std::atan(lockFovTan) + skateFov;
     if (!arrivalPending) { // one camera: the view on screen drives the game camera's next tick (camera_drive)
         const float ex = cam.eye[0] - from[0], ey = cam.eye[1] - from[1], ez = cam.eye[2] - from[2];
         od::port::cameraSetDrive({true, int(std::lround(cam.yaw * 4096.0f / 6.2831853f)) & 0xfff,
@@ -281,7 +320,45 @@ void PlayerView::trackPosition(bool snapNow) {
     }
 }
 
-float PlayerView::frameWeight() const { return std::clamp((lockBlend - 0.8f) / 0.15f, 0.0f, 1.0f); }
+bool PlayerView::objectOfActor(uint32_t address, uint32_t id) {
+    const uint32_t kind = id >> 24, index = id & 0xffffffu;
+    auto slotOf = [&](uint32_t base, uint32_t count, uint32_t stride, uint32_t& slot) {
+        if (address < base || address >= base + count * stride || (address - base) % stride) return false;
+        slot = (address - base) / stride;
+        return true;
+    };
+    uint32_t slot = 0;
+    if (slotOf(od::port::kAnimatedPool, 24, 0x16c, slot)) return kind == od::kKindActor && (index & 0xff) == slot;
+    if (kind != od::kKindPoolModel) return false;
+    if (slotOf(od::port::kStaticPool, 64, 0xcc, slot)) return index == (0x60u << 8 | slot);
+    if (slotOf(od::port::kProjectilePool, 32, 0xdc, slot)) return index == (0x40u << 8 | slot);
+    if (slotOf(od::port::kShotPool, 16, 0x100, slot)) return index == (0x10u << 8 | slot);
+    return false;
+}
+
+void PlayerView::measureBodies(const RoomMesh& mesh, const std::vector<od::DynamicObject>& objects) {
+    const float scale = float(1 << mesh.shift);
+    auto measure = [&](const float* at, auto&& mine) { // at: the tick's position (game axes)
+        BodyBox b;
+        const float p[3] = {at[0] * scale, -at[1] * scale, at[2] * scale};
+        for (const od::DynamicObject& o : objects) {
+            if (!mine(o.id)) continue;
+            for (const od::RenderVertex& v : o.tris)
+                for (int c = 0; c < 3; ++c) {
+                    const float d = v.pos[c] - p[c];
+                    b.lo[c] = b.valid ? std::min(b.lo[c], d) : d;
+                    b.hi[c] = b.valid ? std::max(b.hi[c], d) : d;
+                    if (c == 2) b.valid = true;
+                }
+        }
+        return b;
+    };
+    if (std::any_of(objects.begin(), objects.end(),
+                    [](const od::DynamicObject& o) { return o.id == od::objectId(od::kKindPlayer, 0); }))
+        playerBody = measure(posCur, [](uint32_t id) { return id == od::objectId(od::kKindPlayer, 0); });
+    targetBodyOf = lockTarget;
+    targetBody = lockTarget ? measure(tgtCur, [&](uint32_t id) { return objectOfActor(lockTarget, id); }) : BodyBox{};
+}
 
 float PlayerView::smoothDamp(float current, float target, float& vel, float smoothTime, float dt) {
     if (dt <= 0.0f) return 0.0f;

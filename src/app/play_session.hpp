@@ -349,14 +349,27 @@ struct PlayerView {
     float tgtPrev[3]{}, tgtCur[3]{};
     float lockBlend = 0.0f; // 0 = orbit view, 1 = lock view (the view pitch toward the aim point eases with it)
     float lockYawVel = 0.0f, lockPitchVel = 0.0f; // smoothDamp velocities (radians / s)
-    // framing (OpenDash): player and target stay within kFrameEdge of the screen edges (the player first); the eye
-    // backs off up to 2.5 x the follow distance (lockDist) when they do not fit. 4:3 horizontally (wider screens
-    // only add room)
+    // framing (OpenDash): while locked on, the player's and the target's drawn bodies (BodyBox) are always within
+    // kFrameEdge of the screen edges, from the lock's first frame, seen from the real eye (pulled in by walls) at
+    // the window's aspect. In order: the yaw turns toward the axis, the eye backs off up to 2.5 x the follow
+    // distance (lockDist), the pitch frames both; what still does not fit widens the FOV at once (lockFovTan), which
+    // eases back once they fit again
     static constexpr float kFrameEdge = 0.85f, kTanHalfFov = 120.0f / 384.0f;
     float lockDist = 1.0f, lockDistVel = 0.0f;
-    // how much the target framing applies: off during the lock's ease-in (lockBlend 0.8 .. 0.95), so the camera
-    // still turns onto the target smoothly
-    float frameWeight() const;
+    float lockFovTan = kTanHalfFov; // tan(half the vertical FOV) of the lock view (>= kTanHalfFov)
+    // a drawn body's extent around its position (render units: the built model's vertices minus the position), per
+    // tick from the geometry the frame draws; invalid = nothing drawn (the position alone is framed)
+    struct BodyBox {
+        bool valid = false;
+        float lo[3]{}, hi[3]{};
+    };
+    BodyBox playerBody, targetBody;
+    uint32_t targetBodyOf = 0; // the lock target targetBody belongs to
+    // measures playerBody (object kKindPlayer 0) and, while locked on, targetBody from the tick's built objects
+    void measureBodies(const RoomMesh& mesh, const std::vector<od::DynamicObject>& objects);
+    // the drawn objects of the actor at `address` (animated pool: kKindActor slot, any blend; static / shot /
+    // projectile pools: kKindPoolModel)
+    static bool objectOfActor(uint32_t address, uint32_t id);
     // critically damped spring toward `target` (Game Programming Gems 4, 1.10): framerate independent; returns the
     // step to add to `current`
     static float smoothDamp(float current, float target, float& vel, float smoothTime, float dt);

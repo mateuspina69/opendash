@@ -324,9 +324,9 @@ void App::updateCamera() {
             axis = std::fmod(std::atan2(dx, dz) + 6.2831853f, 6.2831853f);
             (void)t;
         }
-        SDL_Log("lockcam frame tick %llu: %s yaw %.4f axis %.4f pitch %.4f blend %.2f eye %.0f %.0f %.0f",
+        SDL_Log("lockcam frame tick %llu: %s yaw %.4f axis %.4f pitch %.4f blend %.2f eye %.0f %.0f %.0f fov %.3f dist %.2f",
                 (unsigned long long)simTicks, camSource, std::fmod(std::fmod(cam.yaw, 6.2831853f) + 6.2831853f, 6.2831853f),
-                axis, cam.pitch, playerView.lockBlend, cam.eye[0], cam.eye[1], cam.eye[2]);
+                axis, cam.pitch, playerView.lockBlend, cam.eye[0], cam.eye[1], cam.eye[2], cam.fovY, playerView.lockDist);
     }
 }
 
@@ -385,6 +385,7 @@ void App::updateScene() {
                 dyn.push_back({od::objectId(od::kKindLive, 2 + m), std::move(segSemi[m]), uint8_t(m + 1)});
         if (!live.empty()) dyn.push_back({od::objectId(od::kKindLive, 0), std::move(live)});
         dyn.push_back({od::objectId(od::kKindPlayer, 0), playerView.build(current)});
+        if (playerView.play) playerView.measureBodies(current, dyn); // the lock camera's framing (app/cameras)
         if (playerView.play) ghosts.appendDynamic(dyn, g_roomVramGen); // objectId(kKindPlayer, 1 + slot)
         if (current.trackAxis >= 0) { // endless track: the travel frame (see travelOffset)
             const int ax = current.trackAxis;
