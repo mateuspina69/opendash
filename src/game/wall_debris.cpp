@@ -67,7 +67,9 @@ constexpr int16_t kFloorBelow = 0x80;
 constexpr int16_t kBlinkAfter = 0x3e0, kLifeTicks = 0x400;
 constexpr int16_t kGravity = 3;
 constexpr int32_t kMaxDepth = 0xfff; // the ordering table's last entry
-constexpr uint32_t kPieceTurn = 0xcc; // a piece's angle around the break: its bit + its index * this
+// a piece's angle around the break: its index * (0xcc + 0x20) -- exe 0x565af0 adds its two loop counters (the angle's,
+// 0xcc a piece, and the face entries', 0x20 a piece)
+constexpr uint32_t kPieceTurn = 0xcc, kPieceEntryStep = 0x20;
 constexpr uint32_t kDebrisRgb = 0x808080;
 
 // exe 0x565ed0(actor, a + 0x10): in front of the camera (the view depth / 4 below the draw depth range): the pieces
@@ -126,7 +128,7 @@ void debrisFly(StaticActor& actor, WallDebrisFields& f) {
         if (list.faces == 0) notPorted(kDebrisArea, "exe 0x565af0: an empty texture list (the exe divides by zero)");
         const FaceEntry entry(list.wordAddress(uint32_t(list.firstWord) + (i % list.faces) * 2));
         auto&& piece = f.pieces[i];
-        const uint32_t ang = (bit + i * kPieceTurn) & kAngleMask;
+        const uint32_t ang = (i * kPieceTurn + i * kPieceEntryStep) & kAngleMask;
         const int r = piece.radius;
         const int16_t X = wrap16(((fixedSin(int(ang)) * r) >> 12) + actor.pos.x.whole);
         const int16_t Z = wrap16((-(fixedCos(int(ang)) * r) >> 12) + actor.pos.z.whole);
