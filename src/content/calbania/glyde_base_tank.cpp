@@ -562,7 +562,10 @@ void gaitStep(AnimatedActor& actor, GlydeTankFields& f) {
     default: return;
     }
 }
-// exe 0x4c0100: the turret's yaw toward the player's position one tick ahead (+-0x20 a tick)
+// exe 0x4c0100: the turret's yaw toward the player's position one tick ahead (+-0x20 a tick). The exe writes only the
+// whole halves of its 16.16 aim point: the fractions are stale stack (the frames of 0x4bff70 / 0x4be620 called before
+// it), not reproducible; OpenDash takes them as 0 -- a deliberate deviation, the yaw off by one (1/4096 turn) when the
+// angle lands at a whole number's edge
 void aimTurret(AnimatedActor& actor, GlydeTankFields& f) {
     const Player& p = player();
     const uint16_t px = uint16_t(uint32_t(uint16_t(p.pos.x.whole)) * 17u - (uint32_t(uint16_t(p.prevPos.x.whole)) << 4));
