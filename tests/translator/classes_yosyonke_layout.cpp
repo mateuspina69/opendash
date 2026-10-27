@@ -158,7 +158,6 @@ void layoutValue(LayoutVisitor& v, uint32_t a, od::port::ice_ruin_critters_state
     layoutValue(v, a + 0x162, s.animKey);
     layoutValue(v, a + 0x163, s.hits);
     layoutValue(v, a + 0x14c, s.hit);
-    layoutValue(v, a + 0x154, s.hitYaw);
     layoutValue(v, a + 0x15c, s.timer);
     layoutValue(v, a + 0x15e, s.heading);
     layoutValue(v, a + 0x161, s.coin);
@@ -175,7 +174,6 @@ void layoutValue(LayoutVisitor& v, uint32_t a, od::port::ice_ruin_herded_creatur
     layoutValue(v, a + 0x168, s.watchesPlayer);
     layoutValue(v, a + 0x169, s.frontHitArmed);
     layoutValue(v, a + 0x14c, s.hit);
-    layoutValue(v, a + 0x154, s.hitYaw);
     layoutValue(v, a + 0x15c, s.heading);
     layoutValue(v, a + 0x15e, s.cooldown);
     layoutValue(v, a + 0x164, s.neighbour);
