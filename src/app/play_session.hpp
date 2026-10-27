@@ -210,12 +210,6 @@ struct PlayerView {
     // ---- message windows (game/message: logic only, no text rendering yet) ----------------------------------
     uint32_t doorEvent = 0; // door actor whose event is running (fallback target)
     uint32_t lastPage = 0;  // window 0 page start last logged
-    // OpenDash policy (not the game's): a window parked on fb 2b after the event runner passed its state 3 waits
-    // for a system that is not ported (the shops: the stage callback 0xa6bb80 = Maybe_ShopMenuTick 0x5d1e30 run as
-    // a script kind through 0x5128f0, started by the room scripts on flag 0x6ff). After 2 s the event is dropped so
-    // the player is not stuck in the talk state.
-    int stuckTicks = 0;
-    void stuckWindowWatch();
     uint32_t lastChoice = 0;
     // a message whose opcodes are not ported: log, drop the event and its windows; a door event falls back to
     // the door's "yes" (door state 2: kind 0xe + flag 0x700 for the transition controller)

@@ -864,35 +864,6 @@ void PlayerView::setFlag(uint32_t n, bool on) {
     else od::port::clearStoryFlag(n);
 }
 
-void PlayerView::stuckWindowWatch() {
-    bool stuck = false;
-    // Data's save / hint menus park their window on fb 2b until the talking NPC runs the menu (flags 0x6fa /
-    // 0x6f9, game/save_menus saveMenuTick): ported, not stuck
-    if (od::port::storyFlag(0x6fa) || od::port::storyFlag(0x6f9)) {
-        stuckTicks = 0;
-        return;
-    }
-    // a ported script (game/story: the cutscenes, the shops through script 8) drives its windows itself
-    if ((od::port::scriptState().flags & od::port::kScriptRunning) &&
-        od::port::storyScriptPorted(od::port::scriptState().id)) {
-        stuckTicks = 0;
-        return;
-    }
-    for (uint32_t i = 0; i < 5; ++i) {
-        const od::port::MessageWindow& w = od::port::messageWindow(i);
-        const uint32_t f = w.flags;
-        if (!(f & 0x40) || !(f & 0x80)) continue;
-        const od::port::TextBytes text = w.readText();
-        if (!text.mappedAt(0, 2) || text.byte(0) != 0xfb || text.byte(1) != 0x2b) continue;
-        if (od::port::eventState().active == 0 || od::port::eventState().state >= 4) stuck = true;
-    }
-    stuckTicks = stuck ? stuckTicks + 1 : 0;
-    if (stuckTicks > 60) {
-        stuckTicks = 0;
-        messageFallback(std::runtime_error("window waits (fb 2b) on a system that is not ported (shop / script)"));
-    }
-}
-
 void PlayerView::messageFallback(const std::exception& e) {
     SDL_Log("message system: %s -- event dropped", e.what());
     // FUN_00543aa0 (the game's own "end the event now"): talk camera back to the saved follow pose (mode 0),
@@ -1630,7 +1601,6 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
         dcPrims.clear(); // the frame's draw commands (Maybe_ProcessDrawCommands 0x5f0580), before the buffer flip
         dcStats = od::dc::decode(g_fxTextures, dcPrims);
         processDatQueue();
-        stuckWindowWatch();
         logMessages();
         audioTick();
         // the double-buffer index the render step flips every frame: the field mode's sub-state 3 / the room
