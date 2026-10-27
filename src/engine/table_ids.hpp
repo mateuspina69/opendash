@@ -231,6 +231,7 @@ namespace od {
     /* ---- game/shop */                                                                                               \
     X(ShopLines)                                                                                                       \
     X(ShopItemPrices)                                                                                                  \
+    X(ShopItemPricesForSale)                                                                                           \
     X(ShopLifePrices)                                                                                                  \
     X(ShopUpgradeOnePrices)                                                                                            \
     X(ShopUpgradeTwoPrices)                                                                                            \

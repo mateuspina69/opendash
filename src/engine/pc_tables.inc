@@ -188,6 +188,7 @@
 // game/shop
 {TableId::ShopLines, 0x8d1af0u},
 {TableId::ShopItemPrices, 0x8d11a0u},
+{TableId::ShopItemPricesForSale, 0x8d11a0u},
 {TableId::ShopLifePrices, 0x8d1aa0u},
 {TableId::ShopUpgradeOnePrices, 0x8d1aacu},
 {TableId::ShopUpgradeTwoPrices, 0x8d1accu},

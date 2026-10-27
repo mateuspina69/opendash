@@ -80,7 +80,10 @@ constexpr uint8_t kVisibleRows = 6;
 
 // ---- the exe's tables ----
 const DataTable<ScalarTable<uint8_t, 0x20>> shopLines{TableId::ShopLines}; // 16 message ids per shop kind (ShopLine)
-const DataTable<ScalarTable<int16_t, 0x680>> itemPrices{TableId::ShopItemPrices}; // by item id (the for-sale range moved by 0x100)
+// by item id (ids kFirstItem .. 0x47f), and the ids for sale 0x480 .. 0x57f moved by kPriceShift: one array on the PC
+// (exe 0x8d11a0), two tables on the PS1 (SLUS_011.40 0x800708dc / 0x80068b90, by the same index)
+const DataTable<ScalarTable<int16_t, kPriceShiftFrom>> itemPrices{TableId::ShopItemPrices};
+const DataTable<ScalarTable<int16_t, kPriceShiftEnd + kPriceShift>> forSalePrices{TableId::ShopItemPricesForSale};
 const DataTable<ScalarTable<int16_t, kLifeLevels>> lifePrices{TableId::ShopLifePrices};
 const DataTable<ScalarTable<int16_t, kUpgradePriceLevels + 1>> upgradeOnePrices{TableId::ShopUpgradeOnePrices};
 const DataTable<ScalarTable<int16_t, kUpgradePriceLevels + 1>> upgradeTwoPrices{TableId::ShopUpgradeTwoPrices};
@@ -932,7 +935,7 @@ int32_t shopPrice(int16_t item, bool buying) {
         if (k > kUpgradePriceLevels) k = kUpgradePriceLevels;
         v = id == kUpgradeOne ? upgradeOnePrices[uint32_t(k)] : upgradeTwoPrices[uint32_t(k)];
     } else {
-        v = itemPrices[uint32_t(id)];
+        v = id >= kPriceShiftEnd ? forSalePrices[uint32_t(id)] : itemPrices[uint32_t(id)];
     }
     if (v < 0) v = v * kPriceUnit;
     if (buying) {
