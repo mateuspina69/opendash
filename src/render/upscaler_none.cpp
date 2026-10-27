@@ -28,8 +28,11 @@ public:
 } // namespace
 
 #ifndef _WIN32
-// the vendor SDKs are built for D3D12 only (third_party/): outside Windows the backends are not compiled in
+// the vendor SDKs are built for D3D12 only (third_party/): outside Windows the backends are not compiled in, but FSR
+// (upscaler_fsr_vk.cpp, when cmake/fidelityfx_vk.cmake finds the SDK)
+#ifndef OD_FSR_VK
 std::unique_ptr<Upscaler> createFsrUpscaler() { return nullptr; }
+#endif
 std::unique_ptr<Upscaler> createDlssUpscaler() { return nullptr; }
 std::unique_ptr<Upscaler> createXessUpscaler() { return nullptr; }
 std::unique_ptr<Upscaler> createNisUpscaler() { return nullptr; }

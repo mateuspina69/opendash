@@ -3,6 +3,7 @@
 /third_party/
 /tools/*
 !/tools/fetch_sdks.py
+!/tools/ffx_sc_glsl.py
 /tests/data/
 /lang/
 /screenshots/

@@ -178,19 +178,34 @@ bool DeviceVulkan::init(SDL_Window* window, int w, int h, bool debug) {
     qci.queueFamilyIndex = queueFamily_;
     qci.queueCount = 1;
     qci.pQueuePriorities = &priority;
+    // what the GPU has of the features FSR's shaders may use (upscaler_fsr_vk: the SDK picks its FP16 permutations
+    // by what the GPU supports, so the device enables them when present)
+    VkPhysicalDeviceVulkan13Features has13{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
+    VkPhysicalDeviceVulkan12Features has12{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES, &has13};
+    VkPhysicalDeviceVulkan11Features has11{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES, &has12};
+    VkPhysicalDeviceFeatures2 has{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, &has11};
+    vkGetPhysicalDeviceFeatures2(physical_, &has);
     VkPhysicalDeviceVulkan13Features f13{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
     f13.dynamicRendering = VK_TRUE;
     f13.synchronization2 = VK_TRUE;
+    f13.subgroupSizeControl = has13.subgroupSizeControl;
+    f13.computeFullSubgroups = has13.computeFullSubgroups;
     f13.pNext = depthClip.depthClipEnable ? &depthClip : nullptr;
     VkPhysicalDeviceVulkan12Features f12{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES, &f13};
     f12.timelineSemaphore = VK_TRUE;
-    VkPhysicalDeviceFeatures supported;
-    vkGetPhysicalDeviceFeatures(physical_, &supported);
-    VkPhysicalDeviceFeatures2 f2{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, &f12};
+    f12.shaderFloat16 = has12.shaderFloat16;
+    VkPhysicalDeviceVulkan11Features f11{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES, &f12};
+    f11.storageBuffer16BitAccess = has11.storageBuffer16BitAccess;
+    f11.uniformAndStorageBuffer16BitAccess = has11.uniformAndStorageBuffer16BitAccess;
+    const VkPhysicalDeviceFeatures& supported = has.features;
+    VkPhysicalDeviceFeatures2 f2{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, &f11};
     f2.features.samplerAnisotropy = supported.samplerAnisotropy;
     f2.features.independentBlend = supported.independentBlend; // the scene's four targets blend differently
     f2.features.fillModeNonSolid = supported.fillModeNonSolid;
     f2.features.depthClamp = supported.depthClamp;
+    f2.features.shaderInt16 = supported.shaderInt16;
+    f2.features.shaderStorageImageReadWithoutFormat = supported.shaderStorageImageReadWithoutFormat;
+    f2.features.shaderStorageImageWriteWithoutFormat = supported.shaderStorageImageWriteWithoutFormat;
     VkDeviceCreateInfo dci{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO, &f2};
     dci.queueCreateInfoCount = 1;
     dci.pQueueCreateInfos = &qci;
