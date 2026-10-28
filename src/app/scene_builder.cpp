@@ -25,6 +25,9 @@ namespace od::app {
 std::vector<od::RenderVertex> PlayerView::liveScene(const RoomMesh& mesh, size_t* segVerts,
                                                    std::vector<od::DynamicObject>* perActor,
                                                    std::array<std::vector<od::RenderVertex>, 3>* segSemi) const {
+    // the exe's whole-model centre test (game/projection modelCentreDrawn) through the game's camera: applied while
+    // that camera is the one drawn (a cutscene's shots); OpenDash's own camera in play draws every model
+    const bool gameView = play && !freeView(mesh);
     std::vector<od::RenderVertex> out;
     const bool bound = play && roomStage == mesh.stage && roomSub == mesh.sub;
     const uint32_t segs = bound ? uint32_t(od::port::roomGrid().segments) : 0;
@@ -138,6 +141,8 @@ std::vector<od::RenderVertex> PlayerView::liveScene(const RoomMesh& mesh, size_t
             const uint32_t a = od::port::kStaticPool + i * 0xcc;
             const od::port::StaticActor& act = od::port::staticActorAt(a);
             if (!(act.flags & act.runFlags & od::port::kActorDrawn) || act.state == 0 || !actorLive(a, false)) continue;
+            const int16_t centre[3] = {act.pos.x.whole, act.pos.y.whole, act.pos.z.whole};
+            if (gameView && !od::port::modelCentreDrawn(act.flags, centre)) continue; // the whole model culled (exe 0x5f4600..)
             const RoomMesh::AltBank* alt = nullptr;
             const uint32_t model = act.model;
             const int entry = modelEntry(model, alt);
@@ -168,6 +173,8 @@ std::vector<od::RenderVertex> PlayerView::liveScene(const RoomMesh& mesh, size_t
             const od::port::MeshActor& act = od::port::meshActorAt(a);
             if ((act.flags & act.runFlags & kDrawnMesh) != kDrawnMesh || !actorLive(a, false))
                 continue;
+            const int16_t centre[3] = {act.pos.x.whole, act.pos.y.whole, act.pos.z.whole};
+            if (gameView && !od::port::modelCentreDrawn(act.flags, centre)) continue; // the whole model culled (exe 0x5f4600..)
             const bool projectile = base == od::port::kProjectilePool;
             const od::port::ActorPool pool = projectile ? od::port::ActorPool::Projectiles : od::port::ActorPool::Shots;
             const RoomMesh::AltBank* alt = nullptr;
@@ -195,6 +202,9 @@ float PlayerView::liveShiftScale(const RoomMesh& mesh) const {
 }
 
 std::vector<od::DynamicObject> PlayerView::liveActors(const RoomMesh& mesh) const {
+    // the exe's whole-model centre test (game/projection modelCentreDrawn) through the game's camera: applied while
+    // that camera is the one drawn (a cutscene's shots); OpenDash's own camera in play draws every model
+    const bool gameView = play && !freeView(mesh);
     std::vector<od::DynamicObject> out;
     if (!play || roomStage != mesh.stage || roomSub != mesh.sub || !bankAt) return out;
     const float shiftScale = liveShiftScale(mesh);
@@ -229,6 +239,7 @@ std::vector<od::DynamicObject> PlayerView::liveActors(const RoomMesh& mesh) cons
         out.push_back(od::DynamicObject{od::objectId(od::kKindActor, i), {}});
         if (!(act.flags & act.runFlags & od::port::kActorDrawn)) continue; // hidden
         const int16_t centre[3] = {act.pos.x.whole, act.pos.y.whole, act.pos.z.whole};
+        if (gameView && !od::port::modelCentreDrawn(act.flags, centre)) continue; // the whole model culled (exe 0x5f4160)
         // FUN_005f4160's semi-transparency: draw word 0x6d00e0 |= +0xeb << 20 for the whole actor, or with
         // +0xeb & 1 per part the bone block's byte +0xa3 + (ref & 3) * 4 << 20 (after & 0xfd9fffff); the packet
         // writer 0x5f5500 turns bit 25 into the GP0 semi bit and bits 21..22 into the tpage ABR. The semi parts

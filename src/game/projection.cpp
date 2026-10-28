@@ -147,6 +147,19 @@ int32_t actorCentreViewZ(const int16_t v[3]) {
     return view[2];
 }
 
+bool modelCentreDrawn(uint8_t flags, const int16_t centre[3]) {
+    constexpr uint8_t kNearerThanRange = 0x40; // flags byte 0: drawn at any depth nearer than the range
+    constexpr int32_t kModelNear = 0x10;       // the nearest OTZ drawn otherwise
+    const CameraTransform& camera = cameraTransform();
+    const int32_t eyeOffset[3] = {camera.eyeOffset[0], camera.eyeOffset[1], camera.eyeOffset[2]};
+    int32_t view[3];
+    const Projected p = projectThrough(camera.view.matrix.get(), eyeOffset, centre, view);
+    const int32_t z = (view[2] > 0 ? view[2] : 0) >> 2, far = int32_t(stage().depthRange);
+    if ((flags & kNearerThanRange) && z < far) return true;
+    return z <= far && z >= kModelNear && uint16_t(p.sx + kScreenMarginX) <= kScreenSpan &&
+           uint16_t(p.sy + kScreenMarginY) <= kScreenSpan;
+}
+
 bool effectDepthVisible(const CameraPoint& c) {
     return c.view[2] <= int32_t(uint32_t(stage().effectsFar) * 4) && c.view[2] >= kEffectsNear;
 }

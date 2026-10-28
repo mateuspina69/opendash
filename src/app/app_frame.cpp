@@ -316,9 +316,13 @@ void App::updateCamera() {
             camSource = "free";
         }
     }
-    // the game's near plane in play (focal 0x180 / 5 = 76 game units, scaled to the room): a camera pressed
-    // against a wall sees past it as on the original instead of a wall-sized polygon on the lens
-    cam.nearZ = playerView.play ? float(0x180 / 5) * float(1 << current.shift) : 8.0f;
+    // the game's near plane in play (exe 0x40d020 / 0x40d0c0: focal 0x180 / 5 = 76 view units, the view in the world
+    // scaled by the game's current coordinate shift 0x6d00b5, which the camera scripts raise for close shots: 76 >>
+    // that shift world units, here in the room's units): a camera pressed against a wall sees past it as on the original
+    // instead of a wall-sized polygon on the lens
+    cam.nearZ = playerView.play ? float(0x180 / 5) * float(1 << current.shift) /
+                                      float(1 << (od::port::stage().coordinateShift & 0x1f))
+                                : 8.0f;
     if (playerView.logLock && playerView.play && (playerView.lockedOn() || playerView.lockBlend > 0.0f)) {
         // scripted: camera source per frame + the player -> target axis yaw it converges to (axis -1 = none)
         float axis = -1.0f;
