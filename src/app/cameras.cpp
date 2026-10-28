@@ -337,25 +337,24 @@ void PlayerView::pivotAt(const RoomMesh& mesh, float out[3]) const {
     out[2] = posCur[2] * scale;
 }
 
-void PlayerView::seeThroughBodies(const RoomMesh& mesh, float alpha, bool drawn,
+void PlayerView::seeThroughBodies(const RoomMesh& mesh, const std::vector<od::DynamicObject>& objects,
                                   std::vector<od::SeeThroughBody>& out) const {
     out.clear();
     if (!freeView(mesh)) return; // cutscenes show the scenery whole
-    const float scale = float(1 << mesh.shift);
-    auto add = [&](const float* prev, const float* cur, const BodyBox& b) {
-        if (!b.valid) return;
-        od::SeeThroughBody body;
-        for (int c = 0; c < 3; ++c) {
-            float at = (prev[c] + (cur[c] - prev[c]) * alpha) * scale;
-            if (c == 1) at = -at; // render y up
-            if (drawn) at += renderOffset[c];
-            body.lo[c] = at + b.lo[c];
-            body.hi[c] = at + b.hi[c];
-        }
-        out.push_back(body);
-    };
     const od::port::Player& pl = od::port::player();
-    if (pl.flags & pl.runFlags & od::port::kActorDrawn) add(posPrev, posCur, playerBody);
+    if (!(pl.flags & pl.runFlags & od::port::kActorDrawn)) return;
+    for (const od::DynamicObject& o : objects) {
+        if (o.id != od::objectId(od::kKindPlayer, 0) || o.tris.empty()) continue;
+        od::SeeThroughBody body;
+        std::copy(o.tris[0].pos, o.tris[0].pos + 3, body.lo);
+        std::copy(o.tris[0].pos, o.tris[0].pos + 3, body.hi);
+        for (const od::RenderVertex& v : o.tris)
+            for (int c = 0; c < 3; ++c) {
+                body.lo[c] = std::min(body.lo[c], v.pos[c]);
+                body.hi[c] = std::max(body.hi[c], v.pos[c]);
+            }
+        out.push_back(body);
+    }
 }
 
 bool PlayerView::objectOfActor(uint32_t address, uint32_t id) {

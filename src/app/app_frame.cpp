@@ -393,15 +393,6 @@ void App::updateScene() {
     const float* travel = playerView.renderOffset;
     drawCam = cam;
     for (int c = 0; c < 3; ++c) drawCam.eye[c] += travel[c];
-    { // the see-through (app/see_through): the open pieces this frame, the characters' holes as drawn
-        std::vector<od::SeeThroughBody> bodies;
-        std::vector<od::SeeThroughPiece> pieces;
-        if (dissolve) {
-            playerView.seeThroughBodies(current, alpha, true, bodies);
-            seeThrough.frame(dt, pieces);
-        }
-        renderer->setSeeThrough(bodies, pieces, dissolve && seeThroughDebug);
-    }
     {
         const float aspect = float(width) / float(std::max(height, 1));
         std::vector<od::RenderVertex> skyV;
@@ -453,7 +444,7 @@ void App::updateScene() {
         if (playerView.play) playerView.measureBodies(current, dyn); // the lock camera's framing (app/cameras)
         { // the see-through: the dynamic scenery's pieces, which pieces hide the characters this tick
             std::vector<od::SeeThroughBody> bodies;
-            if (dissolve) playerView.seeThroughBodies(current, 1.0f, false, bodies);
+            if (dissolve) playerView.seeThroughBodies(current, dyn, bodies);
             seeThrough.tick(dyn, cam.eye, bodies);
         }
         if (playerView.play) ghosts.appendDynamic(dyn, g_roomVramGen); // objectId(kKindPlayer, 1 + slot)
@@ -596,6 +587,15 @@ void App::updateScene() {
         for (od::DynamicObject& o : playerView.reticleOverlay(current, cam)) {
             travelOffset(travel, o.tris);
             dynFrame.push_back(std::move(o));
+        }
+        { // the see-through (app/see_through): the open pieces this frame, the player's hole around the model as drawn
+            std::vector<od::SeeThroughBody> bodies;
+            std::vector<od::SeeThroughPiece> pieces;
+            if (dissolve) {
+                playerView.seeThroughBodies(current, dynFrame, bodies);
+                seeThrough.frame(dt, pieces);
+            }
+            renderer->setSeeThrough(bodies, pieces, dissolve && seeThroughDebug);
         }
         renderer->uploadDynamic(dynFrame);
     }
