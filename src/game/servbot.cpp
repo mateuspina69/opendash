@@ -16,6 +16,7 @@
 #include "game/distances.hpp"
 #include "game/event_state.hpp"
 #include "game/hit_list.hpp"
+#include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
@@ -37,7 +38,12 @@ constexpr const char* kServbotPort = "servbot"; // the area of its port-gap erro
 enum class ServbotState : uint8_t {
     Init = 0,   // exe 0x4629f0
     Main = 1,   // exe 0x462af0
-    Lifted = 2, // exe 0x463b70 (not ported)
+    Lifted = 2, // exe 0x463b70
+};
+// the sub-states of the lifted state (+9; table 0x88fc9c)
+enum class LiftedSub : uint8_t {
+    InHands = 0, // exe 0x463b90
+    Thrown = 1,  // exe 0x463c90
 };
 // the sub-states of the main state (+9; table 0x88fbec)
 enum class ServbotSub : uint8_t {
@@ -105,6 +111,8 @@ constexpr uint8_t kAnimGetUp = 7;
 constexpr uint8_t kAnimThrown = 9;
 constexpr uint8_t kAnimThrownDown = 10;
 constexpr uint8_t kAnimGetUpBack = 0xb;
+constexpr uint8_t kAnimLifted = 0xd;     // in the player's hands
+constexpr uint8_t kAnimLiftedDown = 0xe; // ... knocked out (its hit points below 0)
 constexpr uint8_t kAnimBounce = 0x10;
 constexpr uint8_t kAnimFall = 0x15;
 constexpr uint8_t kAnimLand = 0x16;
@@ -128,6 +136,11 @@ constexpr int16_t kGravity = 0x40;
 constexpr int16_t kKnockUp = -0x180;
 constexpr int16_t kFallForward = -0x80; // the forward speed of a fall
 constexpr uint8_t kServbotType = 0xb;   // its type in the stage tables (the partner search compares it)
+// let go from the player's hands: thrown along the player's aim, or dropped (the player hurt)
+constexpr int16_t kThrowUp = -0x100, kThrowForward = -0x400;
+constexpr int16_t kDropUp = -0x200, kDropForward = -0x100;
+constexpr uint8_t kThrownBits = kServbotAttackEntry | kServbotAirborneBits | kServbotMover;
+constexpr uint8_t kDroppedBits = kServbotAirborneBits | kServbotLifted | kServbotMover;
 
 // the exe's servbot tables
 const DataTable<ScalarTable<int16_t, 16>> pauseTicks{TableId::ServbotPauseTicks};
@@ -708,6 +721,73 @@ void servbotMain(AnimatedActor& actor, ServbotFields& bot) {
         bot.bits |= kServbotLifted;
     }
 }
+void liftedThrown(AnimatedActor& actor, ServbotFields& bot);
+// exe 0x463b90: at the player's hands (the dizzy face); let go: thrown along the player's aim (its hit entry the
+// attacking kind) or dropped, its yaw the player's, put at the player, bouncing
+void liftedInHands(AnimatedActor& actor, ServbotFields& bot) {
+    bot.collisionBits = 0;
+    if (actor.step == 0) {
+        actor.step = 1;
+        actor.anim = actor.hitPoints < 0 ? kAnimLiftedDown : kAnimLifted;
+        setTextureCell(actor, kDizzyCell);
+    }
+    carryAtHands(actor, 0, 0, 0); // exe 0x573ab0
+    const CarryRelease r = carryReleased(); // exe 0x573950
+    if (r == CarryRelease::Held) return;
+    if (r == CarryRelease::Thrown) {
+        int32_t aim[3];
+        playerAimVector(0, kThrowUp, kThrowForward, aim); // exe 0x5e3e50
+        actor.velocity.x = 0;
+        actor.velocity.y = int16_t(aim[1]);
+        actor.velocity.z = int16_t(aim[2]);
+        bot.bits = kThrownBits;
+    } else {
+        actor.velocity.y = kDropUp;
+        actor.velocity.z = kDropForward;
+        bot.bits = kDroppedBits;
+    }
+    actor.acceleration.y = kGravity;
+    actor.rotation.y = player().rotation.y;
+    actor.airborne = 1;
+    carryDropFromPlayer(actor); // exe 0x573990
+    setTextureCell(actor, kDizzyCell);
+    bot.groundLossReaction = 0;
+    actor.anim = kAnimBounce;
+    actor.subState = uint8_t(LiftedSub::Thrown);
+    actor.enterStep(0);
+    liftedThrown(actor, bot);
+}
+// exe 0x463c90: flying (a solid body, or an actor it ran into, turns it back: lifted again unless knocked out);
+// landed: one more step, then dazed
+void liftedThrown(AnimatedActor& actor, ServbotFields& bot) {
+    if ((bot.hitBox.result & kHitAttackSolid) || actor.actorHit != 0u) {
+        actor.rotation.y = int16_t(uint16_t(actor.rotation.y + kHalfTurn));
+        if (actor.hitPoints >= 0) bot.bits |= kServbotLifted;
+    }
+    if (airStep(actor, bot) != 0) {
+        if (actor.stepCounter == 0) {
+            integrateVelocity(actor, 0, actor.velocity.y, actor.velocity.z);
+            actor.velocity.y = int16_t(uint16_t(actor.velocity.y + actor.acceleration.y));
+            ++actor.stepCounter;
+            collide(actor, bot);
+            return;
+        }
+        actor.state = uint8_t(ServbotState::Main);
+        actor.subState = uint8_t(ServbotSub::Dazed);
+        actor.enterStep(0);
+        actor.airborne = 0;
+        bot.bits &= uint8_t(~kServbotBouncing);
+    }
+    collide(actor, bot);
+}
+// exe 0x463b70: the lifted state's sub-state
+void servbotLifted(AnimatedActor& actor, ServbotFields& bot) {
+    switch (LiftedSub(actor.subState)) {
+    case LiftedSub::InHands: liftedInHands(actor, bot); break;
+    case LiftedSub::Thrown: liftedThrown(actor, bot); break;
+    default: notPortedAt(kServbotPort, "lifted sub-state (table 0x88fc9c has 2 entries)", actor.subState);
+    }
+}
 // exe 0x4629f0: the model, the boxes, the class block cleared, the partner servbot; then back to idle
 void servbotInit(AnimatedActor& actor, ServbotFields& bot) {
     auto enterMain = [&] {
@@ -764,7 +844,8 @@ void servbot(AnimatedActor& actor) {
     switch (ServbotState(actor.state)) {
     case ServbotState::Init: servbotInit(actor, bot); break;
     case ServbotState::Main: servbotMain(actor, bot); break;
-    default: notPortedAt(kServbotPort, "state (2 = lifted by the player: exe 0x463b70 not ported)", actor.state);
+    case ServbotState::Lifted: servbotLifted(actor, bot); break;
+    default: notPortedAt(kServbotPort, "state", actor.state);
     }
     if (!(actor.flags & kActorLive)) return;
     NpcHead head = bot.head();

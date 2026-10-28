@@ -1,7 +1,7 @@
 // The shy critter of ST0D, class 0x509830 (pool 0x20 type 0x7e; see st0d_critter.hpp). It wanders (the RNG: idle /
 // hop / short walks), runs off when the player comes near its front, flees until he is far, is knocked away by a hit
-// (sound 0x8d, the balance -500), falls; the player can lift it (state 2: the carry routines 0x573950.. are not
-// ported). States (the exe's table 0x89823c): 0 exe 0x5099a0, 1 exe 0x509a60 (the sub-states 0x89824c), 2 exe
+// (sound 0x8d, the balance -500), falls; the player can lift it (state 2: held, thrown or dropped, then it flees).
+// States (the exe's table 0x89823c): 0 exe 0x5099a0, 1 exe 0x509a60 (the sub-states 0x89824c), 2 exe
 // 0x50a170 lifted, 3 exe 0x50a3c0 defeated (the drops, freed). Its shadow (exe 0x5f20f0, unless lifted) is render
 // output and left out.
 #include "content/yosyonke/st0d_critter.hpp"
@@ -23,6 +23,7 @@
 #include "game/hit_effects.hpp"
 #include "game/hit_list.hpp"
 #include "game/pickups.hpp"
+#include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
@@ -53,6 +54,10 @@ enum class CritterSub : uint8_t {
     Fall = 3,    // exe 0x509f60
     Knocked = 4, // exe 0x509fc0
 };
+enum class LiftedSub : uint8_t {
+    InHands = 0, // exe 0x50a190
+    Thrown = 1,  // exe 0x50a290
+};
 enum class WanderStep : uint8_t { Start = 0, Wait = 1, Choose = 2, Walk = 3 };
 // the wander's walk: the wall's turn picked (the step counter)
 constexpr uint8_t kNoTurnPicked = 0, kTurnPicked = 1;
@@ -65,6 +70,14 @@ constexpr uint32_t kHurtingHits = 0x10fff;      // any damage or a bump (& the r
 constexpr uint8_t kDustVariant = 3;             // the hit spark's dust variant of its slide
 constexpr uint16_t kDustSize = 0x40;
 constexpr uint32_t kHarmlessBump = kHitAttackHarmless | kHitAttackBump;
+// lifted: at the player's hands this far up; let go: thrown along the player's aim, or dropped (the player hurt)
+constexpr int kHandsRaise = -0x10;
+constexpr int16_t kThrowUp = -0x100, kThrowForward = -0x380;
+constexpr int16_t kDropFall = 0x300, kDropForward = -0x40;
+constexpr uint32_t kThrownStops = kHitAttackSolid | kHitAttackDeflects; // a thrown critter bounces back off these
+constexpr uint8_t kLandedSteps = 2; // the steps it still slides once landed
+constexpr uint8_t kAnimHeld = 6;
+constexpr uint8_t kSparkLoops = 2;
 
 void setSub(AnimatedActor& a, CritterSub s) {
     a.subState = uint8_t(s);
@@ -260,6 +273,69 @@ void critterSub(AnimatedActor& a, CritterFields& f) {
     }
 }
 
+void liftedThrown(const PlayerEnv& env, AnimatedActor& a, CritterFields& f);
+// exe 0x50a190: at the player's hands, no hit entry; let go: thrown along the player's aim (its entry the player's
+// attacks) or dropped, along the player's yaw, put at the player
+void liftedInHands(const PlayerEnv& env, AnimatedActor& a, CritterFields& f) {
+    if (a.step == 0) {
+        f.behaviour = kCritterNoHitEntry | kWalkerBounces;
+        a.step = 1;
+        a.anim = kAnimHeld;
+        a.rotation.z = 0;
+        resetModelScale(a); // exe 0x4e5cd0
+    }
+    carryAtHands(a, 0, kHandsRaise, 0); // exe 0x573ab0
+    const CarryRelease r = carryReleased(); // exe 0x573950
+    if (r == CarryRelease::Held) return;
+    f.behaviour &= uint8_t(~kCritterNoHitEntry);
+    f.turn = player().rotation.y;
+    if (r == CarryRelease::Thrown) {
+        int32_t aim[3];
+        playerAimVector(0, kThrowUp, kThrowForward, aim); // exe 0x5e3e50
+        a.velocity.x = 0;
+        a.velocity.y = int16_t(aim[1]);
+        a.velocity.z = int16_t(aim[2]);
+        f.behaviour |= kCritterBodyAttack;
+    } else {
+        a.velocity.y = kDropFall;
+        a.velocity.z = kDropForward;
+    }
+    a.acceleration.y = 0x40;
+    a.rotation.y = f.turn;
+    a.airborne = kAirborneFalling;
+    carryDropFromPlayer(a); // exe 0x573990
+    a.subState = uint8_t(LiftedSub::Thrown);
+    a.enterStep(0);
+    liftedThrown(env, a, f);
+}
+// exe 0x50a290: flying along its heading (a solid / deflecting body sends it back, a spark, no more hit entry);
+// landed: two more steps, then it flees; a wall turns the heading round
+void liftedThrown(const PlayerEnv& env, AnimatedActor& a, CritterFields& f) {
+    if (a.step == 0) {
+        f.turn = a.rotation.y;
+        ++a.step;
+    }
+    if ((f.box.result & kThrownStops) && a.hitPoints >= 0) {
+        a.velocity.z = int16_t(-int(a.velocity.z) >> 1);
+        spawnHitSpark(kSparkLoops, a.pos.x.whole, int16_t(a.pos.y.whole - 0x40), a.pos.z.whole); // exe 0x5e5400
+        f.behaviour |= kCritterNoHitEntry;
+    }
+    if (walkerFallStep(a, f.hits, f.turn)) { // exe 0x50a360
+        if (a.stepCounter < kLandedSteps) {
+            ++a.stepCounter;
+            integrateVelocity(a, 0, a.velocity.y, a.velocity.z); // exe 0x5e3690
+        } else {
+            a.state = uint8_t(CritterState::Main);
+            a.subState = uint8_t(CritterSub::Flee);
+            a.restartStep();
+            a.velocity.y = 0;
+            a.airborne = 0;
+        }
+    }
+    walkerCollide(env, a, f.hits, f.behaviour, false, kCritterMaxDrop); // exe 0x50a470
+    if (f.hits & kWalkHitSides) f.turn = int16_t(uint32_t(uint16_t(f.turn)) + uint32_t(kHalfTurn));
+}
+
 // exe 0x509830
 void critter(const PlayerEnv& env, AnimatedActor& a) {
     CritterFields& f = classState<CritterFields>(a);
@@ -311,6 +387,12 @@ void critter(const PlayerEnv& env, AnimatedActor& a) {
         }
         break;
     }
+    case CritterState::Lifted: // exe 0x50a170: the sub-state (table 0x898260)
+        a.tint = kTintNeutral;
+        if (LiftedSub(a.subState) == LiftedSub::InHands) liftedInHands(env, a, f);
+        else if (LiftedSub(a.subState) == LiftedSub::Thrown) liftedThrown(env, a, f);
+        else notPortedAt(kCritterPort, "0x50a170 sub-state (table 0x898260 has 2 entries)", a.subState);
+        break;
     case CritterState::Defeated: { // exe 0x50a3c0
         a.tint = kTintFlash;
         if (a.step == 0) {
@@ -330,7 +412,7 @@ void critter(const PlayerEnv& env, AnimatedActor& a) {
         }
         break;
     }
-    default: notPortedAt(kCritterPort, "0x509830 state (2 = lifted by the player)", a.state);
+    default: notPortedAt(kCritterPort, "0x509830 state", a.state);
     }
     if (!(a.flags & kActorLive)) return;
     if (a.anim == a.prevAnim) animStep(a); // exe 0x5e1e80 / 0x5e1c30: the animation and the pose

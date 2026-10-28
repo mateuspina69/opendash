@@ -7,8 +7,7 @@
 
 namespace od::port {
 
-// exe 0x509830: wanders, runs from the player, knocked away by hits (the lifted state 2 throws: the carry routines are
-// not ported)
+// exe 0x509830: wanders, runs from the player, knocked away by hits; lifted by the player (state 2), thrown or dropped
 void shyCritterUpdate(const PlayerEnv& env, uint32_t actor);
 
 } // namespace od::port
