@@ -370,8 +370,8 @@ struct PlayerView {
     // the player's position at the last tick, the room's units (render y up)
     void pivotAt(const RoomMesh& mesh, float out[3]) const;
     // the see-through's characters in focus (renderer SeeThroughBody, their kept boxes at the tick blend alpha; drawn:
-    // with the travel offset, as drawn, else in the room's own units): the player whenever drawn, the lock-on target
-    // while the lock view holds it; none in cutscenes
+    // with the travel offset, as drawn, else in the room's own units): the player whenever drawn (never an enemy: no
+    // seeing a target through the walls); none in cutscenes
     void seeThroughBodies(const RoomMesh& mesh, float alpha, bool drawn, std::vector<od::SeeThroughBody>& out) const;
     // critically damped spring toward `target` (Game Programming Gems 4, 1.10): framerate independent; returns the
     // step to add to `current`

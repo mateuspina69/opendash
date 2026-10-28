@@ -356,7 +356,6 @@ void PlayerView::seeThroughBodies(const RoomMesh& mesh, float alpha, bool drawn,
     };
     const od::port::Player& pl = od::port::player();
     if (pl.flags & pl.runFlags & od::port::kActorDrawn) add(posPrev, posCur, playerBody);
-    if (lockAimValid && targetBodyOf == lockTarget) add(tgtPrev, tgtCur, targetBody);
 }
 
 bool PlayerView::objectOfActor(uint32_t address, uint32_t id) {
