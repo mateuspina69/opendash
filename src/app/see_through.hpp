@@ -14,8 +14,12 @@
 class SeeThrough {
 public:
     // A room was loaded: numbers its pieces into tris (RenderVertex::piece, 1 ..) and keeps its opaque triangles
-    // (tris[0 .. opaqueEnd)) for the segments. Every piece state of the last room is dropped
-    void roomLoaded(std::vector<od::RenderVertex>& tris, size_t opaqueEnd);
+    // (tris[0 .. opaqueEnd)) for the segments; slices: its texture slices (RGBA, sliceCount of kSliceSize squared),
+    // what a face shows through. A face one already sees through (a fence's or a grate's transparent texels, a
+    // semi-transparent one: glass, water) is no piece and never in the way. Every piece state of the last room is
+    // dropped
+    void roomLoaded(std::vector<od::RenderVertex>& tris, size_t opaqueEnd, const std::vector<uint8_t>& slices,
+                    int sliceCount);
     // A logic tick: numbers the dynamic scenery's pieces (RenderVertex::piece from kDynamicPieces on) and finds the
     // pieces hiding each body (eye and bodies in the room's units; no bodies: nothing hides anything)
     void tick(std::vector<od::DynamicObject>& objects, const float eye[3], const std::vector<od::SeeThroughBody>& bodies);
@@ -25,6 +29,7 @@ public:
     void clear() { states_.clear(); }
 
     static constexpr uint32_t kDynamicPieces = 1u << 20; // the room's pieces stay below (RenderVertex::piece)
+    static constexpr int kSliceSize = 256;               // the texture slices' side (Renderer::upload)
 
 private:
     struct Tri {
@@ -47,7 +52,12 @@ private:
     static uint64_t roomKey(uint32_t piece) { return piece; }
     static uint64_t dynamicKey(uint32_t object, uint32_t index) { return 1ull << 63 | uint64_t(object) << 20 | index; }
 
+    // a face one sees through (its texels sampled: transparent, a fence's or a grate's gaps)
+    bool seeThroughFace(const od::RenderVertex* v) const;
+
     std::vector<Tri> room_;                       // the room's opaque triangles
+    std::vector<uint8_t> clear_;                  // per texel of the room's slices: 1 transparent
+    int clearSlices_ = 0;
     std::unordered_map<uint64_t, Piece> pieces_;  // the room's and this tick's dynamic pieces
     std::unordered_map<uint64_t, State> states_;  // the pieces opening / open / closing
 };

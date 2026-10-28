@@ -19,14 +19,15 @@ cbuffer Frame : register(b0) {
     float shadowMode;  // 1: this draw receives sun shadows (opaque world / actors); 0: sky, blended effects, sun off
     float semiPass;    // a semi-transparent range: 1 its opaque texels (no STP bit), 2 its blended ones; 0 any draw else
     float modelNear;  // the game's near plane: a model's face is clipped there (surface kSurfaceModel)
-    float pad1;
+    float seeLens;  // 1: the see-through's lens pass (its open pieces drawn as a lens); 0 any draw else
     float fogMode;          // 0 off, 1 classic (the original's linear table fog), 2 remaster (exponential height fog), 3 the PS1's depth cue
     float fogDensity;       // remaster: extinction per world unit
     float fogHeightFalloff; // remaster: density e-folds per world unit of height above the eye
     float fogMaxOpacity;    // remaster: the far field never fogs more than this
     float sunScatter;       // remaster: fog brightened toward the sun (0 = sun off)
     float fogSky;           // remaster fog of a sky draw (the ray never ends): 0 not sky, 1 dome, 2 screen-space layer
-    float2 pad2;
+    float seeClock;         // the see-through lens's clock (seconds): its rim's slow ripple
+    float pad2;
     float4 water;           // remaster medium: x on, y clock (seconds), z 1 = sky draw (replaced), w 0 water / 1 hot air
                             // (cave) / 2 hot air under an open sky (waterTint = the sky colour)
     float4 waterTint;       // the room's water colour (the game's wave tint / 0x80)
@@ -49,6 +50,7 @@ Texture2DArray pages : register(t0);
 SamplerState pointClamp : register(s0);
 Texture2D<float> heightMap : register(t4);  // precipitation: the room seen from above (depth 0 = top, 1 = no surface)
 Texture2D<float> sceneDepth : register(t5); // the opaque scene's raw depth (R32F copy, before the blended draws)
+Texture2D<float4> sceneColor : register(t6); // the scene's colour before the see-through's lens (what lies behind it)
 
 #ifdef OD_RT
 // ray-traced sun shadows (DXR 1.1 inline ray queries). Instance 0 = room (opaque ranges), 1 = dynamic actors;
@@ -330,38 +332,48 @@ PSOut ps_main(VSOut i, bool front : SV_IsFrontFace) {
     const uint surface = uint(round(i.surface)), piece = surface >> 3;
     if ((surface & 1u) && i.depth < modelNear) discard;
     // the see-through (OpenDash, Baldur's Gate style; app/see_through decides which pieces stand between the camera and
-    // a character): an open piece dissolves in an ordered dither, either whole (a piece smaller than the hole) or in a
-    // soft round hole around each character it hides, there only on its fragments nearer than that character
+    // a character): an open piece turns into a lens, either whole (a piece smaller than the hole) or in a soft round
+    // hole around each character it hides, there only on its fragments nearer than that character; the hole's rim
+    // ripples slowly. The opaque draws skip where it opens (seeOpen > 0); the lens pass draws only there
     float3 seeTint = float3(1, 1, 1);
+    float seeOpen = 0.0, seeRing = 0.0; // how open this fragment is; its distance from the hole's middle (0..1+)
+    float2 seeMiddle = float2(0, 0);    // the hole's middle (NDC); seeRing < 0: no hole (a whole piece)
     if (piece != 0u) {
-        static const float kBayer[16] = {0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5};
         static const float kHoleEdge = 0.35; // the hole's soft rim, of its radius
-        const uint2 px = uint2(i.pos.xy) & 3u;
-        const float threshold = (kBayer[px.y * 4 + px.x] + 0.5) / 16.0;
+        static const float kRimWave = 0.05;  // how far the rim ripples, of the radius
         const float2 here = i.curClip.xy / i.curClip.w;
-        float open = 0.0;
         bool listed = false;
         for (int p = 0; p < int(seeInfo.z + 0.5); ++p) {
             if (uint(seePiece[p].x + 0.5) != piece) continue;
             listed = true;
             if (seePiece[p].z > 0.5) {
-                open = seePiece[p].y;
+                seeOpen = seePiece[p].y;
+                seeRing = -1.0;
                 break;
             }
             const uint bodies = uint(seePiece[p].w + 0.5);
             for (int k = 0; k < 2; ++k) {
                 const float nearest = k == 0 ? seeInfo.x : seeInfo.y;
                 if (!((bodies >> k) & 1u) || nearest <= 0.0 || i.depth >= nearest) continue;
-                const float d = length((here - seeBody[k].xy) / max(seeBody[k].zw, 1e-4));
-                open = max(open, saturate((1.0 - d) / kHoleEdge) * seePiece[p].y);
+                const float2 q = (here - seeBody[k].xy) / max(seeBody[k].zw, 1e-4);
+                const float angle = atan2(q.y, q.x);
+                const float d = length(q) + kRimWave * (sin(angle * 5.0 + seeClock * 1.7) + 0.6 * sin(angle * 9.0 - seeClock * 2.3)) * 0.5;
+                const float open = saturate((1.0 - d) / kHoleEdge) * seePiece[p].y;
+                if (open > seeOpen) {
+                    seeOpen = open;
+                    seeRing = d;
+                    seeMiddle = seeBody[k].xy;
+                }
             }
             break;
         }
-        if (seeInfo.w > 0.5) { // debug: every piece its own hue, the open ones red
+        if (seeInfo.w > 0.5) { // debug: every piece its own hue, the open ones red; nothing dissolves
             const float h = frac(float(piece) * 0.61803398875);
             seeTint = listed ? float3(1.0, 0.25, 0.25) : lerp(float3(1, 1, 1), saturate(abs(frac(h + float3(0, 2, 1) / 3.0) * 6.0 - 3.0) - 1.0), 0.45);
-        } else if (open > threshold) discard;
+            seeOpen = 0.0;
+        }
     }
+    if (seeLens > 0.5 ? seeOpen <= 0.0 : seeOpen > 0.0) discard;
     // culling (RenderVertex::cull): 1 the triangle's own facing; quads by both halves: the other half's facing from its
     // winding normal, with the sign that relates this triangle's winding normal to its raster facing
     const int cullMode = int(round(i.cull));
@@ -425,7 +437,25 @@ PSOut ps_main(VSOut i, bool front : SV_IsFrontFace) {
         if (blendMode > 1.5 && blendMode < 3.5) rgb *= soft;
         else alpha *= soft;
     }
-    o.color = float4(rgb, alpha);
+    if (seeLens > 0.5) {
+        // the lens: what lies behind (the scene so far), clear in the middle and bent outward toward the rim like
+        // the edge of thick glass, a thin bright rim; the surface shows only as the opening fades it in
+        static const float kRimBend = 0.08; // how far the rim bends what is behind, of the hole's radius
+        float2 at = i.pos.xy / renderSize;
+        float rim = 0.0;
+        if (seeRing >= 0.0) {
+            const float r = saturate(seeRing);
+            const float2 middle = seeMiddle * float2(0.5, -0.5) + 0.5;
+            const float bend = kRimBend * smoothstep(0.55, 1.0, r);
+            at += (at - middle) * bend;
+            rim = smoothstep(0.75, 1.0, r) * (1.0 - smoothstep(1.0, 1.15, r));
+        }
+        const float3 behind = sceneColor.SampleLevel(pointClamp, saturate(at), 0).rgb;
+        const float3 lens = behind * float3(0.97, 0.99, 1.02) + rim * 0.18;
+        rgb = lerp(rgb, lens, seeOpen);
+        alpha = 1.0;
+    }
+    o.color = float4(rgb, saturate(alpha));
     float2 cur = (i.curClip.xy / i.curClip.w) * float2(0.5, -0.5) + 0.5;
     float2 prv = (i.prevClip.xy / i.prevClip.w) * float2(0.5, -0.5) + 0.5;
     o.motion = motionMode > 0.5 ? float2(0, 0) : (prv - cur) * renderSize; // pixels, prev - cur

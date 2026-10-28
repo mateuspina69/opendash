@@ -82,14 +82,15 @@ struct FrameConstants {
     float shadowMode;
     float semiPass; // a semi-transparent range: 1 its opaque texels (no STP bit), 2 its blended ones; 0 any draw else
     float modelNear; // the game's near plane (world units): a model's face is clipped there (scene.hlsl)
-    float pad1;
+    float seeLens; // 1: the see-through's lens pass (its open pieces drawn as a lens); 0 any draw else
     float fogMode; // 0 off, 1 classic (linear on depth), 2 remaster (exponential height fog), 3 the PS1's depth cue
     float fogDensity;
     float fogHeightFalloff;
     float fogMaxOpacity;
     float sunScatter; // remaster fog brightened toward the sun (0 = sun off)
     float fogSky;     // remaster fog of a sky draw (the ray never ends): 0 not sky, 1 dome, 2 screen-space layer
-    float pad2[2];
+    float seeClock;   // the see-through lens's clock (seconds)
+    float pad2;
     float water[4];     // remaster medium look: on, clock (seconds), sky draw, kind (0 water, 1 hot air)
     float waterTint[4]; // the room's water colour
     XMFLOAT4X4 skyRay;  // screen-space sky: NDC -> view direction (inverse of the unjittered rotation-only viewProj)
@@ -292,7 +293,8 @@ public:
         nvrhi::BindingLayoutDesc bl;
         bl.visibility = nvrhi::ShaderType::All;
         bl.bindings = {nvrhi::BindingLayoutItem::VolatileConstantBuffer(0), nvrhi::BindingLayoutItem::Texture_SRV(0),
-                       nvrhi::BindingLayoutItem::Sampler(0), nvrhi::BindingLayoutItem::Texture_SRV(5)};
+                       nvrhi::BindingLayoutItem::Sampler(0), nvrhi::BindingLayoutItem::Texture_SRV(5),
+                       nvrhi::BindingLayoutItem::Texture_SRV(6)};
         if (rt_) {
             bl.bindings.push_back(nvrhi::BindingLayoutItem::RayTracingAccelStruct(1));
             bl.bindings.push_back(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2));
@@ -1288,6 +1290,7 @@ private:
     void makeDepthCopy() {
         depthCopy_ = makeTarget(t_.renderW, t_.renderH, nvrhi::Format::R32_FLOAT, "depth copy");
         depthCopyFb_ = dev_.device()->createFramebuffer(nvrhi::FramebufferDesc().addColorAttachment(depthCopy_));
+        sceneCopy_ = makeTarget(t_.renderW, t_.renderH, t_.color->getDesc().format, "scene colour copy");
         outSets_.clear(); // they bind the old copy
         flakeSet_ = blizzardSet_ = nullptr;
         makeSceneSet();
@@ -1435,7 +1438,8 @@ private:
         }
         nvrhi::BindingSetDesc bs;
         bs.bindings = {nvrhi::BindingSetItem::ConstantBuffer(0, frameCb_), nvrhi::BindingSetItem::Texture_SRV(0, pages_),
-                       nvrhi::BindingSetItem::Sampler(0, pointClamp_), nvrhi::BindingSetItem::Texture_SRV(5, depthCopy_)};
+                       nvrhi::BindingSetItem::Sampler(0, pointClamp_), nvrhi::BindingSetItem::Texture_SRV(5, depthCopy_),
+                       nvrhi::BindingSetItem::Texture_SRV(6, sceneCopy_)};
         if (rt_) {
             bs.bindings.push_back(nvrhi::BindingSetItem::RayTracingAccelStruct(1, tlas_));
             bs.bindings.push_back(nvrhi::BindingSetItem::StructuredBuffer_SRV(2, staticAttr_));
@@ -1505,6 +1509,8 @@ private:
             f.seePiece[k][2] = seePieces_[k].whole ? 1.0f : 0.0f;
             f.seePiece[k][3] = float(seePieces_[k].bodies);
         }
+        f.seeLens = frameLens_;
+        f.seeClock = seeClock_;
         f.fogStart = fog_.start;
         f.fogEnd = fog_.end;
         f.fogMode = fog ? float(int(fog_.mode)) : 0.0f;
@@ -1578,6 +1584,7 @@ private:
         }
         float fwdv[3];
         for (int c = 0; c < 3; ++c) fwdv[c] = XMVectorGetByIndex(fwd, c);
+        seeClock_ = std::chrono::duration<float>(std::chrono::steady_clock::now() - seeStart_).count();
         // the see-through's holes: each body's box through the unjittered camera, its screen bounds widened by
         // kSeeHoleMargin (NDC) and its nearest view depth; a body with a corner behind the eye opens no hole
         constexpr float kSeeHoleMargin = 1.25f;
@@ -1687,6 +1694,20 @@ private:
         }
         frameBlend_ = 0.0f;
         frameSemiPass_ = 0.0f;
+        // the see-through's open pieces: the opaque draws skipped them where they open; drawn again over everything as
+        // a lens (scene.hlsl) over a copy of the scene so far (what lies behind them), behind what is nearer (depth
+        // test, no depth write)
+        if (!seePieces_.empty() && !seeDebug_) {
+            constexpr float kLensReactive = 0.6f;
+            if (t_.samples > 1) cl_->resolveTexture(sceneCopy_, nvrhi::AllSubresources, t_.msColor, nvrhi::AllSubresources);
+            else cl_->copyTexture(sceneCopy_, nvrhi::TextureSlice(), t_.color, nvrhi::TextureSlice());
+            frameLens_ = 1.0f;
+            writeFrame(vpJit, vp, prevVp_, cam.eye, prevEye_, fwdv, cam.cullSign, true, kLensReactive, 0.0f);
+            drawRange(semi_[0], vbuf_, 0, semiStart_[0]);
+            if (!dynGpu_.empty())
+                drawRange(semi_[0], dynBuf_, 0, std::min<uint32_t>(dynStart_[0], uint32_t(dynGpu_.size())));
+            frameLens_ = 0.0f;
+        }
 
         // the precipitation's flakes, among the scene (the blown snow's medium follows after the resolve, draw())
         invVp_ = XMMatrixInverse(nullptr, vpJit);
@@ -1825,6 +1846,7 @@ private:
     std::unordered_map<int, nvrhi::GraphicsPipelineHandle> debugPipes_; // per target format, x2 + multisampled source
     std::unordered_map<nvrhi::ITexture*, nvrhi::BindingSetHandle> debugSets_;
     nvrhi::TextureHandle depthCopy_;
+    nvrhi::TextureHandle sceneCopy_; // the scene's colour before the see-through's lens (render size, resolved)
     nvrhi::FramebufferHandle depthCopyFb_;
     DebugView view_ = DebugView::Final;
     nvrhi::TextureHandle pages_;
@@ -1843,6 +1865,9 @@ private:
     std::array<uint32_t, 5> dynStart_{}; // dynamic vertices with blend <= m ([0] = end of the opaque objects)
     float frameSemiPass_ = 0.0f;         // FrameConstants::semiPass of the draws writeFrame is preparing
     float frameBlend_ = 0.0f;            // the blend of the draws writeFrame is preparing (FrameConstants::blendMode)
+    float frameLens_ = 0.0f;           // FrameConstants::seeLens of the draws writeFrame is preparing
+    float seeClock_ = 0.0f;              // the see-through lens's clock (seconds since the renderer started)
+    std::chrono::steady_clock::time_point seeStart_ = std::chrono::steady_clock::now();
     std::vector<float> dynPrev_;
     MotionHistory history_;
     bool skyScreen_ = true;

@@ -242,7 +242,8 @@ void App::simStep(int gameFrames) {
                 g_inStageSwitch = true; // the same room: the stage's files, not a new selection
                 RoomMesh mesh = loadRoom(current.stage, current.sub);
                 g_inStageSwitch = false;
-                seeThrough.roomLoaded(mesh.tris, mesh.semiStart[3] ? mesh.semiStart[0] : mesh.tris.size());
+                seeThrough.roomLoaded(mesh.tris, mesh.semiStart[3] ? mesh.semiStart[0] : mesh.tris.size(), mesh.slices,
+                                      mesh.sliceCount);
                 modelClearance.roomLoaded(mesh.tris, mesh.semiStart[3] ? mesh.semiStart[0] : mesh.tris.size());
                 if (!renderer->upload(mesh.tris, mesh.slices, mesh.sliceCount, mesh.semiStart)) SDL_Log("upload failed");
                 mesh.camTris = std::move(current.camTris);

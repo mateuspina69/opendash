@@ -412,7 +412,8 @@ int App::init() {
         if (od::port::stageDatFiles(current.stage, g, t) && g != current.roomFileName) {
             try {
                 RoomMesh mesh = loadRoom(current.stage, current.sub);
-                seeThrough.roomLoaded(mesh.tris, mesh.semiStart[3] ? mesh.semiStart[0] : mesh.tris.size());
+                seeThrough.roomLoaded(mesh.tris, mesh.semiStart[3] ? mesh.semiStart[0] : mesh.tris.size(), mesh.slices,
+                                      mesh.sliceCount);
                 modelClearance.roomLoaded(mesh.tris, mesh.semiStart[3] ? mesh.semiStart[0] : mesh.tris.size());
                 if (!renderer->upload(mesh.tris, mesh.slices, mesh.sliceCount, mesh.semiStart)) SDL_Log("upload failed");
                 current = std::move(mesh);
@@ -550,7 +551,8 @@ void App::reload(int newStage, int newSub, bool transition) {
     }
     try {
         RoomMesh mesh = loadRoom(newStage, newSub);
-        seeThrough.roomLoaded(mesh.tris, mesh.semiStart[3] ? mesh.semiStart[0] : mesh.tris.size());
+        seeThrough.roomLoaded(mesh.tris, mesh.semiStart[3] ? mesh.semiStart[0] : mesh.tris.size(), mesh.slices,
+                              mesh.sliceCount);
         modelClearance.roomLoaded(mesh.tris, mesh.semiStart[3] ? mesh.semiStart[0] : mesh.tris.size());
         if (!renderer->upload(mesh.tris, mesh.slices, mesh.sliceCount, mesh.semiStart)) SDL_Log("upload failed");
         {

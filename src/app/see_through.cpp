@@ -15,6 +15,9 @@ constexpr float kCloseTime = 0.3f;    // seconds to close
 constexpr float kEndMargin = 0.06f;   // a segment stops this many body heights short of its point (the body's skin)
 constexpr float kSideSpread = 0.35f;  // the side points, from the middle, of the body's width
 constexpr float kHeights[4] = {0.15f, 0.4f, 0.65f, 0.9f}; // the points' heights, of the body's height
+constexpr uint8_t kClearAlpha = 0x40; // a texel's alpha below this is transparent (PS1 colour 0; an STP texel, 0x80,
+                                      // is drawn opaque on an opaque face)
+constexpr int kClearSamples = 3;      // a face with this many of its 9 samples see-through is see-through
 
 float largestSide(const std::array<float, 6>& box) {
     return std::max({box[3] - box[0], box[4] - box[1], box[5] - box[2]});
@@ -22,7 +25,29 @@ float largestSide(const std::array<float, 6>& box) {
 
 } // namespace
 
-void SeeThrough::roomLoaded(std::vector<od::RenderVertex>& tris, size_t opaqueEnd) {
+bool SeeThrough::seeThroughFace(const od::RenderVertex* v) const {
+    if (v[0].slice < 0.0f) return false; // untextured: solid
+    const int slice = int(std::lround(v[0].slice));
+    if (slice >= clearSlices_) return false; // a slice made after the room (effects, the ghosts' looks)
+    static constexpr float kWeights[9][3] = {{1 / 3.0f, 1 / 3.0f, 1 / 3.0f}, {0.6f, 0.2f, 0.2f}, {0.2f, 0.6f, 0.2f},
+                                             {0.2f, 0.2f, 0.6f}, {0.45f, 0.45f, 0.1f}, {0.1f, 0.45f, 0.45f},
+                                             {0.45f, 0.1f, 0.45f}, {0.8f, 0.1f, 0.1f}, {0.1f, 0.1f, 0.8f}};
+    int clear = 0;
+    for (const auto& w : kWeights) {
+        const float u = v[0].uv[0] * w[0] + v[1].uv[0] * w[1] + v[2].uv[0] * w[2];
+        const float t = v[0].uv[1] * w[0] + v[1].uv[1] * w[1] + v[2].uv[1] * w[2];
+        const int x = std::clamp(int(u * kSliceSize), 0, kSliceSize - 1), y = std::clamp(int(t * kSliceSize), 0, kSliceSize - 1);
+        clear += clear_[(size_t(slice) * kSliceSize + size_t(y)) * kSliceSize + size_t(x)];
+    }
+    return clear >= kClearSamples;
+}
+
+void SeeThrough::roomLoaded(std::vector<od::RenderVertex>& tris, size_t opaqueEnd, const std::vector<uint8_t>& slices,
+                            int sliceCount) {
+    const size_t texels = size_t(kSliceSize) * kSliceSize;
+    clearSlices_ = slices.size() == size_t(std::max(sliceCount, 0)) * texels * 4 ? sliceCount : 0;
+    clear_.assign(size_t(clearSlices_) * texels, 0);
+    for (size_t i = 0; i < clear_.size(); ++i) clear_[i] = slices[i * 4 + 3] < kClearAlpha ? 1 : 0;
     const od::ScenePieces sp = od::scenePieces(tris.data(), tris.size());
     pieces_.clear();
     states_.clear();
@@ -30,9 +55,13 @@ void SeeThrough::roomLoaded(std::vector<od::RenderVertex>& tris, size_t opaqueEn
     for (size_t p = 0; p < sp.box.size(); ++p)
         pieces_[roomKey(uint32_t(p) + 1)] = Piece{uint32_t(p) + 1, largestSide(sp.box[p])};
     for (size_t f = 0; f < sp.of.size(); ++f) {
+        // semi-transparent (water, glass) or showing through (a fence): no piece, never in the way
+        if (f * 3 + 2 >= opaqueEnd || seeThroughFace(&tris[f * 3])) {
+            for (size_t v = 0; v < 3; ++v) tris[f * 3 + v].piece = 0.0f;
+            continue;
+        }
         const uint32_t number = sp.of[f] + 1;
         for (size_t v = 0; v < 3; ++v) tris[f * 3 + v].piece = float(number);
-        if (f * 3 + 2 >= opaqueEnd) continue; // semi-transparent (water, glass): never in the way
         Tri t;
         std::copy(tris[f * 3].pos, tris[f * 3].pos + 3, t.a);
         std::copy(tris[f * 3 + 1].pos, tris[f * 3 + 1].pos + 3, t.b);
@@ -57,6 +86,10 @@ void SeeThrough::tick(std::vector<od::DynamicObject>& objects, const float eye[3
             pieces_[dynamicKey(o.id, uint32_t(p))] = Piece{number[p], largestSide(sp.box[p])};
         }
         for (size_t f = 0; f < sp.of.size(); ++f) {
+            if (seeThroughFace(&o.tris[f * 3])) { // a fence, a grate: no piece, never in the way
+                for (size_t v = 0; v < 3; ++v) o.tris[f * 3 + v].piece = 0.0f;
+                continue;
+            }
             for (size_t v = 0; v < 3; ++v) o.tris[f * 3 + v].piece = float(number[sp.of[f]]);
             Tri t;
             std::copy(o.tris[f * 3].pos, o.tris[f * 3].pos + 3, t.a);
