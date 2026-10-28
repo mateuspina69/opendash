@@ -40,6 +40,7 @@ private:
     std::vector<nvrhi::TextureHandle> backbuffers_;
     int width_ = 1, height_ = 1;
     D3D_SHADER_MODEL shaderModel_ = D3D_SHADER_MODEL_5_1;
+    UINT swapFlags_ = 0; // DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING when the system has it (vsync off uncapped)
 };
 
 } // namespace od

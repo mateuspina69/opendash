@@ -80,6 +80,12 @@ bool DeviceD3D12::init(HWND hwnd, int w, int h, bool debug) {
     sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     sd.BufferCount = kBackBuffers;
     sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+    // A flip-model swapchain's Present(0) still waits for the refresh in a window / borderless unless it may tear
+    BOOL tearing = FALSE;
+    if (SUCCEEDED(factory_->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &tearing, sizeof tearing)) &&
+        tearing)
+        swapFlags_ = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+    sd.Flags = swapFlags_;
     ComPtr<IDXGISwapChain1> sc;
     if (FAILED(factory_->CreateSwapChainForHwnd(queue_.Get(), hwnd, &sd, nullptr, nullptr, &sc)) ||
         FAILED(sc.As(&swap_))) {
@@ -125,7 +131,7 @@ void DeviceD3D12::resize(int w, int h) {
     device_->waitForIdle();
     backbuffers_.clear();
     device_->runGarbageCollection();
-    if (FAILED(swap_->ResizeBuffers(0, UINT(w), UINT(h), DXGI_FORMAT_UNKNOWN, 0))) {
+    if (FAILED(swap_->ResizeBuffers(0, UINT(w), UINT(h), DXGI_FORMAT_UNKNOWN, swapFlags_))) {
         SDL_Log("d3d12: ResizeBuffers failed");
         createBackbuffers(); // keep presenting at the old size
         return;
@@ -136,7 +142,7 @@ void DeviceD3D12::resize(int w, int h) {
 }
 
 void DeviceD3D12::present(bool vsync) {
-    swap_->Present(vsync ? 1 : 0, 0);
+    swap_->Present(vsync ? 1 : 0, !vsync && swapFlags_ ? DXGI_PRESENT_ALLOW_TEARING : 0);
     queue_->Signal(fence_.Get(), ++fenceValue_);
     if (fenceValue_ > 1 && fence_->GetCompletedValue() < fenceValue_ - 1) { // two frames in flight
         fence_->SetEventOnCompletion(fenceValue_ - 1, fenceEvent_);
