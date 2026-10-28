@@ -100,6 +100,24 @@ struct Fog {
     float density = 0.0f, heightFalloff = 0.0f, maxOpacity = 1.0f;
 };
 
+// OpenDash's remaster precipitation: the game's snow / blizzard drawn in the world instead of its screen-space quads.
+// Flakes of a field fixed in the world fall and drift at `wind` and land on the first surface below them (a height map
+// of the room seen from above, made at upload(): nothing falls under a roof); with `blizzard`, the snow the wind blows
+// is also a medium along the view (sheets drifting with the wind, none where the height map shelters). 0 / 0 = none
+struct Precipitation {
+    float snow = 0.0f;     // 0..1: the falling flakes' density
+    float blizzard = 0.0f; // 0..1: the blown snow's density (more, faster, streaked flakes and the drifting medium)
+    float gust = 0.0f;     // 0..1: how much the blown snow's density swings between gusts
+    float wind[3]{};       // the field's velocity, world units a second (Y-up)
+    float seconds = 0.0f;  // the game's clock (stops with the game)
+    float unit = 1.0f;     // world units a game unit (the room's 1 << shift): the flakes' size and spacing
+    // the flakes' look, tuned in F1 (1 = OpenDash's defaults): how many fall, their size and brightness, the wind's
+    // eddies, each flake's flutter, how far they reach from the eye, the blown snow's streaks, the motion's chaos (each
+    // flake's own wander off the common course and its quick jitter)
+    float density = 1.0f, size = 1.0f, brightness = 1.0f, swirl = 1.0f, flutter = 1.0f, reach = 1.0f, streak = 1.0f,
+          chaos = 1.0f;
+};
+
 struct Camera {
     float eye[3];
     float yaw;     // radians, 0 = looking down +Z
@@ -169,6 +187,8 @@ public:
     virtual void setClearColor(float r, float g, float b) = 0;
     // world-geometry fog (Fog below)
     virtual void setFog(const Fog& fog) = 0;
+    // this frame's precipitation (Precipitation above)
+    virtual void setPrecipitation(const Precipitation& p) = 0;
     // sky: a dome around the eye or screen-space layers; isSky false = a 2D layer that is not the sky (ST01's travel
     // map), which the remaster fog leaves alone
     virtual void uploadSky(const std::vector<RenderVertex>& tris, bool screenSpace, bool isSky) = 0;

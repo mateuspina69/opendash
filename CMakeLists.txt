@@ -119,6 +119,12 @@ od_add_shader(TARGET opendash FILE src/render/shaders/scene.hlsl ENTRY vs_main P
 od_add_shader(TARGET opendash FILE src/render/shaders/scene.hlsl ENTRY ps_main PROFILE ps_6_0 NAME g_scene_ps)
 od_add_shader(TARGET opendash FILE src/render/shaders/scene.hlsl ENTRY ps_main PROFILE ps_6_5 NAME g_scene_rt_ps
               DEFINES OD_RT=1)
+od_add_shader(TARGET opendash FILE src/render/shaders/scene.hlsl ENTRY vs_height PROFILE vs_6_0 NAME g_height_vs)
+od_add_shader(TARGET opendash FILE src/render/shaders/scene.hlsl ENTRY ps_height PROFILE ps_6_0 NAME g_height_ps)
+od_add_shader(TARGET opendash FILE src/render/shaders/scene.hlsl ENTRY vs_flake PROFILE vs_6_0 NAME g_flake_vs)
+od_add_shader(TARGET opendash FILE src/render/shaders/scene.hlsl ENTRY ps_flake PROFILE ps_6_0 NAME g_flake_ps)
+od_add_shader(TARGET opendash FILE src/render/shaders/scene.hlsl ENTRY vs_full PROFILE vs_6_0 NAME g_full_vs)
+od_add_shader(TARGET opendash FILE src/render/shaders/scene.hlsl ENTRY ps_blizzard PROFILE ps_6_0 NAME g_blizzard_ps)
 od_add_shader(TARGET opendash FILE src/render/shaders/debugview.hlsl ENTRY ps_main PROFILE ps_6_0 NAME g_debugview_ms_ps
               DEFINES OD_MSAA=1)
 od_add_shader(TARGET opendash FILE src/render/shaders/ssaa.hlsl ENTRY cs_main PROFILE cs_6_0 NAME g_ssaa_cs)

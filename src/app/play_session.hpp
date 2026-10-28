@@ -441,8 +441,9 @@ struct PlayerView {
     std::vector<od::DynamicObject> reticleOverlay(const RoomMesh& mesh, const od::Camera& cam) const;
     // The screen-space overlays (the storm's glow, the weather layers): planes in front of the camera, so they are
     // built every rendered frame with the camera of that frame -- built once per logic tick (with the per-actor
-    // effects) they stayed where the camera was on that tick and fell behind / out of view as it moved
-    std::vector<od::DynamicObject> screenOverlays(const RoomMesh& mesh, const od::Camera& cam) const;
+    // effects) they stayed where the camera was on that tick and fell behind / out of view as it moved.
+    // remasterWeather: the weather quads over the scene are left out (the renderer's precipitation draws that weather)
+    std::vector<od::DynamicObject> screenOverlays(const RoomMesh& mesh, const od::Camera& cam, bool remasterWeather) const;
     float viewAspect = 4.0f / 3.0f; // the window's aspect (the storm's screen glow), set by the render loop
     // The field HUD (game/hud): ticked with the logic, drawn by HudUi over the scene
     od::hud::Hud hud;

@@ -338,6 +338,53 @@ static void travelOffset(const float r[3], std::vector<od::RenderVertex>& v) {
         for (int c = 0; c < 3; ++c) x.pos[c] += r[c];
 }
 
+// OpenDash's remaster precipitation (render/renderer.hpp Precipitation) from the game's weather after the tick
+// (game/weather_draw conditions). The towns' snow: as dense as its live particles, drifting with its wind (game units a
+// tick, y down) at kSnowScale of its speed -- snow's pace (~0.5 m/s; the wind at full speed, ST08 / ST09's 8 a tick,
+// fell like rain) -- never slower than kSnowFall. A blizzard layer over the scene: as thick as its grey (an additive
+// layer: 0x40 = full; ST10 / ST11 0x30), gusting by its grey's swing, blowing as fast as its x scroll (1/16 PS1 pixel a
+// tick: kBlowPerScroll game units a second each; ST10 / ST11 320: ~29 m/s, a gale -- the layer crosses the screen in
+// half a second) while the snow sinks at kBlowFall: it flies sideways.
+// The layer scrolls the screen at the camera's yaw and so gives no direction in the world: the snow's wind gives it
+// when the stage also snows, else it blows along world +x / -x by its scroll's sign
+static od::Precipitation precipitationOf(const od::weather::Conditions& w, float unit, float seconds,
+                                         const App::PrecipTuning& tune) {
+    constexpr float kTicksPerSecond = 30.0f, kSnowScale = 0.35f, kSnowFall = 70.0f, kBlowPerScroll = 13.5f,
+                    kBlowFall = 200.0f;
+    od::Precipitation p;
+    p.unit = unit;
+    p.seconds = seconds;
+    float wind[3] = {0.0f, -kSnowFall, 0.0f};
+    if (w.snowStatics) {
+        p.snow = std::min(1.0f, float(w.flakes) / float(od::port::kSnowParticles * w.snowStatics));
+        const float k = kTicksPerSecond * kSnowScale;
+        wind[0] = float(w.wind[0]) * k * tune.drift;
+        wind[1] = std::min(-float(w.wind[1]) * k, -kSnowFall) * tune.fall;
+        wind[2] = float(w.wind[2]) * k * tune.drift;
+    }
+    if (w.blizzards) {
+        const float grey = float(w.speed.grey), swing = float(w.speed.swing);
+        p.blizzard = std::clamp(grey / 64.0f, 0.25f, 1.0f);
+        p.gust = std::clamp(swing / std::max(grey, 1.0f), 0.0f, 0.8f);
+        const float blow = std::fabs(float(w.speed.scrollX)) * kBlowPerScroll * tune.blow;
+        const float h = std::sqrt(wind[0] * wind[0] + wind[2] * wind[2]);
+        const float dir[2] = {h > 1e-3f ? wind[0] / h : (w.speed.scrollX < 0 ? -1.0f : 1.0f), h > 1e-3f ? wind[2] / h : 0.0f};
+        wind[0] = dir[0] * std::max(blow, h);
+        wind[2] = dir[1] * std::max(blow, h);
+        wind[1] = std::min(wind[1], -kBlowFall * tune.fall);
+    }
+    for (int c = 0; c < 3; ++c) p.wind[c] = wind[c] * unit;
+    p.density = tune.density;
+    p.size = tune.size;
+    p.brightness = tune.brightness;
+    p.swirl = tune.swirl;
+    p.flutter = tune.flutter;
+    p.reach = tune.reach;
+    p.streak = tune.streak;
+    p.chaos = tune.chaos;
+    return p;
+}
+
 void App::updateScene() {
     if (current.depthCue && fogMode == od::FogMode::Classic) renderer->setFog(fogFor(current, fogMode, fogDistance, fogSource)); // the game's far colour as it goes
     const float* travel = playerView.renderOffset;
@@ -525,7 +572,7 @@ void App::updateScene() {
                 }
             }
         }
-        for (od::DynamicObject& o : playerView.screenOverlays(current, cam)) {
+        for (od::DynamicObject& o : playerView.screenOverlays(current, cam, weatherRemaster)) {
             travelOffset(travel, o.tris);
             dynFrame.push_back(std::move(o));
         }
@@ -596,6 +643,24 @@ void App::updateScene() {
         const bool heat = !((pl.inWater == 1) || display.pace == 3);
         renderer->setScreenWave(waveAmp, std::fmod(float(playerView.logicTicks) + alpha, 128.0f), tint, waterRemaster,
                                 float(std::fmod(double(SDL_GetTicksNS()) * 1e-9, 2400.0)), heat);
+    }
+    { // the remaster precipitation (none in classic: the game's quads, PlayerView::screenOverlays), on the game's clock
+        od::Precipitation p;
+        if (playerView.play && weatherRemaster && od::port::display().drawingOff == 0) {
+            const od::weather::Conditions w = od::weather::conditions();
+            p = precipitationOf(w, float(1 << current.shift), float((double(playerView.logicTicks) + alpha) / 30.0),
+                                w.blizzards ? blizzardTuning : snowTuning);
+            if (w.snowStatics != weatherLog.snowStatics || w.blizzards != weatherLog.blizzards ||
+                w.flakes / 8 != weatherLog.flakes / 8) {
+                SDL_Log("precipitation: snow %u statics %u flakes wind %d %d %d | blizzard %u grey %u swing %u scroll %d %d"
+                        " -> snow %.2f blizzard %.2f gust %.2f wind %.0f %.0f %.0f",
+                        w.snowStatics, w.flakes, int(w.wind[0]), int(w.wind[1]), int(w.wind[2]), w.blizzards,
+                        unsigned(w.speed.grey), unsigned(w.speed.swing), int(w.speed.scrollX), int(w.speed.scrollY),
+                        p.snow, p.blizzard, p.gust, p.wind[0], p.wind[1], p.wind[2]);
+                weatherLog = w;
+            }
+        }
+        renderer->setPrecipitation(p);
     }
 }
 

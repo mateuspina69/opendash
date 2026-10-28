@@ -7,6 +7,7 @@
 #include "game/angles.hpp"
 #include "game/camera_state.hpp"
 #include "game/display.hpp"
+#include "game/snow_state.hpp"
 
 namespace od::weather {
 namespace {
@@ -129,6 +130,33 @@ void collect(std::vector<Quad>& out, int extra) {
         if (!a.live()) continue;
         if (handler(a, port::ActorPool::Statics, port::ActorPool::StaticsLate) == kSnow) snow(i, out, extra);
     }
+}
+
+Conditions conditions() {
+    Conditions c;
+    port::EffectPool& effects = port::effectPool();
+    port::StaticPool& statics = port::staticPool();
+    for (uint32_t i = 0; i < effects.size(); ++i) {
+        const port::EffectActor& a = effects[i];
+        if (!a.live() || handler(a, port::ActorPool::Effects, port::ActorPool::EffectsLate) != kBlizzardLayer) continue;
+        if (!(a.flags & port::kActorDrawn) || port::display().drawingOff != 0) continue; // as the layer's draw
+        const port::BlizzardLayerFields& f = port::classState<port::BlizzardLayerFields>(a);
+        if (f.otSlot >= kBackSlot || !f.speed.targetMapped(8)) continue;
+        if (c.blizzards++ == 0) c.speed = *f.speed;
+    }
+    for (uint32_t i = 0; i < statics.size(); ++i) {
+        const port::StaticActor& a = statics[i];
+        if (!a.live() || handler(a, port::ActorPool::Statics, port::ActorPool::StaticsLate) != kSnow) continue;
+        const port::SnowDrawBlock& blk = port::snowDrawBlock(i);
+        if (c.snowStatics++ == 0) {
+            const port::snow_state::SnowFields& f = port::classState<port::snow_state::SnowFields>(a);
+            c.wind[0] = f.windX.get();
+            c.wind[1] = f.windY.get();
+            c.wind[2] = f.windZ.get();
+        }
+        for (uint32_t m = blk.drawn; m; m &= m - 1) ++c.flakes;
+    }
+    return c;
 }
 
 } // namespace od::weather

@@ -33,6 +33,8 @@ struct Config {
     float fogDistance = 1.0f;
     // water= remaster|classic (F1 Video): the flooded rooms' underwater look (OpenDash's or the PS1 / PSP screen wave)
     std::string water = "remaster";
+    // weather= remaster|classic (F1 Video): the snow / blizzard (OpenDash's, in the world, or the game's screen quads)
+    std::string weather = "remaster";
     // dissolve= 0|1 (F1 Visual): the scenery between the camera and the characters in focus (the player, the lock-on
     // target) dissolves around them, Baldur's Gate style
     bool dissolve = true;

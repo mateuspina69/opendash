@@ -86,6 +86,22 @@ int run(const std::filesystem::path& exe, const std::filesystem::path& file, int
         std::vector<Words> mine;
         for (const auto& q : quads)
             if (q.original) mine.push_back(packet(q));
+        // the remaster's precipitation reads the same state (od::weather::conditions): a blizzard over the scene
+        // exactly when a layer's quads are drawn over it, at least as many live snow particles as snow sprites (one
+        // nearer than the sprites' near depth is not drawn)
+        const od::weather::Conditions cond = od::weather::conditions();
+        size_t over = 0, sprites = 0;
+        for (const auto& q : quads) {
+            if (!q.original) continue;
+            over += q.source == od::RoutineId::BlizzardLayerUpdate && od::weather::overScene(q);
+            sprites += q.source == od::RoutineId::SnowParticleDraw;
+        }
+        if ((cond.blizzards > 0) != (over > 0) || cond.flakes < sprites || (cond.snowStatics == 0 && sprites > 0)) {
+            if (++fails <= 8)
+                std::printf("  %s tick %u: conditions blizzards %u flakes %u statics %u, quads over the scene %zu, "
+                            "snow sprites %zu\n", file.filename().string().c_str(), tick, cond.blizzards, cond.flakes,
+                            cond.snowStatics, over, sprites);
+        }
         std::sort(game.begin(), game.end());
         std::sort(mine.begin(), mine.end());
         checked += int(game.size());

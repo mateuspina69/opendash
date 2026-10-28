@@ -92,6 +92,23 @@ struct Quad {
 // box.
 void collect(std::vector<Quad>& out, int extra = 0);
 
+// The OT slots from kBackSlot on lie behind the room geometry: a blizzard layer linked there is a backdrop the room
+// hides (ST02 1024, ST03 4095: the sky seen through the airship's windows in the attract), one before it is drawn
+// over the scene (ST10 / ST11 / ST1D: slot 1). The snow sprites are always among the scene (the depth OT, z >> 1).
+constexpr uint16_t kBackSlot = 0x100;
+inline bool overScene(const Quad& q) { return q.source != RoutineId::BlizzardLayerUpdate || q.ot < kBackSlot; }
+
+// The weather the game runs after the tick (read-only; OpenDash's remaster precipitation draws it in the world
+// instead of the screen-space quads above): the towns' snow statics and the blizzard layers over the scene
+struct Conditions {
+    uint32_t snowStatics = 0;     // live snow statics (exe 0x591640)
+    uint32_t flakes = 0;          // their live particles (kSnowParticles each: trickling in / thinning out)
+    int8_t wind[3]{};             // the first one's wind, game units a tick (x, y down, z)
+    uint32_t blizzards = 0;       // blizzard layers over the scene (exe 0x431af0, OT slot < kBackSlot)
+    port::BlizzardSpeed speed{};  // the first one's speed record (its grey, the grey's swing, its scroll speeds)
+};
+Conditions conditions();
+
 // The texture key (od::fx::TextureCache) of a quad: tpage / CLUT with the neutral tint.
 inline int texture(fx::TextureCache& tex, const Quad& q) { return tex.index(q.tpage, q.clut); }
 

@@ -277,6 +277,61 @@ void App::drawDebugMenu() {
                     ImGui::SetTooltip("original: a ondulacao de linhas da tela do PS1 / PSP.\n"
                                       "remaster: ondulacao suave, cor mais funda embaixo, causticas e raios de luz.");
             }
+            {
+                ImGui::SeparatorText("Neve");
+                static const char* kWeatherModes[] = {"original (PS1)", "remaster"};
+                int wm = weatherRemaster ? 1 : 0;
+                if (ImGui::Combo("neve e nevasca", &wm, kWeatherModes, 2)) {
+                    weatherRemaster = wm == 1;
+                    od::saveConfigValue("weather", weatherRemaster ? "remaster" : "classic");
+                }
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("original: os sprites de neve e a camada de nevasca na tela, como o jogo desenha.\n"
+                                      "remaster: flocos no mundo, que caem com o vento e pousam no chao e nos telhados\n"
+                                      "(nada debaixo de um teto); na nevasca, rajadas de neve soprada pelo cenario.");
+                if (weatherRemaster && ImGui::TreeNode("ajustes da neve remaster")) {
+                    // the set of the weather on screen (the last conditions the frame read)
+                    const bool blizzard = weatherLog.blizzards > 0;
+                    PrecipTuning& t = blizzard ? blizzardTuning : snowTuning;
+                    ImGui::TextDisabled(blizzard ? "ajustando: nevasca" : "ajustando: neve das cidades");
+                    struct Knob {
+                        const char* name;
+                        float* value;
+                        float lo, hi;
+                        const char* tip;
+                    };
+                    const Knob knobs[] = {
+                        {"queda", &t.fall, 0.1f, 4.0f, "velocidade com que os flocos descem"},
+                        {"deriva", &t.drift, 0.0f, 4.0f, "quanto o vento da neve leva os flocos de lado"},
+                        {"vento da nevasca", &t.blow, 0.0f, 3.0f, "velocidade do vento nas nevascas (ST10 / ST11)"},
+                        {"densidade", &t.density, 0.1f, 2.0f, "quantos flocos caem (ate 2)"},
+                        {"tamanho", &t.size, 0.25f, 4.0f, "tamanho de cada floco no mundo (1 = o sprite do PS1 na distancia do Mega Man)"},
+                        {"brilho", &t.brightness, 0.25f, 2.0f, "brilho dos flocos (1 = o cinza do PS1)"},
+                        {"redemoinho", &t.swirl, 0.0f, 4.0f, "redemoinhos lentos do vento"},
+                        {"balanco", &t.flutter, 0.0f, 4.0f, "o vaivem de cada floco"},
+                        {"caos", &t.chaos, 0.0f, 4.0f,
+                         "a desordem do movimento: cada floco se desvia do vento comum e treme (0 = todos juntos)"},
+                        {"alcance", &t.reach, 0.1f, 3.0f, "ate que distancia ha flocos (1 = 4000 unidades, 3 = o maximo)"},
+                        {"rastro", &t.streak, 0.0f, 4.0f, "rastro dos flocos na nevasca"},
+                    };
+                    for (const Knob& k : knobs) {
+                        ImGui::SliderFloat(k.name, k.value, k.lo, k.hi, "%.2f");
+                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", k.tip);
+                    }
+                    if (ImGui::Button("padrao")) t = blizzard ? kBlizzardTuning : kSnowTuning;
+                    ImGui::SameLine();
+                    if (ImGui::Button("copiar valores")) {
+                        std::string s = blizzard ? "nevasca:" : "neve:";
+                        char v[48];
+                        for (const Knob& k : knobs) {
+                            std::snprintf(v, sizeof v, " %s=%.2f", k.name, *k.value);
+                            s += v;
+                        }
+                        ImGui::SetClipboardText(s.c_str());
+                    }
+                    ImGui::TreePop();
+                }
+            }
             ImGui::EndTabItem();
         }
         if (playerView.ok && ImGui::BeginTabItem("Som e idioma")) {

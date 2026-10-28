@@ -433,7 +433,8 @@ std::vector<od::DynamicObject> PlayerView::liveEffects(const RoomMesh& mesh, con
     return out;
 }
 
-std::vector<od::DynamicObject> PlayerView::screenOverlays(const RoomMesh& mesh, const od::Camera& cam) const {
+std::vector<od::DynamicObject> PlayerView::screenOverlays(const RoomMesh& mesh, const od::Camera& cam,
+                                                          bool remasterWeather) const {
     std::vector<od::DynamicObject> out;
     if (!play || roomStage != mesh.stage || roomSub != mesh.sub || mesh.fxSlices.empty()) return out;
     const float f[3] = {std::sin(cam.yaw) * std::cos(cam.pitch), std::sin(cam.pitch), std::cos(cam.yaw) * std::cos(cam.pitch)};
@@ -500,20 +501,25 @@ std::vector<od::DynamicObject> PlayerView::screenOverlays(const RoomMesh& mesh, 
         if (!obj.tris.empty()) out.push_back(std::move(obj));
     }
     // the weather overlays (game/weather_draw): textured PS1 quads (additive, tpage abr 1). The blizzard layer is
-    // linked at its OT slot +0xc: slot 1 (ST1D) = in front of everything, drawn over the scene like the storm glow;
-    // the back of the OT (ST02 1024, ST03 4095: the sky seen through the airship's windows in the attract) = behind
-    // every polygon, a backdrop the room hides. The snow sprites go into the depth OT (slot z >> 1) in the game, here
-    // they are drawn over the scene too (approximation)
+    // linked at its OT slot +0xc: slot 1 (ST10 / ST11 / ST1D) = in front of everything, drawn over the scene like the
+    // storm glow; the back of the OT (ST02 1024, ST03 4095: the sky seen through the airship's windows in the attract)
+    // = behind every polygon, a backdrop the room hides (od::weather::overScene). A snow sprite goes into the depth OT
+    // at slot z >> 1, z its view depth in game units (the logic moves it by the eye's travel along the view): it is
+    // drawn at that depth, behind what is nearer (a wall, a roof's edge). remasterWeather: the quads over the scene
+    // are the renderer's precipitation instead
     if (!weather.empty()) {
         od::DynamicObject obj{od::objectId(od::kKindEffect, 0x78000u | 2u), {}, 2};
         od::DynamicObject back{od::objectId(od::kKindEffect, 0x78000u | 3u), {}, 2};
         constexpr float kDepth = 12.5f;       // just behind the storm glow plane
         constexpr float kBackDepth = 120000.0f; // behind the room, in front of the sky dome (140000)
-        constexpr uint16_t kBackSlot = 0x100;   // OT slots from here on: behind the room geometry
+        const float world = float(1 << mesh.shift);
         const float vw = 240.0f * viewAspect, ox = (vw - 320.0f) * 0.5f;
         for (const od::weather::Quad& q : weather) {
-            const bool behind = q.source == od::RoutineId::BlizzardLayerUpdate && q.ot >= kBackSlot;
-            const float depth = behind ? kBackDepth : kDepth;
+            const bool over = od::weather::overScene(q);
+            if (over && remasterWeather) continue;
+            const float depth = !over ? kBackDepth
+                                : q.source == od::RoutineId::SnowParticleDraw ? float(q.ot) * 2.0f * world
+                                                                               : kDepth;
             const int t = g_fxTextures.find(q.tpage, q.clut);
             if (t < 0 || size_t(t) >= mesh.fxSlices.size()) continue; // slice not built yet
             // the far texel edge one texel out: the PS1 maps 32 pixels onto u .. u + 31 inclusive
@@ -530,7 +536,7 @@ std::vector<od::DynamicObject> PlayerView::screenOverlays(const RoomMesh& mesh, 
                 v[k].slice = float(mesh.fxSlices[size_t(t)]);
                 v[k].shade = 1.0f;
             }
-            for (int idx : od::kQuadTris) (behind ? back : obj).tris.push_back(v[idx]);
+            for (int idx : od::kQuadTris) (over ? obj : back).tris.push_back(v[idx]);
         }
         if (!back.tris.empty()) out.push_back(std::move(back));
         if (!obj.tris.empty()) out.push_back(std::move(obj));

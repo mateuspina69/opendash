@@ -35,9 +35,21 @@ cbuffer Frame : register(b0) {
     float4 focusWorld[2];   // ... their feet (world y), their strength (0..1)
     float focusCount;
     float3 pad3;
+    float4 heightBounds;  // precipitation height map: min x, min z, 1 / its width, 1 / its depth (world units)
+    float4 heightRange;   // ... its top y, its height span, its size in texels (x, z)
+    float4 precip;        // precipitation: snow, blizzard (0..1), the gusts' swing, the game's clock (seconds)
+    float4 precipWind;    // ... the field's velocity (world units a second), world units a game unit
+    float4 precipView;    // ... tan(fovY / 2), the flakes' light
+    float4x4 invViewProj; // the blown snow's pass: NDC (x, y, depth) -> world (jittered, as the depth was drawn)
+    float4 softDepth;     // the depth copy's near / far planes (its raw depth -> view depth)
+    float4 precipLook0;   // the flakes' look (F1, 1 = the defaults): density, size, brightness, the eddies' swirl
+    float4 precipLook1;   // ... each flake's flutter, how far they reach, the blown snow's streaks, the motion's chaos
+    float4 precipLayer;   // the flake field drawn: its cells' scale, flakes a cell, 1 = the far field
 };
 Texture2DArray pages : register(t0);
 SamplerState pointClamp : register(s0);
+Texture2D<float> heightMap : register(t4);  // precipitation: the room seen from above (depth 0 = top, 1 = no surface)
+Texture2D<float> sceneDepth : register(t5); // the opaque scene's raw depth (R32F copy, before the blended draws)
 
 #ifdef OD_RT
 // ray-traced sun shadows (DXR 1.1 inline ray queries). Instance 0 = room (opaque ranges), 1 = dynamic actors;
@@ -73,6 +85,19 @@ float sunVisibility(float3 wp, float3 n, float lift) {
     return q.CommittedStatus() == COMMITTED_TRIANGLE_HIT ? 0.0 : 1.0;
 }
 #endif
+
+// Soft effects (OpenDash): an effect's polygon (a billboard, a particle, a ring) cut by the scenery it passes into shows
+// the cut as a hard line; instead it fades out as it nears the opaque surface behind it (0 at the surface, 1 a softness
+// away: wider with the distance, where a polygon's depth spans more). The view depth of the opaque surface at a pixel:
+// the depth copy made before the blended draws
+float sceneViewDepth(float2 px) {
+    const float z = sceneDepth.Load(int3(int2(px), 0));
+    return softDepth.x * softDepth.y / (softDepth.y - z * (softDepth.y - softDepth.x));
+}
+
+float softEdge(float2 px, float viewDepth) {
+    return saturate((sceneViewDepth(px) - viewDepth) / (16.0 + viewDepth * 0.012));
+}
 
 struct VSIn {
     float3 pos : POSITION;
@@ -379,7 +404,14 @@ PSOut ps_main(VSOut i, bool front : SV_IsFrontFace) {
     else if (water.x > 0.5) rgb = underwater(rgb, i.world, reactive == 0.0 && water.z < 0.5, reactive > 0.0 && water.z < 0.5);
     PSOut o;
     // the PC exe's vertex alpha of a semi-transparent polygon (0x402100): 0x80 average, 0x40 B + F/4, else 0xff
-    o.color = float4(rgb, blendMode > 0.5 && blendMode < 1.5 ? 0.5 : blendMode > 3.5 ? 0.25 : 1.0);
+    float alpha = blendMode > 0.5 && blendMode < 1.5 ? 0.5 : blendMode > 3.5 ? 0.25 : 1.0;
+    // an effect's blended texels fade at the scenery (softEdge): the light it adds / takes away, or its alpha
+    if ((surface & 4u) && semiPass > 1.5) {
+        const float soft = softEdge(i.pos.xy, i.depth);
+        if (blendMode > 1.5 && blendMode < 3.5) rgb *= soft;
+        else alpha *= soft;
+    }
+    o.color = float4(rgb, alpha);
     float2 cur = (i.curClip.xy / i.curClip.w) * float2(0.5, -0.5) + 0.5;
     float2 prv = (i.prevClip.xy / i.prevClip.w) * float2(0.5, -0.5) + 0.5;
     o.motion = motionMode > 0.5 ? float2(0, 0) : (prv - cur) * renderSize; // pixels, prev - cur
@@ -390,5 +422,310 @@ PSOut ps_main(VSOut i, bool front : SV_IsFrontFace) {
     // with depth clip off (a face past the near plane is drawn at depth 0)
     o.depth = round(saturate(i.pos.z) * 16777215.0) / 16777215.0;
 #endif
+    return o;
+}
+
+// ---- precipitation (OpenDash remaster: renderer.hpp Precipitation) ----
+
+// the height map (made once per room, upload()): the room's surfaces seen from above, the highest one per texel; the
+// alpha-tested texels (PS1 colour 0: railings, foliage) let the snow through
+struct HeightOut {
+    float4 pos : SV_Position;
+    float3 uvs : TEXCOORD0;
+};
+
+HeightOut vs_height(VSIn i) {
+    HeightOut o;
+    const float2 uv = (i.pos.xz - heightBounds.xy) * heightBounds.zw;
+    o.pos = float4(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, saturate((heightRange.x - i.pos.y) / heightRange.y), 1.0);
+    o.uvs = float3(i.uv, i.slice);
+    return o;
+}
+
+void ps_height(HeightOut i) {
+    if (i.uvs.z >= 0) clip(pages.Sample(pointClamp, i.uvs).a - 0.25);
+}
+
+// the first surface below the point (x, z) from above; -1e30 = none (outside the room, or open to the void)
+float groundAt(float2 xz) {
+    const float2 uv = (xz - heightBounds.xy) * heightBounds.zw;
+    if (any(uv < 0.0) || any(uv >= 1.0)) return -1e30;
+    const float d = heightMap.Load(int3(int2(uv * heightRange.zw), 0));
+    return d >= 1.0 ? -1e30 : heightRange.x - d * heightRange.y;
+}
+
+uint4 pcg4d(uint4 v) {
+    v = v * 1664525u + 1013904223u;
+    v.x += v.y * v.w;
+    v.y += v.z * v.x;
+    v.z += v.x * v.y;
+    v.w += v.y * v.z;
+    v ^= v >> 16u;
+    v.x += v.y * v.w;
+    v.y += v.z * v.x;
+    v.z += v.x * v.y;
+    v.w += v.y * v.z;
+    return v;
+}
+
+float4 rand4(int3 cell, uint k) { return float4(pcg4d(uint4(asuint(cell), k))) * (1.0 / 4294967296.0); }
+
+// the light of the snow: white, dimmed with the place (precipView.y), fogged at that point a little less than the
+// scenery (kSnowFog: a flake turned into the fog's colour would vanish in the white haze)
+static const float kSnowFog = 0.6;
+
+float3 snowLight(float3 wp, float viewDepth) {
+    float3 c = float3(0.93, 0.95, 0.98) * precipView.y;
+    if (fogMode > 0.5 && fogMode < 1.5 && fogEnd > fogStart)
+        c = lerp(c, fogColor, (1.0 - saturate((fogEnd - viewDepth) / (fogEnd - fogStart))) * kSnowFog);
+    else if (fogMode > 1.5 && fogMode < 2.5)
+        c = lerp(c, remasterFogColor(normalize(wp - eye)), remasterFog(wp) * kSnowFog);
+    return c;
+}
+
+// The flakes: points fixed in their own field, in cells of kFlakeCell game units around the eye, up to kFlakesPerCell
+// random points each; a field moves with the wind (each flake keeps its place in the world while the camera moves or
+// turns; the cells at the edge of the range come and go faded out by the distance). Three fields fall at their own
+// speeds (kFlakeFall: light flakes drift, heavy ones drop). The wind gusts (it speeds up and slackens) and its slow
+// eddies swirl the flakes, holding them up or lifting them a little before they sink again; each flake also flutters.
+// A flake is a soft dot like the game's snow sprite (exe 0x591c10), about kFlakeRadius game units across in the world:
+// the sprite's size at the player's distance, larger nearer and smaller further on (the sprite's 1..4 pixels in the
+// screen's box read as snow stuck to the lens) -- most small, a few big ones; equally bright at any distance (the
+// sprite's grey (z >> 3) + 0x40 darkened the near flakes into grey blots). They fill the view out to kFlakeReach, none
+// hugging the lens (nearer than kFlakeNear). Two fields of kFlakeCells cells: the near one (kFlakeCell, up to
+// precipLayer.y = 32 flakes a cell: density up to 2) and the far one beyond it (cells precipLayer.x = 3 times larger,
+// up to 16 flakes: the reach out to ~12000), crossfaded where they meet; each draw is cells x flakes a cell x 6
+// vertices (NvrhiRenderer drawScene)
+static const int3 kFlakeCells = int3(24, 12, 24);
+static const float kFlakeCell = 260.0;
+static const uint kFlakesDense = 16; // the flakes a cell at density 1
+static const float kFlakeRadius = 3.5;
+static const float kFlakeNear = 150.0;
+static const float kFlakeFall[3] = {0.65, 1.0, 1.4};
+static const float kFlakeRest = 1.2;    // seconds a flake lies on the surface it fell on, fading
+static const float kFlakeReach = 4000.0; // game units of view depth the flakes reach
+// seconds of travel a flake's streak shows (the eye's motion blur): none for calm snow (a streak reads as a raindrop),
+// a short one for blown snow, never longer than kFlakeMaxStreak flake widths
+static const float2 kFlakeExposure = float2(0.0, 0.008);
+static const float kFlakeMaxStreak = 3.0;
+
+// the wind's eddies at a point of the field: a swirl across the ground and up / down drafts (displacement, game units x
+// unit), larger and slower than one flake's flutter; neighbours a few metres apart already drift differently
+float3 eddies(float3 q, float t, float unit, float strength) {
+    const float3 s = q / (380.0 * unit);
+    const float2 swirl = float2(sin(s.z * 1.7 + t * 0.35) + 0.5 * sin(s.z * 3.9 - t * 0.6 + s.y),
+                                cos(s.x * 1.9 - t * 0.31) + 0.5 * cos(s.x * 4.3 + t * 0.55 - s.y));
+    const float draft = sin(s.x * 2.3 + s.z * 1.7 + t * 0.45) + 0.5 * sin(s.z * 3.1 - s.x * 1.3 - t * 0.7);
+    return float3(swirl.x, draft * 0.45, swirl.y) * (strength * unit);
+}
+
+// a flake's place at time t: its point carried by its field's wind (gusting: the travel's speed swings around the
+// wind's), bent by the eddies (precipLook0.w); then its own way: its flutter (precipLook1.x) and the chaos
+// (precipLook1.w): a slow wander off the common course (each flake's speed and heading differ: no two move in parallel)
+// and a quick jitter (sines of unrelated rates: the path never repeats nor runs smooth)
+float3 flakeAt(float3 home, float3 vel, float4 r2, float t, float unit, float blown) {
+    const float gust = (0.35 + 0.15 * blown) * min(1.0 / 0.21, 900.0 * unit / max(length(vel.xz), 1.0));
+    float3 q = home + vel * t;
+    q.xz += vel.xz * gust * (sin(t * 0.21) + 0.4 * sin(t * 0.53 + 1.3)); // the travel's swing (bounded)
+    const float phase = r2.x * 6.2832, rate = 0.7 + r2.y;
+    const float chaos = precipLook1.w;
+    float3 p = q + eddies(q, t, unit, lerp(120.0, 260.0, blown) * precipLook0.w);
+    // the wander: a slow, wide swing around the course, its own rates and phases per axis
+    const float wander = lerp(90.0, 260.0, blown) * unit * chaos;
+    p.x += sin(t * (0.23 + 0.31 * r2.y) + phase) * wander;
+    p.z += sin(t * (0.19 + 0.37 * r2.x) + phase * 2.1) * wander;
+    p.y += sin(t * (0.17 + 0.29 * r2.w) + phase * 3.3) * wander * 0.35;
+    // the flutter and the jitter
+    const float flutter = 20.0 * unit * (1.0 - 0.5 * blown) * precipLook1.x;
+    p.x += (sin(t * rate * 1.3 + phase) * 0.6 + sin(t * rate * 2.9 + phase * 2.3) * 0.4) * flutter;
+    p.z += (cos(t * rate * 1.1 + phase * 1.7) * 0.6 + sin(t * rate * 2.3 + phase * 0.6) * 0.4) * flutter;
+    p.y += sin(t * rate * 0.9 + phase * 1.3) * flutter * 0.4;
+    const float jitter = lerp(6.0, 16.0, blown) * unit * chaos;
+    p.x += (sin(t * 3.7 * rate + phase * 5.1) + sin(t * 7.9 * rate + phase * 1.9) * 0.5) * jitter;
+    p.y += (sin(t * 5.3 * rate + phase * 2.7) + sin(t * 9.1 * rate + phase * 4.3) * 0.5) * jitter;
+    p.z += (sin(t * 4.1 * rate + phase * 3.9) + sin(t * 8.3 * rate + phase * 6.1) * 0.5) * jitter;
+    return p;
+}
+
+struct FlakeOut {
+    float4 pos : SV_Position;
+    float2 uv : TEXCOORD0;   // -1..1 across the flake, x along its streak
+    float ratio : TEXCOORD1; // the streak's half length / half width
+    float alpha : TEXCOORD2;
+    float depth : TEXCOORD3; // the flake's view depth (softEdge)
+    float3 color : COLOR0;
+};
+
+FlakeOut vs_flake(uint vid : SV_VertexID) {
+    FlakeOut o;
+    o.pos = float4(0.0, 0.0, -1.0, 1.0); // culled (outside the depth range)
+    o.uv = float2(0.0, 0.0);
+    o.ratio = 1.0;
+    o.alpha = 0.0;
+    o.depth = 0.0;
+    o.color = float3(0.0, 0.0, 0.0);
+    const uint flake = vid / 6, corner = vid % 6;
+    const uint perCell = uint(precipLayer.y + 0.5), k = flake % perCell, cell = flake / perCell;
+    const bool farField = precipLayer.z > 0.5;
+    const float unit = precipWind.w, t = precip.w, blown = saturate(precip.y);
+    // this flake's field: its fall speed (light flakes also drift a little more with the wind)
+    const float fall = kFlakeFall[k % 3];
+    const float3 vel = float3(precipWind.x * (1.2 - 0.2 * fall), precipWind.y * fall, precipWind.z * (1.2 - 0.2 * fall));
+    const float size = kFlakeCell * precipLayer.x * unit;
+    const int3 base = int3(floor((eye - vel * t) / size)) - kFlakeCells / 2;
+    const int3 ci = base + int3(cell % kFlakeCells.x, (cell / kFlakeCells.x) % kFlakeCells.y,
+                                cell / (kFlakeCells.x * kFlakeCells.y));
+    const int3 seed = farField ? ci + int3(611953, 999331, 314159) : ci; // the far field's own points
+    const float4 r = rand4(seed, k), r2 = rand4(seed + int3(7919, 104729, 1299709), k);
+    // how many of a cell's points fall: the snow's density, the blown snow's on top (kFlakesDense at density 1)
+    const float dense = (precip.x * 0.8 + precip.y * 1.2) * precipLook0.x * float(kFlakesDense) / float(perCell);
+    if (r.w >= saturate(dense)) return o;
+    const float3 home = (float3(ci) + r.xyz) * size;
+    float3 p = flakeAt(home, vel, r2, t, unit, blown);
+    float3 v = (p - flakeAt(home, vel, r2, t - 0.04, unit, blown)) / 0.04; // its real travel (the streak)
+    // landed: under the first surface below it (a roof, the ground, a table) it lay there since it reached it, where the
+    // wind left it, for kFlakeRest seconds; under a roof it never was
+    float fade = 1.0;
+    const float ground = groundAt(p.xz);
+    if (p.y < ground) {
+        const float since = (ground - p.y) / max(-vel.y, 1.0);
+        if (since >= kFlakeRest) return o;
+        p.xz -= v.xz * since;
+        const float at = groundAt(p.xz);
+        if (at < ground - size) return o; // it would have gone on falling past an edge: not drawn lying
+        p.y = at + unit * 6.0; // its soft edge (softEdge) leaves its top on the surface
+        fade = 1.0 - since / kFlakeRest;
+        v = float3(0.0, 0.0, 0.0);
+    }
+    const float3 toEye = p - eye;
+    const float dist = length(toEye);
+    const float depth = dot(toEye, fwd);
+    const float z = depth / unit; // the original's z (game units of view depth)
+    const float reach = kFlakeReach * precipLook1.y;
+    if (z <= 0.0 || z >= reach) return o;
+    fade *= 1.0 - smoothstep(0.6 * reach, reach, z);
+    fade *= smoothstep(kFlakeNear * unit, 2.0 * kFlakeNear * unit, dist); // none hugging the lens
+    // the fields' edges: the near one hands over to the far one, the far one fades out at its own
+    const float nearRange = kFlakeCell * unit * float(kFlakeCells.x) * 0.5, range = size * float(kFlakeCells.x) * 0.5;
+    const float handover = smoothstep(0.55 * nearRange, 0.9 * nearRange, dist);
+    fade *= farField ? handover * (1.0 - smoothstep(0.6 * range, 0.95 * range, dist)) : 1.0 - handover;
+    if (fade <= 0.0) return o;
+    // its size in the world (most small, a few big clumps); at least ~a pixel (a smaller one is drawn that big,
+    // fainter by its width)
+    float radius = kFlakeRadius * unit * lerp(0.6, 2.0, r2.z * r2.z) * precipLook0.y;
+    const float pixel = dist * 2.0 * precipView.x / renderSize.y; // world units a picture pixel at the flake
+    const float drawn = max(radius, pixel * 0.75);
+    fade *= radius / drawn;
+    radius = drawn;
+    // a streak along its travel (the eye's exposure), foreshortened when it comes toward the eye
+    const float3 view = toEye / dist;
+    const float speed = length(v);
+    float3 a = speed > 1e-3 ? v / speed : float3(0.0, 1.0, 0.0);
+    float3 b = cross(a, view);
+    float across = length(b);
+    if (across < 0.05) { // travelling along the view: no streak
+        b = normalize(cross(float3(0.0, 1.0, 0.0), fwd));
+        a = cross(view, b);
+        across = 0.0;
+    } else {
+        b /= across;
+    }
+    const float exposure = lerp(kFlakeExposure.x, kFlakeExposure.y, blown) * precipLook1.z;
+    const float halfLength = min(radius + 0.5 * speed * exposure * across, radius * kFlakeMaxStreak);
+    static const float2 kCorner[6] = {float2(-1, -1), float2(1, -1), float2(-1, 1), float2(1, -1), float2(1, 1),
+                                      float2(-1, 1)};
+    const float2 c = kCorner[corner];
+    const float3 wp = p + a * (c.x * halfLength) + b * (c.y * radius);
+    o.pos = mul(float4(wp, 1.0), viewProj);
+    o.uv = c;
+    o.ratio = halfLength / radius;
+    o.alpha = fade / pow(o.ratio, 0.25);
+    o.depth = depth;
+    // as bright at any distance, a little more or less per flake
+    o.color = snowLight(p, depth) * lerp(0.9, 1.05, r2.w) * precipLook0.z;
+    return o;
+}
+
+struct FlakePSOut {
+    float4 color : SV_Target0;
+    float reactive : SV_Target3;
+};
+
+FlakePSOut ps_flake(FlakeOut i) {
+    // a soft dot (a soft capsule along a blown flake's streak), its edge about a pixel wide at least
+    const float2 q = float2(max(abs(i.uv.x) * i.ratio - (i.ratio - 1.0), 0.0), i.uv.y);
+    const float m = 1.0 - length(q);
+    const float cover = smoothstep(0.0, max(fwidth(m) * 1.5, 0.5), m);
+    const float a = i.alpha * cover * softEdge(i.pos.xy, i.depth);
+    if (a <= 0.002) discard;
+    FlakePSOut o;
+    o.color = float4(i.color, a);
+    o.reactive = a;
+    return o;
+}
+
+// The blown snow (blizzard): sheets of snow carried by the wind, a medium marched along the view ray up to the scene
+// (the sky: kBlowReach), absent where the height map shelters (under a roof); drawn over the resolved scene colour
+static const float kBlowReach = 3600.0; // game units
+static const float kBlowScale = 520.0;  // game units: the sheets' size across the wind (3 x along it)
+static const int kBlowSteps = 14;
+
+float vnoise3(float3 p) {
+    const float3 i = floor(p), f = frac(p);
+    const float3 u = f * f * (3.0 - 2.0 * f);
+    const int3 c = int3(i);
+    float n[8];
+    for (int k = 0; k < 8; ++k) n[k] = rand4(c + int3(k & 1, (k >> 1) & 1, k >> 2), 0u).x;
+    return lerp(lerp(lerp(n[0], n[1], u.x), lerp(n[2], n[3], u.x), u.y),
+                lerp(lerp(n[4], n[5], u.x), lerp(n[6], n[7], u.x), u.y), u.z);
+}
+
+float blowDensity(float3 q) {
+    if (q.y < groundAt(q.xz)) return 0.0; // sheltered
+    const float unit = precipWind.w, t = precip.w;
+    const float3 vel = precipWind.xyz;
+    const float2 w = length(vel.xz) > 1e-3 ? normalize(vel.xz) : float2(1.0, 0.0);
+    // the sheets move with the wind (a little slower than the flakes) and stretch along it
+    float3 p = (q - vel * (t * 0.85)) / (kBlowScale * unit);
+    p = float3(dot(p.xz, w) / 3.0, p.y * 1.5, dot(p.xz, float2(-w.y, w.x)));
+    const float n = vnoise3(p) * 0.65 + vnoise3(p * 2.1 + 17.3) * 0.35;
+    // the gusts: the whole field thickens and thins
+    const float gust = 1.0 + precip.z * sin(t * 0.9 + sin(t * 0.37) * 2.0);
+    return saturate(n * 1.8 - 0.55) * gust;
+}
+
+float4 vs_full(uint id : SV_VertexID) : SV_Position {
+    const float2 uv = float2((id << 1) & 2, id & 2);
+    return float4(uv * float2(2, -2) + float2(-1, 1), 0, 1);
+}
+
+struct BlowOut {
+    float4 color : SV_Target0; // premultiplied: the scattered light, the transmittance (blend One / SrcAlpha)
+    float reactive : SV_Target1;
+};
+
+BlowOut ps_blizzard(float4 pos : SV_Position) {
+    const float raw = sceneDepth.Load(int3(int2(pos.xy), 0));
+    const float2 ndc = pos.xy / renderSize * float2(2.0, -2.0) + float2(-1.0, 1.0);
+    const float4 h = mul(float4(ndc, min(raw, 0.99999), 1.0), invViewProj);
+    float3 dir = h.xyz / h.w - eye;
+    float dist = length(dir);
+    dir /= max(dist, 1e-3);
+    const float reach = kBlowReach * precipWind.w;
+    dist = raw >= 1.0 ? reach : min(dist, reach);
+    // optical depth ~1.6 over the whole reach at full density and mean sheet cover (the far scenery a pale shape)
+    const float sigma = precip.y * 1.6 / (reach * 0.35);
+    const float jitter = frac(52.9829189 * frac(dot(pos.xy, float2(0.06711056, 0.00583715)))); // per pixel
+    const float stepLen = dist / kBlowSteps;
+    float tr = 1.0, scatter = 0.0;
+    for (int s = 0; s < kBlowSteps; ++s) {
+        const float3 q = eye + dir * ((s + jitter) * stepLen);
+        const float e = exp(-blowDensity(q) * sigma * stepLen);
+        scatter += tr * (1.0 - e);
+        tr *= e;
+    }
+    BlowOut o;
+    o.color = float4(snowLight(eye + dir * (dist * 0.5), dot(dir, fwd) * dist * 0.5) * scatter, tr);
+    o.reactive = 1.0 - tr;
     return o;
 }

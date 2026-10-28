@@ -112,6 +112,7 @@ void App::parseArgs(int argc, char** argv) {
         else if (a == "--sky2d") sky2d = std::stoi(argv[++i]) != 0;              // original 2D sky
         else if (a == "--nofog") noFog = std::stoi(argv[++i]) != 0;              // fog off (comparison)
         else if (a == "--fog") fogArg = argv[++i];                                // remaster | classic | off
+        else if (a == "--weather") weatherArg = argv[++i];                        // remaster | classic
         else if (a == "--play") startPlay = std::stoi(argv[++i]) != 0;            // start in play mode
         else if (a == "--load") loadArg = argv[++i];
         else if (a == "--fps-log") fpsLog = true;
@@ -327,6 +328,7 @@ int App::init() {
             fogDistance = std::clamp(cfg.fogDistance, 0.25f, 4.0f);
             fogSource = cfg.fogSource == "ps1" ? FogSource::Ps1 : FogSource::OpenDash;
             waterRemaster = cfg.water != "classic";
+            weatherRemaster = (weatherArg.empty() ? cfg.weather : weatherArg) != "classic";
             dissolve = cfg.dissolve;
         }
         if (const auto c = voiceTestArg.find(':'); c != std::string::npos && playerView.mixer) {

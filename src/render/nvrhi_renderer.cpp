@@ -5,6 +5,7 @@
 #include <SDL3/SDL_video.h>
 
 #include <algorithm>
+#include <cfloat>
 #include <map>
 #include <chrono>
 #include <cmath>
@@ -24,9 +25,15 @@
 #include "renderer.hpp"
 #include "upscaler.hpp"
 
+#include "g_blizzard_ps.h"
 #include "g_debugview_ms_ps.h"
 #include "g_debugview_ps.h"
 #include "g_debugview_vs.h"
+#include "g_flake_ps.h"
+#include "g_flake_vs.h"
+#include "g_full_vs.h"
+#include "g_height_ps.h"
+#include "g_height_vs.h"
 #include "g_output_ps.h"
 #include "g_output_vs.h"
 #include "g_preview_ps.h"
@@ -50,10 +57,11 @@ struct GpuVertex {
     float faceN[3];
     float pairN[3];
     float surface; // bits: kSurfaceModel a model's face (actors, the player, bank models), clipped at the game's near
-                   // plane; kSurfaceScenery the scenery (room, segments, doors, static objects), dissolved around a focus
+                   // plane; kSurfaceScenery the scenery (room, segments, doors, static objects), dissolved around a focus;
+                   // kSurfaceEffect an effect (particles, billboards, rings): its blended texels fade at the scenery
 };
 static_assert(sizeof(RenderVertex) == 48 && sizeof(GpuVertex) == 100);
-constexpr uint32_t kSurfaceModel = 1, kSurfaceScenery = 2;
+constexpr uint32_t kSurfaceModel = 1, kSurfaceScenery = 2, kSurfaceEffect = 4;
 constexpr uint32_t kStaticPoolModels = 0x60; // kKindPoolModel index >> 8 of the static pool's objects (liveScene)
 
 // scene.hlsl cbuffer Frame
@@ -90,7 +98,21 @@ struct FrameConstants {
     float focusWorld[kMaxFocusBodies][4]; // ... its feet (world y), its strength
     float focusCount;
     float pad3[3];
+    float heightBounds[4]; // precipitation height map: min x, min z, 1 / its width, 1 / its depth
+    float heightRange[4];  // ... its top y, its height span, its size in texels (x, z)
+    float precip[4];       // Precipitation: snow, blizzard, gust, seconds
+    float precipWind[4];   // ... wind (world units a second), unit
+    float precipView[4];   // ... tan(fovY / 2), the flakes' light
+    XMFLOAT4X4 invViewProj; // the blown snow's pass: NDC -> world (jittered)
+    float softDepth[4];     // the depth copy's near / far planes (its raw depth -> view depth: the soft effects)
+    float precipLook[8];    // Precipitation's look: density, size, brightness, swirl / flutter, reach, streak, chaos
+    float precipLayer[4];   // the flake field drawn (drawScene): its cells' scale, flakes a cell, 1 = the far field
 };
+// scene.hlsl vs_flake's two fields of kFlakeCells (24 x 12 x 24) cells, 6 vertices a flake: the near one (up to
+// kFlakesNear a cell) and the far one beyond it (cells kFlakeFarScale times larger, up to kFlakesFar a cell)
+constexpr uint32_t kFlakeCellCount = 24 * 12 * 24, kFlakesNear = 32, kFlakesFar = 16;
+constexpr float kFlakeFarScale = 3.0f;
+constexpr int kHeightTexels = 1024; // the height map's longer side
 
 // Same projection and 24-bit depth as the former D3D11 renderer (ADR 0002): the room data has coplanar faces
 // whose depths differ only by rounding (different quad splits). D24 quantisation makes them tie, and LESS keeps
@@ -240,6 +262,19 @@ public:
                        : d->createShader({nvrhi::ShaderType::Pixel, "", "ps_main"}, g_scene_ps, sizeof(g_scene_ps));
         outVs_ = d->createShader({nvrhi::ShaderType::Vertex, "", "vs_main"}, g_output_vs, sizeof(g_output_vs));
         outPs_ = d->createShader({nvrhi::ShaderType::Pixel, "", "ps_main"}, g_output_ps, sizeof(g_output_ps));
+        heightVs_ = d->createShader({nvrhi::ShaderType::Vertex, "", "vs_height"}, g_height_vs, sizeof(g_height_vs));
+        heightPs_ = d->createShader({nvrhi::ShaderType::Pixel, "", "ps_height"}, g_height_ps, sizeof(g_height_ps));
+        flakeVs_ = d->createShader({nvrhi::ShaderType::Vertex, "", "vs_flake"}, g_flake_vs, sizeof(g_flake_vs));
+        flakePs_ = d->createShader({nvrhi::ShaderType::Pixel, "", "ps_flake"}, g_flake_ps, sizeof(g_flake_ps));
+        fullVs_ = d->createShader({nvrhi::ShaderType::Vertex, "", "vs_full"}, g_full_vs, sizeof(g_full_vs));
+        blizzardPs_ = d->createShader({nvrhi::ShaderType::Pixel, "", "ps_blizzard"}, g_blizzard_ps, sizeof(g_blizzard_ps));
+        {
+            nvrhi::BindingLayoutDesc pl; // the flakes, the blown snow: the frame, the height map, the depth copy
+            pl.visibility = nvrhi::ShaderType::All;
+            pl.bindings = {nvrhi::BindingLayoutItem::VolatileConstantBuffer(0), nvrhi::BindingLayoutItem::Texture_SRV(4),
+                           nvrhi::BindingLayoutItem::Texture_SRV(5)};
+            precipLayout_ = d->createBindingLayout(pl);
+        }
 
         auto attr = [](const char* name, nvrhi::Format f, uint32_t offset) {
             return nvrhi::VertexAttributeDesc().setName(name).setFormat(f).setOffset(offset).setElementStride(
@@ -257,7 +292,7 @@ public:
         nvrhi::BindingLayoutDesc bl;
         bl.visibility = nvrhi::ShaderType::All;
         bl.bindings = {nvrhi::BindingLayoutItem::VolatileConstantBuffer(0), nvrhi::BindingLayoutItem::Texture_SRV(0),
-                       nvrhi::BindingLayoutItem::Sampler(0)};
+                       nvrhi::BindingLayoutItem::Sampler(0), nvrhi::BindingLayoutItem::Texture_SRV(5)};
         if (rt_) {
             bl.bindings.push_back(nvrhi::BindingLayoutItem::RayTracingAccelStruct(1));
             bl.bindings.push_back(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2));
@@ -302,7 +337,9 @@ public:
         }
 
         createTargets(dev_.width(), dev_.height());
-        if (!opaque_ || !sky_pipe_ || !semi_[0] || !semi_[1] || !semi_[2] || !semi_[3]) {
+        buildHeightMap({}); // no room yet: no surfaces
+        if (!opaque_ || !sky_pipe_ || !semi_[0] || !semi_[1] || !semi_[2] || !semi_[3] || !flakePipe_ || !blizzardPipe_ ||
+            !height_) {
             SDL_Log("render: the scene pipelines failed to create");
             return false;
         }
@@ -331,7 +368,10 @@ public:
         sceneSet_ = nullptr;
         staticBlas_ = nullptr;
         staticAttr_ = nullptr;
-        if (tris.empty() || sliceCount <= 0) return true;
+        if (tris.empty() || sliceCount <= 0) {
+            buildHeightMap({}); // the last room's surfaces are gone
+            return bool(height_);
+        }
 
         std::vector<GpuVertex> gv;
         const std::vector<std::pair<size_t, size_t>> room{{0, tris.size()}};
@@ -383,10 +423,12 @@ public:
         d->waitForIdle(); // the BLAS build scratch memory lives in cl: keep it until the GPU is done
         staticGv_ = std::move(gv); // CPU copy for updateStaticUvs
         makeSceneSet();
-        return bool(sceneSet_);
+        buildHeightMap(tris);
+        return bool(sceneSet_) && bool(height_);
     }
 
     void setSun(const SunLight& sun) override { sun_ = sun; }
+    void setPrecipitation(const Precipitation& p) override { precip_ = p; }
     void setFocus(const std::vector<FocusBody>& bodies) override {
         focus_.assign(bodies.begin(), bodies.begin() + std::ptrdiff_t(std::min(bodies.size(), kMaxFocusBodies)));
     }
@@ -497,6 +539,7 @@ public:
                 bits |= kSurfaceModel;
             if (kind == kKindLive || (kind == kKindPoolModel && ((o.id & 0xffffffu) >> 8) == kStaticPoolModels))
                 bits |= kSurfaceScenery;
+            if (kind == kKindEffect) bits |= kSurfaceEffect;
             if (bits) {
                 surfaces.push_back({dyn_.size(), dyn_.size() + o.tris.size()});
                 surfaceBits.push_back(bits);
@@ -776,6 +819,7 @@ public:
             cl_->resolveTexture(t_.normal, nvrhi::AllSubresources, t_.msNormal, nvrhi::AllSubresources);
             cl_->resolveTexture(t_.reactive, nvrhi::AllSubresources, t_.msReactive, nvrhi::AllSubresources);
         }
+        if (vbuf_ && sceneSet_ && precip_.blizzard > 0.0f) drawBlowingSnow();
         if (view_ == DebugView::Final) {
             upscale(cam);
             drawOutput(t_.upscaled, back);
@@ -856,6 +900,7 @@ private:
         nvrhi::TextureHandle msColor, msMotion, msNormal, msReactive;
         int samples = 1;
         nvrhi::FramebufferHandle scene;
+        nvrhi::FramebufferHandle post; // color + reactive at render size (after the MSAA resolve): the blown snow
         int renderW = 0, renderH = 0, outW = 0, outH = 0;
     };
 
@@ -917,6 +962,28 @@ private:
                                             .addColorAttachment(ms ? t_.msNormal : t_.normal)
                                             .addColorAttachment(ms ? t_.msReactive : t_.reactive)
                                             .setDepthAttachment(t_.depth));
+        t_.post = d->createFramebuffer(nvrhi::FramebufferDesc().addColorAttachment(t_.color).addColorAttachment(t_.reactive));
+        blizzardSet_ = nullptr; // it binds the old depth copy
+        if (!blizzardPipe_) { // the blown snow over the resolved colour: premultiplied (One / SrcAlpha), reactive = max
+            nvrhi::GraphicsPipelineDesc bp;
+            bp.primType = nvrhi::PrimitiveType::TriangleList;
+            bp.VS = fullVs_;
+            bp.PS = blizzardPs_;
+            bp.bindingLayouts = {precipLayout_};
+            bp.renderState.rasterState.setCullNone();
+            bp.renderState.depthStencilState.depthTestEnable = false;
+            bp.renderState.depthStencilState.depthWriteEnable = false;
+            auto& c = bp.renderState.blendState.targets[0];
+            c.blendEnable = true;
+            c.srcBlend = nvrhi::BlendFactor::One;
+            c.destBlend = nvrhi::BlendFactor::SrcAlpha;
+            c.colorWriteMask = nvrhi::ColorMask::Red | nvrhi::ColorMask::Green | nvrhi::ColorMask::Blue;
+            auto& r = bp.renderState.blendState.targets[1];
+            r.blendEnable = true;
+            r.srcBlend = r.destBlend = r.srcBlendAlpha = r.destBlendAlpha = nvrhi::BlendFactor::One;
+            r.blendOp = r.blendOpAlpha = nvrhi::BlendOp::Max;
+            blizzardPipe_ = d->createGraphicsPipeline(bp, t_.post->getFramebufferInfo());
+        }
         if (samples != prevSamples) opaque_ = nullptr; // the scene pipelines carry the sample count
         outSets_.clear();
         debugSets_.clear();
@@ -974,6 +1041,129 @@ private:
             r.blendOpAlpha = nvrhi::BlendOp::Max;
             semi_[mode] = d->createGraphicsPipeline(sp, fb);
         }
+
+        // the precipitation's flakes (no vertex buffer: made from the vertex id): alpha blended over the scene, behind
+        // what is nearer (depth test, no depth write), no motion / normal, reactive = max
+        nvrhi::GraphicsPipelineDesc fp;
+        fp.primType = nvrhi::PrimitiveType::TriangleList;
+        fp.VS = flakeVs_;
+        fp.PS = flakePs_;
+        fp.bindingLayouts = {precipLayout_};
+        fp.renderState.rasterState.setCullNone();
+        fp.renderState.depthStencilState.depthTestEnable = true;
+        fp.renderState.depthStencilState.depthWriteEnable = false;
+        fp.renderState.depthStencilState.depthFunc = nvrhi::ComparisonFunc::Less;
+        auto& c = fp.renderState.blendState.targets[0];
+        c.blendEnable = true;
+        c.srcBlend = nvrhi::BlendFactor::SrcAlpha;
+        c.destBlend = nvrhi::BlendFactor::InvSrcAlpha;
+        c.colorWriteMask = nvrhi::ColorMask::Red | nvrhi::ColorMask::Green | nvrhi::ColorMask::Blue;
+        fp.renderState.blendState.targets[1].colorWriteMask = nvrhi::ColorMask(0);
+        fp.renderState.blendState.targets[2].colorWriteMask = nvrhi::ColorMask(0);
+        auto& r = fp.renderState.blendState.targets[3];
+        r.blendEnable = true;
+        r.srcBlend = r.destBlend = r.srcBlendAlpha = r.destBlendAlpha = nvrhi::BlendFactor::One;
+        r.blendOp = r.blendOpAlpha = nvrhi::BlendOp::Max;
+        flakePipe_ = d->createGraphicsPipeline(fp, fb);
+    }
+
+    // The precipitation's height map (renderer.hpp Precipitation): the room's surfaces seen from above (an orthographic
+    // depth map, the highest surface per texel), over the room's x / z bounds at kHeightTexels on the longer side.
+    // No geometry: one texel without a surface
+    void buildHeightMap(const std::vector<RenderVertex>& tris) {
+        nvrhi::IDevice* d = dev_.device();
+        float lo[3] = {FLT_MAX, FLT_MAX, FLT_MAX}, hi[3] = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
+        for (const RenderVertex& v : tris)
+            for (int c = 0; c < 3; ++c) {
+                lo[c] = std::min(lo[c], v.pos[c]);
+                hi[c] = std::max(hi[c], v.pos[c]);
+            }
+        const bool any = !tris.empty() && hi[0] > lo[0] && hi[2] > lo[2];
+        int tw = 1, th = 1;
+        if (any) {
+            const float texel = std::max(hi[0] - lo[0], hi[2] - lo[2]) / float(kHeightTexels);
+            tw = std::clamp(int(std::ceil((hi[0] - lo[0]) / texel)), 1, kHeightTexels);
+            th = std::clamp(int(std::ceil((hi[2] - lo[2]) / texel)), 1, kHeightTexels);
+            // a margin above / below: a surface exactly at the bottom keeps a depth below 1 (1 = no surface)
+            heightBounds_[0] = lo[0];
+            heightBounds_[1] = lo[2];
+            heightBounds_[2] = 1.0f / (hi[0] - lo[0]);
+            heightBounds_[3] = 1.0f / (hi[2] - lo[2]);
+            heightRange_[0] = hi[1] + 1.0f;
+            heightRange_[1] = hi[1] - lo[1] + 2.0f;
+        } else {
+            std::fill(std::begin(heightBounds_), std::end(heightBounds_), 0.0f);
+            heightRange_[0] = 0.0f;
+            heightRange_[1] = 1.0f;
+        }
+        heightRange_[2] = float(tw);
+        heightRange_[3] = float(th);
+        flakeSet_ = blizzardSet_ = nullptr; // they bind the old map
+        height_ = makeTarget(tw, th, nvrhi::Format::D32, "precipitation height map", true);
+        if (!height_) return;
+        nvrhi::FramebufferHandle fb = d->createFramebuffer(nvrhi::FramebufferDesc().setDepthAttachment(height_));
+        if (!heightPipe_) {
+            nvrhi::GraphicsPipelineDesc hp;
+            hp.primType = nvrhi::PrimitiveType::TriangleList;
+            hp.inputLayout = inputLayout_;
+            hp.VS = heightVs_;
+            hp.PS = heightPs_;
+            hp.bindingLayouts = {sceneLayout_};
+            hp.renderState.rasterState.setCullNone();
+            hp.renderState.depthStencilState.depthTestEnable = true;
+            hp.renderState.depthStencilState.depthWriteEnable = true;
+            hp.renderState.depthStencilState.depthFunc = nvrhi::ComparisonFunc::Less; // the highest surface
+            heightPipe_ = d->createGraphicsPipeline(hp, fb->getFramebufferInfo());
+        }
+        nvrhi::CommandListHandle cl = d->createCommandList();
+        cl->open();
+        cl->clearDepthStencilTexture(height_, nvrhi::AllSubresources, true, 1.0f, false, 0);
+        if (any && vbuf_ && sceneSet_ && heightPipe_) {
+            FrameConstants f{};
+            std::copy(std::begin(heightBounds_), std::end(heightBounds_), f.heightBounds);
+            std::copy(std::begin(heightRange_), std::end(heightRange_), f.heightRange);
+            cl->writeBuffer(frameCb_, &f, sizeof f);
+            nvrhi::GraphicsState gs;
+            gs.pipeline = heightPipe_;
+            gs.framebuffer = fb;
+            gs.viewport.addViewportAndScissorRect(nvrhi::Viewport(float(tw), float(th)));
+            gs.bindings = {sceneSet_};
+            gs.vertexBuffers = {nvrhi::VertexBufferBinding().setBuffer(vbuf_).setSlot(0).setOffset(0)};
+            cl->setGraphicsState(gs);
+            cl->draw(nvrhi::DrawArguments().setVertexCount(vertexCount_));
+        }
+        cl->close();
+        d->executeCommandList(cl);
+    }
+
+    bool precipitating() const { return precip_.snow > 0.0f || precip_.blizzard > 0.0f; }
+
+    // the flakes' / the blown snow's bindings: the frame, the height map, the depth copy
+    nvrhi::BindingSetHandle precipSet() {
+        nvrhi::BindingSetDesc bs;
+        bs.bindings = {nvrhi::BindingSetItem::ConstantBuffer(0, frameCb_), nvrhi::BindingSetItem::Texture_SRV(4, height_),
+                       nvrhi::BindingSetItem::Texture_SRV(5, depthCopy_)};
+        return dev_.device()->createBindingSet(bs, precipLayout_);
+    }
+
+    // the flakes' light: the place's (its fog colour, or the background) -- a dark place has dim snow
+    float precipLight() const {
+        const float* c = fog_.mode != FogMode::Off ? fog_.color : clear_;
+        return std::clamp(0.3f + 0.8f * std::max({c[0], c[1], c[2]}), 0.45f, 1.0f);
+    }
+
+    // the blown snow over the resolved scene colour (Precipitation::blizzard), before the upscaler
+    void drawBlowingSnow() {
+        copyDepth();
+        if (!blizzardSet_) blizzardSet_ = precipSet();
+        writeFrame(lastVpJit_, lastVp_, prevVp_, lastEye_, lastEye_, lastFwd_, 1.0f, true, 0.0f, 0.0f);
+        nvrhi::GraphicsState gs;
+        gs.pipeline = blizzardPipe_;
+        gs.framebuffer = t_.post;
+        gs.viewport.addViewportAndScissorRect(nvrhi::Viewport(float(t_.renderW), float(t_.renderH)));
+        gs.bindings = {blizzardSet_};
+        cl_->setGraphicsState(gs);
+        cl_->draw(nvrhi::DrawArguments().setVertexCount(3));
     }
 
     void upscale(const Camera& cam) {
@@ -1091,14 +1281,22 @@ private:
         debugPass(src, int(view_) - 1, backFramebuffer(back), float(dev_.width()), float(dev_.height()));
     }
 
-    // D24 depth -> R32F target (render size), for CPU readback
+    // the R32F copy of the depth (render size): the soft effects, the precipitation, the upscalers and the CPU readback
+    // read it; made / resized with the binding sets that bind it
+    bool depthCopyStale() const {
+        return !depthCopy_ || depthCopy_->getDesc().width != uint32_t(t_.renderW) ||
+               depthCopy_->getDesc().height != uint32_t(t_.renderH);
+    }
+    void makeDepthCopy() {
+        depthCopy_ = makeTarget(t_.renderW, t_.renderH, nvrhi::Format::R32_FLOAT, "depth copy");
+        depthCopyFb_ = dev_.device()->createFramebuffer(nvrhi::FramebufferDesc().addColorAttachment(depthCopy_));
+        outSets_.clear(); // they bind the old copy
+        flakeSet_ = blizzardSet_ = nullptr;
+        makeSceneSet();
+    }
+    // D24 depth -> the R32F copy
     nvrhi::ITexture* copyDepth() {
-        if (!depthCopy_ || depthCopy_->getDesc().width != uint32_t(t_.renderW) ||
-            depthCopy_->getDesc().height != uint32_t(t_.renderH)) {
-            depthCopy_ = makeTarget(t_.renderW, t_.renderH, nvrhi::Format::R32_FLOAT, "depth copy");
-            depthCopyFb_ = dev_.device()->createFramebuffer(nvrhi::FramebufferDesc().addColorAttachment(depthCopy_));
-            outSets_.clear(); // they bind the old copy
-        }
+        if (depthCopyStale()) makeDepthCopy();
         debugPass(t_.depth, 5, depthCopyFb_, float(t_.renderW), float(t_.renderH));
         depthFresh_ = true;
         return depthCopy_;
@@ -1233,9 +1431,13 @@ private:
 
     void makeSceneSet() {
         if (!pages_) return;
+        if (depthCopyStale()) {
+            makeDepthCopy(); // (it makes the set)
+            return;
+        }
         nvrhi::BindingSetDesc bs;
         bs.bindings = {nvrhi::BindingSetItem::ConstantBuffer(0, frameCb_), nvrhi::BindingSetItem::Texture_SRV(0, pages_),
-                       nvrhi::BindingSetItem::Sampler(0, pointClamp_)};
+                       nvrhi::BindingSetItem::Sampler(0, pointClamp_), nvrhi::BindingSetItem::Texture_SRV(5, depthCopy_)};
         if (rt_) {
             bs.bindings.push_back(nvrhi::BindingSetItem::RayTracingAccelStruct(1, tlas_));
             bs.bindings.push_back(nvrhi::BindingSetItem::StructuredBuffer_SRV(2, staticAttr_));
@@ -1335,6 +1537,23 @@ private:
             } else
                 for (int c = 0; c < 3; ++c) f.waterTint[c] = waveTint_[c];
         }
+        std::copy(std::begin(heightBounds_), std::end(heightBounds_), f.heightBounds);
+        std::copy(std::begin(heightRange_), std::end(heightRange_), f.heightRange);
+        f.precip[0] = precip_.snow;
+        f.precip[1] = precip_.blizzard;
+        f.precip[2] = precip_.gust;
+        f.precip[3] = precip_.seconds;
+        for (int c = 0; c < 3; ++c) f.precipWind[c] = precip_.wind[c];
+        f.precipWind[3] = precip_.unit;
+        f.precipView[0] = tanHalfFov_;
+        f.precipView[1] = precipLight();
+        XMStoreFloat4x4(&f.invViewProj, invVp_);
+        f.softDepth[0] = nearZ_;
+        f.softDepth[1] = kFar;
+        const float look[8] = {precip_.density, precip_.size, precip_.brightness, precip_.swirl,
+                               precip_.flutter, precip_.reach, precip_.streak, precip_.chaos};
+        std::copy(std::begin(look), std::end(look), f.precipLook);
+        std::copy(std::begin(flakeLayer_), std::end(flakeLayer_), f.precipLayer);
         cl_->writeBuffer(frameCb_, &f, sizeof f);
     }
 
@@ -1383,6 +1602,7 @@ private:
         stream(dynBuf_, dynGpu_, "dynamic vertices", rt_);
         if (rt_) buildScene(dynGpu_.empty() ? 0 : std::min<uint32_t>(dynStart_[0], uint32_t(dynGpu_.size())));
 
+        if (depthCopyStale()) makeDepthCopy(); // (the set below binds it)
         nvrhi::GraphicsState gs;
         gs.framebuffer = t_.scene;
         gs.viewport.addViewportAndScissorRect(nvrhi::Viewport(float(t_.renderW), float(t_.renderH)));
@@ -1429,6 +1649,8 @@ private:
         drawRange(opaque_, vbuf_, semiStart_[0], semiStart_[3] - semiStart_[0]);
         if (const uint32_t n = uint32_t(dynGpu_.size()); dynStart_[0] < n)
             drawRange(opaque_, dynBuf_, dynStart_[0], n - dynStart_[0]);
+        // the opaque surfaces' depth, which the blended effects and the flakes fade against (scene.hlsl softEdge)
+        copyDepth();
         frameSemiPass_ = 2.0f;
         static const float kReactive[4] = {0.5f, 0.9f, 0.5f, 0.6f};      // avg, add, B*(1-F), B+F/4
         for (int mode = 0; mode < 3; ++mode) { // the room's semi quads (modes 0..2)
@@ -1449,6 +1671,31 @@ private:
         }
         frameBlend_ = 0.0f;
         frameSemiPass_ = 0.0f;
+
+        // the precipitation's flakes, among the scene (the blown snow's medium follows after the resolve, draw())
+        invVp_ = XMMatrixInverse(nullptr, vpJit);
+        lastVpJit_ = vpJit;
+        lastVp_ = vp;
+        for (int c = 0; c < 3; ++c) {
+            lastEye_[c] = cam.eye[c];
+            lastFwd_[c] = fwdv[c];
+        }
+        if (precipitating()) {
+            if (!flakeSet_) flakeSet_ = precipSet();
+            nvrhi::GraphicsState fs;
+            fs.pipeline = flakePipe_;
+            fs.framebuffer = t_.scene;
+            fs.viewport.addViewportAndScissorRect(nvrhi::Viewport(float(t_.renderW), float(t_.renderH)));
+            fs.bindings = {flakeSet_};
+            for (const bool farField : {false, true}) { // the near field, then the far one beyond it
+                const float perCell = float(farField ? kFlakesFar : kFlakesNear);
+                const float layer[4] = {farField ? kFlakeFarScale : 1.0f, perCell, farField ? 1.0f : 0.0f, 0.0f};
+                std::copy(std::begin(layer), std::end(layer), flakeLayer_);
+                writeFrame(vpJit, vp, prevVp_, cam.eye, prevEye_, fwdv, cam.cullSign, true, 0.0f, 0.0f);
+                cl_->setGraphicsState(fs);
+                cl_->draw(nvrhi::DrawArguments().setVertexCount(kFlakeCellCount * uint32_t(perCell) * 6));
+            }
+        }
 
         prevVp_ = vp;
         prevRotVp_ = rotView * proj;
@@ -1606,6 +1853,18 @@ private:
     float focusNdc_[kMaxFocusBodies][4]{}; // drawScene: the focus bodies through this frame's camera (FrameConstants)
     float focusWorld_[kMaxFocusBodies][4]{};
     uint32_t focusShown_ = 0;
+    // precipitation (setPrecipitation): the room's height map from above, the flakes, the blown snow
+    Precipitation precip_;
+    nvrhi::ShaderHandle heightVs_, heightPs_, flakeVs_, flakePs_, fullVs_, blizzardPs_;
+    nvrhi::BindingLayoutHandle precipLayout_;
+    nvrhi::BindingSetHandle flakeSet_, blizzardSet_; // precipSet()
+    nvrhi::GraphicsPipelineHandle heightPipe_, flakePipe_, blizzardPipe_;
+    nvrhi::TextureHandle height_;
+    float heightBounds_[4]{}, heightRange_[4]{0.0f, 1.0f, 1.0f, 1.0f};
+    float flakeLayer_[4]{1.0f, 1.0f, 0.0f, 0.0f}; // FrameConstants::precipLayer of the flake draw being prepared
+    // the last drawScene's camera (the blown snow's pass after the resolve), the inverse of its jittered viewProj
+    XMMATRIX lastVpJit_ = XMMatrixIdentity(), lastVp_ = XMMatrixIdentity(), invVp_ = XMMatrixIdentity();
+    float lastEye_[3]{}, lastFwd_[3]{0.0f, 0.0f, 1.0f};
     nvrhi::rt::AccelStructHandle tlas_, staticBlas_, dynBlas_;
     uint64_t dynBlasBytes_ = 0; // size of the dynBuf_ the actors' BLAS was made for
     nvrhi::BufferHandle staticAttr_, dynAttr_, indices_;

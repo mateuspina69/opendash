@@ -67,6 +67,7 @@ struct App {
     bool sky2d = false;
     bool noFog = false;
     std::string fogArg; // --fog: over opendash.ini fog=
+    std::string weatherArg; // --weather: over opendash.ini weather=
     // experimental ray-traced sun shadows: --sun <azimuth deg> <elevation deg> (0 0 = off), F1 "Sol"
     float sunAzimuth = 45.0f, sunElevation = 50.0f, sunStrength = 0.45f;
     bool sunOn = false;
@@ -177,6 +178,23 @@ struct App {
     float fogDistance = 1.0f;
     FogSource fogSource = FogSource::OpenDash; // F1 Visual: the fog of a room with no range of its own (the disc's rooms)
     bool waterRemaster = true; // F1 Video: the underwater look (remaster / the PS1 screen wave)
+    bool weatherRemaster = true; // F1 Video: the snow / blizzard (remaster: in the world / the game's screen quads)
+    od::weather::Conditions weatherLog; // the weather of the last "precipitation:" log line
+    // F1 Video > Neve: the remaster precipitation tuned live, one set for the towns' snow and one for the blizzards
+    // (precipitationOf picks by the weather; "copiar valores" puts the shown set on the clipboard): the snow's fall and
+    // drift, the blizzard's wind, then od::Precipitation's look -- scales of OpenDash's base values
+    struct PrecipTuning {
+        float fall = 1.0f, drift = 1.0f, blow = 1.0f;
+        float density = 1.0f, size = 1.0f, brightness = 1.0f, swirl = 1.0f, flutter = 1.0f, reach = 1.0f, streak = 1.0f,
+              chaos = 1.0f;
+    };
+    // the looks the user tuned in game (2026-10-27): Yosyonke's snow (bright enough to stay white over the snowy
+    // ground: below it the big near flakes read as grey blots; falling briskly, calm, out to the furthest reach) and
+    // the blizzard (a steep, chaotic gale with few eddies)
+    static constexpr PrecipTuning kSnowTuning{2.34f, 1.00f, 1.00f, 0.70f, 1.00f, 1.19f, 1.00f, 1.03f, 3.00f, 1.00f, 0.00f};
+    static constexpr PrecipTuning kBlizzardTuning{4.00f, 0.00f, 0.67f, 1.02f, 1.08f, 1.00f, 0.37f, 1.00f, 1.00f, 1.00f,
+                                                  1.31f};
+    PrecipTuning snowTuning = kSnowTuning, blizzardTuning = kBlizzardTuning;
     od::Config cfg;
     // the game's data (DAT/ and dash2.exe read as files: engine/pc_data_source), bound for the whole run (before
     // playerView: it outlives everything that reads it)
