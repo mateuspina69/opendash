@@ -343,4 +343,27 @@ void padVibrateAt(uint32_t a, uint32_t b, uint32_t nearDistance, uint32_t farDis
     }
 }
 
+void padVibrationTick() {
+    PadVibration& v = padVibration();
+    if ((v.requested & 0xff) == 0) return;
+    const auto setFlag = [&](int byte) { v.requested |= 1u << (byte * 8); };
+    if (((v.requested >> 16) & 0xff) == 0 && --v.motorHigh == 0) {
+        v.motorLow = 0;
+        setFlag(2);
+    }
+    if (((v.requested >> 24) & 0xff) == 0) {
+        if (v.durationLow != 0 && --v.durationLow == 0) {
+            v.strength = 0;
+            setFlag(3);
+        } else if (int(v.strength) <= int(int8_t(v.durationHigh))) {
+            v.strength = 0;
+            setFlag(3);
+        } else {
+            v.strength = uint8_t(v.strength - v.durationHigh);
+        }
+    }
+    if (v.strength == 0 && v.motorLow == 0) v.requested = 0;
+    padMotors() = {v.motorLow, v.strength};
+}
+
 } // namespace od::port

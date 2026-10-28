@@ -32,6 +32,7 @@
 
 #include "game/audio_logic.hpp"
 #include "game/display.hpp"
+#include "game/game_state.hpp"
 #include "content/registry.hpp"
 
 #ifdef _WIN32
@@ -105,11 +106,32 @@ void App::frame() {
             accumulator -= kSimStepNs;
         }
     }
+    rumble();
     updateCamera();
     updateScene();
     drawOverlays();
     if (showMenu) drawDebugMenu();
     present();
+}
+
+// The game's motors (game/player/player_input: what its vibration tick hands 0x409f90) on the gamepad: the small one
+// is on / off (the PS1 pad's), the high-frequency motor at full; the large one's level on the low-frequency motor.
+// Off while the game's frames do not run (the viewer, a pause, the window in the background); sent when it
+// changes and again every half second (each send lasts a second, so a stalled loop stops it)
+void App::rumble() {
+    const uint16_t frame = od::port::gameState().frame;
+    if (frame != rumbleFrame) {
+        rumbleFrame = frame;
+        rumbleFrameAt = now;
+    }
+    od::port::PadMotors m;
+    if (paced() && windowFocused && now - rumbleFrameAt < 200'000'000ull) m = od::port::padMotors();
+    if (!pad) return;
+    const bool changed = m.small != rumbleSent.small || m.large != rumbleSent.large;
+    if (!changed && ((m.small == 0 && m.large == 0) || now - rumbleSentAt < 500'000'000ull)) return;
+    SDL_RumbleGamepad(pad, uint16_t(m.large * 257), m.small ? 0xffff : 0, 1000);
+    rumbleSent = m;
+    rumbleSentAt = now;
 }
 
 void App::handleEvents() {
@@ -164,6 +186,7 @@ void App::handleEvents() {
         if (e.type == SDL_EVENT_GAMEPAD_REMOVED && pad && e.gdevice.which == SDL_GetGamepadID(pad)) {
             SDL_CloseGamepad(pad);
             pad = nullptr;
+            rumbleSent = {};
         }
         if (e.type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED) {
             width = e.window.data1;

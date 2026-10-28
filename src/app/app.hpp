@@ -38,6 +38,7 @@
 #include "engine/config.hpp"
 #include "engine/pc_data_source.hpp"
 #include "engine/ps1_data_source.hpp"
+#include "game/player/player_input.hpp"
 #include "render/renderer.hpp"
 #include "render/ui_canvas.hpp"
 
@@ -232,6 +233,9 @@ struct App {
     od::AaQuality aaQuality = od::AaQuality::NativeAA;
     bool vsync = true;
     SDL_Gamepad* pad = nullptr; // the first gamepad (opened in the loop)
+    od::port::PadMotors rumbleSent;       // the motors last sent to the gamepad (App::rumble)
+    uint64_t rumbleSentAt = 0, rumbleFrameAt = 0;
+    uint16_t rumbleFrame = 0;
     bool showMenu = false;
     bool softReset = false;
     size_t animTick = 0, shownTick = 0;
@@ -288,6 +292,7 @@ struct App {
 
     // ---- app/main.cpp
     void frame();
+    void rumble(); // the game's motors on the gamepad
     void handleEvents();
     void shutdown();
 

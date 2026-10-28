@@ -178,5 +178,20 @@ void padVibrate(uint32_t a, uint32_t b);
 void padVibrateAt(uint32_t a, uint32_t b, uint32_t nearDistance, uint32_t farDistance, const Fixed16Vec3& pos);
 // ... at the point's whole parts (x / y / z)
 void padVibrateAt(uint32_t a, uint32_t b, uint32_t nearDistance, uint32_t farDistance, const int16_t pos[3]);
+// exe 0x55cc40 (the frame loop, 0x54a4cd, before the frame counter): the request's tick. Bytes 2 / 3 of `requested`
+// mark the small / large motor done (a new request clears them). The small motor runs at motorLow for motorHigh
+// ticks; the large one at strength, for durationLow ticks when that is set, and it loses durationHigh (signed) a
+// tick, off once that would take it to 0 or below. Both off: the request ends. Then 0x409f90(small, large): the
+// small motor's DirectInput effect started / stopped (on / off), the large one's magnitude large * 10000 / 255.
+void padVibrationTick();
+// what the last tick handed 0x409f90 (OpenDash sends it to the gamepad's motors)
+struct PadMotors {
+    uint8_t small = 0;
+    uint8_t large = 0;
+};
+inline PadMotors& padMotors() {
+    static PadMotors m;
+    return m;
+}
 
 } // namespace od::port

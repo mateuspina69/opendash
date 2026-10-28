@@ -751,6 +751,7 @@ void App::titleStep(uint16_t ps1) {
     for (; paceFrames > 0 && titleScreen.active; --paceFrames) { // the frames it runs are not the game loop's
         od::port::padUpdate(od::port::pad0(), ps1, 0x80, 0x80);
         std::vector<od::port::ScreenPrim> prims;
+        od::port::padVibrationTick(); // 0x54a4cd: the pad vibration's tick (FUN_0055cc40)
         ++od::port::gameState().frame; // 0x54a4dc: the frame counter (u16), before the task's frame
         try {
             g_menuVram = &titleScreen.mv; // the options page's VRAM writes (game/status_screen)

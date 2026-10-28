@@ -1525,6 +1525,7 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
         od::port::padUpdate(od::port::pad0(), ps1Buttons, stickX, stickY);
         if (afterPad) afterPad(); // the game loop's FUN_00542530 (the demo's pad replay, game/title)
         od::dc::resetCursor(); // 0x54a489: the draw-command cursor back to this frame's buffer
+        od::port::padVibrationTick(); // 0x54a4cd: the pad vibration's tick (FUN_0055cc40)
         ++game.frame; // 0x54a4dc: the frame counter (u16), before the mode's frame
         gameFrame();
         if (afterFrame) afterFrame(); // FUN_005410b0 (the soft reset, game/title)
