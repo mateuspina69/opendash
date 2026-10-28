@@ -94,7 +94,9 @@ void layoutValue(LayoutVisitor& v, uint32_t a, od::port::bars_and_gate_state::Ba
     layoutValue(v, a + 0xc8, s.light);
     layoutValue(v, a + 0xc6, s.hangY);
     layoutValue(v, a + 0xc9, s.triggerSpawned);
-    for (size_t i = 0; i < s.clearedPad0.size(); ++i) layoutValue(v, a + 0xbc + uint32_t(i) * (1), s.clearedPad0[i]);
+    layoutValue(v, a + 0xbc, s.hitBox);
+    layoutValue(v, a + 0xc4, s.lifted);
+    layoutValue(v, a + 0xc5, s.entry);
     for (size_t i = 0; i < s.clearedPad1.size(); ++i) layoutValue(v, a + 0xca + uint32_t(i) * (1), s.clearedPad1[i]);
 }
 

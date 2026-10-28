@@ -6,28 +6,31 @@
 
 #include "game/actor_state.hpp"
 #include "game/field_alias.hpp"
+#include "game/hit_list.hpp"
 #include "game/state_array.hpp"
 
 namespace od::port::bars_and_gate_state {
 
-// The bar's class block: the hanger's height when it hung on, its light's slot, the trigger spawned (the ST17 lever)
+// The bar's class block: the hanger's height when it hung on, its light's slot, the trigger spawned (the ST17 lever);
+// the ST17 liftable static's hit box, lifted once, its hit entry's kind (kLiftable* bits)
 struct BarFields : ActorClassState {
     explicit BarFields(StaticActor& actor) : light(actor.gunshipTimer()) {}
     uint8_t& light;
-    StateArray<uint8_t, 10> clearedPad0{}; // bytes the block clear covers (no reader)
+    HitBoxHead hitBox;   // +0xbc (the liftable static's: no contact output)
+    uint8_t lifted = 0;  // +0xc4: lifted once (it no longer rides its gate)
+    uint8_t entry = 0;   // +0xc5
     int16_t hangY = 0;
     uint8_t triggerSpawned = 0;
     StateArray<uint8_t, 2> clearedPad1{}; // bytes the block clear covers (no reader)
     void clearBlockBytes() {
-        clearedPad0 = {};
-        hangY = 0;
-        triggerSpawned = 0;
-        clearedPad1 = {};
+        clearBlock();
         light = 0;
     }
 
     void clearBlock() override {
-        clearedPad0 = {};
+        hitBox = {};
+        lifted = 0;
+        entry = 0;
         hangY = 0;
         triggerSpawned = 0;
         clearedPad1 = {};

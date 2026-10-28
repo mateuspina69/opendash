@@ -26,10 +26,16 @@
 #include "game/actor_stats.hpp"
 #include "game/angles.hpp"
 #include "game/audio_logic.hpp"
+#include "game/carry.hpp"
+#include "game/explosions.hpp"
+#include "game/global_class_types.hpp"
+#include "game/hit_list.hpp"
+#include "game/hit_points.hpp"
 #include "game/encounter.hpp"
 #include "game/field_alias.hpp"
 #include "game/game_state.hpp"
 #include "game/player/player_hang.hpp"
+#include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
 #include "game/port_gap.hpp"
 #include "game/script_state.hpp"
@@ -523,8 +529,177 @@ void gateLever(StaticActor& bar, BarFields& fields) {
     }
     if (bar.flags & kActorLive) bar.wasOnPlatform = bar.onPlatform;
 }
+// ---- 0x58fc40: the ST17 liftable static (variant 2; the gate's wave): sub-states [0x8cdc78] ----------------------------
+enum class LiftableSub : uint8_t {
+    Slide = 0,     // exe 0x58fdc0: spawned on the gate, it slides off forward
+    Rest = 1,      // exe 0x58fe70: at rest, riding its gate until lifted
+    InHands = 2,   // exe 0x58fed0: at the player's hands
+    Flying = 3,    // exe 0x590aa0: thrown / dropped, until it hits something
+    Destroyed = 4, // exe 0x590b00: a blast, freed
+};
+// BarFields::entry
+constexpr uint8_t kLiftableNoEntry = 0x01; // in the hands: no hit entry
+constexpr uint8_t kLiftableThrown = 0x02;  // flying thrown: the player's attack, a mover
+constexpr uint8_t kLiftableFalling = 0x04; // sliding off the gate: its touch a thrown object's
+constexpr int16_t kSlideSpeed = -0x180, kSlideBrake = 0x40;
+constexpr int16_t kLiftableGravity = 0x40, kLiftableFallMax = 0x800;
+constexpr int kLiftableHandsRaise = -0x10;
+constexpr int16_t kLiftableThrowUp = -0x100, kLiftableThrowForward = -0x300;
+constexpr int16_t kLiftableDropUp = -0x200, kLiftableDropForward = -0x100;
+constexpr int32_t kLiftableLostY = 0x15800001; // fallen this far (16.16): freed
+constexpr int16_t kLiftableHitHeight = 0x5a;   // its hit entry this far above its position
+constexpr uint32_t kLiftableHitRadius = 0x60;
+constexpr uint16_t kLiftableHitSound = 0x8d, kLiftableStrongHitSound = 0x8e;
+constexpr uint16_t kLiftableBlastSize = 0x100;
+constexpr uint32_t kLiftableBreaks = kHitAttackSolid | kHitAttackStrong; // a flying one bursts on these
+
+// exe 0x58fe40: lifted by the player -> in the hands, no hit entry, off its platform, no longer riding its gate
+void liftableLiftCheck(StaticActor& bar, BarFields& fields) {
+    if (!playerLiftTargetCheck(bar, 0)) return; // exe 0x573a60
+    bar.subState = uint8_t(LiftableSub::InHands);
+    fields.entry |= kLiftableNoEntry;
+    bar.onPlatform = 0;
+    fields.lifted = 1;
+}
+void liftableSlide(StaticActor& bar, BarFields& fields) { // exe 0x58fdc0
+    if (bar.step == 0) {
+        fields.entry = kLiftableFalling;
+        bar.velocity.z = kSlideSpeed;
+        bar.enterStep(1);
+    }
+    if (bar.step <= 1) {
+        BarParams p(bar);
+        p.linked -= 1u; // its timer
+        if (p.linked == 0) bar.enterStep(2);
+    } else if (bar.step == 2) {
+        bar.velocity.z = int16_t(bar.velocity.z + kSlideBrake);
+        if (bar.velocity.z >= 0) {
+            bar.velocity.z = 0;
+            bar.subState = uint8_t(LiftableSub::Rest);
+            bar.restartStep();
+        }
+    }
+    integrateVelocity(bar, 0, 0, bar.velocity.z); // exe 0x5e3690
+    liftableLiftCheck(bar, fields);
+}
+void liftableRest(StaticActor& bar, BarFields& fields) { // exe 0x58fe70
+    if (bar.step == 0) {
+        fields.entry = 0;
+        bar.enterStep(1);
+    }
+    if (fields.lifted == 0) { // on its gate (the slot of its second parameter): its height
+        const StaticActor& gate = staticActorAt(actorBySlot(bar.params[1]));
+        if (gate.flags & kActorLive) bar.pos.y = gate.pos.y;
+    }
+    liftableLiftCheck(bar, fields);
+}
+void liftableFlying(const PlayerEnv& env, StaticActor& bar, BarFields& fields);
+void liftableInHands(const PlayerEnv& env, StaticActor& bar, BarFields& fields) { // exe 0x58fed0
+    if (bar.step == 0) {
+        fields.entry = kLiftableNoEntry;
+        bar.enterStep(1);
+    }
+    carryAtHands(bar, 0, kLiftableHandsRaise, 0); // exe 0x573ab0
+    const CarryRelease r = carryReleased(); // exe 0x573950
+    if (r == CarryRelease::Held) return;
+    if (r == CarryRelease::Thrown) {
+        int32_t aim[3];
+        playerAimVector(0, kLiftableThrowUp, kLiftableThrowForward, aim); // exe 0x5e3e50
+        bar.velocity.x = 0;
+        bar.velocity.y = int16_t(aim[1]);
+        bar.velocity.z = int16_t(aim[2]);
+        fields.entry = kLiftableThrown;
+    } else {
+        bar.velocity.y = kLiftableDropUp;
+        bar.velocity.z = kLiftableDropForward;
+        fields.entry = 0;
+    }
+    bar.acceleration.y = kLiftableGravity;
+    const int16_t yaw = player().rotation.y;
+    bar.rotation.y = yaw;
+    bar.rotation.spare = yaw;
+    bar.airborne = 1;
+    bar.actorHit = 0;
+    carryDropFromPlayer(bar); // exe 0x573990
+    bar.subState = uint8_t(LiftableSub::Flying);
+    bar.restartStep();
+    liftableFlying(env, bar, fields);
+}
+void liftableFlying(const PlayerEnv& env, StaticActor& bar, BarFields& fields) { // exe 0x590aa0
+    bar.velocity.y = int16_t(bar.velocity.y + kLiftableGravity);
+    if (bar.velocity.y > kLiftableFallMax) bar.velocity.y = kLiftableFallMax;
+    integrateVelocity(bar, 0, bar.velocity.y, bar.velocity.z); // exe 0x5e3690
+    bar.wallHit = actorTestMove(env, bar); // exe 0x40f570
+    if (int32_t(bar.wallHit) >= 0 && bar.actorHit == 0 && !(fields.hitBox.result & kLiftableBreaks)) return;
+    bar.subState = uint8_t(LiftableSub::Destroyed);
+    bar.restartStep();
+}
+void liftableDestroyed(StaticActor& bar) { // exe 0x590b00: a blast (static type 7) of its row's power, freed
+    if (const uint32_t address = allocActor60(0)) { // exe 0x5e1300
+        StaticActor& blast = staticActorAt(address);
+        BlastParams params(blast);
+        blast.subtype = 0;
+        blast.variant = 0;
+        blast.loopFlags |= kActorSweepGroup2;
+        blast.flags = kActorLive;
+        blast.type = typeByte(GlobalStaticType::Blast);
+        blast.pos.x = bar.pos.x;
+        blast.pos.y = bar.pos.y;
+        blast.pos.z = bar.pos.z;
+        blast.pos.y.whole = int16_t(bar.pos.y.whole - kLiftableHitHeight);
+        params.size = kLiftableBlastSize;
+        params.attack = staticStats(bar.type, 0).power;
+    }
+    actorDetachRiders(bar); // exe 0x414e70
+    freeActor(bar);         // exe 0x5e1540
+}
+// exe 0x58fc40: a hit by the player (its row's hit points: destroyed), the sub-state; fallen out: freed; its hit entry
+// (in the hands none, flying the player's attack and a mover, else a liftable solid one stands on)
+void liftableStatic(const PlayerEnv& env, StaticActor& bar, BarFields& fields) {
+    bar.tint = kTintNeutral;
+    const uint32_t hit = fields.hitBox.result;
+    if ((hit & kHitDamageMask) && (hit & (kHitAttackByPlayer | kHitAttackStrong))) {
+        bar.tint = kTintFlash;
+        soundPlayAtPos((hit & kHitAttackStrongPush) ? kLiftableStrongHitSound : kLiftableHitSound, bar.pos);
+        if (hitPointsAdd(bar, -int(hit & kHitDamageMask)) != 0) { // exe 0x5e52f0
+            bar.subState = uint8_t(LiftableSub::Destroyed);
+            bar.restartStep();
+        }
+    }
+    switch (LiftableSub(bar.subState)) { // [0x8cdc78]
+    case LiftableSub::Slide: liftableSlide(bar, fields); break;
+    case LiftableSub::Rest: liftableRest(bar, fields); break;
+    case LiftableSub::InHands: liftableInHands(env, bar, fields); break;
+    case LiftableSub::Flying: liftableFlying(env, bar, fields); break;
+    case LiftableSub::Destroyed: liftableDestroyed(bar); break;
+    default: notPortedAt(kStoryPort, "static 0x58fc40 sub-state (table 0x8cdc78 has 5 entries)", bar.subState);
+    }
+    if (!(bar.flags & kActorLive)) return;
+    if (int32_t(bar.pos.y) >= kLiftableLostY) {
+        freeActor(bar); // exe 0x5e1540
+        return;
+    }
+    bar.wasOnPlatform = bar.onPlatform;
+    fields.hitBox.result = 0;
+    fields.hitBox.previousX = bar.pos.x.whole;
+    fields.hitBox.previousZ = bar.pos.z.whole;
+    const uint8_t entry = fields.entry;
+    if (entry & kLiftableNoEntry) return;
+    const int16_t pos[3] = {bar.pos.x.whole, int16_t(bar.pos.y.whole - kLiftableHitHeight), bar.pos.z.whole};
+    const uint32_t owner = hitOwner(bar.slot) | kHitNoLockOn | hitRadius(kLiftableHitRadius);
+    if (entry & kLiftableThrown) {
+        hitListSubmit(pos, fields.hitBox, owner | hitGroup(kHitGroupPlayerAttacks),
+                      staticStats(bar.type, 0).damage | kHitAttackHarmless | kHitAttackByPlayer); // exe 0x5e4120
+        actorCollisionSubmitMover(bar); // exe 0x4140b0
+        return;                         // (exe 0x5f20f0: the shadow, render output)
+    }
+    hitListSubmit(pos, fields.hitBox, owner | hitGroup(kHitGroupLiftable),
+                  ((entry & kLiftableFalling) ? kHitAttackThrown : 0u) | kHitAttackHarmless | kHitAttackSolid);
+    actorCollisionSubmitSolid(bar, SolidType::StandOn, kNoBone, 0); // exe 0x414050
+}
+
 // exe 0x58f820
-void st17Bar(StaticActor& bar) {
+void st17Bar(const PlayerEnv& env, StaticActor& bar) {
     BarFields& fields = classState<BarFields>(bar);
     bar.savePreviousPose();
     bar.wasAirborne = bar.airborne;
@@ -535,6 +710,7 @@ void st17Bar(StaticActor& bar) {
         case St17BarVariant::Still:
         case St17BarVariant::Still3: return; // exe 0x52ef00
         case St17BarVariant::Lever: gateLever(bar, fields); return;
+        case St17BarVariant::Liftable: liftableStatic(env, bar, fields); return; // exe 0x58fc40
         default: notPortedAt(kStoryPort, "static 0x58f820 variant", bar.variant);
         }
     default: notPortedAt(kStoryPort, "static 0x58f820 state", bar.state);
@@ -733,7 +909,7 @@ void st17Gate(StaticActor& gate) {
 } // namespace
 
 void st16BarUpdate(const PlayerEnv&, uint32_t actor) { st16Bar(staticActorAt(actor)); }
-void st17LeverUpdate(const PlayerEnv&, uint32_t actor) { st17Bar(staticActorAt(actor)); }
+void st17LeverUpdate(const PlayerEnv& env, uint32_t actor) { st17Bar(env, staticActorAt(actor)); }
 void st17GateUpdate(const PlayerEnv&, uint32_t actor) { st17Gate(staticActorAt(actor)); }
 
 } // namespace od::port
