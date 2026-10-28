@@ -5,6 +5,7 @@
 #include "game/audio_logic.hpp"
 #include "game/game_state.hpp"
 #include "game/items.hpp"
+#include "game/patched_data.hpp"
 #include "game/player/player_model.hpp"
 #include "game/player/player_state.hpp"
 #include "game/player/player_weapons.hpp"
@@ -17,6 +18,9 @@
 namespace od::port {
 
 namespace {
+
+// the player's collision box: exe data the game writes (the water sinks its top: game/player/player_update)
+PatchedRecord<BoxExtents> playerBox{TableId::PlayerCollisionBox};
 
 // ---- a new run's game state ----
 // the best times' default records (the race courses' rows: the holder's three letters on the first, the times)
@@ -199,7 +203,7 @@ void playerInit(int load) {
     p.setParamsWord(0);
     p.enterState(PlayerState::Init);
     p.variant = loadedBodyVariant();
-    p.collisionBox.pointAt(TableId::PlayerCollisionBox);
+    p.collisionBox.pointTo(*playerBox);
     p.immunity = 0;
     p.immunityTicks = 0;
     p.invulnerable = 0;
