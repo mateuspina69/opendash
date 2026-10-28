@@ -97,6 +97,7 @@ TextLayoutPenShiftY,0x55ae80,fb 2f dy: the pen moved down (one pixel less withou
 TextLayoutWriteZenny,0x55b180,fb 3b: the zenny's decimal written over the text after the code, then laid out
 TextLayoutSkipChoiceFlags,0x55b5d0,fb 43 n flags: past the n flags
 TextLayoutLoadRecordTime,0x55b780,fb 48 k: a best-time record's time into the window
+TextLayoutInsertRecordName,0x55b7c0,fb 49 k: a best-time record's three letters inserted (the letter being named lit)
 # the empty routine (a bare ret) many tables point at
 EmptyRoutine,0x52ef00,does nothing
 # game/player/player_update: the player's states (exe table 0x8c4f5c) and sub-state input / motion handlers (0x8c4fc0 / 0x8c4f6c)

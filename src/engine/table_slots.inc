@@ -4731,7 +4731,7 @@ static constexpr TableRoutineSlot kTableRoutineSlots[] = {
     {TableId::TextLayoutHandlers, 0x0, 0, 0x118, RoutineId::TextLayoutSkipTwo},
     {TableId::TextLayoutHandlers, 0x0, 0, 0x11c, RoutineId::TextLayoutSkipSix},
     {TableId::TextLayoutHandlers, 0x0, 0, 0x120, RoutineId::TextLayoutLoadRecordTime},
-    {TableId::TextLayoutHandlers, 0x0, 0, 0x124, RoutineId::None},
+    {TableId::TextLayoutHandlers, 0x0, 0, 0x124, RoutineId::TextLayoutInsertRecordName},
     {TableId::TextLayoutHandlers, 0x0, 0, 0x128, RoutineId::TextLayoutSkipThree},
     {TableId::TextLayoutHandlers, 0x0, 0, 0x12c, RoutineId::TextLayoutSkipThree},
     {TableId::ScriptHandlers, 0x0, 0, 0x0, RoutineId::None},

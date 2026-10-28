@@ -2314,6 +2314,7 @@ enum class RoutineId : uint16_t {
     TextLayoutInsertKeyName, // fb 22
     TextLayoutInsertNumber, // fb 21
     TextLayoutInsertPlace, // fb 44
+    TextLayoutInsertRecordName, // fb 49 k: a best-time record's three letters inserted (the letter being named lit)
     TextLayoutInsertString, // fb 20
     TextLayoutInsertTime, // fb 23
     TextLayoutLoadRecordTime, // fb 48 k: a best-time record's time into the window
@@ -2525,7 +2526,7 @@ enum class RoutineId : uint16_t {
 };
 
 // the number of RoutineIds (None included)
-inline constexpr uint16_t kRoutineIds = 2515;
+inline constexpr uint16_t kRoutineIds = 2516;
 
 inline const char* routineName(RoutineId id) {
     static constexpr const char* kNames[] = {
@@ -4836,6 +4837,7 @@ inline const char* routineName(RoutineId id) {
         "TextLayoutInsertKeyName",
         "TextLayoutInsertNumber",
         "TextLayoutInsertPlace",
+        "TextLayoutInsertRecordName",
         "TextLayoutInsertString",
         "TextLayoutInsertTime",
         "TextLayoutLoadRecordTime",

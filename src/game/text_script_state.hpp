@@ -14,6 +14,7 @@ struct InsertedTexts {
     StateArray<uint8_t, 0xc> number{}; // 0x8b172c
     StateArray<uint8_t, 0xa> time{};   // 0x8b1738
     StateArray<uint8_t, 12> warpOperands{}; // 0x8b171e: fb 3c's operands, kept
+    StateArray<uint8_t, 0x28> recordName{}; // 0x8b1744 (PS1 SLUS 0x8006b890): fb 49's
 };
 // the texts (registered as the game's built data at their addresses on their first use)
 inline InsertedTexts& insertedTexts() {
@@ -21,6 +22,8 @@ inline InsertedTexts& insertedTexts() {
     static const bool registered = [] {
         registerBuiltData(stateAddress(TableId::TextScriptNumberText), std::span<uint8_t>(s.number.data(), s.number.size()));
         registerBuiltData(stateAddress(TableId::TextScriptTimeText), std::span<uint8_t>(s.time.data(), s.time.size()));
+        registerBuiltData(stateAddress(TableId::TextScriptRecordNameText),
+                          std::span<uint8_t>(s.recordName.data(), s.recordName.size()));
         return true;
     }();
     (void)registered;

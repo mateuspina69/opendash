@@ -1518,6 +1518,7 @@ namespace od {
     /* ---- game/text_script_state */                                                                               \
     X(TextScriptNumberText) /* the text fb 21 inserts (7 digits, fb 1f) */                                          \
     X(TextScriptTimeText) /* the text fb 23 inserts (8 characters, fb 1f) */                                        \
+    X(TextScriptRecordNameText) /* the text fb 49 inserts (a record's three letters, fb 1f) */                      \
     /* ---- game/title */                                                                                           \
     /* the title's class tables (no title actors: its spawn list 0x88c400 is empty) and the depth cue it            \
        points at */                                                                                                 \

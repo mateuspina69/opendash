@@ -1544,6 +1544,7 @@
 {0x55b6c0u, RoutineId::TextLogicJumpByDockCounter},
 {0x55b730u, RoutineId::TextLogicLoadRecordTime},
 {0x55b780u, RoutineId::TextLayoutLoadRecordTime},
+{0x55b7c0u, RoutineId::TextLayoutInsertRecordName},
 {0x55b8b0u, RoutineId::TextLogicNameRecord},
 {0x55b9c0u, RoutineId::TextLogicClearRecordName},
 {0x55d210u, RoutineId::HitSparkUpdate},

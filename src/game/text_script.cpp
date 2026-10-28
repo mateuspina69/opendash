@@ -170,6 +170,65 @@ void insertTime(MessageWindow& w, uint32_t& read, uint32_t& ret) {
     read = stateAddress(TableId::TextScriptTimeText);
 }
 
+// fb 49 k (layout exe 0x55b7c0; the PS1's SLUS 0x8004ee40): record k's three letters (k < 0: +0x6f) into
+// TableId::TextScriptRecordNameText, ended by fb 1f; while a name is entered each letter after fb 0a (lit: the one
+// being entered, else dimmed) and fb 0a 0 at the end. A letter's high byte goes first when it is a two-byte glyph's
+// (the PC's 0xd0.., the PS1's 0xea..); the PS1's letters sit centred in 12 px between two fb 2e pen shifts (the
+// single-byte glyphs below 0x6b by their width)
+void insertRecordName(MessageWindow& w, uint32_t& read, uint32_t& ret) {
+    constexpr uint8_t kOpColour = 0x0a, kOpPenShift = 0x2e, kDimLetter = 0x80, kLitLetter = 0;
+    constexpr uint16_t kPcHighGlyphs = 0xd0, kPs1HighGlyphs = 0xea, kPs1WidthGlyphs = 0x6b;
+    constexpr int kPs1Cell = 12;
+    const uint32_t p = read;
+    int8_t k = TextBytes(p).signedByte(2);
+    read = p + 3;
+    if (k < 0) k = w.record;
+    insertedTexts(); // the buffer (built data at TableId::TextScriptRecordNameText)
+    TextBytes out(stateAddress(TableId::TextScriptRecordNameText));
+    uint32_t n = 0;
+    const auto put = [&](uint8_t b) { out.byte(n++) = b; };
+    const bool naming = (w.flags & kWindowNaming) != 0;
+    if (k < kBestTimeCount) {
+        const BestTime& record = bestTimes().records[size_t(int32_t(k))];
+        const bool ps1 = ps1Text();
+        for (int8_t i = 0; i < 3; ++i) {
+            if (naming) {
+                put(kTextCodeOp);
+                put(kOpColour);
+                put(w.letter != i ? kDimLetter : kLitLetter);
+            }
+            const uint16_t g = record.name[size_t(i)];
+            int before = 0, after = 0;
+            if (ps1 && g < kPs1WidthGlyphs) {
+                const int width = ps1Advance(uint8_t(g));
+                before = (kPs1Cell - width) / 2;
+                after = kPs1Cell - before - width;
+            }
+            if (ps1) {
+                put(kTextCodeOp);
+                put(kOpPenShift);
+                put(uint8_t(before));
+            }
+            if ((g >> 8) >= (ps1 ? kPs1HighGlyphs : kPcHighGlyphs)) put(uint8_t(g >> 8));
+            put(uint8_t(g));
+            if (ps1) {
+                put(kTextCodeOp);
+                put(kOpPenShift);
+                put(uint8_t(after));
+            }
+        }
+        if (naming) {
+            put(kTextCodeOp);
+            put(kOpColour);
+            put(kLitLetter);
+        }
+    }
+    put(kTextCodeOp);
+    put(kTextOpReturn);
+    ret = read;
+    read = stateAddress(TableId::TextScriptRecordNameText);
+}
+
 // fb 44 (logic exe 0x55b600 / layout 0x55b630): into the place name +0x6e of the place bank
 void insertPlace(MessageWindow& w, uint32_t& read, uint32_t& ret) {
     const uint32_t q = read + 3;
@@ -1006,6 +1065,7 @@ void runLayoutCode(MessageWindow& w, uint32_t index) {
     case RoutineId::TextLayoutInsertKeyName: insertKeyName(w.layoutAt, w.layoutReturn); return;
     case RoutineId::TextLayoutInsertTime: insertTime(w, w.layoutAt, w.layoutReturn); return;
     case RoutineId::TextLayoutInsertPlace: insertPlace(w, w.layoutAt, w.layoutReturn); return;
+    case RoutineId::TextLayoutInsertRecordName: insertRecordName(w, w.layoutAt, w.layoutReturn); return;
     case RoutineId::TextLayoutLoadSaveSlot: { // slot (0xff: +0x6f): +0x68 the slot + 1, +0x6e its place, +0x64 its time
         int8_t k = op.signedByte(2);
         w.layoutAt = p + 3;
@@ -1046,6 +1106,7 @@ uint32_t messageOpLength(const TextBytes& text) {
     case RoutineId::TextLayoutWriteZenny: return 2;
     case RoutineId::TextLayoutSkipChoiceFlags: return 3 + uint32_t(text.byte(2)) * 2;
     case RoutineId::TextLayoutLoadRecordTime: return 3;
+    case RoutineId::TextLayoutInsertRecordName: return 3;
     case RoutineId::TextLayoutInsertKeyName: return 3;
     case RoutineId::TextLayoutInsertTime: return 3;
     case RoutineId::TextLayoutInsertPlace: return 3;

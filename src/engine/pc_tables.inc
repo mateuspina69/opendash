@@ -1454,6 +1454,7 @@
 // game/text_script_state
 {TableId::TextScriptNumberText, 0x8b172cu},
 {TableId::TextScriptTimeText, 0x8b1738u},
+{TableId::TextScriptRecordNameText, 0x8b1744u},
 // game/title
 {TableId::TitleClassTables, 0x88c3fcu},
 {TableId::TitleDepthCue, 0x88c414u},
