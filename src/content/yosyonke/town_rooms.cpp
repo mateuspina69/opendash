@@ -353,12 +353,10 @@ bool townRoomScriptHandler(RoutineId fn, bool run) {
         return true;
     // ST04 (the Flutter's cabin, table 0x8c5054 by story)
     case RoutineId::St04Story0Sub0RoomHandlerA:
-        // story 0 sub 0: the first arrival: its flags, script 0x4c; later visits run exe 0x57be10's other
-        // path (not ported)
+        // story 0 sub 0 (exe 0x57bdc0): the first arrival: its flags, script 0x4c; later visits: exe 0x57be10
         if (storyFlag(kFlagCabinArrived)) {
-            if (run)
-                notPortedAt(kTownRoomsPort, "ST04 room handler", routineStateValue(RoutineId::CabinLaterVisitsHandler));
-            return false;
+            if (run) cabinVisit();
+            return true;
         }
         if (!run) return true;
         for (uint32_t f : {kFlagCabinArrived, kFlagCabinPending, kFlagCabinScenesSeen, kFlagCabinEvent})

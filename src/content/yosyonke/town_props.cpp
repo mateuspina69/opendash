@@ -96,8 +96,11 @@ enum class St09PropState : uint8_t {
     Init = 0,    // exe 0x58e100
     Main = 1,    // exe 0x58e1e0: by variant
     Free = 2,    // exe 0x5afdd0 (exe 0x5e1540)
-    Rebind = 3,  // exe 0x58eeb0: bind again, then state 4 (past the table)
+    Rebind = 3,  // exe 0x58eeb0: bind again, then state 4
+    Turning = 4, // exe 0x58eee0: its counter; by variant: a solid, rolling, rocking
 };
+enum class St09TurningVariant : uint8_t { Solid = 0, Rolling = 1, Rocking = 2 };
+constexpr int16_t kRollStep = 0x10;
 enum class St09PropVariant : uint8_t {
     Breakable = 0, // exe 0x58e240
     Kickable = 1,  // exe 0x58e340: kicked 0x58e360 / lifted 0x58e600
@@ -335,7 +338,21 @@ void st09Prop(const PlayerEnv& env, StaticActor& actor) {
         }
         ++actor.state;
         return;
-    default: notPortedAt(kTownPropsPort, "ST09 static type 1 state (table 0x8cdb6c has 4)", actor.state);
+    case St09PropState::Turning: { // its first parameter counts the ticks
+        const uint8_t t = uint8_t(actor.params[0] + 1u);
+        actor.params[0] = t;
+        switch (St09TurningVariant(actor.variant)) {
+        case St09TurningVariant::Solid: actorCollisionSubmitSolid(actor, SolidType::StandOn, kNoBone, 0); return;
+        case St09TurningVariant::Rolling:
+            actor.rotation.z = int16_t((uint32_t(uint16_t(actor.rotation.z)) - kRollStep) & kAngleMask);
+            return;
+        case St09TurningVariant::Rocking: // the pitch from the sine of the counter (0x80 steps a turn)
+            actor.rotation.x = int16_t(fixedSin(int(uint32_t(t & 0x7fu) << 5)) >> 7);
+            return;
+        default: return;
+        }
+    }
+    default: notPortedAt(kTownPropsPort, "ST09 static type 1 state (table 0x8cdb6c has 5)", actor.state);
     }
 }
 

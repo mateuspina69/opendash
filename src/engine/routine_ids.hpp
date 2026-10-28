@@ -165,7 +165,7 @@ enum class RoutineId : uint16_t {
     BusterShotUpdate, // pool 0x10 type 1: the buster shot (game/shots/buster)
     BystanderScript,
     CabinAnimatedUpdate, // ST04 pool 0x20 type 0x47: the animation by +0xc (content/yosyonke/flutter_cabin)
-    CabinLaterVisitsHandler, // ST04 story 0 sub 0's later visits (not ported: a gap's message names it)
+    CabinLaterVisitsHandler, // ST04 story 0 sub 0's later visits (content/yosyonke/town_rooms cabinVisit)
     CabinModelUpdate, // ST04 static type 1: a placed model (content/yosyonke/flutter_cabin)
     CabinNpcUpdate, // ST04 pool 0x20 type 0x60: an NPC turning its head (content/yosyonke/flutter_cabin)
     CalbaniaArrivalScript,
