@@ -94,8 +94,8 @@ struct FrameConstants {
     float water[4];     // remaster medium look: on, clock (seconds), sky draw, kind (0 water, 1 hot air)
     float waterTint[4]; // the room's water colour
     XMFLOAT4X4 skyRay;  // screen-space sky: NDC -> view direction (inverse of the unjittered rotation-only viewProj)
-    float focus[kMaxFocusBodies][4];      // a focus body: NDC x, y of its centre, its radius in NDC y, its view depth
-    float focusWorld[kMaxFocusBodies][4]; // ... its feet (world y), its strength
+    float focus[kMaxFocusBodies][4];      // a focus body (world): its axis' foot x, y, z, its half width
+    float focusWorld[kMaxFocusBodies][4]; // ... its axis' top y, its strength
     float focusCount;
     float pad3[3];
     float heightBounds[4]; // precipitation height map: min x, min z, 1 / its width, 1 / its depth
@@ -1499,7 +1499,7 @@ private:
         f.focusCount = float(focusShown_);
         for (uint32_t k = 0; k < focusShown_; ++k)
             for (int c = 0; c < 4; ++c) {
-                f.focus[k][c] = focusNdc_[k][c];
+                f.focus[k][c] = focusAxis_[k][c];
                 f.focusWorld[k][c] = focusWorld_[k][c];
             }
         f.fogStart = fog_.start;
@@ -1575,19 +1575,14 @@ private:
         }
         float fwdv[3];
         for (int c = 0; c < 3; ++c) fwdv[c] = XMVectorGetByIndex(fwd, c);
-        // the focus bodies through the unjittered camera: the hole's centre and radius on screen, the body's depth
+        // the focus bodies (FrameConstants): their capsules
         focusShown_ = 0;
         for (const FocusBody& b : focus_) {
-            const XMVECTOR c = XMVectorSet(b.centre[0], b.centre[1], b.centre[2], 1.0f);
-            const float depth = XMVectorGetX(XMVector3Dot(XMVectorSubtract(c, eye), fwd));
-            if (depth <= cam.nearZ || b.strength <= 0.0f) continue;
-            const XMVECTOR ndc = XMVector3TransformCoord(c, vp);
-            float* n = focusNdc_[focusShown_];
-            n[0] = XMVectorGetX(ndc);
-            n[1] = XMVectorGetY(ndc);
-            n[2] = b.radius / (depth * std::tan(cam.fovY * 0.5f));
-            n[3] = depth;
-            focusWorld_[focusShown_][0] = b.feet;
+            if (b.strength <= 0.0f || b.radius <= 0.0f) continue;
+            float* a = focusAxis_[focusShown_];
+            for (int c = 0; c < 3; ++c) a[c] = b.base[c];
+            a[3] = b.radius;
+            focusWorld_[focusShown_][0] = b.top;
             focusWorld_[focusShown_][1] = b.strength;
             ++focusShown_;
         }
@@ -1850,7 +1845,7 @@ private:
     bool rt_ = false;
     SunLight sun_;
     std::vector<FocusBody> focus_;
-    float focusNdc_[kMaxFocusBodies][4]{}; // drawScene: the focus bodies through this frame's camera (FrameConstants)
+    float focusAxis_[kMaxFocusBodies][4]{}; // drawScene: the focus bodies' capsules (FrameConstants)
     float focusWorld_[kMaxFocusBodies][4]{};
     uint32_t focusShown_ = 0;
     // precipitation (setPrecipitation): the room's height map from above, the flakes, the blown snow

@@ -76,12 +76,12 @@ struct SunLight {
     float strength = 0.45f;
 };
 
-// A character in focus (OpenDash, the Baldur's Gate style see-through): the scenery between the camera and it
-// dissolves in a dithered hole around it on screen. World units of the drawn scene
+// A character in focus (OpenDash, the Baldur's Gate style see-through): the scenery that lies between the camera and
+// its body dissolves in a dithered hole. The body is a vertical capsule; world units of the drawn scene
 struct FocusBody {
-    float centre[3]{};
-    float radius = 0.0f;   // the hole's radius around the centre (the body's half size and a margin)
-    float feet = 0.0f;     // the body's lowest y: the floor it stands on never dissolves
+    float base[3]{};       // the axis' foot: the body's middle in x / z, its lowest y (the floor it stands on stays)
+    float top = 0.0f;      // the axis' top (world y)
+    float radius = 0.0f;   // the body's horizontal half width
     float strength = 1.0f; // 0..1: how open the hole is (a focus that appears / leaves eases it)
 };
 constexpr size_t kMaxFocusBodies = 2;

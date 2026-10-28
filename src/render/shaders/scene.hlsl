@@ -31,8 +31,8 @@ cbuffer Frame : register(b0) {
                             // (cave) / 2 hot air under an open sky (waterTint = the sky colour)
     float4 waterTint;       // the room's water colour (the game's wave tint / 0x80)
     float4x4 skyRay;        // screen-space sky: NDC -> view direction (inverse unjittered rotation-only viewProj)
-    float4 focus[2];        // the characters in focus (OpenDash's see-through): NDC x, y, radius in NDC y, view depth
-    float4 focusWorld[2];   // ... their feet (world y), their strength (0..1)
+    float4 focus[2];        // the characters in focus (OpenDash's see-through, world): axis foot x, y, z, half width
+    float4 focusWorld[2];   // ... their axis top y, their strength (0..1)
     float focusCount;
     float3 pad3;
     float4 heightBounds;  // precipitation height map: min x, min z, 1 / its width, 1 / its depth (world units)
@@ -329,22 +329,35 @@ PSOut ps_main(VSOut i, bool front : SV_IsFrontFace) {
     // renderer keeps depth clip off)
     const uint surface = uint(round(i.surface));
     if ((surface & 1u) && i.depth < modelNear) discard;
-    // the see-through (OpenDash, Baldur's Gate style): the scenery between the camera and a character in focus,
-    // above its feet and around it on screen, dissolves in an ordered dither (a soft edge, the floor kept)
+    // the see-through (OpenDash, Baldur's Gate style): the scenery that lies between the camera and a character in
+    // focus dissolves in an ordered dither: where the eye's ray through it passes the body's capsule (a soft edge
+    // out to kFocusEdge of its half width) with the fragment in front of the body; the floor is kept
     if ((surface & 2u) && focusCount > 0.5) {
         static const float kBayer[16] = {0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5};
+        static const float kFocusEdge = 1.3;
         const uint2 px = uint2(i.pos.xy) & 3u;
         const float threshold = (kBayer[px.y * 4 + px.x] + 0.5) / 16.0;
-        const float2 here = i.curClip.xy / i.curClip.w;
-        const float aspect = renderSize.x / renderSize.y;
         // a surface facing up (the floor, a step, a table top) is never dissolved: only walls, pillars, ceilings
         float3 up = normalize(cross(ddy(i.world), ddx(i.world)));
         if (dot(up, eye - i.world) < 0) up = -up;
+        const float3 ray = i.world - eye;
+        const float reach = length(ray);
+        const float3 d = ray / max(reach, 1e-4);
         float open = 0.0;
         for (int f = 0; f < int(focusCount + 0.5) && up.y < 0.6; ++f) {
-            if (i.depth >= focus[f].w || i.world.y <= focusWorld[f].x) continue;
-            const float d = length(float2((here.x - focus[f].x) * aspect, here.y - focus[f].y)) / focus[f].z;
-            open = max(open, saturate((1.35 - d) / 0.35) * focusWorld[f].y);
+            const float3 foot = focus[f].xyz;
+            const float r = focus[f].w, height = max(focusWorld[f].x - foot.y, 0.0);
+            if (i.world.y <= foot.y) continue;
+            // the ray's nearest approach to the axis (foot + s * up, s within 0 .. height)
+            const float3 w = eye - foot;
+            const float b = d.y, dw = dot(d, w);
+            const float s = clamp((w.y - b * dw) / max(1.0 - b * b, 1e-4), 0.0, height);
+            const float t = max(dot(foot + float3(0, s, 0) - eye, d), 0.0);
+            const float miss = length(eye + d * t - foot - float3(0, s, 0));
+            // in front of the body: nearer than where the ray enters it (at the nearest approach at least r before)
+            const float entry = t - max(sqrt(max(r * r - miss * miss, 0.0)), 0.5 * r);
+            if (reach >= entry) continue;
+            open = max(open, saturate((kFocusEdge - miss / r) / (kFocusEdge - 1.0)) * focusWorld[f].y);
         }
         if (open > threshold) discard;
     }

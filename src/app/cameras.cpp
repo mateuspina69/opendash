@@ -348,13 +348,10 @@ void PlayerView::focusBodies(const RoomMesh& mesh, float alpha, std::vector<od::
         for (int c = 0; c < 3; ++c) base[c] = (prev[c] + (cur[c] - prev[c]) * alpha) * scale;
         base[1] = -base[1]; // render y up
         od::FocusBody f;
-        float size = 0.0f;
-        for (int c = 0; c < 3; ++c) {
-            f.centre[c] = base[c] + (b.lo[c] + b.hi[c]) * 0.5f + renderOffset[c];
-            size = std::max(size, b.hi[c] - b.lo[c]);
-        }
-        f.radius = size * 0.6f; // half the body's largest extent and a margin
-        f.feet = base[1] + b.lo[1] + renderOffset[1];
+        for (int c = 0; c < 3; ++c) f.base[c] = base[c] + (b.lo[c] + b.hi[c]) * 0.5f + renderOffset[c];
+        f.base[1] = base[1] + b.lo[1] + renderOffset[1];
+        f.top = base[1] + b.hi[1] + renderOffset[1];
+        f.radius = std::max(b.hi[0] - b.lo[0], b.hi[2] - b.lo[2]) * 0.5f;
         f.strength = strength;
         out.push_back(f);
     };
