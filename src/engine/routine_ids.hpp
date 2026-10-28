@@ -2316,11 +2316,14 @@ enum class RoutineId : uint16_t {
     TextLayoutInsertPlace, // fb 44
     TextLayoutInsertString, // fb 20
     TextLayoutInsertTime, // fb 23
+    TextLayoutLoadRecordTime, // fb 48 k: a best-time record's time into the window
     TextLayoutLoadSaveSlot, // fb 45 slot: a save slot's summary into the window
     TextLayoutNewLine, // fc
     TextLayoutPenShift, // fb 2e dx: the pen moved
+    TextLayoutPenShiftY, // fb 2f dy: the pen moved down (one pixel less without ruby)
     TextLayoutReturn, // fb 1f
     TextLayoutRubyGlyph, // fe: the glyph and its ruby
+    TextLayoutSkipChoiceFlags, // fb 43 n flags: past the n flags
     TextLayoutSkipEight,
     TextLayoutSkipFive,
     TextLayoutSkipFour,
@@ -2335,6 +2338,7 @@ enum class RoutineId : uint16_t {
     TextLayoutSkipThree,
     TextLayoutSkipTwo,
     TextLayoutSkipWindows, // fb 13 / 38: past the id list
+    TextLayoutWriteZenny, // fb 3b: the zenny's decimal written over the text after the code, then laid out
     TextLogicAddCounter, // fb 37 k v: a counter or the zenny
     TextLogicAskInWindow, // fb 38 id n targets: a question in another window, then by its answer
     TextLogicBalance, // fb 3e n: the good / bad balance
@@ -2521,7 +2525,7 @@ enum class RoutineId : uint16_t {
 };
 
 // the number of RoutineIds (None included)
-inline constexpr uint16_t kRoutineIds = 2511;
+inline constexpr uint16_t kRoutineIds = 2515;
 
 inline const char* routineName(RoutineId id) {
     static constexpr const char* kNames[] = {
@@ -4834,11 +4838,14 @@ inline const char* routineName(RoutineId id) {
         "TextLayoutInsertPlace",
         "TextLayoutInsertString",
         "TextLayoutInsertTime",
+        "TextLayoutLoadRecordTime",
         "TextLayoutLoadSaveSlot",
         "TextLayoutNewLine",
         "TextLayoutPenShift",
+        "TextLayoutPenShiftY",
         "TextLayoutReturn",
         "TextLayoutRubyGlyph",
+        "TextLayoutSkipChoiceFlags",
         "TextLayoutSkipEight",
         "TextLayoutSkipFive",
         "TextLayoutSkipFour",
@@ -4853,6 +4860,7 @@ inline const char* routineName(RoutineId id) {
         "TextLayoutSkipThree",
         "TextLayoutSkipTwo",
         "TextLayoutSkipWindows",
+        "TextLayoutWriteZenny",
         "TextLogicAddCounter",
         "TextLogicAskInWindow",
         "TextLogicBalance",

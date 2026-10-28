@@ -979,6 +979,30 @@ void runLayoutCode(MessageWindow& w, uint32_t index) {
         w.penX = int16_t(w.penX + op.signedByte(2));
         w.layoutAt = p + 3;
         return;
+    case RoutineId::TextLayoutPenShiftY: // without ruby the lines sit one pixel higher
+        w.penY = int16_t(w.penY + op.signedByte(2));
+        w.layoutAt = p + 3;
+        if (gameOptions().ruby == 0) w.penY = int16_t(w.penY - 1);
+        return;
+    case RoutineId::TextLayoutWriteZenny: { // the digits over the text's bytes after the code (exe 0x557be0, no pad)
+        w.layoutAt = p + 2;
+        TextBytes out(w.layoutAt);
+        (void)messageNumberWrite(gameState().zenny, out, 0);
+        return;
+    }
+    case RoutineId::TextLayoutSkipChoiceFlags: w.layoutAt = p + 3 + uint32_t(op.byte(2)) * 2; return;
+    case RoutineId::TextLayoutLoadRecordTime: { // as the logic's fb 48 (k < 0: +0x6f; k past the records: -1)
+        int8_t k = op.signedByte(2);
+        w.layoutAt = p + 3;
+        if (k < 0) k = w.record;
+        if (k < kBestTimeCount) {
+            w.record = k;
+            w.timeValue = bestTimes().records[size_t(int32_t(k))].time;
+        } else {
+            w.timeValue = -1;
+        }
+        return;
+    }
     case RoutineId::TextLayoutInsertKeyName: insertKeyName(w.layoutAt, w.layoutReturn); return;
     case RoutineId::TextLayoutInsertTime: insertTime(w, w.layoutAt, w.layoutReturn); return;
     case RoutineId::TextLayoutInsertPlace: insertPlace(w, w.layoutAt, w.layoutReturn); return;
@@ -1018,6 +1042,10 @@ uint32_t messageOpLength(const TextBytes& text) {
     case RoutineId::TextLayoutInsertString: return 4;
     case RoutineId::TextLayoutInsertNumber: return 3;
     case RoutineId::TextLayoutPenShift: return 3;
+    case RoutineId::TextLayoutPenShiftY: return 3;
+    case RoutineId::TextLayoutWriteZenny: return 2;
+    case RoutineId::TextLayoutSkipChoiceFlags: return 3 + uint32_t(text.byte(2)) * 2;
+    case RoutineId::TextLayoutLoadRecordTime: return 3;
     case RoutineId::TextLayoutInsertKeyName: return 3;
     case RoutineId::TextLayoutInsertTime: return 3;
     case RoutineId::TextLayoutInsertPlace: return 3;

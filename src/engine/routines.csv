@@ -93,6 +93,10 @@ TextLayoutPenShift,0x55ae60,fb 2e dx: the pen moved
 TextLayoutInsertItemName,0x55b380,fb 3d
 TextLayoutInsertPlace,0x55b630,fb 44
 TextLayoutLoadSaveSlot,0x55b660,fb 45 slot: a save slot's summary into the window
+TextLayoutPenShiftY,0x55ae80,fb 2f dy: the pen moved down (one pixel less without ruby)
+TextLayoutWriteZenny,0x55b180,fb 3b: the zenny's decimal written over the text after the code, then laid out
+TextLayoutSkipChoiceFlags,0x55b5d0,fb 43 n flags: past the n flags
+TextLayoutLoadRecordTime,0x55b780,fb 48 k: a best-time record's time into the window
 # the empty routine (a bare ret) many tables point at
 EmptyRoutine,0x52ef00,does nothing
 # game/player/player_update: the player's states (exe table 0x8c4f5c) and sub-state input / motion handlers (0x8c4fc0 / 0x8c4f6c)
@@ -2792,7 +2796,7 @@ St3eReport67LastStep,0x539730
 # the routines content code names by hand (cues, steps, handlers, the callers a gap names)
 St28LavaBossLanding,0x4ce300,the ST28 lava boss's landing (a gap's message names it)
 St28LavaBossFall,0x4ce780,the ST28 lava boss's fall (a gap's message names it)
-CabinLaterVisitsHandler,0x57be10,ST04 story 0 sub 0's later visits (not ported: a gap's message names it)
+CabinLaterVisitsHandler,0x57be10,ST04 story 0 sub 0's later visits (content/yosyonke/town_rooms cabinVisit)
 St1cFlyerFlightCue,0x4bc180,the ST1C flyer's flight cue
 EndStaffRollStep,0x53be40,script 0x6e's one step (the staff roll)
 St53StoryFRoomHandler,0x58c0c0,ST53 sub 0 at story 0xf (table 0x8cd800): script 0x60 once
