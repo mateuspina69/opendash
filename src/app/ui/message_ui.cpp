@@ -612,6 +612,12 @@ void MessageUi::menuText(ui::Canvas& cv, const od::port::ScreenPrim& p, float s,
     if (p.kind == od::port::ScreenPrim::Glyph) { // sampled from p.u texels (of the 24-texel cell) on
         const Font& F = font[p.font];
         const int g = p.code;
+        // the lists' hand (the shop / development room / entry lists: PC glyph 1, or 0) in the pack's font as the
+        // windows' hand (PS1 font cells 12 * 20 + 16 / + 13, colour 0 / 1): the disc has no PC font
+        if (p.font == 0 && (g == 0 || g == 1) && usePs1 && ps1.tex) {
+            glyphPs1(cv, g == 1 ? 12 * 20 + 16 : 12 * 20 + 13, p.gx, p.gy, s, o, col, nullptr, g == 1 ? 0 : 1);
+            return;
+        }
         if (hdText && hdTex && g > 0x20 && g < 0x7f && hd.has(uint32_t(g))) {
             // HD text: the PC font's ASCII glyph (digits of the counters, ...) from the TrueType font, centred in
             // its cell, the capitals 3 / 4 of the cell high
