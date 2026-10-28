@@ -25,19 +25,18 @@ files still come from your copy (see below).
 - An installed copy of the PC version of *Mega Man Legends 2* (the `dat/` folder and `dash2.exe`).
 - Windows 10/11, Visual Studio 2026 (C++ workload), CMake 3.28+, [vcpkg](https://vcpkg.io) (manifest mode); or
   Linux with GCC 13+ / Clang 17+, CMake 3.28+, Ninja, SDL3, stb, NanoSVG, DXC and a Vulkan 1.3 driver.
-- Python 3.11+ (the build and `tools/fetch_sdks.py`), and Git with Git LFS for the upscaler SDKs.
+- Python 3.11+, and Git with Git LFS (the configure fetches the upscaler SDKs).
 
 ## Building
 
 ```
 cd opendash
-python tools/fetch_sdks.py
 cmake --preset vs2026
 cmake --build --preset release
 ```
 
-`tools/fetch_sdks.py` downloads the pinned upscaler SDKs (DLSS, FSR, XeSS, NIS) into `third_party/` (not in git);
-the Windows configure stops if they are missing. Every build includes all four; each one is offered at run time
+The configure fetches the pinned upscaler SDKs (DLSS, FSR, XeSS, NIS) into `third_party/` (not in git) through
+`tools/fetch_sdks.py`. Every build includes all four; each one is offered at run time
 when its DLL is next to the exe and the GPU supports it.
 
 On Linux (Arch: `pacman -S cmake ninja sdl3 stb nanosvg directx-shader-compiler vulkan-icd-loader`; NVRHI, Dear ImGui
@@ -48,7 +47,8 @@ cmake --preset linux
 cmake --build --preset linux-release
 ```
 
-The Linux build renders through Vulkan (dynamic rendering, synchronization2) and has no upscalers yet (`aa=none`); the
+The Linux build renders through Vulkan (dynamic rendering, synchronization2). Its upscaler is FSR 3.1, built when
+`python tools/fetch_sdks.py --only fidelityfx-vk` has fetched the SDK and `glslangValidator` is installed; the
 depth buffer is D32 with the scene's depth written at D24 precision, so coplanar faces tie as on Direct3D 12.
 
 On its first start, if the game is not installed in `C:/Program Files (x86)/Capcom/Dash2` (on Linux, the same path in

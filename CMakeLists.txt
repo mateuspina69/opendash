@@ -139,8 +139,13 @@ add_custom_command(TARGET opendash POST_BUILD # seed saves/ from the Debug dir (
     COMMAND ${CMAKE_COMMAND} -DSRC=${CMAKE_BINARY_DIR}/Debug -DDST=$<TARGET_FILE_DIR:opendash>
             -P ${CMAKE_SOURCE_DIR}/cmake/sync_runtime_data.cmake)
 
-# --- upscaler SDKs (Windows only): not in the repository; whoever builds puts them in third_party/ ---
+# --- upscaler SDKs (Windows only): not in the repository; the configure fetches the pinned versions into third_party/
+# (tools/fetch_sdks.py, a no-op for the ones already there) ---
 if(WIN32)
+execute_process(COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/fetch_sdks.py RESULT_VARIABLE od_fetch_rc)
+if(NOT od_fetch_rc EQUAL 0)
+    message(FATAL_ERROR "upscaler SDKs: tools/fetch_sdks.py failed (${od_fetch_rc}); it needs git, Git LFS and network")
+endif()
 # Every build compiles all four backends, so every build of the same sources is the same exe; whether a backend is
 # offered is decided at run time only (its DLL next to the exe, the GPU / driver): DLLs are delay-loaded or loaded by
 # the SDK, a missing one turns the backend off.
@@ -152,7 +157,7 @@ set(od_sdk_files "${OD_FFX_ROOT}/api/include/ffx_api.h" "${OD_DLSS_ROOT}/include
     "${OD_XESS_ROOT}/inc/xess/xess_d3d12.h" "${OD_NIS_ROOT}/NIS_Main.hlsl")
 foreach(f IN LISTS od_sdk_files)
     if(NOT EXISTS "${f}")
-        message(FATAL_ERROR "upscaler SDKs: ${f} missing (FidelityFX, DLSS, XeSS and NIS go in third_party/: "
+        message(FATAL_ERROR "upscaler SDKs: ${f} missing after tools/fetch_sdks.py (third_party/: "
                             "fidelityfx/Kits/FidelityFX, dlss, xess, nis/NIS)")
     endif()
 endforeach()
