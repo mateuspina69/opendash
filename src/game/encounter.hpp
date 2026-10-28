@@ -254,7 +254,8 @@ struct FieldClassRecord : DataRecord {
 // to, followed to the extents the encounter code reads -- the picks; the formations the picks can name; each
 // formation's class list to its negative terminator; the position ranges of the kinds the formations ask for; the
 // position sets those ranges cover and each set's positions to their negative terminator; the class records the lists
-// name (the exe's real 0xc-byte extent, not the 0x18 of a group record).
+// name (the exe's real 0xc-byte extent, not the 0x18 of a group record). The formations are those of the table's picks
+// and of the pick lists the stage's spawners point the table at (game/patched_data: exe 0x41b700 / 0x41b830).
 struct FieldEncounterData : DataRecord {
     static constexpr uint32_t kBytes = FieldEncounterTable::kBytes;
     static constexpr uint32_t kPickCount = 0x20;
@@ -271,7 +272,7 @@ struct FieldEncounterData : DataRecord {
     std::vector<PositionSet> positionSets; // (max base + count) * kPositionSetsPerKind
     std::vector<std::vector<FormationPosition>> positions; // per set: its positions, the negative-yaw terminator included
 
-    static FieldEncounterData load(const TableReader& r);
+    static FieldEncounterData load(const TableReader& r, TableKey key);
 
     // the formation a pick names
     const Formation& formation(size_t pick) const {

@@ -124,6 +124,8 @@ public:
     std::string followString(size_t o, size_t maxLength) const;
     // a function pointer at o: the named routine
     RoutineRef routine(size_t o) const;
+    // the source the bytes come from (a load that needs another of its tables)
+    const DataSource& source() const { return *source_; }
 
 private:
     const uint8_t* at(size_t o, size_t n) const;
@@ -170,11 +172,15 @@ public:
     // when the source has no pointer for it
     virtual uint32_t routineStateValue(RoutineId id) const = 0;
 
-    // the typed table T of `key` (T::kBytes bytes, T::load(const TableReader&)), loaded once per source
+    // the typed table T of `key` (T::kBytes bytes, T::load(const TableReader&), or T::load(const TableReader&, key)
+    // for a family whose extent depends on its index), loaded once per source
     template <class T> const T& load(TableKey key) const {
         Cached& slot = cache_[key];
         if (!slot.value) {
-            slot.value = std::make_shared<const T>(T::load(table(key, T::kBytes)));
+            if constexpr (requires(const TableReader& r) { T::load(r, key); })
+                slot.value = std::make_shared<const T>(T::load(table(key, T::kBytes), key));
+            else
+                slot.value = std::make_shared<const T>(T::load(table(key, T::kBytes)));
             slot.type = std::type_index(typeid(T));
         } else if (slot.type != std::type_index(typeid(T))) {
             throw DataSourceError("data source: " + describe(key) + " loaded as two types");

@@ -130,6 +130,15 @@ const DataTable<ScalarTable<uint32_t, 0x10>> fieldOdds{TableId::EncounterFieldOd
 const DataTable<ScalarTable<uint32_t, 0x10>> waveEndOdds{TableId::EncounterWaveEndOdds}; // 2-bit odds packed in words
 // the stage's field encounter table through its typed load (the lists the exe reads by pointer)
 const TableFamily<FieldEncounterData> fieldTables{TableId::StageEncounterField};
+// the pick lists a stage's spawner points its field table at (exe data): ST0D's Roll by the tracks (exe 0x41b700),
+// ST0E's encounter switch east / west (exe 0x41b830)
+const DataTable<ScalarTable<uint8_t, FieldEncounterData::kPickCount>> rollSpawnerPicks{TableId::RollSpawnersFormationPicks},
+    st0eEastPicks{TableId::St0eSpawnerEastFormationPicks}, st0eWestPicks{TableId::St0eSpawnerWestFormationPicks};
+struct StagePicks {
+    uint32_t stage;
+    const DataTable<ScalarTable<uint8_t, FieldEncounterData::kPickCount>>* picks;
+};
+const StagePicks kSpawnerPicks[] = {{0x0d, &rollSpawnerPicks}, {0x0e, &st0eEastPicks}, {0x0e, &st0eWestPicks}};
 const FieldEncounterData& fieldEncounterData() { return fieldTables[uint32_t(gameState().stage)]; }
 
 // the keep test (exe 0x510ad0): the screen, how far a seen enemy may be, the facing window of mode 4
@@ -805,11 +814,12 @@ void dropFreedTracked(EncounterSlot& slot) {
 } // namespace
 
 // The typed load of a stage's field encounter table (TableId::StageEncounterField): every list the encounter routines
-// can read, followed to its real extent. The pick list names at most 0x20 formations (exe 0x510c00: r & 0x1f); the
-// highest pick bounds the formation array; a formation's mode >> 4 bounds the position kind, whose {base, count}
-// bounds the sets (four per kind); a set's positions and a formation's classes end at a negative yaw / index. The class
-// records are the 0xc-byte records fieldWave reads (exe 0x5102d0 / 0x50fd20), not a group record's 0x18.
-FieldEncounterData FieldEncounterData::load(const TableReader& r) {
+// can read, followed to its real extent. A pick list names at most 0x20 formations (exe 0x510c00: r & 0x1f); the
+// highest pick of the table's list and of the lists the stage's spawners install bounds the formation array; a
+// formation's mode >> 4 bounds the position kind, whose {base, count} bounds the sets (four per kind); a set's
+// positions and a formation's classes end at a negative yaw / index. The class records are the 0xc-byte records
+// fieldWave reads (exe 0x5102d0 / 0x50fd20), not a group record's 0x18.
+FieldEncounterData FieldEncounterData::load(const TableReader& r, TableKey key) {
     constexpr const char* kArea = "field encounter typed load";
     constexpr uint32_t kMaxClassList = 0x80, kMaxPositionList = 0x80;
     FieldEncounterData t;
@@ -823,6 +833,11 @@ FieldEncounterData FieldEncounterData::load(const TableReader& r) {
     uint32_t maxPick = 0;
     for (const uint8_t p : t.formationPick)
         if (p > maxPick) maxPick = p;
+    for (const StagePicks& sp : kSpawnerPicks) {
+        if (sp.stage != key.index) continue;
+        const auto& picks = r.source().load<ScalarTable<uint8_t, kPickCount>>(sp.picks->key());
+        for (size_t i = 0; i < kPickCount; ++i) maxPick = std::max<uint32_t>(maxPick, picks[i]);
+    }
     const TableReader forms = r.follow(4, (maxPick + 1) * kFormationSize);
     t.formations.resize(maxPick + 1);
     t.classLists.resize(maxPick + 1);
