@@ -91,6 +91,7 @@ Config loadConfig() {
             if (key == "water") cfg.water = trim(line.substr(eq + 1));
             if (key == "weather") cfg.weather = trim(line.substr(eq + 1));
             if (key == "dissolve") cfg.dissolve = trim(line.substr(eq + 1)) != "0";
+            if (key == "clearance") cfg.clearance = trim(line.substr(eq + 1)) != "0";
             if (key == "fog_distance") cfg.fogDistance = std::strtof(trim(line.substr(eq + 1)).c_str(), nullptr);
             if (key == "keys") cfg.keys = trim(line.substr(eq + 1));
             if (key == "pad") cfg.pad = trim(line.substr(eq + 1));

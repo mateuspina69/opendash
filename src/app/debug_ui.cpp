@@ -223,6 +223,11 @@ void App::drawDebugMenu() {
                 if (ImGui::IsItemHovered())
                     ImGui::SetTooltip("Cada peca do cenario com uma cor; as que estao abertas (escondendo o foco) em vermelho.");
             }
+            if (ImGui::Checkbox("Megaman fora das paredes", &clearance))
+                od::saveConfigValue("clearance", clearance ? "1" : "0");
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("So o desenho: o modelo do Megaman e empurrado para fora das paredes em que afundaria.\n"
+                                  "A posicao e a colisao do jogo nao mudam.");
             {
                 bool precisePoses = od::precise::enabled();
                 if (ImGui::Checkbox("animacoes suaves (desmarcado = tremido original do PS1)", &precisePoses))

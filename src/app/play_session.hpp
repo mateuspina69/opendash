@@ -364,6 +364,11 @@ struct PlayerView {
     // the drawn objects of the actor at `address` (animated pool: kKindActor slot, any blend; static / shot /
     // projectile pools: kKindPoolModel)
     static bool objectOfActor(uint32_t address, uint32_t id);
+    // play in this room outside cutscenes (no script, event or talk holds the game's camera): the views OpenDash adds
+    // (the see-through, the model clearance) apply
+    bool freeView(const RoomMesh& mesh) const;
+    // the player's position at the last tick, the room's units (render y up)
+    void pivotAt(const RoomMesh& mesh, float out[3]) const;
     // the see-through's characters in focus (renderer SeeThroughBody, their kept boxes at the tick blend alpha; drawn:
     // with the travel offset, as drawn, else in the room's own units): the player whenever drawn, the lock-on target
     // while the lock view holds it; none in cutscenes

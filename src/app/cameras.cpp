@@ -325,12 +325,22 @@ void PlayerView::trackPosition(bool snapNow) {
     }
 }
 
+bool PlayerView::freeView(const RoomMesh& mesh) const {
+    return play && roomStage == mesh.stage && roomSub == mesh.sub && !gameCameraActive() &&
+           !(od::port::scriptState().flags & od::port::kScriptRunning);
+}
+
+void PlayerView::pivotAt(const RoomMesh& mesh, float out[3]) const {
+    const float scale = float(1 << mesh.shift);
+    out[0] = posCur[0] * scale;
+    out[1] = -posCur[1] * scale; // render y up
+    out[2] = posCur[2] * scale;
+}
+
 void PlayerView::seeThroughBodies(const RoomMesh& mesh, float alpha, bool drawn,
                                   std::vector<od::SeeThroughBody>& out) const {
     out.clear();
-    if (!play || roomStage != mesh.stage || roomSub != mesh.sub) return;
-    // cutscenes (the game's camera: a script, an event, a talk) show the scenery whole
-    if (gameCameraActive() || (od::port::scriptState().flags & od::port::kScriptRunning)) return;
+    if (!freeView(mesh)) return; // cutscenes show the scenery whole
     const float scale = float(1 << mesh.shift);
     auto add = [&](const float* prev, const float* cur, const BodyBox& b) {
         if (!b.valid) return;

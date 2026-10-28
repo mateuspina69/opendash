@@ -38,6 +38,8 @@ struct Config {
     // dissolve= 0|1 (F1 Visual): the scenery between the camera and the characters in focus (the player, the lock-on
     // target) dissolves around them, Baldur's Gate style
     bool dissolve = true;
+    // clearance= 0|1 (F1 Visual): the player's model is drawn out of the walls it sinks into (app/model_clearance)
+    bool clearance = true;
     // netplay (app/netplay, docs/netplay.md): net= off|host|join, net_port= the host's UDP port (unset / 0: 27460;
     // a client binds any free port), net_join= the host's ip:port, net_name= this player's name, net_key= the session key (the host refuses
     // a player whose key differs; only its hash travels). --host / --join / --net-name / --net-key override them.

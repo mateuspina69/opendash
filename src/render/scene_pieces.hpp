@@ -20,6 +20,10 @@ struct ScenePieces {
 // The pieces of triangles tris[0 .. count) (count / 3 triangles). A triangle with no area is a piece of its own.
 ScenePieces scenePieces(const RenderVertex* tris, size_t count);
 
+// The drawn scenery among the dynamic objects: the room's live parts (switchable segments, doors) and the static
+// pool's objects, opaque
+bool isSceneryObject(const DynamicObject& o);
+
 // The distance along d (0..1 of its length) at which the segment o -> o + d meets triangle a b c, or a negative value
 // when it does not (either side of the triangle)
 float segmentHitsTriangle(const float* o, const float* d, const float* a, const float* b, const float* c);

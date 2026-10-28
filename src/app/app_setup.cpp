@@ -330,6 +330,7 @@ int App::init() {
             waterRemaster = cfg.water != "classic";
             weatherRemaster = (weatherArg.empty() ? cfg.weather : weatherArg) != "classic";
             dissolve = cfg.dissolve;
+            clearance = cfg.clearance;
         }
         if (const auto c = voiceTestArg.find(':'); c != std::string::npos && playerView.mixer) {
             auto& mx = *playerView.mixer;
@@ -412,6 +413,7 @@ int App::init() {
             try {
                 RoomMesh mesh = loadRoom(current.stage, current.sub);
                 seeThrough.roomLoaded(mesh.tris, mesh.semiStart[3] ? mesh.semiStart[0] : mesh.tris.size());
+                modelClearance.roomLoaded(mesh.tris, mesh.semiStart[3] ? mesh.semiStart[0] : mesh.tris.size());
                 if (!renderer->upload(mesh.tris, mesh.slices, mesh.sliceCount, mesh.semiStart)) SDL_Log("upload failed");
                 current = std::move(mesh);
                 playerView.enterPlay(current);
@@ -549,6 +551,7 @@ void App::reload(int newStage, int newSub, bool transition) {
     try {
         RoomMesh mesh = loadRoom(newStage, newSub);
         seeThrough.roomLoaded(mesh.tris, mesh.semiStart[3] ? mesh.semiStart[0] : mesh.tris.size());
+        modelClearance.roomLoaded(mesh.tris, mesh.semiStart[3] ? mesh.semiStart[0] : mesh.tris.size());
         if (!renderer->upload(mesh.tris, mesh.slices, mesh.sliceCount, mesh.semiStart)) SDL_Log("upload failed");
         {
             std::vector<od::DynamicObject> dyn;

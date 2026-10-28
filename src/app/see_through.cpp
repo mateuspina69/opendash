@@ -15,13 +15,6 @@ constexpr float kCloseTime = 0.3f;    // seconds to close
 constexpr float kEndMargin = 0.06f;   // a segment stops this many body heights short of its point (the body's skin)
 constexpr float kSideSpread = 0.35f;  // the side points, from the middle, of the body's width
 constexpr float kHeights[4] = {0.15f, 0.4f, 0.65f, 0.9f}; // the points' heights, of the body's height
-constexpr uint32_t kStaticPoolModels = 0x60;               // kKindPoolModel index >> 8 of the static pool (liveScene)
-
-bool isScenery(const od::DynamicObject& o) {
-    const uint32_t kind = o.id >> 24;
-    return o.blend == 0 && (kind == od::kKindLive ||
-                            (kind == od::kKindPoolModel && ((o.id & 0xffffffu) >> 8) == kStaticPoolModels));
-}
 
 float largestSide(const std::array<float, 6>& box) {
     return std::max({box[3] - box[0], box[4] - box[1], box[5] - box[2]});
@@ -56,7 +49,7 @@ void SeeThrough::tick(std::vector<od::DynamicObject>& objects, const float eye[3
     std::vector<Tri> dynamic;
     uint32_t next = kDynamicPieces;
     for (od::DynamicObject& o : objects) {
-        if (!isScenery(o)) continue;
+        if (!od::isSceneryObject(o)) continue;
         const od::ScenePieces sp = od::scenePieces(o.tris.data(), o.tris.size());
         std::vector<uint32_t> number(sp.box.size());
         for (size_t p = 0; p < sp.box.size(); ++p) {

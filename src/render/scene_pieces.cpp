@@ -12,6 +12,7 @@ namespace {
 
 constexpr float kPieceCrease = 0.82f; // cos 35 degrees: faces turning more than this meet at a crease (a new piece)
 constexpr float kWeld = 8.0f;         // positions closer than 1 / kWeld world units are the same vertex
+constexpr uint32_t kStaticPoolModels = 0x60; // kKindPoolModel index >> 8 of the static pool's objects (liveScene)
 
 uint32_t root(std::vector<uint32_t>& parent, uint32_t i) {
     while (parent[i] != i) i = parent[i] = parent[parent[i]];
@@ -81,6 +82,11 @@ ScenePieces scenePieces(const RenderVertex* tris, size_t count) {
             }
     }
     return out;
+}
+
+bool isSceneryObject(const DynamicObject& o) {
+    const uint32_t kind = o.id >> 24;
+    return o.blend == 0 && (kind == kKindLive || (kind == kKindPoolModel && ((o.id & 0xffffffu) >> 8) == kStaticPoolModels));
 }
 
 float segmentHitsTriangle(const float* o, const float* d, const float* a, const float* b, const float* c) {

@@ -23,6 +23,7 @@
 
 #include "app/ghost_view.hpp"
 #include "app/input.hpp"
+#include "app/model_clearance.hpp"
 #include "app/netplay.hpp"
 #include "app/play_session.hpp"
 #include "app/room_mesh.hpp"
@@ -238,6 +239,8 @@ struct App {
     bool dissolve = true; // F1 Visual / dissolve=: the scenery between the camera and the characters in focus dissolves
     bool seeThroughDebug = false; // F1 Visual: the see-through's pieces tinted, the open ones red
     SeeThrough seeThrough;        // which scenery pieces open (app/see_through)
+    bool clearance = true;          // F1 Visual / clearance=: the player's model drawn out of the walls
+    ModelClearance modelClearance;  // (app/model_clearance)
     int browseStage = 0;
 
     Input input;

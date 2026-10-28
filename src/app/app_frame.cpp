@@ -243,6 +243,7 @@ void App::simStep(int gameFrames) {
                 RoomMesh mesh = loadRoom(current.stage, current.sub);
                 g_inStageSwitch = false;
                 seeThrough.roomLoaded(mesh.tris, mesh.semiStart[3] ? mesh.semiStart[0] : mesh.tris.size());
+                modelClearance.roomLoaded(mesh.tris, mesh.semiStart[3] ? mesh.semiStart[0] : mesh.tris.size());
                 if (!renderer->upload(mesh.tris, mesh.slices, mesh.sliceCount, mesh.semiStart)) SDL_Log("upload failed");
                 mesh.camTris = std::move(current.camTris);
                 mesh.tris.clear();
@@ -443,6 +444,11 @@ void App::updateScene() {
                 dyn.push_back({od::objectId(od::kKindLive, 2 + m), std::move(segSemi[m]), uint8_t(m + 1)});
         if (!live.empty()) dyn.push_back({od::objectId(od::kKindLive, 0), std::move(live)});
         dyn.push_back({od::objectId(od::kKindPlayer, 0), playerView.build(current)});
+        if (playerView.play) { // the player drawn out of the walls it sinks into (app/model_clearance)
+            float pivot[3];
+            playerView.pivotAt(current, pivot);
+            modelClearance.tick(dyn, od::objectId(od::kKindPlayer, 0), pivot, clearance && playerView.freeView(current));
+        }
         if (playerView.play) playerView.measureBodies(current, dyn); // the lock camera's framing (app/cameras)
         { // the see-through: the dynamic scenery's pieces, which pieces hide the characters this tick
             std::vector<od::SeeThroughBody> bodies;
