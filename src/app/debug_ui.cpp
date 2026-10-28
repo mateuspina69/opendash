@@ -217,6 +217,12 @@ void App::drawDebugMenu() {
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip("O cenario entre a camera e o Megaman (e o alvo da mira) se desfaz em volta deles,\n"
                                   "como no Baldur's Gate 3.");
+            if (dissolve) {
+                ImGui::SameLine();
+                ImGui::Checkbox("ver pecas", &seeThroughDebug);
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("Cada peca do cenario com uma cor; as que estao abertas (escondendo o foco) em vermelho.");
+            }
             {
                 bool precisePoses = od::precise::enabled();
                 if (ImGui::Checkbox("animacoes suaves (desmarcado = tremido original do PS1)", &precisePoses))

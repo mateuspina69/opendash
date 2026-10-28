@@ -359,15 +359,15 @@ struct PlayerView {
     BodyBox playerBody, targetBody;
     static constexpr float kBodyShrink = 0.05f; // a kept BodyBox moves this much a tick toward a smaller pose
     uint32_t targetBodyOf = 0; // the lock target targetBody belongs to
-    uint32_t targetObject = 0; // its DynamicObject this tick (0: not built)
     // measures playerBody (object kKindPlayer 0) and, while locked on, targetBody from the tick's built objects
     void measureBodies(const RoomMesh& mesh, const std::vector<od::DynamicObject>& objects);
     // the drawn objects of the actor at `address` (animated pool: kKindActor slot, any blend; static / shot /
     // projectile pools: kKindPoolModel)
     static bool objectOfActor(uint32_t address, uint32_t id);
-    // the see-through's characters in focus (renderer FocusBody, drawn-scene units with the travel offset): the
-    // player whenever drawn, the lock-on target while the lock view holds it (eased with lockBlend); none in cutscenes
-    void focusBodies(const RoomMesh& mesh, float alpha, std::vector<od::FocusBody>& out) const;
+    // the see-through's characters in focus (renderer SeeThroughBody, their kept boxes at the tick blend alpha; drawn:
+    // with the travel offset, as drawn, else in the room's own units): the player whenever drawn, the lock-on target
+    // while the lock view holds it; none in cutscenes
+    void seeThroughBodies(const RoomMesh& mesh, float alpha, bool drawn, std::vector<od::SeeThroughBody>& out) const;
     // critically damped spring toward `target` (Game Programming Gems 4, 1.10): framerate independent; returns the
     // step to add to `current`
     static float smoothDamp(float current, float target, float& vel, float smoothTime, float dt);

@@ -1,6 +1,8 @@
-// GPU-free render logic: normals, jitter, render sizes, per-object interpolation / motion history, AA names.
+// GPU-free render logic: normals, jitter, render sizes, per-object interpolation / motion history, AA names, the
+// see-through's scenery pieces.
 #include "check.hpp"
 #include "render/render_logic.hpp"
+#include "render/scene_pieces.hpp"
 
 #include <cmath>
 #include <string_view>
@@ -144,6 +146,25 @@ static void backend_order() {
     CHECK((backendCandidates(B::None, {B::Dlss}) == std::vector<B>{B::None}));
 }
 
+// a wall of two triangles is one piece; the floor meeting it at a right angle is another; a lone triangle a third
+static void scene_pieces() {
+    const std::vector<RenderVertex> tris = {
+        vtx(0, 0, 0), vtx(4, 0, 0), vtx(4, 4, 0), vtx(0, 0, 0), vtx(4, 4, 0), vtx(0, 4, 0), // wall (z = 0)
+        vtx(0, 0, 0), vtx(0, 0, 4), vtx(4, 0, 0),                                         // floor, on the wall's edge
+        vtx(9, 0, 9), vtx(10, 0, 9), vtx(9, 1, 9)};                                       // apart
+    const ScenePieces sp = scenePieces(tris.data(), tris.size());
+    CHECK(sp.of.size() == 4 && sp.box.size() == 3);
+    CHECK(sp.of[0] == sp.of[1] && sp.of[2] != sp.of[0] && sp.of[3] != sp.of[0] && sp.of[3] != sp.of[2]);
+    CHECK(near(sp.box[sp.of[0]][3], 4) && near(sp.box[sp.of[0]][4], 4) && near(sp.box[sp.of[0]][5], 0));
+    // a segment through the wall meets it half way; one that stops short, or misses, does not
+    const float a[3] = {0, 0, 0}, b[3] = {4, 0, 0}, c[3] = {0, 4, 0};
+    const float o[3] = {1, 1, -2}, through[3] = {0, 0, 4}, shortOf[3] = {0, 0, 1.5f};
+    const float miss[3] = {9, 0, 4};
+    CHECK(near(segmentHitsTriangle(o, through, a, b, c), 0.5f));
+    CHECK(segmentHitsTriangle(o, shortOf, a, b, c) < 0.0f);
+    CHECK(segmentHitsTriangle(o, miss, a, b, c) < 0.0f);
+}
+
 int main() {
     face_normal();
     jitter_sequence();
@@ -157,5 +178,6 @@ int main() {
     motion_pan_pixels();
     aa_names();
     backend_order();
+    scene_pieces();
     return testResult("test_render_logic");
 }

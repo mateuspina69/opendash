@@ -242,6 +242,7 @@ void App::simStep(int gameFrames) {
                 g_inStageSwitch = true; // the same room: the stage's files, not a new selection
                 RoomMesh mesh = loadRoom(current.stage, current.sub);
                 g_inStageSwitch = false;
+                seeThrough.roomLoaded(mesh.tris, mesh.semiStart[3] ? mesh.semiStart[0] : mesh.tris.size());
                 if (!renderer->upload(mesh.tris, mesh.slices, mesh.sliceCount, mesh.semiStart)) SDL_Log("upload failed");
                 mesh.camTris = std::move(current.camTris);
                 mesh.tris.clear();
@@ -390,10 +391,14 @@ void App::updateScene() {
     const float* travel = playerView.renderOffset;
     drawCam = cam;
     for (int c = 0; c < 3; ++c) drawCam.eye[c] += travel[c];
-    { // the see-through's characters in focus (renderer FocusBody)
-        std::vector<od::FocusBody> focus;
-        if (dissolve) playerView.focusBodies(current, alpha, focus);
-        renderer->setFocus(focus);
+    { // the see-through (app/see_through): the open pieces this frame, the characters' holes as drawn
+        std::vector<od::SeeThroughBody> bodies;
+        std::vector<od::SeeThroughPiece> pieces;
+        if (dissolve) {
+            playerView.seeThroughBodies(current, alpha, true, bodies);
+            seeThrough.frame(dt, pieces);
+        }
+        renderer->setSeeThrough(bodies, pieces, dissolve && seeThroughDebug);
     }
     {
         const float aspect = float(width) / float(std::max(height, 1));
@@ -439,6 +444,11 @@ void App::updateScene() {
         if (!live.empty()) dyn.push_back({od::objectId(od::kKindLive, 0), std::move(live)});
         dyn.push_back({od::objectId(od::kKindPlayer, 0), playerView.build(current)});
         if (playerView.play) playerView.measureBodies(current, dyn); // the lock camera's framing (app/cameras)
+        { // the see-through: the dynamic scenery's pieces, which pieces hide the characters this tick
+            std::vector<od::SeeThroughBody> bodies;
+            if (dissolve) playerView.seeThroughBodies(current, 1.0f, false, bodies);
+            seeThrough.tick(dyn, cam.eye, bodies);
+        }
         if (playerView.play) ghosts.appendDynamic(dyn, g_roomVramGen); // objectId(kKindPlayer, 1 + slot)
         if (current.trackAxis >= 0) { // endless track: the travel frame (see travelOffset)
             const int ax = current.trackAxis;

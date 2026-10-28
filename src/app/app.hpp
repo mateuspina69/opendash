@@ -26,6 +26,7 @@
 #include "app/netplay.hpp"
 #include "app/play_session.hpp"
 #include "app/room_mesh.hpp"
+#include "app/see_through.hpp"
 #include "app/game_pacer.hpp"
 #include "app/title_screen.hpp"
 #include "app/video_mode.hpp"
@@ -235,6 +236,8 @@ struct App {
     size_t animTick = 0, shownTick = 0;
     bool skyDome = true; // sky layers on a sphere (default) or the original 2D screen-space scroll
     bool dissolve = true; // F1 Visual / dissolve=: the scenery between the camera and the characters in focus dissolves
+    bool seeThroughDebug = false; // F1 Visual: the see-through's pieces tinted, the open ones red
+    SeeThrough seeThrough;        // which scenery pieces open (app/see_through)
     int browseStage = 0;
 
     Input input;

@@ -61,8 +61,8 @@ if(MSVC)
 endif()
 
 # --- render logic: GPU-free math shared by the renderers (unit tested) ---
-add_library(odrender STATIC src/render/render_logic.cpp src/render/ui_canvas.cpp src/render/ui_font.cpp
-    src/render/ui_svg.cpp)
+add_library(odrender STATIC src/render/render_logic.cpp src/render/scene_pieces.cpp src/render/ui_canvas.cpp
+    src/render/ui_font.cpp src/render/ui_svg.cpp)
 target_include_directories(odrender PUBLIC src)
 find_package(Stb QUIET) # stb_truetype: the UI font (render/ui_font); stb_image_write: dev dumps
 if(NOT Stb_FOUND) # no vcpkg: the system's headers

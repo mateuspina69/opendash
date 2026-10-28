@@ -56,13 +56,12 @@ struct GpuVertex {
     float prevPos[3];
     float faceN[3];
     float pairN[3];
-    float surface; // bits: kSurfaceModel a model's face (actors, the player, bank models), clipped at the game's near
-                   // plane; kSurfaceScenery the scenery (room, segments, doors, static objects), dissolved around a focus;
-                   // kSurfaceEffect an effect (particles, billboards, rings): its blended texels fade at the scenery
+    float surface; // bits 0..2: kSurfaceModel a model's face (actors, the player, bank models), clipped at the game's
+                   // near plane; kSurfaceEffect an effect (particles, billboards, rings): its blended texels fade at
+                   // the scenery. Above them (* 8): RenderVertex::piece, the see-through's scenery piece
 };
-static_assert(sizeof(RenderVertex) == 48 && sizeof(GpuVertex) == 100);
-constexpr uint32_t kSurfaceModel = 1, kSurfaceScenery = 2, kSurfaceEffect = 4;
-constexpr uint32_t kStaticPoolModels = 0x60; // kKindPoolModel index >> 8 of the static pool's objects (liveScene)
+static_assert(sizeof(RenderVertex) == 52 && sizeof(GpuVertex) == 104);
+constexpr uint32_t kSurfaceModel = 1, kSurfaceEffect = 4;
 
 // scene.hlsl cbuffer Frame
 struct FrameConstants {
@@ -94,9 +93,9 @@ struct FrameConstants {
     float water[4];     // remaster medium look: on, clock (seconds), sky draw, kind (0 water, 1 hot air)
     float waterTint[4]; // the room's water colour
     XMFLOAT4X4 skyRay;  // screen-space sky: NDC -> view direction (inverse of the unjittered rotation-only viewProj)
-    float focus[kMaxFocusBodies][4]; // a focus body: its feet (world y), its strength; its depth is focusMask_[k]
-    float focusCount;
-    float pad3[3];
+    float seeBody[kMaxSeeThroughBodies][4];  // see-through: a body's hole on screen (NDC centre x, y, radius x, y)
+    float seeInfo[4];                        // ... the bodies' nearest view depths (x, y), the open pieces (z), debug (w)
+    float seePiece[kMaxSeeThroughPieces][4]; // ... an open piece: its RenderVertex::piece, opening, whole (1), bodies
     float heightBounds[4]; // precipitation height map: min x, min z, 1 / its width, 1 / its depth
     float heightRange[4];  // ... its top y, its height span, its size in texels (x, z)
     float precip[4];       // Precipitation: snow, blizzard, gust, seconds
@@ -181,12 +180,12 @@ void toGpu(const std::vector<RenderVertex>& tris, const float* prevPos, std::vec
         std::memcpy(out[k].faceN, own, sizeof out[k].faceN);
         std::memcpy(out[k].pairN, &fn[pf * 3], sizeof out[k].pairN);
         std::memcpy(out[k].prevPos, prevPos ? prevPos + k * 3 : tris[k].pos, sizeof out[k].prevPos);
-        out[k].surface = 0.0f;
+        out[k].surface = tris[k].piece * 8.0f;
     }
     if (surfaceRanges)
         for (size_t r = 0; r < surfaceRanges->size(); ++r)
             for (size_t k = (*surfaceRanges)[r].first; k < (*surfaceRanges)[r].second; ++k)
-                out[k].surface = float((*surfaceBits)[r]);
+                out[k].surface += float((*surfaceBits)[r]);
 }
 
 // ray-tracing attributes per vertex: (u, v, slice, 0) -- what the shadow rays' alpha test reads
@@ -283,16 +282,17 @@ public:
             attr("POSITION", nvrhi::Format::RGB32_FLOAT, 0), attr("UV", nvrhi::Format::RG32_FLOAT, 12),
             attr("SLICE", nvrhi::Format::R32_FLOAT, 20),     attr("SHADE", nvrhi::Format::R32_FLOAT, 24),
             attr("CULL", nvrhi::Format::R32_FLOAT, 28),      attr("LAYER", nvrhi::Format::R32_FLOAT, 32),
-            attr("COLOR", nvrhi::Format::RGB32_FLOAT, 36),   attr("NORMAL", nvrhi::Format::RGB32_FLOAT, 48),
-            attr("PREVPOS", nvrhi::Format::RGB32_FLOAT, 60), attr("FACEN", nvrhi::Format::RGB32_FLOAT, 72),
-            attr("PAIRN", nvrhi::Format::RGB32_FLOAT, 84),   attr("SURFACE", nvrhi::Format::R32_FLOAT, 96)};
+            attr("COLOR", nvrhi::Format::RGB32_FLOAT, 36),   attr("NORMAL", nvrhi::Format::RGB32_FLOAT, offsetof(GpuVertex, normal)),
+            attr("PREVPOS", nvrhi::Format::RGB32_FLOAT, offsetof(GpuVertex, prevPos)),
+            attr("FACEN", nvrhi::Format::RGB32_FLOAT, offsetof(GpuVertex, faceN)),
+            attr("PAIRN", nvrhi::Format::RGB32_FLOAT, offsetof(GpuVertex, pairN)),
+            attr("SURFACE", nvrhi::Format::R32_FLOAT, offsetof(GpuVertex, surface))};
         inputLayout_ = d->createInputLayout(attrs, uint32_t(std::size(attrs)), sceneVs_);
 
         nvrhi::BindingLayoutDesc bl;
         bl.visibility = nvrhi::ShaderType::All;
         bl.bindings = {nvrhi::BindingLayoutItem::VolatileConstantBuffer(0), nvrhi::BindingLayoutItem::Texture_SRV(0),
-                       nvrhi::BindingLayoutItem::Sampler(0), nvrhi::BindingLayoutItem::Texture_SRV(5),
-                       nvrhi::BindingLayoutItem::Texture_SRV(6), nvrhi::BindingLayoutItem::Texture_SRV(7)};
+                       nvrhi::BindingLayoutItem::Sampler(0), nvrhi::BindingLayoutItem::Texture_SRV(5)};
         if (rt_) {
             bl.bindings.push_back(nvrhi::BindingLayoutItem::RayTracingAccelStruct(1));
             bl.bindings.push_back(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2));
@@ -374,9 +374,7 @@ public:
         }
 
         std::vector<GpuVertex> gv;
-        const std::vector<std::pair<size_t, size_t>> room{{0, tris.size()}};
-        const std::vector<uint32_t> roomBits{kSurfaceScenery};
-        toGpu(tris, nullptr, gv, nullptr, &room, &roomBits);
+        toGpu(tris, nullptr, gv);
         nvrhi::BufferDesc bd;
         bd.byteSize = gv.size() * sizeof(GpuVertex);
         bd.isVertexBuffer = true;
@@ -429,8 +427,11 @@ public:
 
     void setSun(const SunLight& sun) override { sun_ = sun; }
     void setPrecipitation(const Precipitation& p) override { precip_ = p; }
-    void setFocus(const std::vector<FocusBody>& bodies) override {
-        focus_.assign(bodies.begin(), bodies.begin() + std::ptrdiff_t(std::min(bodies.size(), kMaxFocusBodies)));
+    void setSeeThrough(const std::vector<SeeThroughBody>& bodies, const std::vector<SeeThroughPiece>& pieces,
+                       bool debug) override {
+        seeBodies_.assign(bodies.begin(), bodies.begin() + std::ptrdiff_t(std::min(bodies.size(), kMaxSeeThroughBodies)));
+        seePieces_.assign(pieces.begin(), pieces.begin() + std::ptrdiff_t(std::min(pieces.size(), kMaxSeeThroughPieces)));
+        seeDebug_ = debug;
     }
     bool rayTracingSupported() const override { return rt_; }
 
@@ -523,10 +524,8 @@ public:
                          [](const DynamicObject& a, const DynamicObject& b) { return a.blend < b.blend; });
         dyn_.clear();
         dynStart_.fill(0);
-        objectRanges_.clear();
         std::vector<std::pair<size_t, size_t>> models; // the objects' vertex ranges, smoothed per object
-        // the surface bits by object: the model draws (exe 0x5f4980 / 0x5f3820) and the scenery (the room's segments
-        // and doors, the static pool's objects)
+        // the surface bits by object: the model draws (exe 0x5f4980 / 0x5f3820) and the effects
         std::vector<std::pair<size_t, size_t>> surfaces;
         std::vector<uint32_t> surfaceBits;
         for (const DynamicObject& o : sorted) {
@@ -538,14 +537,11 @@ public:
             uint32_t bits = 0;
             if (kind == kKindActor || kind == kKindPlayer || kind == kKindPoolModel || kind == kKindWalker)
                 bits |= kSurfaceModel;
-            if (kind == kKindLive || (kind == kKindPoolModel && ((o.id & 0xffffffu) >> 8) == kStaticPoolModels))
-                bits |= kSurfaceScenery;
             if (kind == kKindEffect) bits |= kSurfaceEffect;
             if (bits) {
                 surfaces.push_back({dyn_.size(), dyn_.size() + o.tris.size()});
                 surfaceBits.push_back(bits);
             }
-            if (o.blend == 0) objectRanges_[o.id] = {uint32_t(dyn_.size()), uint32_t(o.tris.size())};
             dyn_.insert(dyn_.end(), o.tris.begin(), o.tris.end());
         }
         history_.apply(sorted, dynPrev_);
@@ -1292,10 +1288,6 @@ private:
     void makeDepthCopy() {
         depthCopy_ = makeTarget(t_.renderW, t_.renderH, nvrhi::Format::R32_FLOAT, "depth copy");
         depthCopyFb_ = dev_.device()->createFramebuffer(nvrhi::FramebufferDesc().addColorAttachment(depthCopy_));
-        for (size_t k = 0; k < kMaxFocusBodies; ++k) {
-            focusMask_[k] = makeTarget(t_.renderW, t_.renderH, nvrhi::Format::R32_FLOAT, "focus depth");
-            focusMaskFb_[k] = dev_.device()->createFramebuffer(nvrhi::FramebufferDesc().addColorAttachment(focusMask_[k]));
-        }
         outSets_.clear(); // they bind the old copy
         flakeSet_ = blizzardSet_ = nullptr;
         makeSceneSet();
@@ -1443,9 +1435,7 @@ private:
         }
         nvrhi::BindingSetDesc bs;
         bs.bindings = {nvrhi::BindingSetItem::ConstantBuffer(0, frameCb_), nvrhi::BindingSetItem::Texture_SRV(0, pages_),
-                       nvrhi::BindingSetItem::Sampler(0, pointClamp_), nvrhi::BindingSetItem::Texture_SRV(5, depthCopy_),
-                       nvrhi::BindingSetItem::Texture_SRV(6, focusMask_[0]),
-                       nvrhi::BindingSetItem::Texture_SRV(7, focusMask_[1])};
+                       nvrhi::BindingSetItem::Sampler(0, pointClamp_), nvrhi::BindingSetItem::Texture_SRV(5, depthCopy_)};
         if (rt_) {
             bs.bindings.push_back(nvrhi::BindingSetItem::RayTracingAccelStruct(1, tlas_));
             bs.bindings.push_back(nvrhi::BindingSetItem::StructuredBuffer_SRV(2, staticAttr_));
@@ -1504,10 +1494,16 @@ private:
         }
         f.cullSign = cullSign;
         f.modelNear = nearZ_;
-        f.focusCount = float(focusShown_);
-        for (uint32_t k = 0; k < focusShown_; ++k) {
-            f.focus[k][0] = focusShownBody_[k].feet;
-            f.focus[k][1] = focusShownBody_[k].strength;
+        std::memcpy(f.seeBody, seeBody_, sizeof f.seeBody);
+        f.seeInfo[0] = seeDepth_[0];
+        f.seeInfo[1] = seeDepth_[1];
+        f.seeInfo[2] = float(seePieces_.size());
+        f.seeInfo[3] = seeDebug_ ? 1.0f : 0.0f;
+        for (size_t k = 0; k < seePieces_.size(); ++k) {
+            f.seePiece[k][0] = float(seePieces_[k].piece);
+            f.seePiece[k][1] = seePieces_[k].open;
+            f.seePiece[k][2] = seePieces_[k].whole ? 1.0f : 0.0f;
+            f.seePiece[k][3] = float(seePieces_[k].bodies);
         }
         f.fogStart = fog_.start;
         f.fogEnd = fog_.end;
@@ -1582,13 +1578,34 @@ private:
         }
         float fwdv[3];
         for (int c = 0; c < 3; ++c) fwdv[c] = XMVectorGetByIndex(fwd, c);
-        // the focus bodies drawn this frame (their objects uploaded, FrameConstants / focusMask_)
-        focusShown_ = 0;
-        for (const FocusBody& b : focus_) {
-            const auto it = objectRanges_.find(b.object);
-            if (b.strength <= 0.0f || it == objectRanges_.end() || it->second.second == 0) continue;
-            focusShownBody_[focusShown_] = b;
-            focusShownRange_[focusShown_++] = it->second;
+        // the see-through's holes: each body's box through the unjittered camera, its screen bounds widened by
+        // kSeeHoleMargin (NDC) and its nearest view depth; a body with a corner behind the eye opens no hole
+        constexpr float kSeeHoleMargin = 1.25f;
+        for (size_t k = 0; k < kMaxSeeThroughBodies; ++k) {
+            seeDepth_[k] = 0.0f;
+            for (float& v : seeBody_[k]) v = 0.0f;
+            if (k >= seeBodies_.size()) continue;
+            const SeeThroughBody& b = seeBodies_[k];
+            float lo[2] = {1e9f, 1e9f}, hi[2] = {-1e9f, -1e9f}, nearest = 1e9f;
+            bool behind = false;
+            for (int corner = 0; corner < 8; ++corner) {
+                const XMVECTOR p = XMVectorSet(corner & 1 ? b.hi[0] : b.lo[0], corner & 2 ? b.hi[1] : b.lo[1],
+                                               corner & 4 ? b.hi[2] : b.lo[2], 1.0f);
+                const float depth = XMVectorGetX(XMVector3Dot(XMVectorSubtract(p, eye), fwd));
+                if (depth <= cam.nearZ) behind = true;
+                nearest = std::min(nearest, depth);
+                const XMVECTOR ndc = XMVector3TransformCoord(p, vp);
+                for (int c = 0; c < 2; ++c) {
+                    lo[c] = std::min(lo[c], XMVectorGetByIndex(ndc, c));
+                    hi[c] = std::max(hi[c], XMVectorGetByIndex(ndc, c));
+                }
+            }
+            if (behind) continue;
+            seeBody_[k][0] = (lo[0] + hi[0]) * 0.5f;
+            seeBody_[k][1] = (lo[1] + hi[1]) * 0.5f;
+            seeBody_[k][2] = (hi[0] - lo[0]) * 0.5f * kSeeHoleMargin;
+            seeBody_[k][3] = (hi[1] - lo[1]) * 0.5f * kSeeHoleMargin;
+            seeDepth_[k] = nearest;
         }
 
         // streamed geometry: sky (dome previous positions follow the eye) and dynamic actors
@@ -1631,21 +1648,6 @@ private:
             drawRange(sky_pipe_, skyBuf_, 0, uint32_t(sky_.size()));
         }
         frameSky_ = 0.0f;
-
-        // the see-through's focus bodies, each drawn alone (its opaque and its STP texels) into the cleared depth and
-        // copied to its focusMask_; the depth is cleared again for the scene, which draws them where they are seen
-        for (uint32_t k = 0; k < focusShown_; ++k) {
-            const uint32_t n = uint32_t(dynGpu_.size()), first = std::min(focusShownRange_[k].first, n);
-            const uint32_t count = std::min(focusShownRange_[k].second, n - first);
-            for (const float semiPass : {0.0f, 1.0f}) {
-                frameSemiPass_ = semiPass;
-                writeFrame(vpJit, vp, prevVp_, cam.eye, prevEye_, fwdv, cam.cullSign, true, 0.0f, 0.0f, true);
-                drawRange(opaque_, dynBuf_, first, count);
-            }
-            frameSemiPass_ = 0.0f;
-            debugPass(t_.depth, 5, focusMaskFb_[k], float(t_.renderW), float(t_.renderH));
-            cl_->clearDepthStencilTexture(t_.depth, nvrhi::AllSubresources, true, 1.0f, kDepthHasStencil, 0);
-        }
 
         // every opaque surface (room, then actors / switchable segments) before any semi-transparent one: the blended
         // faces write no depth, so an opaque draw after them overwrote them wherever it lay behind (the ST4B sub 1
@@ -1863,15 +1865,11 @@ private:
     // sun shadows (ray queries)
     bool rt_ = false;
     SunLight sun_;
-    std::vector<FocusBody> focus_;
-    FocusBody focusShownBody_[kMaxFocusBodies]{}; // drawScene: the focus bodies drawn this frame
-    std::pair<uint32_t, uint32_t> focusShownRange_[kMaxFocusBodies]{}; // ... their opaque vertices in dynBuf_
-    uint32_t focusShown_ = 0;
-    // the opaque objects' vertex ranges in dyn_ (first, count) by DynamicObject id: a focus body's draw
-    std::unordered_map<uint32_t, std::pair<uint32_t, uint32_t>> objectRanges_;
-    // a focus body's depth (R32F, render size, 1 = none): drawn alone before the scene (scene.hlsl see-through)
-    nvrhi::TextureHandle focusMask_[kMaxFocusBodies];
-    nvrhi::FramebufferHandle focusMaskFb_[kMaxFocusBodies];
+    std::vector<SeeThroughBody> seeBodies_; // setSeeThrough
+    std::vector<SeeThroughPiece> seePieces_;
+    bool seeDebug_ = false;
+    float seeBody_[kMaxSeeThroughBodies][4]{}; // drawScene: the bodies' holes on screen (FrameConstants seeBody)
+    float seeDepth_[kMaxSeeThroughBodies]{};   // ... their nearest view depths (0: no hole)
     // precipitation (setPrecipitation): the room's height map from above, the flakes, the blown snow
     Precipitation precip_;
     nvrhi::ShaderHandle heightVs_, heightPs_, flakeVs_, flakePs_, fullVs_, blizzardPs_;

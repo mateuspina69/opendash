@@ -31,6 +31,7 @@ struct RenderVertex {
     float layer;   // coplanar priority (PS1 OT order): pushed layer * kLayerStep toward the camera
     float color[3]{1.0f, 1.0f, 1.0f}; // vertex colour (gouraud), multiplied in; with slice < 0 the polygon is
                                       // untextured (PS1 shaded polygons, e.g. the sky gradient 0x5f03a0)
+    float piece = 0.0f; // the see-through: the scenery piece it belongs to (app/see_through, SeeThroughPiece); 0 none
 };
 
 // Geometry of one actor rebuilt every tick. The id is stable for the actor's life in the room, so the tick
@@ -76,14 +77,19 @@ struct SunLight {
     float strength = 0.45f;
 };
 
-// A character in focus (OpenDash, the Baldur's Gate style see-through): the scenery dissolves, in a dither, on the
-// pixels where it hides the character's drawn body (the character's own depth, drawn first)
-struct FocusBody {
-    uint32_t object = 0;   // the character's DynamicObject (uploadDynamic)
-    float feet = 0.0f;     // its lowest y, world units of the drawn scene: the floor it stands on stays
-    float strength = 1.0f; // 0..1: how open the hole is (a focus that appears / leaves eases it)
+// The see-through (OpenDash, Baldur's Gate style; app/see_through): a scenery piece that stands between the camera and
+// a character in focus opens, in an ordered dither, a soft round hole around that character on screen (only its
+// fragments nearer than the character), or fades whole when it is smaller than the hole
+struct SeeThroughBody {
+    float lo[3]{}, hi[3]{}; // the character's box, world units of the drawn scene
 };
-constexpr size_t kMaxFocusBodies = 2;
+struct SeeThroughPiece {
+    uint32_t piece = 0;  // RenderVertex::piece
+    float open = 0.0f;   // 0..1
+    bool whole = false;  // the whole piece fades (smaller than the hole)
+    uint8_t bodies = 0;  // the bodies it hides (bit k: SeeThroughBody k): its hole goes around them
+};
+constexpr size_t kMaxSeeThroughBodies = 2, kMaxSeeThroughPieces = 16;
 
 // Fog of the world geometry. Classic: the original's D3D linear table fog on camera depth (start..end, fully fogged
 // at end). Remaster: exponential fog on the view distance from `start` on (density per world unit), thinner above the
@@ -103,6 +109,17 @@ struct Fog {
 // Flakes of a field fixed in the world fall and drift at `wind` and land on the first surface below them (a height map
 // of the room seen from above, made at upload(): nothing falls under a roof); with `blizzard`, the snow the wind blows
 // is also a medium along the view (sheets drifting with the wind, none where the height map shelters). 0 / 0 = none
+// OpenDash remaster: the light of the particles. Every additive effect (a kKindEffect DynamicObject of blend 2 or 4: the
+// shots, the explosions, the sparks, the fire) is a point light at its centre, of its own colour (its texels' mean
+// times its vertex colour); the opaque surfaces near it gain that light times their texture colour. Nothing darkens:
+// the original's light stays painted in the textures
+struct ParticleLighting {
+    bool enabled = false;
+    float strength = 1.0f; // the light's gain
+    float radius = 400.0f; // world units a light reaches at least (a larger effect reaches further)
+};
+constexpr size_t kMaxParticleLights = 32; // the brightest / largest ones a frame
+
 struct Precipitation {
     float snow = 0.0f;     // 0..1: the falling flakes' density
     float blizzard = 0.0f; // 0..1: the blown snow's density (more, faster, streaked flakes and the drifting medium)
@@ -188,6 +205,8 @@ public:
     virtual void setFog(const Fog& fog) = 0;
     // this frame's precipitation (Precipitation above)
     virtual void setPrecipitation(const Precipitation& p) = 0;
+    // the light of the particles (ParticleLighting above)
+    virtual void setParticleLighting(const ParticleLighting& l) { (void)l; }
     // sky: a dome around the eye or screen-space layers; isSky false = a 2D layer that is not the sky (ST01's travel
     // map), which the remaster fog leaves alone
     virtual void uploadSky(const std::vector<RenderVertex>& tris, bool screenSpace, bool isSky) = 0;
@@ -229,8 +248,10 @@ public:
     virtual void setDebugView(DebugView view) = 0;
     // sun shadows; ignored when the GPU has no ray queries (DXR 1.1)
     virtual void setSun(const SunLight& sun) = 0;
-    // the characters in focus this frame (at most kMaxFocusBodies; none: nothing dissolves)
-    virtual void setFocus(const std::vector<FocusBody>& bodies) = 0;
+    // the see-through this frame: the characters in focus (at most kMaxSeeThroughBodies) and the open pieces (at most
+    // kMaxSeeThroughPieces, the most open first); debug tints every piece and the open ones
+    virtual void setSeeThrough(const std::vector<SeeThroughBody>& bodies, const std::vector<SeeThroughPiece>& pieces,
+                               bool debug) = 0;
     virtual bool rayTracingSupported() const = 0;
     // anti-aliasing backend + quality; an unavailable backend falls back to Auto (DLSS, else FSR, else none)
     virtual void setAntiAliasing(AaBackend backend, AaQuality quality) = 0;

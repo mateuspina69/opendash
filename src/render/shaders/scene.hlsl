@@ -31,9 +31,9 @@ cbuffer Frame : register(b0) {
                             // (cave) / 2 hot air under an open sky (waterTint = the sky colour)
     float4 waterTint;       // the room's water colour (the game's wave tint / 0x80)
     float4x4 skyRay;        // screen-space sky: NDC -> view direction (inverse unjittered rotation-only viewProj)
-    float4 focus[2];        // the characters in focus (OpenDash's see-through): feet (world y), strength (0..1)
-    float focusCount;
-    float3 pad3;
+    float4 seeBody[2];      // the see-through (OpenDash): a character's hole on screen: NDC centre x, y, radius x, y
+    float4 seeInfo;         // ... the characters' nearest view depths (x, y; 0 no hole), the open pieces (z), debug (w)
+    float4 seePiece[16];    // ... an open piece: its number (RenderVertex::piece), opening, whole (1), its bodies' bits
     float4 heightBounds;  // precipitation height map: min x, min z, 1 / its width, 1 / its depth (world units)
     float4 heightRange;   // ... its top y, its height span, its size in texels (x, z)
     float4 precip;        // precipitation: snow, blizzard (0..1), the gusts' swing, the game's clock (seconds)
@@ -49,8 +49,6 @@ Texture2DArray pages : register(t0);
 SamplerState pointClamp : register(s0);
 Texture2D<float> heightMap : register(t4);  // precipitation: the room seen from above (depth 0 = top, 1 = no surface)
 Texture2D<float> sceneDepth : register(t5); // the opaque scene's raw depth (R32F copy, before the blended draws)
-Texture2D<float> focusDepth0 : register(t6); // a character in focus drawn alone: its raw depth (1 = not there)
-Texture2D<float> focusDepth1 : register(t7);
 
 #ifdef OD_RT
 // ray-traced sun shadows (DXR 1.1 inline ray queries). Instance 0 = room (opaque ranges), 1 = dynamic actors;
@@ -112,7 +110,8 @@ struct VSIn {
     float3 prevPos : PREVPOS;
     float3 faceN : FACEN; // winding normal of this triangle
     float3 pairN : PAIRN; // ... and of the quad's other half (cull 2..5)
-    float surface : SURFACE; // bits: 1 a model's face (actors, the player, bank models), 2 the scenery
+    float surface : SURFACE; // bits: 1 a model's face (actors, the player, bank models), 4 an effect; * 8 the
+                             // see-through's scenery piece (RenderVertex::piece)
 };
 struct VSOut {
     float4 pos : SV_Position;
@@ -328,33 +327,40 @@ PSOut ps_main(VSOut i, bool front : SV_IsFrontFace) {
     // drop a face whose vertices all lie before it (0x40d0c0) and clip the others there (0x40d670), so a model
     // pressed against a cutscene camera vanishes (ST08 sub 1, Joe's lab). The room draws are not clipped (the
     // renderer keeps depth clip off)
-    const uint surface = uint(round(i.surface));
+    const uint surface = uint(round(i.surface)), piece = surface >> 3;
     if ((surface & 1u) && i.depth < modelNear) discard;
-    // the see-through (OpenDash, Baldur's Gate style): the scenery dissolves in an ordered dither on the pixels where it
-    // hides a character in focus, i.e. where that character's own depth (focusDepth, drawn alone first) lies behind
-    // it; nowhere else. The hole's edge softens inward over a few pixels; the floor the character stands on stays
-    if ((surface & 2u) && focusCount > 0.5) {
+    // the see-through (OpenDash, Baldur's Gate style; app/see_through decides which pieces stand between the camera and
+    // a character): an open piece dissolves in an ordered dither, either whole (a piece smaller than the hole) or in a
+    // soft round hole around each character it hides, there only on its fragments nearer than that character
+    float3 seeTint = float3(1, 1, 1);
+    if (piece != 0u) {
         static const float kBayer[16] = {0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5};
-        static const int2 kRing[8] = {int2(1, 0), int2(-1, 0), int2(0, 1), int2(0, -1),
-                                      int2(1, 1), int2(-1, 1), int2(1, -1), int2(-1, -1)};
+        static const float kHoleEdge = 0.35; // the hole's soft rim, of its radius
         const uint2 px = uint2(i.pos.xy) & 3u;
         const float threshold = (kBayer[px.y * 4 + px.x] + 0.5) / 16.0;
-        const int2 at = int2(i.pos.xy), last = int2(renderSize) - 1;
-        const int feather = max(1, int(renderSize.y * 0.006));
+        const float2 here = i.curClip.xy / i.curClip.w;
         float open = 0.0;
-        for (int f = 0; f < int(focusCount + 0.5); ++f) {
-            if (i.world.y <= focus[f].x) continue;
-            float hidden = 0.0;
-            for (int k = 0; k < 9; ++k) {
-                const int2 q = k == 0 ? at : clamp(at + kRing[k - 1] * feather, int2(0, 0), last);
-                const float body = f == 0 ? focusDepth0.Load(int3(q, 0)) : focusDepth1.Load(int3(q, 0));
-                const bool behind = body < 1.0 && i.pos.z < body;
-                if (k == 0 && !behind) break; // this pixel hides nothing of it
-                hidden += behind ? 1.0 : 0.0;
+        bool listed = false;
+        for (int p = 0; p < int(seeInfo.z + 0.5); ++p) {
+            if (uint(seePiece[p].x + 0.5) != piece) continue;
+            listed = true;
+            if (seePiece[p].z > 0.5) {
+                open = seePiece[p].y;
+                break;
             }
-            open = max(open, hidden / 9.0 * focus[f].y);
+            const uint bodies = uint(seePiece[p].w + 0.5);
+            for (int k = 0; k < 2; ++k) {
+                const float nearest = k == 0 ? seeInfo.x : seeInfo.y;
+                if (!((bodies >> k) & 1u) || nearest <= 0.0 || i.depth >= nearest) continue;
+                const float d = length((here - seeBody[k].xy) / max(seeBody[k].zw, 1e-4));
+                open = max(open, saturate((1.0 - d) / kHoleEdge) * seePiece[p].y);
+            }
+            break;
         }
-        if (open > threshold) discard;
+        if (seeInfo.w > 0.5) { // debug: every piece its own hue, the open ones red
+            const float h = frac(float(piece) * 0.61803398875);
+            seeTint = listed ? float3(1.0, 0.25, 0.25) : lerp(float3(1, 1, 1), saturate(abs(frac(h + float3(0, 2, 1) / 3.0) * 6.0 - 3.0) - 1.0), 0.45);
+        } else if (open > threshold) discard;
     }
     // culling (RenderVertex::cull): 1 the triangle's own facing; quads by both halves: the other half's facing from its
     // winding normal, with the sign that relates this triangle's winding normal to its raster facing
@@ -376,7 +382,7 @@ PSOut ps_main(VSOut i, bool front : SV_IsFrontFace) {
     // opaque: drawn by the opaque pass over the same range, skipped by the blended one
     const bool blends = i.uvs.z < 0 || c.a < 0.75;
     if (semiPass > 0.5 && (semiPass < 1.5) == blends) discard;
-    float3 rgb = saturate(c.rgb * i.shade * i.color);
+    float3 rgb = saturate(c.rgb * i.shade * i.color) * seeTint;
 #ifdef OD_RT
     if (shadowMode > 0.5) {
         // geometric normal of the visible side (double-sided faces have no reliable winding)
