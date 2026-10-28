@@ -31,7 +31,8 @@ using namespace sand_trap_state;
 
 namespace {
 
-enum class TrapState : uint8_t { Bind = 0, Run = 1, FirstSub = 2, LastSub = 5 };
+// [0x89638c] (8 entries): from 2 on the sub-table [0x896394] itself
+enum class TrapState : uint8_t { Bind = 0, Run = 1, FirstSub = 2, LastSub = 7 };
 // [0x896394]
 enum class TrapSub : uint8_t { Hidden = 0, Rise = 1, Wait = 2, Hold = 3, LetGo = 4, Sink = 5 };
 enum class HoldStep : uint8_t { Start = 0, Bite = 1, Settle = 2, Drain = 3 };
@@ -274,7 +275,7 @@ void sandTrap(AnimatedActor& actor) {
     case TrapState::Run: runSub(actor, trap, TrapSub(actor.subState)); break; // 0x4e7720
     default:
         if (actor.state >= uint8_t(TrapState::FirstSub) && actor.state <= uint8_t(TrapState::LastSub)) {
-            runSub(actor, trap, TrapSub(actor.state - uint8_t(TrapState::FirstSub))); // the sub-states 0..3 directly
+            runSub(actor, trap, TrapSub(actor.state - uint8_t(TrapState::FirstSub))); // the sub-states 0..5 directly
             break;
         }
         notPortedAt(kStoryPort, "0x4e75d0 state", actor.state);
