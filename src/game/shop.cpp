@@ -868,7 +868,7 @@ void shopTick(ScriptState& b) {
     switch (shopBlockHandlers[b.state].id()) {
     case RoutineId::ShopSetUp:
         windowLayoutVariant(WindowLayout::Shop);
-        scriptSequenceStart(stateAddress(TableId::ShopCameraScript), stateAddress(TableId::ShopCameraSteps));
+        scriptSequenceStart(stateAddress(TableId::ShopCameraScript), scriptStepList<TableId::ShopCameraSteps>);
         scriptReplayPadOn();
         scriptSequenceTick();
         s.clearBytes();

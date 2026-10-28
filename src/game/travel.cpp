@@ -407,7 +407,7 @@ void moveIcons(TravelMap& b) {
 // exe 0x517f50
 void travelSetUp(TravelMap& b) {
     player().flags &= uint8_t(~kActorLiveDrawn);
-    scriptSequenceStart(stateAddress(TableId::TravelCameraScript), stateAddress(TableId::TravelCameraSteps));
+    scriptSequenceStart(stateAddress(TableId::TravelCameraScript), scriptStepList<TableId::TravelCameraSteps>);
     ScriptCamera& cam = scriptCamera();
     cam.angles[kScriptPitch] = kMapCameraPitch;
     cam.angles[kScriptYaw] = kMapCameraYaw;

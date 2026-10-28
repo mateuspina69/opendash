@@ -829,7 +829,7 @@ void script4Step(const RoutineRef& routine) {
 void script4SetUp() { // exe 0x513760
     ScriptState& s = block();
     Script4Bytes& bytes = script4Bytes();
-    scriptSequenceStart(stateAddress(TableId::St03AttractScriptCameraScript), stateAddress(TableId::St03AttractScriptSteps));
+    scriptSequenceStart(stateAddress(TableId::St03AttractScriptCameraScript), scriptStepList<TableId::St03AttractScriptSteps>);
     player().setDrawn(false);
     bytes.engineSound = 0;
     bytes.loop = 0;

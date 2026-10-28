@@ -930,7 +930,7 @@ void script59() {
             }
             f.loaded = 0;
             f.shake = 0;
-            scriptSequenceStart(stateAddress(TableId::St4bSt4cRoomsScript59Camera), stateAddress(TableId::St4bSt4cRoomsScript59Steps)); // exe 0x511390
+            scriptSequenceStart(stateAddress(TableId::St4bSt4cRoomsScript59Camera), scriptStepList<TableId::St4bSt4cRoomsScript59Steps>); // exe 0x511390
             scriptSequenceTick();                    // exe 0x5114d0
             s.subState = 2;
             return;

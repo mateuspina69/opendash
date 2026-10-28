@@ -290,7 +290,7 @@ void squareOpeningScript() {
     switch (s.cutsceneState()) {
     case CutsceneState::SetUp: // exe 0x520c90
         if (SetUpSub(s.subState) == SetUpSub::Start) {
-            scriptSequenceStart(stateAddress(TableId::SquareDefenceScriptsOpeningCamera), stateAddress(TableId::SquareDefenceScriptsOpeningSteps));
+            scriptSequenceStart(stateAddress(TableId::SquareDefenceScriptsOpeningCamera), scriptStepList<TableId::SquareDefenceScriptsOpeningSteps>);
             scriptReplayPadOn(); // exe 0x5117f0
             clearPlayerDirections();
             scriptSequenceTick();
@@ -430,7 +430,7 @@ void squareSecondPhaseScript() {
     switch (s.cutsceneState()) {
     case CutsceneState::SetUp: // exe 0x5212c0
         if (SetUpSub(s.subState) == SetUpSub::Start) {
-            scriptSequenceStart(stateAddress(TableId::SquareDefenceScriptsSecondCamera), stateAddress(TableId::SquareDefenceScriptsSecondSteps));
+            scriptSequenceStart(stateAddress(TableId::SquareDefenceScriptsSecondCamera), scriptStepList<TableId::SquareDefenceScriptsSecondSteps>);
             scriptReplayPadOn();
             actorsSweep(kSweepCast, kSweepHold);
             scriptActorSpawnRecord(secondPhaseRecord()); // exe 0x511740
@@ -587,7 +587,7 @@ void squareThirdPhaseScript() {
     switch (s.cutsceneState()) {
     case CutsceneState::SetUp: // exe 0x521780
         if (SetUpSub(s.subState) == SetUpSub::Start) {
-            scriptSequenceStart(stateAddress(TableId::SquareDefenceScriptsThirdCamera), stateAddress(TableId::SquareDefenceScriptsThirdSteps));
+            scriptSequenceStart(stateAddress(TableId::SquareDefenceScriptsThirdCamera), scriptStepList<TableId::SquareDefenceScriptsThirdSteps>);
             scriptReplayPadOn();
             actorsSweep(kSweepCast, kSweepHold);
             thirdPhaseRecords(true); // exe 0x511740 x 2
@@ -722,7 +722,7 @@ void squareWallLiftScript() {
     switch (s.cutsceneState()) {
     case CutsceneState::SetUp: // exe 0x521c80
         if (SetUpSub(s.subState) == SetUpSub::Start) {
-            scriptSequenceStart(stateAddress(TableId::SquareDefenceScriptsLiftCamera), stateAddress(TableId::SquareDefenceScriptsLiftSteps));
+            scriptSequenceStart(stateAddress(TableId::SquareDefenceScriptsLiftCamera), scriptStepList<TableId::SquareDefenceScriptsLiftSteps>);
             scriptReplayPadOn();
             actorsSweep(kSweepCast, kSweepKeep);
             liftRecords(); // exe 0x511740 x 2

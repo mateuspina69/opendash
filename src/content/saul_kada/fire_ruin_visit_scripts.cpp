@@ -136,7 +136,7 @@ void escapeEveScript() { // exe 0x526fa0
             placePlayer(int32_t(0xfc000000), 0, 0x5000000, 0);
             playerAnim(0x50);
             spawnRecords(stateAddress(TableId::FireRuinVisitScriptsEscapeEveSpawns), 4);
-            scriptSequenceStart(stateAddress(TableId::FireRuinVisitScriptsEscapeEveCamera), stateAddress(TableId::FireRuinVisitScriptsEscapeEveSteps));
+            scriptSequenceStart(stateAddress(TableId::FireRuinVisitScriptsEscapeEveCamera), scriptStepList<TableId::FireRuinVisitScriptsEscapeEveSteps>);
             scriptSequenceTick();
             s.enterStateKeepingPhases(uint8_t(CutsceneState::Steps));
             return;
@@ -211,7 +211,7 @@ void hallScript() { // exe 0x538390
             actorsSweep(kSweepActors, kSweepFree);
             placePlayer(0, 0, int32_t(0xf9000000), 0x800);
             spawnRecords(stateAddress(TableId::FireRuinVisitScriptsHallSpawns), 5);
-            scriptSequenceStart(stateAddress(TableId::FireRuinVisitScriptsHallCamera), stateAddress(TableId::FireRuinVisitScriptsHallSteps));
+            scriptSequenceStart(stateAddress(TableId::FireRuinVisitScriptsHallCamera), scriptStepList<TableId::FireRuinVisitScriptsHallSteps>);
             scriptSequenceTick();
             s.enterStateKeepingPhases(uint8_t(CutsceneState::Steps));
             return;
@@ -326,7 +326,7 @@ void ruinVisitScript() { // exe 0x526b40
             actorsSweep(kVisitSweep, kSweepFree);
             scriptActorSpawnRecord(stateAddress(TableId::FireRuinVisitScriptsRuinVisitRecord)); // exe 0x511740
             placePlayer(int32_t(0xef800000), 0, 0x2000000, 0xc00);
-            scriptSequenceStart(stateAddress(TableId::FireRuinVisitScriptsRuinVisitCamera), stateAddress(TableId::FireRuinVisitScriptsRuinVisitSteps));
+            scriptSequenceStart(stateAddress(TableId::FireRuinVisitScriptsRuinVisitCamera), scriptStepList<TableId::FireRuinVisitScriptsRuinVisitSteps>);
             scriptSequenceTick();
             s.subState = 2;
             return;

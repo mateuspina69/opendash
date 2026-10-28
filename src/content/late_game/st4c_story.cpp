@@ -236,7 +236,7 @@ void introScript() { // 0x53a4a0
             return;
         case 4:
             if (!voiceClipPlaying()) return;
-            scriptSequenceStart(stateAddress(TableId::St4cStoryIntroCamera), stateAddress(TableId::St4cStoryIntroSteps)); // exe 0x511390
+            scriptSequenceStart(stateAddress(TableId::St4cStoryIntroCamera), scriptStepList<TableId::St4cStoryIntroSteps>); // exe 0x511390
             s.enterState(CutsceneState::Steps);
             return;
         default: return;
@@ -359,7 +359,7 @@ void outroScript() { // 0x53aa60
             break;
         case 4:
             if (!voiceClipPlaying()) break;
-            scriptSequenceStart(stateAddress(TableId::St4cStoryOutroCamera), stateAddress(TableId::St4cStoryOutroSteps));
+            scriptSequenceStart(stateAddress(TableId::St4cStoryOutroCamera), scriptStepList<TableId::St4cStoryOutroSteps>);
             s.enterState(CutsceneState::Steps);
             break;
         default: break;

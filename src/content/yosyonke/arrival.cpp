@@ -98,7 +98,7 @@ void descentSetUp() { // exe 0x532ee0
         return;
     case DescentSetUpSub::WaitVoice:
         if (voiceClipPlaying()) {
-            scriptSequenceStart(stateAddress(TableId::ArrivalDescentCameraScript), stateAddress(TableId::ArrivalDescentSteps));
+            scriptSequenceStart(stateAddress(TableId::ArrivalDescentCameraScript), scriptStepList<TableId::ArrivalDescentSteps>);
             scriptSequenceTick();
             scriptFade(kFadeInRequest | 2, 0);
             s.enterState(CutsceneState::Steps);
@@ -302,7 +302,7 @@ void cabinStep(const RoutineRef& routine) {
 void cabinSetUp() { // exe 0x5302f0
     ScriptState& s = block();
     if (s.subState == 0) {
-        scriptSequenceStart(stateAddress(TableId::ArrivalCabinCameraScript), stateAddress(TableId::ArrivalCabinSteps));
+        scriptSequenceStart(stateAddress(TableId::ArrivalCabinCameraScript), scriptStepList<TableId::ArrivalCabinSteps>);
         scriptReplayPadOn();
         Player& p = player();
         p.setPrevMoveDir(MoveDir::Forward);

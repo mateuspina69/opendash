@@ -407,7 +407,7 @@ void arrivalScript() { // exe 0x5366b0
         switch (s.subState) {
         case 0:
             actorsSweep(kSweepActors, kSweepFree);
-            scriptSequenceStart(stateAddress(TableId::PirateBaseScriptsArrivalCamera), stateAddress(TableId::PirateBaseScriptsArrivalSteps));
+            scriptSequenceStart(stateAddress(TableId::PirateBaseScriptsArrivalCamera), scriptStepList<TableId::PirateBaseScriptsArrivalSteps>);
             scriptReplayPadOn();
             s.flags |= kScriptUnskippable;
             player().setDrawn(false);

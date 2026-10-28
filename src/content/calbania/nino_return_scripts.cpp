@@ -221,7 +221,7 @@ void ninoReturnScript() {
     case CutsceneState::SetUp: // exe 0x529ae0
         switch (ReturnSetUp(s.subState)) {
         case ReturnSetUp::Start:
-            scriptSequenceStart(stateAddress(TableId::NinoReturnScriptsReturnCamera), stateAddress(TableId::NinoReturnScriptsReturnSteps)); // exe 0x511390
+            scriptSequenceStart(stateAddress(TableId::NinoReturnScriptsReturnCamera), scriptStepList<TableId::NinoReturnScriptsReturnSteps>); // exe 0x511390
             scriptReplayPadOn();                              // exe 0x5117f0
             s.flags |= kScriptUnskippable;
             clearPlayerAnglesAndFaces();
@@ -445,7 +445,7 @@ void rollToMachineScript() {
         switch (MachineSetUp(s.subState)) {
         case MachineSetUp::Start:
             actorsSweep(kSweepAll, kSweepKeep);                 // exe 0x5e05d0
-            scriptSequenceStart(stateAddress(TableId::NinoReturnScriptsMachineCamera), stateAddress(TableId::NinoReturnScriptsMachineSteps)); // exe 0x511390
+            scriptSequenceStart(stateAddress(TableId::NinoReturnScriptsMachineCamera), scriptStepList<TableId::NinoReturnScriptsMachineSteps>); // exe 0x511390
             scriptReplayPadOn();                                // exe 0x5117f0
             s.flags |= kScriptUnskippable;
             clearPlayerAnglesAndFaces();
@@ -681,7 +681,7 @@ void ninoAttackEndScript() {
     case CutsceneState::SetUp: // exe 0x52ab40
         switch (EndSetUp(s.subState)) {
         case EndSetUp::Start:
-            scriptSequenceStart(stateAddress(TableId::NinoReturnScriptsEndCamera), stateAddress(TableId::NinoReturnScriptsEndSteps)); // exe 0x511390
+            scriptSequenceStart(stateAddress(TableId::NinoReturnScriptsEndCamera), scriptStepList<TableId::NinoReturnScriptsEndSteps>); // exe 0x511390
             scriptReplayPadOn();                        // exe 0x5117f0
             s.flags |= kScriptUnskippable;
             clearPlayerAnglesAndFaces();

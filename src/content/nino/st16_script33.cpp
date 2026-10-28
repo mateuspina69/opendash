@@ -103,7 +103,7 @@ void catchSetUp() {
                 break;
             }
         }
-        scriptSequenceStart(stateAddress(TableId::St16Script33CatchCamera), stateAddress(TableId::St16Script33CatchSteps));
+        scriptSequenceStart(stateAddress(TableId::St16Script33CatchCamera), scriptStepList<TableId::St16Script33CatchSteps>);
         ScriptCamera& camera = scriptCamera();
         camera.lookAt = 1;
         camera.pointSpeed[0] = 0;

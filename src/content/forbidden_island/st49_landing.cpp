@@ -262,11 +262,11 @@ void setUp() {
     Script18Bytes& bytes = scriptState().part<Script18Bytes>();
     if (s.subState == 0) {
         if (!storyFlag(kFlagReturnLanding)) {
-            scriptSequenceStart(stateAddress(TableId::St49LandingFirstCamera), stateAddress(TableId::St49LandingFirstSteps));
+            scriptSequenceStart(stateAddress(TableId::St49LandingFirstCamera), scriptStepList<TableId::St49LandingFirstSteps>);
             bytes.setDestinationWords(kSt10, 0, 0x800, -0x371, -0x3400, 0x800);
             setStoryFlag(kFlagLandingSeen);
         } else {
-            scriptSequenceStart(stateAddress(TableId::St49LandingReturnCamera), stateAddress(TableId::St49LandingReturnSteps));
+            scriptSequenceStart(stateAddress(TableId::St49LandingReturnCamera), scriptStepList<TableId::St49LandingReturnSteps>);
             bytes.setDestinationWords(kSt04, 0, 0x108, -1, 0x140, 0);
         }
         scriptReplayPadOn(); // exe 0x5117f0

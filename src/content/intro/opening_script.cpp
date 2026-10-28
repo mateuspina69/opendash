@@ -481,7 +481,7 @@ void openingSetUp() { // exe 0x5151e0
     ScriptState& s = block();
     switch (SetUpSub(s.subState)) {
     case SetUpSub::Start:
-        scriptSequenceStart(stateAddress(TableId::OpeningScriptCameraScript), stateAddress(TableId::OpeningScriptSteps));
+        scriptSequenceStart(stateAddress(TableId::OpeningScriptCameraScript), scriptStepList<TableId::OpeningScriptSteps>);
         scriptReplayPadOn();
         skyLayers()[kSkyLayer].horizontalOffset = 600;
         player().setDrawn(false);

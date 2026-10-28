@@ -153,7 +153,7 @@ void examDoorsScript() {
             Player& p = player();
             if (gameState().room == 1) {
                 f.destinationRoom = 0;
-                scriptSequenceStart(stateAddress(TableId::TownSideScriptsExamDoorsOutCameraScript), stateAddress(TableId::TownSideScriptsExamDoorsSteps)); // exe 0x511390
+                scriptSequenceStart(stateAddress(TableId::TownSideScriptsExamDoorsOutCameraScript), scriptStepList<TableId::TownSideScriptsExamDoorsSteps>); // exe 0x511390
                 scriptReplayPadOn();                     // exe 0x5117f0
                 p.pos.x.whole = 0;
                 p.pos.y.whole = 0;
@@ -169,7 +169,7 @@ void examDoorsScript() {
             }
             if (gameState().room == 0) {
                 f.destinationRoom = 1;
-                scriptSequenceStart(stateAddress(TableId::TownSideScriptsExamDoorsInCameraScript), stateAddress(TableId::TownSideScriptsExamDoorsSteps));
+                scriptSequenceStart(stateAddress(TableId::TownSideScriptsExamDoorsInCameraScript), scriptStepList<TableId::TownSideScriptsExamDoorsSteps>);
                 scriptReplayPadOn();
                 p.pos.x.whole = 0;
                 p.pos.y.whole = -0x380;
@@ -316,7 +316,7 @@ void st06VoiceScript() {
     switch (st06VoiceStates->idAt(s.state)) {
     case RoutineId::TownSideSt06VoiceSetUp: {
         actorsSweep(kSweepActors, kSweepFree);
-        scriptSequenceStart(stateAddress(TableId::TownSideScriptsSt06VoiceCameraScript), stateAddress(TableId::TownSideScriptsSt06VoiceSteps));
+        scriptSequenceStart(stateAddress(TableId::TownSideScriptsSt06VoiceCameraScript), scriptStepList<TableId::TownSideScriptsSt06VoiceSteps>);
         scriptReplayPadOn();
         Player& p = player();
         p.pos.x = 0x1000000;
@@ -397,7 +397,7 @@ void bystanderScript() {
     switch (bystanderScriptStates->idAt(s.state)) {
     case RoutineId::TownSideBystanderSetUp:
         if (s.subState == 0) {
-            scriptSequenceStart(stateAddress(TableId::TownSideScriptsBystanderCameraScript), stateAddress(TableId::TownSideScriptsBystanderSteps));
+            scriptSequenceStart(stateAddress(TableId::TownSideScriptsBystanderCameraScript), scriptStepList<TableId::TownSideScriptsBystanderSteps>);
             scriptReplayPadOn();
             Player& p = player();
             p.pos.x.whole = 0x12a0;
@@ -625,7 +625,7 @@ void visitorSetUp(const PlayerEnv& env) {
         leaf.pos.y = 0;
         leaf.pos.z = int32_t(0xfea00000u);
         s.actors[kLeafActor] = &leaf;
-        scriptSequenceStart(stateAddress(TableId::TownSideScriptsVisitorCameraScript), stateAddress(TableId::TownSideScriptsVisitorSteps));
+        scriptSequenceStart(stateAddress(TableId::TownSideScriptsVisitorCameraScript), scriptStepList<TableId::TownSideScriptsVisitorSteps>);
         scriptReplayPadOn();
         // the stack copy of the leaf's position
         uint32_t x = uint32_t(leaf.pos.x), y = uint32_t(leaf.pos.y), z = uint32_t(leaf.pos.z);

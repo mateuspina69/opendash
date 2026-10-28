@@ -156,7 +156,7 @@ void islandBlownScript() {
         switch (SetUpSub(s.subState)) {
         case SetUpSub::Start:
             actorsSweep(kSweepAll, kSweepKeep);  // exe 0x5e05d0
-            scriptSequenceStart(stateAddress(TableId::IslandBlownScriptBlownCamera), stateAddress(TableId::IslandBlownScriptSteps)); // exe 0x511390
+            scriptSequenceStart(stateAddress(TableId::IslandBlownScriptBlownCamera), scriptStepList<TableId::IslandBlownScriptSteps>); // exe 0x511390
             scriptReplayPadOn();                  // exe 0x5117f0
             s.flags |= kScriptUnskippable;
             clearPlayerAnglesAndFaces();

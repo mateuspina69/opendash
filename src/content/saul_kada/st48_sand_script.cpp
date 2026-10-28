@@ -81,7 +81,7 @@ void sandScript() { // exe 0x533820
             return;
         case SetUpStep::WaitVoice:
             if (!voiceClipPlaying()) return;
-            scriptSequenceStart(stateAddress(TableId::St48SandScriptCameraScript), stateAddress(TableId::St48SandScriptSteps)); // exe 0x511390
+            scriptSequenceStart(stateAddress(TableId::St48SandScriptCameraScript), scriptStepList<TableId::St48SandScriptSteps>); // exe 0x511390
             scriptSequenceTick();                       // exe 0x5114d0
             scriptFade(kFadeIn, 0);                     // exe 0x53f6b0
             s.enterState(uint8_t(SandState::Rise));

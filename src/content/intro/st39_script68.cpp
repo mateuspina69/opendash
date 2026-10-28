@@ -96,7 +96,7 @@ void script68SetUp(ScriptState& s) {
         return;
     case SetUpSub::WaitVoice:
         if (!voiceClipPlaying()) return;
-        scriptSequenceStart(stateAddress(TableId::St39Script68CameraScript), stateAddress(TableId::St39Script68Steps)); // exe 0x511390
+        scriptSequenceStart(stateAddress(TableId::St39Script68CameraScript), scriptStepList<TableId::St39Script68Steps>); // exe 0x511390
         scriptFade(kFadeIn, 0);                     // exe 0x53f6b0
         s.enterState(CutsceneState::Steps);
         return;

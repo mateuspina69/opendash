@@ -162,12 +162,12 @@ void shrinkSetUp() { // exe 0x52f910
             requestTransition(kTransitionWarp, kSt2dStage, kShrinkRoomFirst, 0, kShrinkFirstY, kShrinkWarpZ, 0x800,
                               kNoFade, kNoFade);
             scriptSequenceSkip(1);
-            scriptSequenceStart(stateAddress(TableId::IceRuinScriptsShrinkFirstCameraScript), stateAddress(TableId::IceRuinScriptsShrinkFirstSteps));
+            scriptSequenceStart(stateAddress(TableId::IceRuinScriptsShrinkFirstCameraScript), scriptStepList<TableId::IceRuinScriptsShrinkFirstSteps>);
         } else {
             requestTransition(kTransitionWarp, kSt2dStage, kShrinkRoomSecond, 0, 0, kShrinkWarpZ, 0x800, kNoFade,
                               kNoFade);
             scriptSequenceSkip(1);
-            scriptSequenceStart(stateAddress(TableId::IceRuinScriptsShrinkSecondCameraScript), stateAddress(TableId::IceRuinScriptsShrinkSecondSteps));
+            scriptSequenceStart(stateAddress(TableId::IceRuinScriptsShrinkSecondCameraScript), scriptStepList<TableId::IceRuinScriptsShrinkSecondSteps>);
         }
         scriptSequenceTick();
         return;
@@ -289,7 +289,7 @@ void critterScene() {
             s.subState = 1;
             [[fallthrough]];
         case 1:
-            scriptSequenceStart(stateAddress(TableId::IceRuinScriptsCritterSceneCamera), stateAddress(TableId::IceRuinScriptsCritterSceneSteps)); // exe 0x511390
+            scriptSequenceStart(stateAddress(TableId::IceRuinScriptsCritterSceneCamera), scriptStepList<TableId::IceRuinScriptsCritterSceneSteps>); // exe 0x511390
             scriptSequenceTick();                                         // exe 0x5114d0
             s.enterStateKeepingPhases(uint8_t(CutsceneState::Steps));
             for (const TableId record : kCritterRecords) scriptActorSpawnRecord(stateAddress(record)); // exe 0x511740
@@ -370,7 +370,7 @@ void tutorialScript() {
     switch (s.cutsceneState()) {
     case CutsceneState::SetUp: // exe 0x52fe20
         if (s.subState == 0) {
-            scriptSequenceStart(stateAddress(TableId::IceRuinScriptsTutorialCamera), stateAddress(TableId::IceRuinScriptsTutorialSteps));
+            scriptSequenceStart(stateAddress(TableId::IceRuinScriptsTutorialCamera), scriptStepList<TableId::IceRuinScriptsTutorialSteps>);
             scriptReplayPadOn();
             s.subState = 1;
             s.flags |= kScriptUnskippable;
@@ -448,7 +448,7 @@ void tutorialScene() {
         case 2:
             actorsSweep(kSweepActors, kSweepFree);
             windowClose(kTutorialWindow, WindowClose::Force);
-            scriptSequenceStart(stateAddress(TableId::IceRuinScriptsTutorialSceneCamera), stateAddress(TableId::IceRuinScriptsTutorialSceneSteps));
+            scriptSequenceStart(stateAddress(TableId::IceRuinScriptsTutorialSceneCamera), scriptStepList<TableId::IceRuinScriptsTutorialSceneSteps>);
             playerAt(kTutorialX, kTutorialY, kTutorialZ, kTutorialYaw);
             ++s.subState;
             [[fallthrough]];

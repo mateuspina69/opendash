@@ -85,6 +85,7 @@ private:
     struct Region {
         TableKey key;
         int region = 0;
+        uint32_t offset = 0; // the read's start in the region (a read inside a table: a list's step k)
     };
     mutable std::string lastTableKey_; // the last table a read started (the trace's context)
 
@@ -93,6 +94,9 @@ private:
     const std::vector<size_t>& partsOf(const std::string& file) const; // the file's type-1 blocks, loaded on first use
     // the part holding [address, address + n): `near` first, then near's file's other blocks, then SLUS_011.40
     std::optional<size_t> partFor(size_t near, uint32_t address, uint32_t n) const;
+    // the table a read inside it starts in (read from its start before: its address and extent are known), at the
+    // read's offset; lock_ held
+    std::optional<Region> regionInside(uint32_t pointer) const;
     // the address in this source's space of (part, PS1 address); records the region it starts
     uint32_t virtualOf(size_t part, uint32_t address, std::optional<Region> region) const;
     // n bytes of the part from address (fewer at its end), the region's pointer slots translated
@@ -132,6 +136,7 @@ private:
     std::map<std::pair<TableKey, int>, std::vector<std::pair<uint32_t, RoutineId>>> routineSlots_;
     std::map<std::pair<TableKey, int>, std::vector<std::pair<uint32_t, int>>> dataSlots_;
     mutable std::map<uint32_t, Region> regionAt_; // by virtual address
+    mutable std::map<TableKey, uint32_t> readExtent_; // the bytes each table's typed load read (its extent)
     // the tables the game reads by address (ps1_labels.inc), by file and PS1 address: their extent and slots, applied to
     // every read that meets them
     struct Label {

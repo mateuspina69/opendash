@@ -166,7 +166,7 @@ void baseEntranceScript() {
             s.flags |= kScriptUnskippable;
             actorsSweep(kSweepBase, kSweepKeep);
             scriptReplayPadOn();
-            scriptSequenceStart(stateAddress(TableId::GlydeBaseScriptsEntranceCamera), stateAddress(TableId::GlydeBaseScriptsEntranceSteps));
+            scriptSequenceStart(stateAddress(TableId::GlydeBaseScriptsEntranceCamera), scriptStepList<TableId::GlydeBaseScriptsEntranceSteps>);
             scriptSequenceTick();
             clearPlayerAnglesAndFaces();
             placePlayer(0x3200000, 0xffff0000u, 0xb600000, 0);
@@ -564,7 +564,7 @@ void brotherHeldScript() {
         case HeldSetUp::Place:
             clearPlayerAnglesAndFaces();
             placePlayer(0xfe200000u, 0xfce00000u, 0xfd200000u, 0xa00);
-            scriptSequenceStart(stateAddress(TableId::GlydeBaseScriptsHeldCamera), stateAddress(TableId::GlydeBaseScriptsHeldSteps));
+            scriptSequenceStart(stateAddress(TableId::GlydeBaseScriptsHeldCamera), scriptStepList<TableId::GlydeBaseScriptsHeldSteps>);
             scriptSequenceTick();
             ++s.subState;
             return;
@@ -730,7 +730,7 @@ void brotherFreedScript() {
             ++s.subState;
             actorsSweep(kSweepBase, kSweepKeep);
             scriptReplayPadOn(); // exe 0x5117f0
-            scriptSequenceStart(stateAddress(TableId::GlydeBaseScriptsFreedCamera), stateAddress(TableId::GlydeBaseScriptsFreedSteps));
+            scriptSequenceStart(stateAddress(TableId::GlydeBaseScriptsFreedCamera), scriptStepList<TableId::GlydeBaseScriptsFreedSteps>);
             scriptSequenceTick();
             clearPlayerAnglesAndFaces();
             placePlayer(0xfec40000u, 0, 0, 0xc00);
@@ -912,7 +912,7 @@ void rescueScript() {
             if (!voiceClipPlaying()) return;
             scriptFade(2, 0);
             ++s.subState;
-            scriptSequenceStart(stateAddress(TableId::GlydeBaseScriptsRescueCamera), stateAddress(TableId::GlydeBaseScriptsRescueSteps));
+            scriptSequenceStart(stateAddress(TableId::GlydeBaseScriptsRescueCamera), scriptStepList<TableId::GlydeBaseScriptsRescueSteps>);
             scriptSequenceTick();
             clearPlayerAnglesAndFaces();
             Player& p = player();

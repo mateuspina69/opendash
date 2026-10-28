@@ -101,7 +101,7 @@ void riseSetUp(ScriptState& s) {
         return;
     case SetUpSub::WaitVoice:
         if (!voiceClipPlaying()) return;
-        scriptSequenceStart(stateAddress(TableId::St24Script56CameraScript), stateAddress(TableId::St24Script56Steps));
+        scriptSequenceStart(stateAddress(TableId::St24Script56CameraScript), scriptStepList<TableId::St24Script56Steps>);
         scriptSequenceTick();
         scriptFade(kFadeIn, 0);
         s.enterState(CutsceneState::Steps);

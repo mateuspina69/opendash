@@ -578,7 +578,7 @@ void gateSetUp() {
     const uint8_t st = s.subState;
     if (st == 0) {
         sweepActors();
-        scriptSequenceStart(stateAddress(TableId::St25TronScenesGateCamera), stateAddress(TableId::St25TronScenesGateSteps));
+        scriptSequenceStart(stateAddress(TableId::St25TronScenesGateCamera), scriptStepList<TableId::St25TronScenesGateSteps>);
         scriptReplayPadOn();
         Player& p = player();
         p.clearDirectionOffsetWords();
@@ -690,7 +690,7 @@ void afterSetUp() {
         s.faceTracks.init(stateAddress(TableId::St25TronScenesAfterEyesTable), stateAddress(TableId::St25TronScenesAfterMouthTable));
         stopEyes(0x14);
         stopMouth(0x14);
-        scriptSequenceStart(stateAddress(TableId::St25TronScenesAfterCamera), stateAddress(TableId::St25TronScenesAfterSteps));
+        scriptSequenceStart(stateAddress(TableId::St25TronScenesAfterCamera), scriptStepList<TableId::St25TronScenesAfterSteps>);
         return;
     }
     default: return;

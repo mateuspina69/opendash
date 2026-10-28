@@ -584,7 +584,7 @@ void setUp() {
         s.clearScriptByteRun();
         actorsSweep(kSweepAllButEffects0, kSweepFree);
         lockSkip(true);
-        scriptSequenceStart(stateAddress(TableId::St1cScript13CameraScript), stateAddress(TableId::St1cScript13Steps));
+        scriptSequenceStart(stateAddress(TableId::St1cScript13CameraScript), scriptStepList<TableId::St1cScript13Steps>);
         scriptReplayPadOn();
         scriptSequenceTick();
         ++s.subState;

@@ -530,7 +530,7 @@ void craneDoneScript() { // exe 0x528310
         case SetUp::Start:
             actorsSweep(kSweepActors, kSweepFree);
             windowClose(4, WindowClose::Force);
-            scriptSequenceStart(stateAddress(TableId::Ch2ScriptsCraneDoneCamera), stateAddress(TableId::Ch2ScriptsCraneDoneSteps));
+            scriptSequenceStart(stateAddress(TableId::Ch2ScriptsCraneDoneCamera), scriptStepList<TableId::Ch2ScriptsCraneDoneSteps>);
             scriptReplayPadOn();
             s.flags |= kScriptUnskippable;
             clearPlayerAnglesAndFaces();
@@ -655,7 +655,7 @@ void cannonDoneScript() { // exe 0x5287f0
         case SetUp::Start:
             actorsSweep(kSweepActors, kSweepFree);
             windowClose(4, WindowClose::Force);
-            scriptSequenceStart(stateAddress(TableId::Ch2ScriptsCannonDoneCamera), stateAddress(TableId::Ch2ScriptsCannonDoneSteps));
+            scriptSequenceStart(stateAddress(TableId::Ch2ScriptsCannonDoneCamera), scriptStepList<TableId::Ch2ScriptsCannonDoneSteps>);
             scriptReplayPadOn();
             s.flags |= kScriptUnskippable;
             clearPlayerAnglesAndFaces();
@@ -706,7 +706,7 @@ void lookAroundScript() { // exe 0x52b7c0
     case CutsceneState::SetUp: // exe 0x52b7e0
         if (s.subState == 0) {
             actorsSweep(kSweepActors, kSweepFree);
-            scriptSequenceStart(stateAddress(TableId::Ch2ScriptsLookAroundCamera), stateAddress(TableId::Ch2ScriptsLookAroundSteps));
+            scriptSequenceStart(stateAddress(TableId::Ch2ScriptsLookAroundCamera), scriptStepList<TableId::Ch2ScriptsLookAroundSteps>);
             scriptReplayPadOn();
             player().setDrawn(false);
             clearPlayerAnglesAndFaces();
@@ -829,7 +829,7 @@ void shipsDoneScript() { // exe 0x528e30
         case SetUp::Start:
             actorsSweep(kSweepActors, kSweepFree);
             windowClose(4, WindowClose::Force);
-            scriptSequenceStart(stateAddress(TableId::Ch2ScriptsShipsDoneCamera), stateAddress(TableId::Ch2ScriptsShipsDoneSteps));
+            scriptSequenceStart(stateAddress(TableId::Ch2ScriptsShipsDoneCamera), scriptStepList<TableId::Ch2ScriptsShipsDoneSteps>);
             scriptReplayPadOn();
             s.flags |= kScriptUnskippable;
             clearPlayerAnglesAndFaces();

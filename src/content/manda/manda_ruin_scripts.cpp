@@ -220,7 +220,7 @@ void script9SetUp() {
     ScriptState& s = block();
     if (s.subState == 0) {
         actorsSweep(kSweepActors, kSweepFree);
-        scriptSequenceStart(stateAddress(TableId::MandaRuinScriptsScript9CameraScript), stateAddress(TableId::MandaRuinScriptsScript9Steps));
+        scriptSequenceStart(stateAddress(TableId::MandaRuinScriptsScript9CameraScript), scriptStepList<TableId::MandaRuinScriptsScript9Steps>);
         scriptReplayPadOn();
         lockSkip(true);
         clearPlayerForScript();
@@ -538,7 +538,7 @@ void scriptBSetUp() {
     ScriptState& s = block();
     if (s.subState == 0) {
         actorsSweep(kSweepTransition, kSweepFree);
-        scriptSequenceStart(stateAddress(TableId::MandaRuinScriptsScriptBCameraScript), stateAddress(TableId::MandaRuinScriptsScriptBSteps));
+        scriptSequenceStart(stateAddress(TableId::MandaRuinScriptsScriptBCameraScript), scriptStepList<TableId::MandaRuinScriptsScriptBSteps>);
         scriptReplayPadOn();
         lockSkip(true);
         clearPlayerForScript();
@@ -765,7 +765,7 @@ void script1aSetUp() {
     if (s.subState == 0) {
         actorsSweep(kSweepActors, kSweepFree);
         windowClose(4, WindowClose::Force); // exe 0x5576b0
-        scriptSequenceStart(stateAddress(TableId::MandaRuinScriptsScript1aCameraScript), stateAddress(TableId::MandaRuinScriptsScript1aSteps));
+        scriptSequenceStart(stateAddress(TableId::MandaRuinScriptsScript1aCameraScript), scriptStepList<TableId::MandaRuinScriptsScript1aSteps>);
         scriptReplayPadOn();
         lockSkip(true);
         clearPlayerForScript();
@@ -879,7 +879,7 @@ void scriptESetUp() {
     clearPlayerForScript();
     placePlayer(0x420, -0x1e0, 0x220, 0xa00);
     playerScriptAnim(PlayerAnim::Idle, 0, true);
-    scriptSequenceStart(stateAddress(TableId::MandaRuinScriptsScriptECameraScript), stateAddress(TableId::MandaRuinScriptsScriptESteps));
+    scriptSequenceStart(stateAddress(TableId::MandaRuinScriptsScriptECameraScript), scriptStepList<TableId::MandaRuinScriptsScriptESteps>);
 }
 // exe 0x51a730: the player idle, the actors swept; the DAT 0x83 unless loaded; then (a skip: a fade in) the player back
 // placed, the reward on its pedestal (record 0x8a0108), a sound
@@ -1039,7 +1039,7 @@ void scriptFSetUp() {
     clearPlayerForScript();
     placePlayer(0, -0x110, -0x7a0, kHalfTurn);
     playerScriptAnim(PlayerAnim::Idle, 0, true);
-    scriptSequenceStart(stateAddress(TableId::MandaRuinScriptsScriptFCameraScript), stateAddress(TableId::MandaRuinScriptsScriptFSteps));
+    scriptSequenceStart(stateAddress(TableId::MandaRuinScriptsScriptFCameraScript), scriptStepList<TableId::MandaRuinScriptsScriptFSteps>);
 }
 // exe 0x51aa60: the rumble off, idle, the actors swept, the voice faded; once it is idle and no fade runs the request
 // back to the terminal (a load with a fade in while the screen is covered, else a warp); once taken the player back,

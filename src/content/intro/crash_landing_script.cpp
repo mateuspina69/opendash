@@ -699,7 +699,7 @@ void crashSetUp() { // exe 0x516540
     auto&& b = crashBytes();
     switch (SetUpSub(s.subState)) {
     case SetUpSub::Start:
-        scriptSequenceStart(stateAddress(TableId::CrashLandingScriptCameraScript), stateAddress(TableId::CrashLandingScriptSteps));
+        scriptSequenceStart(stateAddress(TableId::CrashLandingScriptCameraScript), scriptStepList<TableId::CrashLandingScriptSteps>);
         scriptReplayPadOn();
         player().setDrawn(false);
         backdropReset(-1, 1);

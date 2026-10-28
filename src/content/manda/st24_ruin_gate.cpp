@@ -77,7 +77,7 @@ void gateSetUp() {
     switch (s.subState) {
     case 0: {
         actorsSweep(kSweepActors, kSweepFree);
-        scriptSequenceStart(stateAddress(TableId::St24RuinGateCamera), stateAddress(TableId::St24RuinGateSteps));
+        scriptSequenceStart(stateAddress(TableId::St24RuinGateCamera), scriptStepList<TableId::St24RuinGateSteps>);
         scriptReplayPadOn(); // exe 0x5117f0
         lockSkip(true);
         Player& p = player();

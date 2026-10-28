@@ -249,7 +249,7 @@ void keyDrop() {
             return;
         case KeySetUp::Place:
             actorsSweep(kSweepActors, kSweepFree);   // exe 0x5e05d0
-            scriptSequenceStart(stateAddress(TableId::St33KeyScriptKeyDropCamera), stateAddress(TableId::St33KeyScriptKeyDropSteps)); // exe 0x511390
+            scriptSequenceStart(stateAddress(TableId::St33KeyScriptKeyDropCamera), scriptStepList<TableId::St33KeyScriptKeyDropSteps>); // exe 0x511390
             scriptActorSpawnRecord(stateAddress(TableId::St33KeyScriptKeyDropFigureRecord));        // exe 0x511740: the figure
             setPlayerPos(0xee000000, 0, 0, 0xc00);
             scriptSequenceTick(); // exe 0x5114d0

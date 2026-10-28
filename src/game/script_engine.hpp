@@ -7,6 +7,7 @@
 #pragma once
 
 #include <cstdint>
+#include <vector>
 
 #include "engine/data_source.hpp"
 
@@ -35,6 +36,25 @@ constexpr int kSequencePaused = -3;     // the camera script holds the sequence
 
 // exe 0x511390(camera script, steps): a step sequence on the script camera (game/camera_script), its first step's ids
 void scriptSequenceStart(uint32_t cameraScript, uint32_t steps);
+
+// A step list (exe data) through its typed load: its 8-byte steps {id, sub, ticks, routine} up to the kScriptStepEnd
+// one, each routine a function slot, so every source holds the whole list (a cutscene's steps past a source's shorter
+// copy would read untranslated routines)
+struct ScriptStepList : DataRecord {
+    static constexpr uint32_t kBytes = 8;
+    static constexpr uint32_t kMaxSteps = 0x200; // the read's bound (a list ends at its end step)
+    struct Step {
+        uint8_t id = 0, sub = 0;
+        int16_t ticks = 0;
+        RoutineRef routine;
+    };
+    std::vector<Step> steps; // the end step included
+    static ScriptStepList load(const TableReader& r, TableKey key);
+};
+// the step list of a table, as a namespace-scope handle per id (registered for the loads every table is checked by)
+template <TableId Id> inline const DataTable<ScriptStepList> scriptStepList{Id};
+// scriptSequenceStart with a typed step list (loaded whole first)
+void scriptSequenceStart(uint32_t cameraScript, const DataTable<ScriptStepList>& steps);
 // exe 0x5114d0: one tick of the step list (the camera script first unless the block runs without it): the counters
 // (total, this id, this step), the next step when this one's ticks are over
 int scriptSequenceTick();

@@ -329,7 +329,7 @@ void script75() {
         case 4:
             if (!voiceClipPlaying()) return;
             scriptFade(0xb, 0);
-            scriptSequenceStart(stateAddress(TableId::EndScriptsScript75Camera), stateAddress(TableId::EndScriptsScript75Steps)); // exe 0x511390
+            scriptSequenceStart(stateAddress(TableId::EndScriptsScript75Camera), scriptStepList<TableId::EndScriptsScript75Steps>); // exe 0x511390
             s.enterState(CutsceneState::Steps);
             return;
         default: return;
@@ -610,7 +610,7 @@ void script6d() {
             return;
         case 5:
             if (!voiceClipPlaying()) return;
-            scriptSequenceStart(stateAddress(TableId::EndScriptsScript6dCamera), stateAddress(TableId::EndScriptsScript6dSteps));
+            scriptSequenceStart(stateAddress(TableId::EndScriptsScript6dCamera), scriptStepList<TableId::EndScriptsScript6dSteps>);
             s.enterState(CutsceneState::Steps);
             return;
         default: return;
@@ -1024,7 +1024,7 @@ void script3f() {
             return;
         case 4:
             if (!voiceClipPlaying()) return;
-            scriptSequenceStart(stateAddress(TableId::EndScriptsScript3fCamera), stateAddress(TableId::EndScriptsScript3fSteps));
+            scriptSequenceStart(stateAddress(TableId::EndScriptsScript3fCamera), scriptStepList<TableId::EndScriptsScript3fSteps>);
             f.savedRng = rngNext(rngLastValue());
             rngSetState(kSceneSeedB);
             s.enterState(CutsceneState::Steps);
@@ -1392,7 +1392,7 @@ void script6f() {
             actorsSweep(0xffe, 0x80);
             playerScripted();
             player().setDrawn(false);
-            scriptSequenceStart(stateAddress(TableId::EndScriptsScript6fCamera), stateAddress(TableId::EndScriptsScript6fSteps));
+            scriptSequenceStart(stateAddress(TableId::EndScriptsScript6fCamera), scriptStepList<TableId::EndScriptsScript6fSteps>);
             scriptSequenceTick();
             s.subState = 2;
             return;
@@ -1645,7 +1645,7 @@ void staffRollScript() {
             staffSegment(0);
             staffRoll().segment = 1;
             actorsSweep(0xffe, 0x80);
-            scriptSequenceStart(stateAddress(TableId::EndScriptsStaffRollCamera), stateAddress(TableId::EndScriptsStaffRollSteps));
+            scriptSequenceStart(stateAddress(TableId::EndScriptsStaffRollCamera), scriptStepList<TableId::EndScriptsStaffRollSteps>);
             scriptReplayPadOn();
             unskippable(true);
             setStoryFlag(0x245);

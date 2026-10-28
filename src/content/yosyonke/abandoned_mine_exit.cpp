@@ -122,7 +122,7 @@ void ruinExitStep(const RoutineRef& routine) {
 void ruinExitSetUp() { // exe 0x51b840
     ScriptState& s = block();
     if (s.subState == 0) {
-        scriptSequenceStart(stateAddress(TableId::AbandonedMineExitCameraScript), stateAddress(TableId::AbandonedMineExitSteps));
+        scriptSequenceStart(stateAddress(TableId::AbandonedMineExitCameraScript), scriptStepList<TableId::AbandonedMineExitSteps>);
         scriptReplayPadOn();
         Player& p = player();
         p.pos.x.whole = kPlayerX;

@@ -116,7 +116,7 @@ void townFirstVisitScript() {
     switch (s.cutsceneState()) {
     case CutsceneState::SetUp: // exe 0x51b0b0
         if (SetUpSub(s.subState) == SetUpSub::Start) {
-            scriptSequenceStart(stateAddress(TableId::CalbaniaTownScriptsFirstVisitCamera), stateAddress(TableId::CalbaniaTownScriptsFirstVisitSteps));
+            scriptSequenceStart(stateAddress(TableId::CalbaniaTownScriptsFirstVisitCamera), scriptStepList<TableId::CalbaniaTownScriptsFirstVisitSteps>);
             scriptReplayPadOn(); // exe 0x5117f0
             clearPlayerDirections();
             placePlayerWhole(kFirstVisitX, kFirstVisitY, kFirstVisitZ, kFirstVisitYaw);
@@ -287,7 +287,7 @@ void townReturnScript() {
     switch (s.cutsceneState()) {
     case CutsceneState::SetUp: // exe 0x51b3b0
         if (SetUpSub(s.subState) == SetUpSub::Start) {
-            scriptSequenceStart(stateAddress(TableId::CalbaniaTownScriptsTownReturnCamera), stateAddress(TableId::CalbaniaTownScriptsTownReturnSteps));
+            scriptSequenceStart(stateAddress(TableId::CalbaniaTownScriptsTownReturnCamera), scriptStepList<TableId::CalbaniaTownScriptsTownReturnSteps>);
             scriptReplayPadOn(); // exe 0x5117f0
             clearPlayerDirections();
             placePlayerWhole(int16_t(0xfb20), int16_t(0xfd80), 0x6a0, 0x280);

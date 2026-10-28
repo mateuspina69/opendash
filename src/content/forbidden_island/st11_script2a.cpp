@@ -188,7 +188,7 @@ void setUp() {
     actorsSweep(kSweepScriptActors, kSweepKeep);
     placePlayer(0xfb10000, int32_t(0xfc850000u), 0x3a30000, 0x800);
     soundFadeOut(kMusicFade, kMusicFadeStep, 0);
-    scriptSequenceStart(stateAddress(TableId::St11Script2aCamera), stateAddress(TableId::St11Script2aSteps));
+    scriptSequenceStart(stateAddress(TableId::St11Script2aCamera), scriptStepList<TableId::St11Script2aSteps>);
     scriptSequenceTick();
     s.state = uint8_t(CutsceneState::Steps);
     s.subState = 0;

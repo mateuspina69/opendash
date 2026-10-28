@@ -112,6 +112,22 @@ void scriptSequenceStart(uint32_t cameraScript, uint32_t steps) {
     s.stepSub = first.sub;
 }
 
+void scriptSequenceStart(uint32_t cameraScript, const DataTable<ScriptStepList>& steps) {
+    (void)steps.get();
+    scriptSequenceStart(cameraScript, steps.stateAddress());
+}
+
+ScriptStepList ScriptStepList::load(const TableReader& r, TableKey key) {
+    ScriptStepList t;
+    for (uint32_t n = 1;; ++n) {
+        if (n > kMaxSteps) notPortedAt(kStoryPort, "a step list with no end step", key.index);
+        const TableReader list = n == 1 ? r : r.source().table(key, n * kBytes);
+        const size_t o = size_t(n - 1) * kBytes;
+        t.steps.push_back({list.u8(o), list.u8(o + 1), list.s16(o + 2), list.routine(o + 4)});
+        if (t.steps.back().id == kScriptStepEnd) return t;
+    }
+}
+
 int scriptSequenceTick() {
     ScriptState& s = scriptState();
     uint8_t f = s.flags;

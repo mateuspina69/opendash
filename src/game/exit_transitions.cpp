@@ -443,7 +443,7 @@ void passageStart(const PlayerEnv& env) {
         l->pos.y = toFixed(place.y);
         l->pos.z = toFixed(place.z);
     }
-    scriptSequenceStart(stateAddress(TableId::ExitPassageCamera), arriving ? stateAddress(TableId::ExitPassageInSteps) : stateAddress(TableId::ExitPassageOutSteps));
+    scriptSequenceStart(stateAddress(TableId::ExitPassageCamera), arriving ? scriptStepList<TableId::ExitPassageInSteps> : scriptStepList<TableId::ExitPassageOutSteps>);
     scriptReplayPadOn();
     const int32_t x = toFixed(place.x), z = toFixed(place.z);
     bytes.doorSegment = cellSegment(x, z);
@@ -513,7 +513,7 @@ void walkOffStart(const PlayerEnv& env) {
     ScriptCamera& sc = scriptCamera();
     actorsSweep(kSweepTransition, kSweepFree);
     windowCloseAll(WindowClose::Force);
-    scriptSequenceStart(stateAddress(TableId::ExitWalkOffCamera), stateAddress(TableId::ExitWalkOffSteps));
+    scriptSequenceStart(stateAddress(TableId::ExitWalkOffCamera), scriptStepList<TableId::ExitWalkOffSteps>);
     scriptReplayPadOn();
     p.airborne = 0;
     p.onPlatform = 0;
@@ -614,7 +614,7 @@ void doorActorStart() {
     s.enterState(uint8_t(KindState::Sequence));
     const int16_t doorYaw = staticActorAt(actorBySlot(bytes.doorSlot)).rotation.y;
     const int k = doorYaw == 0 ? 0 : doorYaw == kQuarterTurn ? 1 : (doorYaw != kHalfTurn) + 2;
-    scriptSequenceStart(doorActorCameras[size_t(k)], stateAddress(TableId::ExitDoorActorSteps));
+    scriptSequenceStart(doorActorCameras[size_t(k)], scriptStepList<TableId::ExitDoorActorSteps>);
     p.clearDirectionOffsetWords();
     p.idleFaces[0] = 0;
     p.idleFaces[1] = 0;
@@ -694,7 +694,7 @@ void hingedDoorStart(const PlayerEnv& env) {
     l.pos.y = toFixed(r.trigger.y);
     l.pos.z = toFixed(r.trigger.z);
     pointAtWord(s.actors[kFirstLeaf], address);
-    scriptSequenceStart(stateAddress(TableId::ExitHingedDoorCamera), stateAddress(TableId::ExitHingedDoorSteps));
+    scriptSequenceStart(stateAddress(TableId::ExitHingedDoorCamera), scriptStepList<TableId::ExitHingedDoorSteps>);
     scriptReplayPadOn();
     hideDoorSegment();
     placePlayer(env, r.trigger, kHingedSide, kDoorBack, hingedSigns);
@@ -792,7 +792,7 @@ void frozenTransition() {
     case FrozenState::Start:
         actorsSweep(kSweepTransition, kSweepFree);
         windowCloseAll(WindowClose::Force);
-        scriptSequenceStart(kNoCamera, stateAddress(TableId::ExitFrozenSteps));
+        scriptSequenceStart(kNoCamera, scriptStepList<TableId::ExitFrozenSteps>);
         s.flags |= kScriptNoCameraScript | kScriptUnskippable;
         scriptReplayPadOn();
         p.clearDirectionOffsetWords();
@@ -834,7 +834,7 @@ void ladderTransition() {
         if (playerToScriptIfFree() != 0) return;
         actorsSweep(kSweepTransition, kSweepFree);
         windowCloseAll(WindowClose::Force);
-        scriptSequenceStart(stateAddress(TableId::ExitLadderCamera), stateAddress(TableId::ExitLadderSteps));
+        scriptSequenceStart(stateAddress(TableId::ExitLadderCamera), scriptStepList<TableId::ExitLadderSteps>);
         static constexpr uint32_t kYaw[4] = {0x700, 0x500, 0x800, 0x800};
         static constexpr uint32_t kPitch[4] = {0xf500000, 0xb00000, 0xf800000, 0x800000};
         static constexpr uint32_t kDistance[4] = {0x1800000, 0x1800000, 0x2000000, 0x2000000};
@@ -894,7 +894,7 @@ void pitStart() {
     ScriptCamera& sc = scriptCamera();
     actorsSweep(kSweepTransition, kSweepFree);
     windowCloseAll(WindowClose::Force);
-    scriptSequenceStart(stateAddress(TableId::ExitPitCamera), stateAddress(TableId::ExitPitSteps));
+    scriptSequenceStart(stateAddress(TableId::ExitPitCamera), scriptStepList<TableId::ExitPitSteps>);
     s.flags |= kScriptUnskippable;
     sc.angles[kScriptYaw] = kPitYaw;
     sc.angles[kScriptPitch] = kPitPitch;
@@ -945,7 +945,7 @@ void pushedOutTransition() {
         p.idleFaces[0] = 0;
         p.idleFaces[1] = 0;
         playerScriptAnim(PlayerAnim::EventPose, 0, true);
-        scriptSequenceStart(stateAddress(TableId::ExitPushedCamera), stateAddress(TableId::ExitPushedSteps));
+        scriptSequenceStart(stateAddress(TableId::ExitPushedCamera), scriptStepList<TableId::ExitPushedSteps>);
         ScriptCamera& sc = scriptCamera();
         sc.point[0] = toFixed(r.trigger.x);
         sc.angles[kScriptPitch] = kPushedPitch;
@@ -1066,7 +1066,7 @@ void teleporterTransition() {
         if (playerToScriptIfFree() != 0) return;
         actorsSweep(kSweepTransition, kSweepFree);
         windowCloseAll(WindowClose::Force);
-        scriptSequenceStart(stateAddress(TableId::ExitTeleportCamera), stateAddress(TableId::ExitTeleportSteps));
+        scriptSequenceStart(stateAddress(TableId::ExitTeleportCamera), scriptStepList<TableId::ExitTeleportSteps>);
         p.pos.x = toFixed(r.trigger.x);
         p.pos.y = toFixed(r.trigger.y);
         p.pos.z = toFixed(r.trigger.z);

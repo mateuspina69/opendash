@@ -191,7 +191,7 @@ void arrivalScript() { // exe 0x53a0c0
     case RoutineId::Ch4ArrivalSetUp:
         switch (s.subState) {
         case 0:
-            scriptSequenceStart(stateAddress(TableId::Ch4StoryArrivalCamera), stateAddress(TableId::Ch4StoryArrivalSteps)); // exe 0x511390
+            scriptSequenceStart(stateAddress(TableId::Ch4StoryArrivalCamera), scriptStepList<TableId::Ch4StoryArrivalSteps>); // exe 0x511390
             scriptReplayPadOn();                     // exe 0x5117f0
             s.subState += 1u;
             [[fallthrough]];
@@ -875,7 +875,7 @@ void ridingScript() { // exe 0x537b20
         switch (s.subState) {
         case 0:
             actorsSweep(0xffe, 0x80);                // exe 0x5e05d0
-            scriptSequenceStart(stateAddress(TableId::Ch4StoryRidingCamera), stateAddress(TableId::Ch4StoryRidingSteps)); // exe 0x511390
+            scriptSequenceStart(stateAddress(TableId::Ch4StoryRidingCamera), scriptStepList<TableId::Ch4StoryRidingSteps>); // exe 0x511390
             cameraShake(false, 0x40, 0);             // exe 0x40ea80
             scriptReplayPadOn();                     // exe 0x5117f0
             p.setDrawn(false);

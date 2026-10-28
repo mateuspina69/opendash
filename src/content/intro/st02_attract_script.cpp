@@ -538,7 +538,7 @@ void script3SetUp() { // exe 0x512a00
     switch (SetUpSub(s.subState)) {
     case SetUpSub::Start:
         rngSetState(kRngSeed);
-        scriptSequenceStart(stateAddress(TableId::St02AttractScriptCameraScript), stateAddress(TableId::St02AttractScriptSteps));
+        scriptSequenceStart(stateAddress(TableId::St02AttractScriptCameraScript), scriptStepList<TableId::St02AttractScriptSteps>);
         scriptReplayPadOn(); // exe 0x5117f0
         s.flags |= kScriptUnskippable;
         ++s.subState;

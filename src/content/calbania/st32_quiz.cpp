@@ -548,7 +548,7 @@ void quizShowSetUp(ScriptState& s) {
         p.pos.z = kShowZ;
         p.rotation.y = kShowYaw;
         playerScriptAnimId(0, 0, 1);
-        scriptSequenceStart(stateAddress(TableId::St32QuizCameraScript), stateAddress(TableId::St32QuizSteps));
+        scriptSequenceStart(stateAddress(TableId::St32QuizCameraScript), scriptStepList<TableId::St32QuizSteps>);
         actorsSweep(kSweepMask, kSweepKeep);
         windowLayoutVariant(WindowLayout::Dialogue); // exe 0x557860
         s.enterState(CutsceneState::Steps);

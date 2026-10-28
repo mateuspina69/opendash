@@ -392,7 +392,7 @@ void beatenScript() { // exe 0x52f320
             return;
         case BeatenSetUp::Sequence:
             voiceClipPlay(0xe);
-            scriptSequenceStart(stateAddress(TableId::FireRuinDepthsScriptsBeatenCamera), stateAddress(TableId::FireRuinDepthsScriptsBeatenSteps));
+            scriptSequenceStart(stateAddress(TableId::FireRuinDepthsScriptsBeatenCamera), scriptStepList<TableId::FireRuinDepthsScriptsBeatenSteps>);
             scriptSequenceTick();
             s.subState = uint8_t(BeatenSetUp::WaitVoice);
             return;
@@ -498,7 +498,7 @@ void leaveScript() { // exe 0x52f5e0
             return;
         case LeaveSetUp::Sequence:
             if (!voiceClipPlaying()) return;
-            scriptSequenceStart(stateAddress(TableId::FireRuinDepthsScriptsLeaveCamera), stateAddress(TableId::FireRuinDepthsScriptsLeaveSteps));
+            scriptSequenceStart(stateAddress(TableId::FireRuinDepthsScriptsLeaveCamera), scriptStepList<TableId::FireRuinDepthsScriptsLeaveSteps>);
             scriptSequenceTick();
             scriptFade(kSkippedFade, 0);
             s.enterStateKeepingPhases(uint8_t(CutsceneState::Steps));

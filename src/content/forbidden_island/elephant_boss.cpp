@@ -530,7 +530,7 @@ void script28SetUp() {
         if (playerToScriptIfFree() != 0) return;
         actorsSweep(kSweepScriptActors, kSweepKeep);
         clearPlayerScriptFields();
-        scriptSequenceStart(stateAddress(TableId::ElephantBossScript28Camera), stateAddress(TableId::ElephantBossScript28Steps));
+        scriptSequenceStart(stateAddress(TableId::ElephantBossScript28Camera), scriptStepList<TableId::ElephantBossScript28Steps>);
         scriptSequenceTick();
         soundFadeOut(kMusicFade, 0x444, 0);
         ++s.subState;
@@ -614,7 +614,7 @@ void script29SetUp() {
         if (!fadeState().idle()) return;
         actorsSweep(kSweepScriptActors, kSweepKeep);
         clearPlayerScriptFields();
-        scriptSequenceStart(stateAddress(TableId::ElephantBossScript29Camera), stateAddress(TableId::ElephantBossScript29Steps));
+        scriptSequenceStart(stateAddress(TableId::ElephantBossScript29Camera), scriptStepList<TableId::ElephantBossScript29Steps>);
         scriptSequenceTick();
         s.enterState(CutsceneState::Steps);
         return;

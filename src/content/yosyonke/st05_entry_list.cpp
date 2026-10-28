@@ -194,7 +194,7 @@ void entryListScript() {
     EntryListBlock& l = listBlock();
     switch (entryScriptStates->idAt(s.state)) {
     case RoutineId::St05EntryListEntryScriptSetUp:
-        scriptSequenceStart(stateAddress(TableId::St05EntryListEntryCameraScript), stateAddress(TableId::St05EntryListEntrySteps));
+        scriptSequenceStart(stateAddress(TableId::St05EntryListEntryCameraScript), scriptStepList<TableId::St05EntryListEntrySteps>);
         scriptReplayPadOn();
         scriptSequenceTick();
         l.clear(); // exe 0x40dc40(0xa59fd0, 0xa59fd8)

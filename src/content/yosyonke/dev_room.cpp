@@ -1137,7 +1137,7 @@ void rollDevRoom() {
         case 3:
             if (t.state != kTransitionNone) return;
             scriptFade(kFadeIn, 0);
-            scriptSequenceStart(stateAddress(TableId::DevRoomRollCamera), stateAddress(TableId::DevRoomRollSteps));
+            scriptSequenceStart(stateAddress(TableId::DevRoomRollCamera), scriptStepList<TableId::DevRoomRollSteps>);
             s.state = 1;
             s.subState = 0;
             s.stepPhase = 0;
@@ -1216,7 +1216,7 @@ void ninoDevRoom() {
         p.pos.z = kNinoMenuZ;
         p.rotation.y = 0;
         playerScriptAnim(PlayerAnim::Idle, 0, true); // exe 0x5723d0
-        scriptSequenceStart(stateAddress(TableId::DevRoomNinoCamera), stateAddress(TableId::DevRoomNinoSteps));
+        scriptSequenceStart(stateAddress(TableId::DevRoomNinoCamera), scriptStepList<TableId::DevRoomNinoSteps>);
         s.state = 1;
         s.subState = 0;
         s.stepPhase = 0;

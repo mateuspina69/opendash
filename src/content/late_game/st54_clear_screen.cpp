@@ -229,7 +229,7 @@ void opening() {
     case Opening::Start:
         padVibrate(0, 0x1000000);
         actorsSweep(kSweepAll, kSweepFree);
-        scriptSequenceStart(stateAddress(TableId::St54ClearScreenCameraScript), stateAddress(TableId::St54ClearScreenStepList));
+        scriptSequenceStart(stateAddress(TableId::St54ClearScreenCameraScript), scriptStepList<TableId::St54ClearScreenStepList>);
         scriptReplayPadOn();
         scriptSequenceTick();
         s.flags |= kScriptUnskippable;

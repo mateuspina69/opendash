@@ -315,7 +315,7 @@ void entranceScript() { // exe 0x52ce90
             [] {
                 placePlayer(0xfc000000, 0, 0xad90000, 0);
                 facesInit(stateAddress(TableId::FireRuinEntranceScriptsEntranceFirstTracks), stateAddress(TableId::FireRuinEntranceScriptsEntranceSecondTracks));
-                scriptSequenceStart(stateAddress(TableId::FireRuinEntranceScriptsEntranceCamera), stateAddress(TableId::FireRuinEntranceScriptsEntranceSteps)); // exe 0x511390
+                scriptSequenceStart(stateAddress(TableId::FireRuinEntranceScriptsEntranceCamera), scriptStepList<TableId::FireRuinEntranceScriptsEntranceSteps>); // exe 0x511390
                 scriptSequenceTick();
                 scriptActorSpawnRecord(stateAddress(TableId::FireRuinEntranceScriptsEntranceRecord0));
                 scriptActorSpawnRecord(stateAddress(TableId::FireRuinEntranceScriptsEntranceRecord1));
@@ -440,7 +440,7 @@ void gateScript() { // exe 0x52d5a0
                 placePlayer(0xfc000000, 0, 0x4000000, 0);
                 playerAnim(kAnimStand);
                 facesInit(stateAddress(TableId::FireRuinEntranceScriptsGateFirstTracks), stateAddress(TableId::FireRuinEntranceScriptsGateSecondTracks));
-                scriptSequenceStart(stateAddress(TableId::FireRuinEntranceScriptsGateCamera), stateAddress(TableId::FireRuinEntranceScriptsGateSteps));
+                scriptSequenceStart(stateAddress(TableId::FireRuinEntranceScriptsGateCamera), scriptStepList<TableId::FireRuinEntranceScriptsGateSteps>);
                 scriptSequenceTick();
                 cameraShake(1, 0x200, 0);
                 scriptActorSpawnRecord(stateAddress(TableId::FireRuinEntranceScriptsGateRecord0));
@@ -564,7 +564,7 @@ void depthsScript() { // exe 0x52de50
             actorsSweep(kSweepActors, kSweepFree);
             placePlayer(0xf9270000, 0x100000, 0x2000000, 0xc00);
             facesInit(stateAddress(TableId::FireRuinEntranceScriptsDepthsFirstTracks), stateAddress(TableId::FireRuinEntranceScriptsDepthsSecondTracks));
-            scriptSequenceStart(stateAddress(TableId::FireRuinEntranceScriptsDepthsCamera), stateAddress(TableId::FireRuinEntranceScriptsDepthsSteps));
+            scriptSequenceStart(stateAddress(TableId::FireRuinEntranceScriptsDepthsCamera), scriptStepList<TableId::FireRuinEntranceScriptsDepthsSteps>);
             scriptSequenceTick();
             s.state = uint8_t(CutsceneState::Steps);
             s.subState = 0;
@@ -730,7 +730,7 @@ void rubbleScript() { // exe 0x52e2e0
             return;
         case RubbleSetUp::Sequence:
             if (!voiceClipPlaying()) return;
-            scriptSequenceStart(stateAddress(TableId::FireRuinEntranceScriptsRubbleCamera), stateAddress(TableId::FireRuinEntranceScriptsRubbleSteps));
+            scriptSequenceStart(stateAddress(TableId::FireRuinEntranceScriptsRubbleCamera), scriptStepList<TableId::FireRuinEntranceScriptsRubbleSteps>);
             scriptSequenceTick();
             scriptFade(kSkippedFade, 0);
             playerAnim(1);

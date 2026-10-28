@@ -379,7 +379,7 @@ void liftScript() {
     case CutsceneState::SetUp: // exe 0x531860
         if (s.subState == 0) {
             actorsSweep(kLiftSweep, kSweepFree);
-            scriptSequenceStart(stateAddress(TableId::AbandonedMineScriptsLiftCamera), stateAddress(TableId::AbandonedMineScriptsLiftSteps));
+            scriptSequenceStart(stateAddress(TableId::AbandonedMineScriptsLiftCamera), scriptStepList<TableId::AbandonedMineScriptsLiftSteps>);
             scriptReplayPadOn();
             s.subState = 1;
             scriptSequenceTick();
@@ -527,7 +527,7 @@ void hallScript() {
     switch (s.cutsceneState()) {
     case CutsceneState::SetUp: // exe 0x5320b0
         if (s.subState == 0) {
-            scriptSequenceStart(stateAddress(TableId::AbandonedMineScriptsHallCamera), stateAddress(TableId::AbandonedMineScriptsHallSteps));
+            scriptSequenceStart(stateAddress(TableId::AbandonedMineScriptsHallCamera), scriptStepList<TableId::AbandonedMineScriptsHallSteps>);
             scriptReplayPadOn();
             s.subState = 1;
         } else if (s.subState != 1) {
@@ -584,7 +584,7 @@ void entranceScript() {
         if (s.subState == 0) {
             actorsSweep(kSweepTransition, kSweepFree);
             soundFadeOut(kMusicFades, kMusicFadeOutStep, 0);
-            scriptSequenceStart(stateAddress(TableId::AbandonedMineScriptsEntranceCamera), stateAddress(TableId::AbandonedMineScriptsEntranceSteps));
+            scriptSequenceStart(stateAddress(TableId::AbandonedMineScriptsEntranceCamera), scriptStepList<TableId::AbandonedMineScriptsEntranceSteps>);
             scriptSequenceTick();
             scriptReplayPadOn();
             s.flags |= kScriptUnskippable;
@@ -675,7 +675,7 @@ void endScript() {
                 ev.active = 0;
             }
             s.actors[0] = abandonedMineStageBlock().guardian.get();
-            scriptSequenceStart(stateAddress(TableId::AbandonedMineScriptsEndCamera), stateAddress(TableId::AbandonedMineScriptsEndSteps));
+            scriptSequenceStart(stateAddress(TableId::AbandonedMineScriptsEndCamera), scriptStepList<TableId::AbandonedMineScriptsEndSteps>);
             scriptReplayPadOn();
             setStoryFlag(kFlagScriptSolids);
             setStoryFlag(kFlagPickupsStay);
@@ -839,7 +839,7 @@ void deviceScript() {
     switch (s.cutsceneState()) {
     case CutsceneState::SetUp: // exe 0x5329e0
         if (s.subState == 0) {
-            scriptSequenceStart(stateAddress(TableId::AbandonedMineScriptsDeviceCamera), stateAddress(TableId::AbandonedMineScriptsDeviceSteps));
+            scriptSequenceStart(stateAddress(TableId::AbandonedMineScriptsDeviceCamera), scriptStepList<TableId::AbandonedMineScriptsDeviceSteps>);
             scriptReplayPadOn();
             s.subState = 1;
         } else if (s.subState != 1) {

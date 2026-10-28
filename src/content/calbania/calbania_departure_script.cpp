@@ -223,7 +223,7 @@ void calbaniaDepartureScript() {
             return;
         case SetUpSub::WaitVoice:
             if (!voiceClipPlaying()) return;     // exe 0x601240
-            scriptSequenceStart(stateAddress(TableId::CalbaniaDepartureScriptCamera), stateAddress(TableId::CalbaniaDepartureScriptSteps)); // exe 0x511390
+            scriptSequenceStart(stateAddress(TableId::CalbaniaDepartureScriptCamera), scriptStepList<TableId::CalbaniaDepartureScriptSteps>); // exe 0x511390
             s.enterState(CutsceneState::Steps);
             return;
         default: return;

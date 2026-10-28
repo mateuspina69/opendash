@@ -721,7 +721,7 @@ void trainLostScript() {
     ScriptState& s = block();
     switch (s.cutsceneState()) {
     case CutsceneState::SetUp: // exe 0x53d240
-        scriptSequenceStart(stateAddress(TableId::TownStoryTrainLostCameraScript), stateAddress(TableId::TownStoryTrainLostSteps)); // exe 0x511390
+        scriptSequenceStart(stateAddress(TableId::TownStoryTrainLostCameraScript), scriptStepList<TableId::TownStoryTrainLostSteps>); // exe 0x511390
         scriptReplayPadOn();                      // exe 0x5117f0
         s.enterState(CutsceneState::Steps);
         s.stepPhase = kTintStart;

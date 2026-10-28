@@ -417,14 +417,16 @@ TableReader Ps1DataSource::regionBytes(size_t part, uint32_t address, uint32_t n
         }
     }
     if (region) {
+        const uint32_t d = region->offset; // the slots' offsets are the region's, the read starts d in
         // the function pointers: this source's routine values
         if (const auto it = routineSlots_.find({region->key, region->region}); it != routineSlots_.end())
             for (const auto& [o, routine] : it->second)
-                if (o + 4 <= b.size() && rd32(raw + o) != 0) put32(b, o, kRoutineTag | static_cast<uint16_t>(routine));
+                if (o >= d && o - d + 4 <= b.size() && rd32(raw + (o - d)) != 0)
+                    put32(b, o - d, kRoutineTag | static_cast<uint16_t>(routine));
         // the data pointers: this source's addresses of the PS1 data they point at (null stays null)
         if (const auto it = dataSlots_.find({region->key, region->region}); it != dataSlots_.end())
             for (const auto& [o, child] : it->second)
-                if (o + 4 <= b.size()) dataPointer(o, Region{region->key, child});
+                if (o >= d && o - d + 4 <= b.size()) dataPointer(o - d, Region{region->key, child});
     }
     return TableReader(*this, std::move(b));
 }
@@ -481,6 +483,11 @@ size_t Ps1DataSource::voicePart(TableKey key, const Located& table) const {
 
 TableReader Ps1DataSource::table(TableKey key, uint32_t bytes) const {
     debugTableName() = describe(key); // a diagnostic for TableReader's error
+    {
+        std::lock_guard lock(lock_);
+        uint32_t& e = readExtent_[key]; // (a shorter PS1 record: its own bytes)
+        e = std::max(e, ps1RecordBytes(key.id) ? std::min(bytes, ps1RecordBytes(key.id)) : bytes);
+    }
     if (std::getenv("OPENDASH_TRACE_DATA")) lastTableKey_ = describe(key);
     const auto it = tables_.find(key);
     if (it == tables_.end()) {
@@ -575,11 +582,30 @@ TableReader Ps1DataSource::pointee(uint32_t pointer, uint32_t n) const {
         if (it == partByVbase_.begin()) return TableReader(*this, {});
         part = std::prev(it)->second;
         if (const auto r = regionAt_.find(pointer); r != regionAt_.end()) region = r->second;
+        else region = regionInside(pointer); // a read inside a table (a list's step k)
     }
     const Part& pt = parts_[part];
     const uint32_t off = pointer - pt.vbase;
     if (off >= pt.data->size()) return TableReader(*this, {});
     return regionBytes(part, pt.base + off, n, region);
+}
+
+std::optional<Ps1DataSource::Region> Ps1DataSource::regionInside(uint32_t pointer) const {
+    // the nearest table the game holds the address of whose bytes read so far (its typed load's extent) hold the
+    // pointer: its slots from the pointer's offset
+    for (auto it = regionAt_.upper_bound(pointer); it != regionAt_.begin();) {
+        --it;
+        const uint32_t d = pointer - it->first;
+        if (d > kMaxLabelBytes) break;
+        if (it->second.region != 0) continue;
+        const auto e = readExtent_.find(it->second.key);
+        if (e != readExtent_.end() && d < e->second) {
+            Region r = it->second;
+            r.offset = d;
+            return r;
+        }
+    }
+    return std::nullopt;
 }
 
 std::string Ps1DataSource::pointeeString(uint32_t pointer, size_t maxLength) const {

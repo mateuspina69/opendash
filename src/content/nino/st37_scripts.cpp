@@ -128,8 +128,8 @@ void setUp() {
     switch (SetUp(s.subState)) {
     case SetUp::Start: {
         Player& p = player();
-        if (p.inWater == 1) scriptSequenceStart(stateAddress(TableId::St37ScriptsFloodedCamera), stateAddress(TableId::St37ScriptsFloodedSteps)); // exe 0x511390
-        else scriptSequenceStart(stateAddress(TableId::St37ScriptsDryCamera), stateAddress(TableId::St37ScriptsDrySteps));
+        if (p.inWater == 1) scriptSequenceStart(stateAddress(TableId::St37ScriptsFloodedCamera), scriptStepList<TableId::St37ScriptsFloodedSteps>); // exe 0x511390
+        else scriptSequenceStart(stateAddress(TableId::St37ScriptsDryCamera), scriptStepList<TableId::St37ScriptsDrySteps>);
         scriptReplayPadOn(); // exe 0x5117f0
         p.setPrevMoveDir(MoveDir::Forward);
         p.setMoveDir(MoveDir::Forward);

@@ -82,7 +82,7 @@ void arrivalSetUp(ScriptState& s) {
         return;
     case SetUpSub::WaitVoice:
         if (voiceClipPlaying()) {
-            scriptSequenceStart(stateAddress(TableId::CalbaniaArrivalScriptCameraScript), stateAddress(TableId::CalbaniaArrivalScriptSteps));
+            scriptSequenceStart(stateAddress(TableId::CalbaniaArrivalScriptCameraScript), scriptStepList<TableId::CalbaniaArrivalScriptSteps>);
             scriptSequenceTick();
             scriptFade(kFadeIn, 0);
             s.enterState(CutsceneState::Steps);

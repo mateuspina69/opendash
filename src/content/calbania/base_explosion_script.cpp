@@ -189,9 +189,9 @@ void baseExplosionState(ScriptState& s) {
             actorsSweep(kSweepBase, kSweepKeep);
             scriptReplayPadOn(); // exe 0x5117f0
             if (storyFlag(kFlagEscaped)) {
-                scriptSequenceStart(stateAddress(TableId::BaseExplosionScriptCameraEscaped), stateAddress(TableId::BaseExplosionScriptSteps));
+                scriptSequenceStart(stateAddress(TableId::BaseExplosionScriptCameraEscaped), scriptStepList<TableId::BaseExplosionScriptSteps>);
             } else {
-                scriptSequenceStart(stateAddress(TableId::BaseExplosionScriptCameraNotEscaped), stateAddress(TableId::BaseExplosionScriptSteps));
+                scriptSequenceStart(stateAddress(TableId::BaseExplosionScriptCameraNotEscaped), scriptStepList<TableId::BaseExplosionScriptSteps>);
                 player().flags &= uint8_t(~kActorLiveDrawn);
             }
             scriptSequenceTick();
