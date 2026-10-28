@@ -342,22 +342,15 @@ void PlayerView::focusBodies(const RoomMesh& mesh, float alpha, std::vector<od::
     // cutscenes (the game's camera: a script, an event, a talk) show the scenery whole
     if (gameCameraActive() || (od::port::scriptState().flags & od::port::kScriptRunning)) return;
     const float scale = float(1 << mesh.shift);
-    auto add = [&](const float* prev, const float* cur, const BodyBox& b, float strength) {
-        if (!b.valid || strength <= 0.0f) return;
-        float base[3];
-        for (int c = 0; c < 3; ++c) base[c] = (prev[c] + (cur[c] - prev[c]) * alpha) * scale;
-        base[1] = -base[1]; // render y up
-        od::FocusBody f;
-        for (int c = 0; c < 3; ++c) f.base[c] = base[c] + (b.lo[c] + b.hi[c]) * 0.5f + renderOffset[c];
-        f.base[1] = base[1] + b.lo[1] + renderOffset[1];
-        f.top = base[1] + b.hi[1] + renderOffset[1];
-        f.radius = std::max(b.hi[0] - b.lo[0], b.hi[2] - b.lo[2]) * 0.5f;
-        f.strength = strength;
-        out.push_back(f);
+    auto add = [&](uint32_t object, const float* prev, const float* cur, const BodyBox& b, float strength) {
+        if (!object || !b.valid || strength <= 0.0f) return;
+        const float y = -(prev[1] + (cur[1] - prev[1]) * alpha) * scale; // render y up
+        out.push_back(od::FocusBody{object, y + b.lo[1] + renderOffset[1], strength});
     };
     const od::port::Player& pl = od::port::player();
-    if (pl.flags & pl.runFlags & od::port::kActorDrawn) add(posPrev, posCur, playerBody, 1.0f);
-    if (lockAimValid && targetBodyOf == lockTarget) add(tgtPrev, tgtCur, targetBody, lockBlend);
+    if (pl.flags & pl.runFlags & od::port::kActorDrawn)
+        add(od::objectId(od::kKindPlayer, 0), posPrev, posCur, playerBody, 1.0f);
+    if (lockAimValid && targetBodyOf == lockTarget) add(targetObject, tgtPrev, tgtCur, targetBody, lockBlend);
 }
 
 bool PlayerView::objectOfActor(uint32_t address, uint32_t id) {
@@ -410,8 +403,13 @@ void PlayerView::measureBodies(const RoomMesh& mesh, const std::vector<od::Dynam
         settle(playerBody, measure(posCur, [](uint32_t id) { return id == od::objectId(od::kKindPlayer, 0); }));
     if (targetBodyOf != lockTarget) targetBody = BodyBox{}; // a new target starts from its own pose
     targetBodyOf = lockTarget;
-    if (lockTarget) settle(targetBody, measure(tgtCur, [&](uint32_t id) { return objectOfActor(lockTarget, id); }));
-    else targetBody = BodyBox{};
+    targetObject = 0;
+    if (lockTarget) {
+        settle(targetBody, measure(tgtCur, [&](uint32_t id) { return objectOfActor(lockTarget, id); }));
+        for (const od::DynamicObject& o : objects)
+            if (objectOfActor(lockTarget, o.id)) targetObject = o.id;
+    } else
+        targetBody = BodyBox{};
 }
 
 float PlayerView::smoothDamp(float current, float target, float& vel, float smoothTime, float dt) {

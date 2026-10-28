@@ -359,6 +359,7 @@ struct PlayerView {
     BodyBox playerBody, targetBody;
     static constexpr float kBodyShrink = 0.05f; // a kept BodyBox moves this much a tick toward a smaller pose
     uint32_t targetBodyOf = 0; // the lock target targetBody belongs to
+    uint32_t targetObject = 0; // its DynamicObject this tick (0: not built)
     // measures playerBody (object kKindPlayer 0) and, while locked on, targetBody from the tick's built objects
     void measureBodies(const RoomMesh& mesh, const std::vector<od::DynamicObject>& objects);
     // the drawn objects of the actor at `address` (animated pool: kKindActor slot, any blend; static / shot /

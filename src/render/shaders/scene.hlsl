@@ -31,8 +31,7 @@ cbuffer Frame : register(b0) {
                             // (cave) / 2 hot air under an open sky (waterTint = the sky colour)
     float4 waterTint;       // the room's water colour (the game's wave tint / 0x80)
     float4x4 skyRay;        // screen-space sky: NDC -> view direction (inverse unjittered rotation-only viewProj)
-    float4 focus[2];        // the characters in focus (OpenDash's see-through, world): axis foot x, y, z, half width
-    float4 focusWorld[2];   // ... their axis top y, their strength (0..1)
+    float4 focus[2];        // the characters in focus (OpenDash's see-through): feet (world y), strength (0..1)
     float focusCount;
     float3 pad3;
     float4 heightBounds;  // precipitation height map: min x, min z, 1 / its width, 1 / its depth (world units)
@@ -50,6 +49,8 @@ Texture2DArray pages : register(t0);
 SamplerState pointClamp : register(s0);
 Texture2D<float> heightMap : register(t4);  // precipitation: the room seen from above (depth 0 = top, 1 = no surface)
 Texture2D<float> sceneDepth : register(t5); // the opaque scene's raw depth (R32F copy, before the blended draws)
+Texture2D<float> focusDepth0 : register(t6); // a character in focus drawn alone: its raw depth (1 = not there)
+Texture2D<float> focusDepth1 : register(t7);
 
 #ifdef OD_RT
 // ray-traced sun shadows (DXR 1.1 inline ray queries). Instance 0 = room (opaque ranges), 1 = dynamic actors;
@@ -329,35 +330,29 @@ PSOut ps_main(VSOut i, bool front : SV_IsFrontFace) {
     // renderer keeps depth clip off)
     const uint surface = uint(round(i.surface));
     if ((surface & 1u) && i.depth < modelNear) discard;
-    // the see-through (OpenDash, Baldur's Gate style): the scenery that lies between the camera and a character in
-    // focus dissolves in an ordered dither: where the eye's ray through it passes the body's capsule (a soft edge
-    // out to kFocusEdge of its half width) with the fragment in front of the body; the floor is kept
+    // the see-through (OpenDash, Baldur's Gate style): the scenery dissolves in an ordered dither on the pixels where it
+    // hides a character in focus, i.e. where that character's own depth (focusDepth, drawn alone first) lies behind
+    // it; nowhere else. The hole's edge softens inward over a few pixels; the floor the character stands on stays
     if ((surface & 2u) && focusCount > 0.5) {
         static const float kBayer[16] = {0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5};
-        static const float kFocusEdge = 1.3;
+        static const int2 kRing[8] = {int2(1, 0), int2(-1, 0), int2(0, 1), int2(0, -1),
+                                      int2(1, 1), int2(-1, 1), int2(1, -1), int2(-1, -1)};
         const uint2 px = uint2(i.pos.xy) & 3u;
         const float threshold = (kBayer[px.y * 4 + px.x] + 0.5) / 16.0;
-        // a surface facing up (the floor, a step, a table top) is never dissolved: only walls, pillars, ceilings
-        float3 up = normalize(cross(ddy(i.world), ddx(i.world)));
-        if (dot(up, eye - i.world) < 0) up = -up;
-        const float3 ray = i.world - eye;
-        const float reach = length(ray);
-        const float3 d = ray / max(reach, 1e-4);
+        const int2 at = int2(i.pos.xy), last = int2(renderSize) - 1;
+        const int feather = max(1, int(renderSize.y * 0.006));
         float open = 0.0;
-        for (int f = 0; f < int(focusCount + 0.5) && up.y < 0.6; ++f) {
-            const float3 foot = focus[f].xyz;
-            const float r = focus[f].w, height = max(focusWorld[f].x - foot.y, 0.0);
-            if (i.world.y <= foot.y) continue;
-            // the ray's nearest approach to the axis (foot + s * up, s within 0 .. height)
-            const float3 w = eye - foot;
-            const float b = d.y, dw = dot(d, w);
-            const float s = clamp((w.y - b * dw) / max(1.0 - b * b, 1e-4), 0.0, height);
-            const float t = max(dot(foot + float3(0, s, 0) - eye, d), 0.0);
-            const float miss = length(eye + d * t - foot - float3(0, s, 0));
-            // in front of the body: nearer than where the ray enters it (at the nearest approach at least r before)
-            const float entry = t - max(sqrt(max(r * r - miss * miss, 0.0)), 0.5 * r);
-            if (reach >= entry) continue;
-            open = max(open, saturate((kFocusEdge - miss / r) / (kFocusEdge - 1.0)) * focusWorld[f].y);
+        for (int f = 0; f < int(focusCount + 0.5); ++f) {
+            if (i.world.y <= focus[f].x) continue;
+            float hidden = 0.0;
+            for (int k = 0; k < 9; ++k) {
+                const int2 q = k == 0 ? at : clamp(at + kRing[k - 1] * feather, int2(0, 0), last);
+                const float body = f == 0 ? focusDepth0.Load(int3(q, 0)) : focusDepth1.Load(int3(q, 0));
+                const bool behind = body < 1.0 && i.pos.z < body;
+                if (k == 0 && !behind) break; // this pixel hides nothing of it
+                hidden += behind ? 1.0 : 0.0;
+            }
+            open = max(open, hidden / 9.0 * focus[f].y);
         }
         if (open > threshold) discard;
     }

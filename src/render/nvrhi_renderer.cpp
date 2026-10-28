@@ -94,8 +94,7 @@ struct FrameConstants {
     float water[4];     // remaster medium look: on, clock (seconds), sky draw, kind (0 water, 1 hot air)
     float waterTint[4]; // the room's water colour
     XMFLOAT4X4 skyRay;  // screen-space sky: NDC -> view direction (inverse of the unjittered rotation-only viewProj)
-    float focus[kMaxFocusBodies][4];      // a focus body (world): its axis' foot x, y, z, its half width
-    float focusWorld[kMaxFocusBodies][4]; // ... its axis' top y, its strength
+    float focus[kMaxFocusBodies][4]; // a focus body: its feet (world y), its strength; its depth is focusMask_[k]
     float focusCount;
     float pad3[3];
     float heightBounds[4]; // precipitation height map: min x, min z, 1 / its width, 1 / its depth
@@ -292,7 +291,8 @@ public:
         nvrhi::BindingLayoutDesc bl;
         bl.visibility = nvrhi::ShaderType::All;
         bl.bindings = {nvrhi::BindingLayoutItem::VolatileConstantBuffer(0), nvrhi::BindingLayoutItem::Texture_SRV(0),
-                       nvrhi::BindingLayoutItem::Sampler(0), nvrhi::BindingLayoutItem::Texture_SRV(5)};
+                       nvrhi::BindingLayoutItem::Sampler(0), nvrhi::BindingLayoutItem::Texture_SRV(5),
+                       nvrhi::BindingLayoutItem::Texture_SRV(6), nvrhi::BindingLayoutItem::Texture_SRV(7)};
         if (rt_) {
             bl.bindings.push_back(nvrhi::BindingLayoutItem::RayTracingAccelStruct(1));
             bl.bindings.push_back(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2));
@@ -523,6 +523,7 @@ public:
                          [](const DynamicObject& a, const DynamicObject& b) { return a.blend < b.blend; });
         dyn_.clear();
         dynStart_.fill(0);
+        objectRanges_.clear();
         std::vector<std::pair<size_t, size_t>> models; // the objects' vertex ranges, smoothed per object
         // the surface bits by object: the model draws (exe 0x5f4980 / 0x5f3820) and the scenery (the room's segments
         // and doors, the static pool's objects)
@@ -544,6 +545,7 @@ public:
                 surfaces.push_back({dyn_.size(), dyn_.size() + o.tris.size()});
                 surfaceBits.push_back(bits);
             }
+            if (o.blend == 0) objectRanges_[o.id] = {uint32_t(dyn_.size()), uint32_t(o.tris.size())};
             dyn_.insert(dyn_.end(), o.tris.begin(), o.tris.end());
         }
         history_.apply(sorted, dynPrev_);
@@ -1290,6 +1292,10 @@ private:
     void makeDepthCopy() {
         depthCopy_ = makeTarget(t_.renderW, t_.renderH, nvrhi::Format::R32_FLOAT, "depth copy");
         depthCopyFb_ = dev_.device()->createFramebuffer(nvrhi::FramebufferDesc().addColorAttachment(depthCopy_));
+        for (size_t k = 0; k < kMaxFocusBodies; ++k) {
+            focusMask_[k] = makeTarget(t_.renderW, t_.renderH, nvrhi::Format::R32_FLOAT, "focus depth");
+            focusMaskFb_[k] = dev_.device()->createFramebuffer(nvrhi::FramebufferDesc().addColorAttachment(focusMask_[k]));
+        }
         outSets_.clear(); // they bind the old copy
         flakeSet_ = blizzardSet_ = nullptr;
         makeSceneSet();
@@ -1437,7 +1443,9 @@ private:
         }
         nvrhi::BindingSetDesc bs;
         bs.bindings = {nvrhi::BindingSetItem::ConstantBuffer(0, frameCb_), nvrhi::BindingSetItem::Texture_SRV(0, pages_),
-                       nvrhi::BindingSetItem::Sampler(0, pointClamp_), nvrhi::BindingSetItem::Texture_SRV(5, depthCopy_)};
+                       nvrhi::BindingSetItem::Sampler(0, pointClamp_), nvrhi::BindingSetItem::Texture_SRV(5, depthCopy_),
+                       nvrhi::BindingSetItem::Texture_SRV(6, focusMask_[0]),
+                       nvrhi::BindingSetItem::Texture_SRV(7, focusMask_[1])};
         if (rt_) {
             bs.bindings.push_back(nvrhi::BindingSetItem::RayTracingAccelStruct(1, tlas_));
             bs.bindings.push_back(nvrhi::BindingSetItem::StructuredBuffer_SRV(2, staticAttr_));
@@ -1497,11 +1505,10 @@ private:
         f.cullSign = cullSign;
         f.modelNear = nearZ_;
         f.focusCount = float(focusShown_);
-        for (uint32_t k = 0; k < focusShown_; ++k)
-            for (int c = 0; c < 4; ++c) {
-                f.focus[k][c] = focusAxis_[k][c];
-                f.focusWorld[k][c] = focusWorld_[k][c];
-            }
+        for (uint32_t k = 0; k < focusShown_; ++k) {
+            f.focus[k][0] = focusShownBody_[k].feet;
+            f.focus[k][1] = focusShownBody_[k].strength;
+        }
         f.fogStart = fog_.start;
         f.fogEnd = fog_.end;
         f.fogMode = fog ? float(int(fog_.mode)) : 0.0f;
@@ -1575,16 +1582,13 @@ private:
         }
         float fwdv[3];
         for (int c = 0; c < 3; ++c) fwdv[c] = XMVectorGetByIndex(fwd, c);
-        // the focus bodies (FrameConstants): their capsules
+        // the focus bodies drawn this frame (their objects uploaded, FrameConstants / focusMask_)
         focusShown_ = 0;
         for (const FocusBody& b : focus_) {
-            if (b.strength <= 0.0f || b.radius <= 0.0f) continue;
-            float* a = focusAxis_[focusShown_];
-            for (int c = 0; c < 3; ++c) a[c] = b.base[c];
-            a[3] = b.radius;
-            focusWorld_[focusShown_][0] = b.top;
-            focusWorld_[focusShown_][1] = b.strength;
-            ++focusShown_;
+            const auto it = objectRanges_.find(b.object);
+            if (b.strength <= 0.0f || it == objectRanges_.end() || it->second.second == 0) continue;
+            focusShownBody_[focusShown_] = b;
+            focusShownRange_[focusShown_++] = it->second;
         }
 
         // streamed geometry: sky (dome previous positions follow the eye) and dynamic actors
@@ -1627,6 +1631,21 @@ private:
             drawRange(sky_pipe_, skyBuf_, 0, uint32_t(sky_.size()));
         }
         frameSky_ = 0.0f;
+
+        // the see-through's focus bodies, each drawn alone (its opaque and its STP texels) into the cleared depth and
+        // copied to its focusMask_; the depth is cleared again for the scene, which draws them where they are seen
+        for (uint32_t k = 0; k < focusShown_; ++k) {
+            const uint32_t n = uint32_t(dynGpu_.size()), first = std::min(focusShownRange_[k].first, n);
+            const uint32_t count = std::min(focusShownRange_[k].second, n - first);
+            for (const float semiPass : {0.0f, 1.0f}) {
+                frameSemiPass_ = semiPass;
+                writeFrame(vpJit, vp, prevVp_, cam.eye, prevEye_, fwdv, cam.cullSign, true, 0.0f, 0.0f, true);
+                drawRange(opaque_, dynBuf_, first, count);
+            }
+            frameSemiPass_ = 0.0f;
+            debugPass(t_.depth, 5, focusMaskFb_[k], float(t_.renderW), float(t_.renderH));
+            cl_->clearDepthStencilTexture(t_.depth, nvrhi::AllSubresources, true, 1.0f, kDepthHasStencil, 0);
+        }
 
         // every opaque surface (room, then actors / switchable segments) before any semi-transparent one: the blended
         // faces write no depth, so an opaque draw after them overwrote them wherever it lay behind (the ST4B sub 1
@@ -1845,9 +1864,14 @@ private:
     bool rt_ = false;
     SunLight sun_;
     std::vector<FocusBody> focus_;
-    float focusAxis_[kMaxFocusBodies][4]{}; // drawScene: the focus bodies' capsules (FrameConstants)
-    float focusWorld_[kMaxFocusBodies][4]{};
+    FocusBody focusShownBody_[kMaxFocusBodies]{}; // drawScene: the focus bodies drawn this frame
+    std::pair<uint32_t, uint32_t> focusShownRange_[kMaxFocusBodies]{}; // ... their opaque vertices in dynBuf_
     uint32_t focusShown_ = 0;
+    // the opaque objects' vertex ranges in dyn_ (first, count) by DynamicObject id: a focus body's draw
+    std::unordered_map<uint32_t, std::pair<uint32_t, uint32_t>> objectRanges_;
+    // a focus body's depth (R32F, render size, 1 = none): drawn alone before the scene (scene.hlsl see-through)
+    nvrhi::TextureHandle focusMask_[kMaxFocusBodies];
+    nvrhi::FramebufferHandle focusMaskFb_[kMaxFocusBodies];
     // precipitation (setPrecipitation): the room's height map from above, the flakes, the blown snow
     Precipitation precip_;
     nvrhi::ShaderHandle heightVs_, heightPs_, flakeVs_, flakePs_, fullVs_, blizzardPs_;
