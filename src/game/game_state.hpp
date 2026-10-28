@@ -19,8 +19,8 @@ enum class GameMode : uint8_t {
     Field = 3,        // the field play and its transitions (exe 0x5413a0)
     Pause = 4,        // the PC pause (exe 0x5418f0; not ported)
     StatusMenu = 5,   // the status sub-screen (exe 0x541bf0)
-    SelectMenuA = 6,  // the select button's menu while story flag 0x246 is set (not ported)
-    SelectMenuB = 7,  // ... while flag 0x24d is set (not ported)
+    SelectMenuA = 6,  // the select button's prompt while story flag 0x246 is set: the exam's "give up?" (exe 0x541e10)
+    SelectMenuB = 7,  // ... while flag 0x24d is set: the time trial's "quit?" (exe 0x541fd0)
     GameOver = 8,     // the player died
 };
 // +1 of the field mode (exe 0x5413a0)

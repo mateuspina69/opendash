@@ -87,13 +87,6 @@ void fade(uint32_t request, uint8_t param) {
     if (!H->fade) throw std::logic_error("title port: no fade task");
     fadeStart(*H->fade, request, param);
 }
-// exe 0x5428b0: the rescue of a game over with kFlagGameOverRescue (the licence exam's): the transition to the place
-// content gives (the registry), the player's own equipment back
-void gameOverRescue() {
-    const GameOverRescuePlace to = content().gameOverRescuePlace();
-    requestTransition(kTransitionAccepted, to.stage, to.room, to.x, to.y, to.z, to.yaw, kRescueFadeIn, kNoFade);
-    loadoutRestore();
-}
 // the timers that scale by the pace: (3 - pace) * unit
 uint16_t paceTicks(uint16_t unit) { return uint16_t((uint32_t(kPaceSteps) - display().pace) * unit); }
 
@@ -820,6 +813,12 @@ void frame() {
 }
 
 } // namespace
+
+void gameOverRescue() {
+    const GameOverRescuePlace to = content().gameOverRescuePlace();
+    requestTransition(kTransitionAccepted, to.stage, to.room, to.x, to.y, to.z, to.yaw, kRescueFadeIn, kNoFade);
+    loadoutRestore();
+}
 
 void setTitlePs1Layout(bool on) { gPs1Layout = on; }
 

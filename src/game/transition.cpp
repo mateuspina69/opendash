@@ -13,6 +13,7 @@
 #include "game/game_state.hpp"
 #include "game/hud.hpp"
 #include "game/message.hpp"
+#include "game/message_state.hpp"
 #include "game/event.hpp"
 #include "game/player/player_input.hpp"
 #include "game/player/player_state.hpp"
@@ -27,6 +28,7 @@
 #include "game/stage_files.hpp"
 #include "game/stage_state.hpp"
 #include "game/story_flags.hpp"
+#include "game/title.hpp"
 #include "game/transition_state.hpp"
 #include "game/travel.hpp"
 
@@ -151,6 +153,47 @@ void frameBody() {
     scriptBlockIdle();
 }
 
+// exe 0x5422f0: the draw pass (nothing while the frame draws nothing): the host's at the pass's entry, before its
+// drawingOff test (the host checks it too), then the minimap
+void drawPass() {
+    if (gHooks->render) gHooks->render();
+    if (display().drawingOff != 0) return;
+    minimapDrawPass(); // exe 0x4155b0 (after the sprite banner 0x5f2690)
+}
+
+// ---- the field prompts of the select button (game modes 6 / 7): the licence exam's "give up?" (exe 0x541e10,
+// story flag 0x246) and the time trial's "quit?" (exe 0x541fd0, flag 0x24d) over the field --------------------------
+enum class PromptStep : uint8_t {
+    KeepField = 0,   // the windows kept, the music dipped
+    Open = 1,        // the prompt's window
+    Answer = 2,      // until it closes
+    Yes = 3,         // the exam: given up (the rescue); the trial: the fade
+    Resume = 4,      // the exam: back to play; the trial: the fade over, the course's start
+    TrialResume = 5, // the trial's "no": back to play
+};
+constexpr int16_t kExamPrompt = 8, kTrialPrompt = 9;    // the prompts in the save menus' bank
+constexpr uint8_t kAnswerYes = 1;
+constexpr uint32_t kExamQuitFade = 0x26, kTrialQuitFade = 0x11;
+constexpr uint32_t kPromptMusicFade = 0x20;              // the music's dip while the prompt runs (as the sub-screen's)
+constexpr int16_t kPromptMusicFadeStep = 0x444;
+constexpr uint32_t kExamGivenUpFlag = 0x247;
+constexpr uint32_t kTrialCourseA = 0x683, kTrialCourseB = 0x684; // the course flags (neither: the third)
+constexpr uint8_t kCourseFadeIn = 2;
+// the three courses' starts (exe 0x8ae8e8)
+const DataTable<RecordTable<RoomPlace, 3, RoomPlace::kBytes>> trialCourseStarts{TableId::TimeTrialCourseStarts};
+// the windows the prompt keeps (the exe copies them into the spare buffer)
+StateArray<MessageWindow, kWindowCount>& promptKeptWindows() {
+    static StateArray<MessageWindow, kWindowCount> s{};
+    return s;
+}
+// exe 0x542a10: the time trial restarted -- the request to the current stage / room at its course's start
+void trialCourseWarp() {
+    const GameState& g = gameState();
+    const uint32_t course = storyFlag(kTrialCourseA) ? 0 : storyFlag(kTrialCourseB) ? 1 : 2;
+    const RoomPlace& at = trialCourseStarts[course];
+    requestTransition(kTransitionAccepted, g.stage, g.room, at.x, at.y, at.z, at.yaw, kCourseFadeIn, kNoFade);
+}
+
 // the story moved on to its next value (the story flag group cleared first) when they differ
 void advanceStory() {
     GameState& g = gameState();
@@ -270,14 +313,9 @@ void fieldMode(const PlayerEnv& env, TransitionHooks& hooks, FadeTask& fade) {
     TransitionRequest& r = transitionRequest();
     const FadeState& f = fadeState();
     const uint8_t step = g.modeStep;
-    auto render = [&]() { // exe 0x5422f0: the draw pass (nothing while the frame draws nothing): the host's, then
-        if (hooks.render) hooks.render(); // at the pass's entry, before its drawingOff test (the host checks it too)
-        if (display().drawingOff != 0) return;
-        minimapDrawPass(); // exe 0x4155b0 (after the sprite banner 0x5f2690)
-    };
     auto run = [&]() { // exe 0x542280; 0x5422f0; 0x5426e0
         frameBody();
-        render();
+        drawPass();
         playTimeTick();
     };
     auto next = [&]() { // the step + 1, then the frame
@@ -304,7 +342,7 @@ void fieldMode(const PlayerEnv& env, TransitionHooks& hooks, FadeTask& fade) {
             else g.modeStep = uint8_t(step + 1);
         }
         frameBody();
-        render();
+        drawPass();
         openFieldMenus();
         playTimeTick();
         return;
@@ -333,7 +371,7 @@ void fieldMode(const PlayerEnv& env, TransitionHooks& hooks, FadeTask& fade) {
         }
     case FieldStep::RunExitScript:
         frameBody();
-        render();
+        drawPass();
         if (r.state == kTransitionScriptDone) {
             const uint8_t fadeOut = r.fadeOut;
             if (fadeOut == kNoFade) { // the sub-room switched in place
@@ -437,10 +475,108 @@ void stageLoaded() {
     g.modeStep = uint8_t(RoomLoadedStep::Setup);
 }
 
+namespace {
+
+// exe 0x541e10 / 0x541fd0: the field prompts' steps
+void promptMode(const PlayerEnv& env, TransitionHooks& hooks, FadeTask& fade) {
+    gEnv = &env;
+    gHooks = &hooks;
+    gFade = &fade;
+    GameState& g = gameState();
+    MessageSystem& messages = messageSystem();
+    GameLoopSaves& saves = gameLoopSaves();
+    const bool exam = GameMode(g.mode) == GameMode::SelectMenuA;
+    // exe 0x541be0, at every step: the back buffer cleared (presentation: OpenDash's renderer draws the frame)
+    const auto restoreField = [&] { // the windows and their bits back
+        messageWindows() = promptKeptWindows();
+        messages.openBits = saves.statusOpenBits;
+        messages.waitBits = saves.statusWaitBits;
+    };
+    const auto backToPlay = [&] { // one field frame (exe 0x574830, 0x542280, 0x5422f0), then the field's play
+        playerTickReset();
+        frameBody();
+        drawPass();
+        g.setMode(GameMode::Field);
+        g.modeStep = uint8_t(FieldStep::Playing);
+    };
+    const auto musicBack = [] {
+        soundFadeRestore(kPromptMusicFade, kPromptMusicFadeStep, 0);
+        soundLoopState().holdLoops = 0;
+    };
+    switch (PromptStep(g.modeStep)) {
+    case PromptStep::KeepField: // the windows kept (exe 0x40dc10 into the spare buffer), all closed, the music dipped
+        windowVoicesStop();
+        promptKeptWindows() = messageWindows();
+        saves.statusWaitBits = messages.waitBits;
+        saves.statusOpenBits = messages.openBits;
+        messages.openBits = 0;
+        messages.waitBits = 0;
+        windowCloseAll(WindowClose::Force);
+        soundFadeDip(kPromptMusicFade, kPromptMusicFadeStep, 0, 0);
+        g.modeStep = uint8_t(PromptStep::Open);
+        return;
+    case PromptStep::Open:
+        (void)windowOpen(0, stateAddress(TableId::SaveMenusCardMessageBank), exam ? kExamPrompt : kTrialPrompt);
+        g.modeStep = uint8_t(PromptStep::Answer);
+        return;
+    case PromptStep::Answer: // the window closed: its answer (1 = yes)
+        if (windowStatus(0) != 0) return;
+        if (messages.answerOf(0) == kAnswerYes) g.modeStep = uint8_t(PromptStep::Yes);
+        else g.modeStep = uint8_t(exam ? PromptStep::Resume : PromptStep::TrialResume);
+        return;
+    case PromptStep::Yes:
+        if (!exam) { // the trial: the fade, then the warp to the course's start
+            fadeStart(fade, kTrialQuitFade, 0);
+            g.modeStep = uint8_t(PromptStep::Resume);
+            return;
+        }
+        // the exam given up: the wipe, the rescue to the office it was entered from, the exam's flag, the player held
+        // (no input, no hits, hidden) and every other actor freed; then on as the "no"
+        fadeStart(fade, kExamQuitFade, 0);
+        gameOverRescue(); // exe 0x5428b0
+        setStoryFlag(kExamGivenUpFlag);
+        {
+            Player& p = player();
+            p.inputMode |= kInputOff;
+            p.invulnerable = 1;
+            p.flags &= uint8_t(~(kActorLive | kActorDrawn));
+        }
+        actorsSweep(kSweepAllButPlayer, kSweepFree); // exe 0x5e05d0
+        restoreField();
+        backToPlay();
+        musicBack();
+        return;
+    case PromptStep::Resume:
+        if (exam) {
+            restoreField();
+            backToPlay();
+            musicBack();
+            return;
+        }
+        if (fadeState().busy != 0) return;
+        trialCourseWarp(); // exe 0x542a10
+        restoreField(); // the exe's step 5 with the step byte still 4: the course loads at the field's leave step
+        g.setMode(GameMode::Field);
+        g.modeStep = uint8_t(FieldStep::Leave);
+        musicBack();
+        return;
+    case PromptStep::TrialResume: // exe 0x541fd0 step 5: the trial goes on
+        restoreField();
+        backToPlay();
+        musicBack();
+        return;
+    default: return;
+    }
+}
+
+} // namespace
+
 void gameTick(const PlayerEnv& env, TransitionHooks& hooks, FadeTask& fade) {
     switch (GameMode(gameState().mode)) {
     case GameMode::Field: fieldMode(env, hooks, fade); break;
     case GameMode::RoomLoaded: roomLoadedMode(env, hooks, fade); break;
+    case GameMode::SelectMenuA: // exe 0x541e10
+    case GameMode::SelectMenuB: promptMode(env, hooks, fade); break; // exe 0x541fd0
     default: notPortedAt(kTransitionArea, "game mode", gameState().mode);
     }
     applyActorFrees();

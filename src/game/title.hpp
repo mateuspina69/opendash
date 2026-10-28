@@ -201,6 +201,9 @@ void titleTaskFrame(TitleTasks& t, TitleHost& host, std::vector<ScreenPrim>* dra
 // A language pack's title art is in VRAM: the logo, the copyright and the difficulty rows are drawn with the PS1
 // overlay's geometry
 void setTitlePs1Layout(bool on);
+// exe 0x5428b0: the rescue of a game over with kFlagGameOverRescue (the licence exam's, also its "give up"): the
+// transition to the place content gives (the registry), the player's own equipment back
+void gameOverRescue();
 // exe 0x604b06 from the game loop's side: a script / game over wrote the main task's mode and switched to it
 void titleTaskSwitch(TitleTasks& t, TaskEntry e);
 // called by the caller after the frame: running = pending

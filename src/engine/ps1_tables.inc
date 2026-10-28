@@ -602,6 +602,7 @@
 {TableId::TravelIconBanks, 0x0, "DAT/ST01T.BIN", 0x800e9264u},
 {TableId::TravelStageDocks, 0x0, "COMMON/GAME.BIN", 0x800dbda0u},
 {TableId::TransitionStageClasses, 0x0, "SLUS_011.40", 0x8006c6c8u},
+{TableId::TimeTrialCourseStarts, 0x0, "DAT/ST59T.BIN", 0x800e9b9cu},
 {TableId::TownNpcSpeeds, 0x0, "DAT/ST00T.BIN", 0x800ef3dcu},
 {TableId::TownNpcFidgetLooks, 0x0, "DAT/ST00T.BIN", 0x800ef690u},
 {TableId::TownNpcFidgetLookTicks, 0x0, "DAT/ST00T.BIN", 0x800ef698u},

@@ -1421,7 +1421,7 @@ void PlayerView::gameFrame() {
             od::port::stageLoaded(); // FUN_00542370 + stage bytes -> mode 2 / 1
             enterRoomOfState();
         }
-    } else if (mode == 2 || mode == 3) {
+    } else if (mode == 2 || mode == 3 || mode == 6 || mode == 7) { // 6 / 7: the field prompts (game/transition)
         od::port::gameTick(env, hooks, fadeTask);
     } else if (mode == 8 && gameOver) { // the player died: game/title gameOverModeFrame (main(): the title)
         gameOver();
@@ -1433,7 +1433,7 @@ void PlayerView::gameFrame() {
         menuPrims.clear();
         od::port::statusModeFrame(&menuPrims);
     } else {
-        od::port::notPortedAt("game modes", "game mode (menus)", mode);
+        od::port::notPortedAt("game modes", "game mode", mode);
     }
     od::port::fadeTick(fadeTask); // task 2
     od::port::displayMaskTick(); // 0x53f500: fade type 0 keeps the display off a few frames

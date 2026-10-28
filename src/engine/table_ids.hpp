@@ -218,6 +218,8 @@ namespace od {
     X(SaveImagePlaces)                                                                                                 \
     X(SaveImageTitle)                                                                                                  \
     X(SaveImagePlaceNameTitle)                                                                                         \
+    /* ---- game/transition: the time trial's quit prompt */                                                           \
+    X(TimeTrialCourseStarts)                                                                                           \
     /* ---- game/servbot */                                                                                            \
     X(ServbotPauseTicks)                                                                                               \
     X(ServbotFidgetLooks)                                                                                              \

@@ -176,6 +176,7 @@
 {TableId::SaveImageTitle, 0x8af5dcu},
 {TableId::SaveImagePlaceNameTitle, 0x8af600u},
 // game/servbot
+{TableId::TimeTrialCourseStarts, 0x8ae8e8u},
 {TableId::ServbotPauseTicks, 0x88fc30u},
 {TableId::ServbotFidgetLooks, 0x88fc5cu},
 {TableId::ServbotFidgetLookTicks, 0x88fc64u},

@@ -272,8 +272,8 @@ struct PlayerView {
     // it back (same bytes, checksums good). Never the game's own directory (the caller passes OpenDash's saves dir).
     bool saveGame(const std::filesystem::path& file, uint8_t slot);
     // the game task's frame (FUN_00541070) and the fade task. Mode 1 (stage load) is OpenDash's loader + the
-    // ported state part; mode 5 the status sub-screen (game/status_screen); the modes 6 / 7 (the menus of flags 0x246 /
-    // 0x24d) are not ported: back to field play.
+    // ported state part; mode 5 the status sub-screen (game/status_screen); the modes 6 / 7 the field prompts of flags 0x246 /
+    // 0x24d (game/transition).
     // the status sub-screen (game mode 5): its VRAM and the last frame's primitives (game/status_screen)
     MenuVram menuVram;
     bool inStatus = false; // mode 5 ran last frame (the sub-screen's VRAM was based on the field's on entry)
