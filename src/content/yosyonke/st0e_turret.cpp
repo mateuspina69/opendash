@@ -1308,6 +1308,7 @@ void glowVariant0(EffectActor& a, GlowFields& f) {
         glowSprite(a, f);
         return;
     }
+    case GlowState::Free: freeActor(a); return; // exe 0x4358c0 -> 0x5e1580 (table 0x88d790 entry 2)
     default: notPortedAt(kSt0ePort, "0x43a780 state", a.state);
     }
 }

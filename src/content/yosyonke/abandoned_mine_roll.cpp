@@ -32,7 +32,7 @@ constexpr const char* kRuinRollPort = "town story port"; // the area of its port
 
 constexpr uint8_t kTalkingBit = 0x01;
 constexpr uint8_t kLookMask = 0x60, kLookActor = 0x40, kLookNone = 0x20, kLookActorMask = 0x1f;
-enum class RuinRollState : uint8_t { Init = 0, Main = 1 };
+enum class RuinRollState : uint8_t { Init = 0, Main = 1, Free = 2 }; // [0x896248]
 enum class RuinRollSub : uint8_t { Wait = 0, Talk = 1, Walk = 2 }; // Wait: the walker turns to the path's heading
 enum class TalkStep : uint8_t { Start = 0, Talking = 1, Ending = 2 };
 
@@ -243,6 +243,7 @@ void ruinRoll(const PlayerEnv& env, AnimatedActor& a) {
         a.enterState(uint8_t(RuinRollState::Main));
         break;
     case RuinRollState::Main: ruinRollSub(a, f); break;
+    case RuinRollState::Free: freeActor(a); break; // exe 0x468fa0 -> 0x5e1490 (the walk's path end)
     default: notPortedAt(kRuinRollPort, "0x4e6110 state", a.state);
     }
     if (!(a.flags & kActorLive)) return;
