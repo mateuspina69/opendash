@@ -1122,7 +1122,7 @@ void rayBurst(StaticActor& a) { // exe 0x5bf8a0: [0x8d0e20 + state * 4](actor, a
 // Its life, its count; per mote s16 x / y / z / speed and a size byte. Each tick one more mote (8 / 16 at most), then
 // every mote swirls around the centre (the pitch toward it + 0x400 scaled by its speed: the vertical part on y, the
 // horizontal part along the yaw +-0x400).
-enum class MotesState : uint8_t { Init = 0, Ring = 1, Swirl = 2 };
+enum class MotesState : uint8_t { Init = 0, Ring = 1, Swirl = 2, Burst = 3 };
 // exe 0x5c1590(level, mode): the colour of a level (>= 8: & 7, 0..3 mirrored to 7..4)
 uint32_t moteColour(uint32_t l, uint32_t mode) {
     if (l > 7) {
@@ -1214,17 +1214,51 @@ void motesSwirl(StaticActor& a, MotesFields& m) {
                  a.at, false);
     }
 }
+// exe 0x5c1310: 16 motes at once on a ring of radius 0x70 from a random angle (4 apart), sizes the angles' steps,
+// speed 0x10, swirling up as the ring's (the yaw -0x400)
+void motesBurst(StaticActor& a, MotesFields& m) {
+    if (m.life == 0) {
+        freeActor(a);
+        return;
+    }
+    m.life -= 1u;
+    if (a.step == 0) {
+        m.count = 0;
+        uint32_t k = (rngStep() >> 6) & 0x3fu;
+        for (; m.count <= 0xf; ++m.count) {
+            Mote& p = m.motes[size_t(int32_t(m.count))];
+            p.x = int16_t(int16_t((int32_t(fixedCos64(k)) * 0xe0) >> 13) + a.pos.x.whole);
+            p.y = a.pos.y.whole;
+            p.z = int16_t(int16_t((int32_t(fixedSin64(k)) * 0xe0) >> 13) + a.pos.z.whole);
+            p.speed = 0x10;
+            m.sizes[size_t(int32_t(m.count))] = int8_t(k);
+            k += 4;
+        }
+        ++a.step;
+    }
+    const int16_t c[3] = {a.pos.x.whole, a.pos.y.whole, a.pos.z.whole};
+    const uint32_t col = moteColour(m.life, a.variant);
+    for (int32_t k = m.count - 1; k >= 0; --k) {
+        Mote& p = m.motes[size_t(k)];
+        moteMove(p, c, -0x400);
+        const uint32_t xy = uint32_t(uint16_t(p.y)) << 16 | uint16_t(p.x);
+        const uint32_t z = uint32_t(uint16_t(p.z)) | 0x40000u;
+        dc::emit({0x4000u, dc::ringColour(col), xy, dc::kSemiAdditive, z, 0x400000u}, a.at);
+        dc::emit({0x4000u, dc::ringColour(col), xy, dc::kSemiAdditive, z, 0x200000u}, a.at);
+    }
+}
 void swirlingMotes(StaticActor& a) { // exe 0x5c0d20: [0x8d0e40 + state * 4](actor)
     MotesFields& m = classState<MotesFields>(a);
     switch (MotesState(a.state)) {
-    case MotesState::Init: // 0x5c0d40: hidden, the count 0, the state = its kind + 1 (0..2)
+    case MotesState::Init: // 0x5c0d40: hidden, the count 0, the state = its kind + 1 (1..3)
         a.setDrawn(false);
         m.count = 0;
         if (a.spawnByte <= 2) a.enterState(uint8_t(a.spawnByte + 1u));
         return;
     case MotesState::Ring: motesRing(a, m); return;
     case MotesState::Swirl: motesSwirl(a, m); return;
-    default: notPortedAt(kStoryPort, "0x5c0d20 state (table 0x8d0e40; 3 = 0x5c1310 not ported)", a.state);
+    case MotesState::Burst: motesBurst(a, m); return;
+    default: notPortedAt(kStoryPort, "0x5c0d20 state (table 0x8d0e40)", a.state);
     }
 }
 
