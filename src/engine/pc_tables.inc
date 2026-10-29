@@ -31,6 +31,7 @@
 {TableId::PickupColours, 0x91b9f4u},
 {TableId::PickupModels, 0x91b9e8u},
 {TableId::BladeTrailColours, 0x8c3f20u},
+{TableId::GlowTrailColourSteps, 0x88ca98u},
 {TableId::CloudTextures, 0x8ce350u},
 {TableId::PuffRingHeights, 0x8ce45cu},
 {TableId::PuffRingRadii, 0x8ce468u},

@@ -748,6 +748,7 @@
 {TableId::BusterShotColours, 0x0, "COMMON/GAME.BIN", 0x800dcd70u},
 {TableId::PickupColours, 0x0, "SLUS_011.40", 0x8006b074u},
 {TableId::BladeTrailColours, 0x0, "COMMON/PL00R0A.BIN", 0x8010b478u},
+{TableId::GlowTrailColourSteps, 0x0, "DAT/ST0FT.BIN", 0x801012e4u},
 {TableId::DustPuffGroundProbeBox, 0x0, "COMMON/GAME.BIN", 0x800dc800u},
 {TableId::DoorActorCollisionBox, 0x0, "DAT/ST0BT.BIN", 0x800f1a3cu},
 {TableId::DoorActorTalkBoxYaw0, 0x0, "DAT/ST0BT.BIN", 0x800f1a48u},

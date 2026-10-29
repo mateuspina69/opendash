@@ -72,6 +72,7 @@ namespace od {
     X(PickupColours) /* the pickups' colour pairs */                                                                   \
     X(PickupModels) /* the pickups' models (pointers to s16 x / y / z / pad vertices) */                               \
     X(BladeTrailColours) /* the Blade Arm's trail colours */                                                           \
+    X(GlowTrailColourSteps) /* the glows' channel steps by draw mode (game/glow_trails, exe 0x430e30) */               \
     /* ---- the crash-landing storm (content/intro) */                                                                 \
     X(CloudTextures) /* the cloud texture records (12 bytes) */                                                        \
     X(PuffRingHeights)                                                                                                 \

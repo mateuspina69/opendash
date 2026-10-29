@@ -2,7 +2,8 @@
 // ST21, ST26 / ST28, ST2F, ST33..ST38, ST40..ST43, ST48, ST4D..ST51, ST55): a glow that rides an actor (an offset on
 // one of its bones, or on its position turned by its rotation) and is freed with it. Variant 0 a glow ring growing,
 // holding and shrinking (the ST19 gate lights), 1 a trail (the guardian's: its screen points kept), 2 a fading glow
-// (ST41 / ST42). The draws are render output.
+// (ST41 / ST42). Variants 0 / 2 draw two rings (exe 0x430e30: game/draw_commands records); the
+// trail's quads (variant 1) are render output.
 #pragma once
 
 #include <cstdint>
