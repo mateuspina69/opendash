@@ -26,6 +26,8 @@
 #include "game/address_forms.hpp"
 #include "game/angles.hpp"
 #include "game/audio_logic.hpp"
+#include "game/charge_glow.hpp"
+#include "game/charge_glow_state.hpp"
 #include "game/distances.hpp"
 #include "game/encounter.hpp"
 #include "game/explosions.hpp"
@@ -53,7 +55,7 @@ constexpr const char* kActorsPort = "st22 burrower port"; // the area of its por
 constexpr uint16_t kBurrowerNoGround = 0x01;   // the ground not followed
 constexpr uint16_t kBurrowerNoDamage = 0x02;
 constexpr uint16_t kBurrowerNoFlinch = 0x08;
-constexpr uint16_t kLungeRequest = 0x10;       // the lunge effect at bone 0
+constexpr uint16_t kLungeRequest = 0x10;       // the charge glow (game/charge_glow) at bone 0
 constexpr uint16_t kLungeRelease = 0x20;       // ... let go
 constexpr uint16_t kThrowRequest = 0x40;       // a rock at bone 1
 constexpr uint16_t kRockRelease = 0x80;        // the rock held let go
@@ -72,7 +74,7 @@ constexpr uint8_t kAnimIdle = 0, kAnimWalk = 1, kAnimThrow = 2, kAnimWait = 3, k
                   kAnimRise = 6, kAnimHurt = 7;
 constexpr uint8_t kNoAnim = 0xff;
 const DataTable<ScalarTable<uint8_t, 0x100>> burrowerModels{TableId::St22BurrowerModels}; // the model variant by the spawn byte
-constexpr uint8_t kLungeType = 4, kRockType = 4, kExplosionType = 8;
+constexpr uint8_t kRockType = 4, kExplosionType = 8;
 constexpr uint16_t kSoundHurt = 0x8d, kSoundHurtHard = 0x8e, kSoundRise = 0xa3, kSoundSink = 0xa4, kSoundStep = 0xd3;
 constexpr uint32_t kHitDamageMask = 0xfff, kHitByPlayer = 0x40000;
 constexpr uint8_t kRockHoldTicks = 0x20;
@@ -100,22 +102,6 @@ int absWrap(uint32_t yaw, uint32_t to) {
     if (v >= 0x801) v -= 0x1000;
     return v < 0 ? -v : v;
 }
-// the lunge effect (the stage's effect type 4): on while its flag is set, at bone 0, its damage
-// the lunge effect (the stage's effect type 4): on while its flag is set, at bone 0, its damage (the short after the
-// position), its first trail words cleared
-struct LungeEffectFields {
-    explicit LungeEffectFields(const EffectActor& actor) : LungeEffectFields(const_cast<EffectActor&>(actor)) {}
-    explicit LungeEffectFields(EffectActor& actor) : on(actor.params[0]), damage(actor.posSpare), slot_(actor) {}
-    uint8_t& on;
-    int16_t& damage;
-    // the class's first two words (+0x18) cleared
-    void clearState() {
-        for (size_t i = 0; i < 4; ++i) slot_.trail[i] = 0;
-    }
-
-private:
-    EffectActor& slot_;
-};
 // the rock (the stage's pool-0x40 type 4): its damage, its texture word
 // the rock (the stage's pool-0x40 type 4): its damage, held, a byte its reader is not traced, its spin; its texture
 // word (the hit box's first word)
@@ -175,26 +161,26 @@ void placeAtBone(Fixed16Vec3& pos, const ShortVec4& b, int lift) {
     pos.y = int32_t(uint32_t(int32_t(b.y) - lift) << 16);
     pos.z = int32_t(uint32_t(int32_t(b.z)) << 16);
 }
-// exe 0x457e60: the carried pieces: the lunge effect at bone 0, the rock in the hand at bone 1
+// exe 0x457e60: the carried pieces: the charge glow at bone 0, the rock in the hand at bone 1
 void burrowerPieces(AnimatedActor& actor, BurrowerFields& f) {
     EncounterState& encounter = encounterState();
     if (f.lungeSlot == 0) {
         if (f.bits & kLungeRequest) {
             if (const uint32_t address = allocActorA0(kActorStageClass)) { // exe 0x5e13a0: the stage's effect type 4
                 EffectActor& e = effectActorAt(address);
-                LungeEffectFields lunge(e);
+                charge_glow_state::ChargeGlowFields& lunge = classState<charge_glow_state::ChargeGlowFields>(e);
                 const ShortVec4& b0 = bone(actor, 0);
                 e.flags = kActorLiveDrawn;
-                e.type = kLungeType;
+                e.type = kChargeGlowStageType;
                 e.loopFlags |= uint8_t(kActorSweepGroup2 | kActorLateLoop);
                 e.subtype = 0;
                 e.variant = 0;
-                lunge.on = 1;
+                lunge.held = 1;
                 e.pos.x = b0.x;
                 e.pos.y = b0.y;
                 e.pos.z = b0.z;
                 lunge.damage = int16_t(uint32_t(statsOf(actor).strongAttack) << 2);
-                lunge.clearState();
+                lunge.clearHitBoxWords();
                 f.lungeSlot = e.slot;
                 encounter.markAttackLock(kAttackLockAttack);
             }
@@ -205,7 +191,7 @@ void burrowerPieces(AnimatedActor& actor, BurrowerFields& f) {
         if (const uint32_t address = actorBySlot(f.lungeSlot)) { // exe 0x5e0fa0
             EffectActor& e = effectActorAt(address);
             const ShortVec4& b0 = bone(actor, 0);
-            LungeEffectFields(e).on = 1;
+            classState<charge_glow_state::ChargeGlowFields>(e).held = 1;
             e.pos.x = b0.x;
             e.pos.y = b0.y;
             e.pos.z = b0.z;
