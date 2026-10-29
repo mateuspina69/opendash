@@ -39,6 +39,13 @@ constexpr int kAimCentreX = 0xa0, kAimCentreY = 0x3c; // the screen point the ce
 constexpr int8_t kLockSoundDelay = 8;                 // the lock-on sound's countdown, set with every new candidate
 constexpr int kNone = -1;
 
+// the actor within kReachDistanceSq of the player (x / z)
+bool inReach(const Actor& a) {
+    const Player& p = player();
+    const int dx = a.pos.x.whole - p.pos.x.whole, dz = a.pos.z.whole - p.pos.z.whole;
+    return uint32_t(dz * dz) + uint32_t(dx * dx) < kReachDistanceSq;
+}
+
 } // namespace
 
 void selectLockOnTargets(uint32_t count, uint32_t groupMask) {
@@ -143,7 +150,9 @@ void selectLockOnTargets(uint32_t count, uint32_t groupMask) {
                     if (owner & kHitNoLockOn) {
                         if (onScreen()) nearFlag = false;
                     } else {
-                        if (slot == p.lockTarget) {
+                        // OpenDash (modern aim): a locked target holds only within the reach a new one is taken in
+                        // (the exe holds it at any distance, off the screen too)
+                        if (slot == p.lockTarget && (!modernPlay() || d < kReachDistanceSq)) {
                             e.box->result |= kHitLockedTarget;
                             if (onScreen() && d < minVis) {
                                 minVis = d;
@@ -184,7 +193,8 @@ void selectLockOnTargets(uint32_t count, uint32_t groupMask) {
             p.lockHeldTicks = 0;
         } else if (const ActorRef<ActorHeader> t = p.lockedActor;
                    modernPlay() && t && (actorLayoutOf(*t).flags & kActorLive) &&
-                   actorLayoutOf(*t).slot == remembered && p.lockHeldTicks < kLockHoldTicks) {
+                   actorLayoutOf(*t).slot == remembered && p.lockHeldTicks < kLockHoldTicks &&
+                   inReach(actorLayoutOf(*t))) {
             // OpenDash (modern aim, not the exe): a locked target that is alive but submitted no lock-on point this
             // frame (a boss between phases, a part swapping its hit boxes) keeps the lock a moment -- aimed at the
             // actor's position -- instead of dropping it and turning Megaman / his shots away while the lock button
