@@ -91,7 +91,14 @@ void PlayerView::playerFiles() {
         const std::string name = od::datFileName(i);
         if (name.empty()) continue;
         try {
-            files.mapCode(od::dataSource().gameFile(name));
+            const od::GameFile f = od::dataSource().gameFile(name);
+            files.mapCode(f);
+            // the container loader 0x40eb90 hands each type-8 segment to Maybe_LoadSfxBank 0x5d5010 (0x40ed1d): a
+            // special weapon file's sounds (slot 3, its bank id)
+            if (mixer)
+                for (const od::FilePart& seg : f.parts)
+                    if (seg.kind == od::FilePart::Kind::WavSfxBank)
+                        od::lang_sfx::load(pack.get(), name, seg.bytes, seg.arg, seg.extra);
         } catch (const std::exception& e) {
             SDL_Log("player file %s: %s", name.c_str(), e.what());
             continue;
