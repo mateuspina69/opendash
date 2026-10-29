@@ -21,8 +21,10 @@ public:
     void roomLoaded(std::vector<od::RenderVertex>& tris, size_t opaqueEnd, const std::vector<uint8_t>& slices,
                     int sliceCount);
     // A logic tick: numbers the dynamic scenery's pieces (RenderVertex::piece from kDynamicPieces on) and finds the
-    // pieces hiding each body (eye and bodies in the room's units; no bodies: nothing hides anything)
-    void tick(std::vector<od::DynamicObject>& objects, const float eye[3], const std::vector<od::SeeThroughBody>& bodies);
+    // pieces hiding each body (eye and bodies in the room's units; no bodies: nothing hides anything). The object
+    // `held` (the one the player lifts / carries; 0: none) is no scenery: it never opens
+    void tick(std::vector<od::DynamicObject>& objects, const float eye[3], const std::vector<od::SeeThroughBody>& bodies,
+              uint32_t held);
     // A frame: the openings ease toward the last tick's findings by dt seconds; out = the open pieces, the most open
     // first (at most od::kMaxSeeThroughPieces)
     void frame(float dt, std::vector<od::SeeThroughPiece>& out);

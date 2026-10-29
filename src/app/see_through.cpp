@@ -72,13 +72,13 @@ void SeeThrough::roomLoaded(std::vector<od::RenderVertex>& tris, size_t opaqueEn
 }
 
 void SeeThrough::tick(std::vector<od::DynamicObject>& objects, const float eye[3],
-                      const std::vector<od::SeeThroughBody>& bodies) {
+                      const std::vector<od::SeeThroughBody>& bodies, uint32_t held) {
     // this tick's dynamic pieces, numbered from kDynamicPieces
     for (auto it = pieces_.begin(); it != pieces_.end();) it = it->first >> 63 ? pieces_.erase(it) : std::next(it);
     std::vector<Tri> dynamic;
     uint32_t next = kDynamicPieces;
     for (od::DynamicObject& o : objects) {
-        if (!od::isSceneryObject(o)) continue;
+        if (!od::isSceneryObject(o) || (held != 0 && o.id == held)) continue;
         const od::ScenePieces sp = od::scenePieces(o.tris.data(), o.tris.size());
         std::vector<uint32_t> number(sp.box.size());
         for (size_t p = 0; p < sp.box.size(); ++p) {

@@ -449,7 +449,16 @@ void App::updateScene() {
         { // the see-through: the dynamic scenery's pieces, which pieces hide the characters this tick
             std::vector<od::SeeThroughBody> bodies;
             if (dissolve) playerView.seeThroughBodies(current, dyn, bodies);
-            seeThrough.tick(dyn, cam.eye, bodies);
+            // the object in the player's hands (the lift target, game/carry) is no scenery between him and the eye
+            uint32_t held = 0;
+            const od::port::InteractionTarget& it = od::port::player().interactionTarget;
+            if (playerView.play && it.hasMode(od::port::kInteractLiftMode) && it.actor)
+                for (const od::DynamicObject& o : dyn)
+                    if (PlayerView::objectOfActor(od::port::slotIdentityWord(it.actor), o.id)) {
+                        held = o.id;
+                        break;
+                    }
+            seeThrough.tick(dyn, cam.eye, bodies, held);
         }
         if (playerView.play) ghosts.appendDynamic(dyn, g_roomVramGen); // objectId(kKindPlayer, 1 + slot)
         if (current.trackAxis >= 0) { // endless track: the travel frame (see travelOffset)
