@@ -41,6 +41,7 @@
 #include "content/calbania/ch3_scripts.hpp"
 #include "content/calbania/nino_return_scripts_state.hpp"
 #include "content/calbania/ch3_rooms.hpp"
+#include "content/nino/fly_point.hpp"
 
 #include "engine/data_source.hpp"
 #include "game/actor_pools.hpp"
@@ -304,8 +305,6 @@ void ninoReturnScript() {
 namespace {
 
 // ==== script 0x3a ========================================================================================================
-constexpr int16_t kNoFlyFlag = -1;
-constexpr uint8_t kFlyPointType = 0x1c;
 constexpr int16_t kFlyPointTicks = 8;
 // the flying points' pairs (exe data, 8 bytes apart): from, to
 struct FlyPair : DataRecord {
