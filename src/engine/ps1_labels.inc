@@ -9780,7 +9780,7 @@ static constexpr Ps1Label kPs1Labels[] = {
     {"DAT/ST1ET.BIN", 0x800ef1f0u, 0xc},
     {"COMMON/GAME.BIN", 0x800dc45cu, 0x14},
     {"SLUS_011.40", 0x8006b338u, 0x10},
-    {"SLUS_011.40", 0x8006b0b8u, 0x20},
+    {"SLUS_011.40", 0x8006b0bcu, 0x20},
     {"DAT/ST1ET.BIN", 0x800f0d6cu, 0xc},
     {"DAT/ST1ET.BIN", 0x800f0d6cu, 0xc},
     {"DAT/ST1ET.BIN", 0x800ef460u, 0x8},
