@@ -27,20 +27,6 @@ struct TumbleFields : ActorClassState {
     }
 };
 
-// The dust cloud's spawn parameters (the stage's controller type 0xf; the class is not ported: the names are the
-// spawner's, hypotheses), several in the header's sub-state / step bytes
-struct BlockDustParams : ActorClassState {
-    explicit BlockDustParams(ControllerActor& actor) : angle(actor.subState), rate(actor.step), fade(actor.stepCounter), size(actor.params, 0), life(actor.params[2]), spread(actor.params[3]), owner(actor.recordPoint.spare) {}
-    uint8_t& angle;
-    uint8_t& rate;
-    uint8_t& fade;
-    BytesField<uint16_t, 4> size;
-    uint8_t& life;
-    uint8_t& spread;
-    FieldAlias<uint16_t, int16_t> owner; // the block's slot
-    ShortVec3 point;
-};
-
 struct WalkerFields : ActorClassState {
     explicit WalkerFields(AnimatedActor& actor) : contact(actor.hopperBytes[1]), mode(actor.hopperBytes[2]) {}
     uint8_t& contact; // kWalkerBounced / kWalkerBlocked of this tick

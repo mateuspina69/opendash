@@ -2,6 +2,7 @@
 // in and the gun turret. Left out (render output): the shadows (exe 0x5f20f0 / the shadow list 0x5f2220).
 #include "content/manda/st12_14.hpp"
 #include "content/manda/st12_14_state.hpp"
+#include "content/nino/platform_boss_state.hpp"
 
 #include "engine/data_source.hpp"
 #include "game/actor_animation.hpp"
@@ -32,6 +33,7 @@
 namespace od::port {
 
 using namespace st12_14_state;
+using platform_boss_state::BoltFields;
 
 namespace {
 
@@ -199,48 +201,50 @@ void boulderUpdate(const PlayerEnv& env, StaticActor& a) {
 // ---- 0x59a7a0 (ST12 static type 0x13): the tumbling block -------------------------------------------------------
 // Waits for its variant's flag ([0x8ce4d4]: 0x5b6 / 0x680), then repeats: 0x1e ticks still, slides 0x1000 forward
 // (speed -0x80 a tick down to -0x200, sound 0x13b), lands (a shake, sound 0x13c) and rocks 0x10 ticks (pitch / roll
-// by its facing, which then turns 0x800). While active, 1 tick in 8 a dust cloud (controller type 0xf, sound 0x13d).
+// by its facing, which then turns 0x800). While active, 1 tick in 8 a lightning bolt (controller type 0xf, exe
+// 0x423f40: content/nino/platform_boss; sound 0x13d).
 // Its facing from +0xc (bit 0: 0x800, bit 1: 0x400); a solid and a 0x20 capsule hit entry
 enum class TumbleState : uint8_t { Bind = 0, Run = 1 }; // exe 0x59a840 / 0x59a8d0
 enum class TumbleSub : uint8_t { Rest = 0, Still = 1, SlideStart = 2, Slide = 3, Rock = 4 }; // table 0x59ad8c
 
 const DataTable<ScalarTable<uint16_t, 2>> tumbleStartFlags{TableId::St1214TumbleStartFlags}; // by variant
 const DataTable<CollisionBoxRecord> tumbleBox{TableId::St1214TumbleBox};
-constexpr uint8_t kBlockDustType = 0xf, kBlockDustVariant = 1;
-constexpr uint16_t kSoundSlide = 0x13b, kSoundLand = 0x13c, kSoundDust = 0x13d;
+constexpr uint8_t kBoltType = 0xf, kBoltOnStatic = 1;
+constexpr uint16_t kSoundSlide = 0x13b, kSoundLand = 0x13c, kSoundBolt = 0x13d;
 constexpr uint8_t kStillTicks = 0x1e, kRockTicks = 0x10;
 constexpr int16_t kSlideLength = 0x1000;
 
-// a dust cloud at the block (a random point 0x50 around it), big or small
-void blockDust(const StaticActor& a, bool big) {
+// a lightning bolt on the block (a random point 0x50 around it, length 0x200, amplitude 0x20), wide or narrow: its
+// width, start angle, angle step (the header's step) and fade (its step counter)
+void blockBolt(const StaticActor& a, bool wide) {
     const uint32_t address = allocActorE0(); // exe 0x5e1440
     if (!address) return;
-    ControllerActor& e = controllerActorAt(address);
-    BlockDustParams& p = classState<BlockDustParams>(e);
-    e.flags = kActorLiveDrawn;
-    e.loopFlags |= kActorLateLoop;
-    e.type = kBlockDustType;
-    e.variant = kBlockDustVariant;
+    ControllerActor& bolt = controllerActorAt(address);
+    BoltFields& fields = classState<BoltFields>(bolt);
+    bolt.flags = kActorLiveDrawn;
+    bolt.loopFlags |= kActorLateLoop;
+    bolt.type = kBoltType;
+    bolt.variant = kBoltOnStatic;
     const uint32_t i = uint32_t(uint8_t((rngStep() & 7) << 3));
-    p.point.x = int16_t(uint32_t((int32_t(sin64(i)) * 0x50) >> 12) + uint16_t(a.pos.x.whole));
-    p.point.z = int16_t(uint32_t((int32_t(cos64(i)) * 0x50) >> 12) + uint16_t(a.pos.z.whole));
-    p.point.y = int16_t(uint16_t(a.pos.y.whole) + 0x90u);
-    p.owner = a.slot;
-    p.size = 0x200;
-    p.spread = 0x20;
-    p.life = uint8_t((rngStep() & 0xf) + (big ? 0x10u : 0x20u));
-    if (big) {
-        p.rate = 8;
-        p.angle = uint8_t(rngStep() & 0x3f);
-        p.fade = uint8_t(0x10u - (rngStep() & 7));
+    fields.pos.x = int16_t(uint32_t((int32_t(sin64(i)) * 0x50) >> 12) + uint16_t(a.pos.x.whole));
+    fields.pos.z = int16_t(uint32_t((int32_t(cos64(i)) * 0x50) >> 12) + uint16_t(a.pos.z.whole));
+    fields.pos.y = int16_t(uint16_t(a.pos.y.whole) + 0x90u);
+    fields.parent = int16_t(a.slot);
+    fields.length = 0x200;
+    fields.amplitudeParam = 0x20;
+    fields.widthParam = int8_t((rngStep() & 0xf) + (wide ? 0x10u : 0x20u));
+    if (wide) {
+        bolt.step = 8;
+        bolt.subState = uint8_t(rngStep() & 0x3f);
+        bolt.stepCounter = uint8_t(0x10u - (rngStep() & 7));
     } else {
-        p.angle = uint8_t(rngStep() & 0x3f);
-        p.rate = uint8_t((rngStep() & 7) + 7u);
-        p.fade = uint8_t(0x17u - (rngStep() & 7));
+        bolt.subState = uint8_t(rngStep() & 0x3f);
+        bolt.step = uint8_t((rngStep() & 7) + 7u);
+        bolt.stepCounter = uint8_t(0x17u - (rngStep() & 7));
     }
-    soundPlayAtPos(kSoundDust, a.pos); // exe 0x5d5380
+    soundPlayAtPos(kSoundBolt, a.pos); // exe 0x5d5380
 }
-// exe 0x59a8d0: its flag awaited, then the slides and the rocking; the capsule entry and the dust
+// exe 0x59a8d0: its flag awaited, then the slides and the rocking; the capsule entry and the bolts
 void tumbleRun(StaticActor& a, TumbleFields& f) {
     if (f.active == 0) {
         if (storyFlag(tumbleStartFlags[a.variant])) f.active = 1; // exe 0x510e50
@@ -301,7 +305,7 @@ void tumbleRun(StaticActor& a, TumbleFields& f) {
                          hitOwner(a.slot) | hitGroup(kHitGroupBodies) | kHitNoLockOn | hitCapsule(1),
                          uint32_t(stats.damage) | kHitAttackHarmless | kHitAttackSolid);
     if (rngStep() & 7) return;
-    blockDust(a, (rngStep() & 1) != 0);
+    blockBolt(a, (rngStep() & 1) != 0);
 }
 // exe 0x59a7a0
 void tumbleUpdate(StaticActor& a) {

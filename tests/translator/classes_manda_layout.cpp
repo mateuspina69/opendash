@@ -487,18 +487,6 @@ void layoutValue(LayoutVisitor& v, uint32_t a, od::port::ruin_spawners_state::St
     layoutValue(v, a + 0x18, s.respawnsLeft);
 }
 
-void layoutValue(LayoutVisitor& v, uint32_t a, od::port::st12_14_state::BlockDustParams& s) {
-    using namespace od::port::st12_14_state;
-    layoutValue(v, a + 0x9, s.angle);
-    layoutValue(v, a + 0xa, s.rate);
-    layoutValue(v, a + 0xb, s.fade);
-    layoutValue(v, a + 0xc, s.size);
-    layoutValue(v, a + 0xe, s.life);
-    layoutValue(v, a + 0xf, s.spread);
-    layoutValue(v, a + 0x16, s.owner);
-    layoutValue(v, a + 0x10, s.point);
-}
-
 void layoutValue(LayoutVisitor& v, uint32_t a, od::port::st12_14_state::BoulderFields& s) {
     using namespace od::port::st12_14_state;
     layoutValue(v, a + 0xb, s.companionSlot);
@@ -655,7 +643,6 @@ bool classes_manda(LayoutVisitor& v, uint32_t a, ActorClassState& s) {
     if (typeid(s) == typeid(od::port::manda_ruin_props_state::PlatformFields)) { layoutValue(v, a, static_cast<od::port::manda_ruin_props_state::PlatformFields&>(s)); return true; }
     if (typeid(s) == typeid(od::port::manda_boss_state::DebrisFields)) { layoutValue(v, a, static_cast<od::port::manda_boss_state::DebrisFields&>(s)); return true; }
     if (typeid(s) == typeid(od::port::st12_14_state::WalkerFields)) { layoutValue(v, a, static_cast<od::port::st12_14_state::WalkerFields&>(s)); return true; }
-    if (typeid(s) == typeid(od::port::st12_14_state::BlockDustParams)) { layoutValue(v, a, static_cast<od::port::st12_14_state::BlockDustParams&>(s)); return true; }
     if (typeid(s) == typeid(od::port::manda_guardian_state::ChestFields)) { layoutValue(v, a, static_cast<od::port::manda_guardian_state::ChestFields&>(s)); return true; }
     return false;
 }

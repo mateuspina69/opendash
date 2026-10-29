@@ -393,7 +393,6 @@ namespace od::port::st0e_turret_state { struct TurretFields; }
 namespace od::port::st10_cls_state { struct RollerFields; }
 namespace od::port::st11_boss_state { struct FighterFields; }
 namespace od::port::st11_script2a_state { struct ArrivalCastFields; }
-namespace od::port::st12_14_state { struct BlockDustParams; }
 namespace od::port::st12_14_state { struct BoulderFields; }
 namespace od::port::st12_14_state { struct TumbleFields; }
 namespace od::port::st12_14_state { struct TurretFields; }
@@ -957,7 +956,6 @@ void layoutValue(LayoutVisitor&, uint32_t, od::port::st0e_turret_state::TurretFi
 void layoutValue(LayoutVisitor&, uint32_t, od::port::st10_cls_state::RollerFields&);
 void layoutValue(LayoutVisitor&, uint32_t, od::port::st11_boss_state::FighterFields&);
 void layoutValue(LayoutVisitor&, uint32_t, od::port::st11_script2a_state::ArrivalCastFields&);
-void layoutValue(LayoutVisitor&, uint32_t, od::port::st12_14_state::BlockDustParams&);
 void layoutValue(LayoutVisitor&, uint32_t, od::port::st12_14_state::BoulderFields&);
 void layoutValue(LayoutVisitor&, uint32_t, od::port::st12_14_state::TumbleFields&);
 void layoutValue(LayoutVisitor&, uint32_t, od::port::st12_14_state::TurretFields&);

@@ -11,15 +11,16 @@
 
 namespace od::port::platform_boss_state {
 
-// The bolt (pool 0xe0 stage type 0xf): its parent's pool and index, its length and the spawn's width / amplitude
-// parameters (the header's state bytes carry its start angle, its angle step and its fade)
+// The bolt (pool 0xe0 stage type 0xf, exe 0x423f40): its parent's pool and index, its length, the spawn's width /
+// amplitude parameters and its point (+0x10, where its spawners write it: the orb, ST12's sliding blocks, ST4C's
+// pillars; the header's state bytes carry its start angle, its angle step and its fade)
 struct BoltFields : ActorClassState {
-    explicit BoltFields(ControllerActor& actor) : length(actor.params, 0), widthParam(actor.params[2]), amplitudeParam(actor.params[3]), parent(actor.recordPoint.spare) {}
+    explicit BoltFields(ControllerActor& actor) : length(actor.params, 0), widthParam(actor.params[2]), amplitudeParam(actor.params[3]), parent(actor.recordPoint.spare), pos(actor.recordPoint) {}
     BytesField<uint16_t, 4> length;
     FieldAlias<int8_t, uint8_t> widthParam;
     FieldAlias<int8_t, uint8_t> amplitudeParam;
     int16_t& parent;
-    ShortVec3 pos;
+    ShortVec3& pos;
     uint16_t halfWidth = 0;
     uint16_t amplitude = 0;
     uint8_t fade = 0;
