@@ -1,14 +1,16 @@
-// The cast of the cutscenes of Glyde's attack on Nino (ST17 script 0x39, ST18 script 0x3b): pool 0x20 actors driven by
-// the script's timeline (its step sub and step tick) and its first own byte (the cast's release). Models come from the
-// script's alternate type-1 bank (bound as every class-0x20 actor). One routine per exe routine; the names are
+// The cast of the cutscenes of Glyde's attack on Nino (ST17 scripts 0x3e / 0x39, ST18 script 0x3b): pool 0x20 actors
+// driven by the script's timeline (its step sub and step tick) and its cast start (ScriptCastStart, +0xc). Models come
+// from the script's alternate type-1 bank (bound as every class-0x20 actor). One routine per exe routine; the names are
 // hypotheses from the observed behaviour.
 //   0x498860  ST17 type 0x2d sub 2: the Birdbots of script 0x39 (variants 0..4, records 0x8a6ac4..0x8a6b50; blinking
 //             part pairs on the step tick)
 //   0x498bf0  ST18 type 0x2d sub 3: the Birdbots of script 0x3b (variants 0..3: hops / fly up + sparks)
-//   0x4e34f0  ST17 type 0x5c (record 0x8a6b78 variant 1): a cast member that comes down and lands, timed animations and
-//             texture cells
-//   0x4e30f0  ST17 type 0x5b (record 0x8a6b8c variant 1): a cast member that comes down and lands, a blinking part pair
-//   0x44acc0  ST17 type 2 (record 0x8a6ba0 variant 1): timed animations and texture cells; variant 1 rises away
+//   0x4e34f0  ST17 type 0x5c (script 0x39's record 0x8a6b78 variant 1, script 0x3e's 0x8a77d4 variant 0): a cast member
+//             that comes down and lands, timed animations and texture cells
+//   0x4e30f0  ST17 type 0x5b (0x8a6b8c variant 1, 0x8a77c0 variant 0): a cast member that comes down and lands, a
+//             blinking part pair
+//   0x44acc0  ST17 type 2 (0x8a6ba0 variant 1, 0x8a77ac variant 0): timed animations and texture cells; variant 1 rises
+//             away
 // Render output left out as in the other ports: the shadows (exe 0x5f20f0; its ground probe is replicated).
 #include "content/nino/glyde_attack_cast.hpp"
 #include "content/nino/glyde_attack_cast_state.hpp"
@@ -46,7 +48,8 @@ namespace {
 // the states of every class here: 0 init, 1 the script's cues
 enum class CastState : uint8_t { Init = 0, Cue = 1 };
 
-bool castReleased() { return scriptState().part<DescentScriptBytes>().released != 0; }
+// variant 0's cast (script 0x3e, the landing) waits for the script's cast start (+0xc), set once its voice plays
+bool castReleased() { return scriptState().part<ScriptCastStart>().started != 0; }
 
 int32_t stepTick() { return scriptState().stepTick; }
 uint8_t stepSub() { return scriptState().stepSub; }

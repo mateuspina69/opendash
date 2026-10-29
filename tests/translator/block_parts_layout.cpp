@@ -320,10 +320,6 @@ void part37(LayoutVisitor& v, void* p0) { // od::port::st25_tron_scenes_state::P
     v.field(kScriptBlock + 0x14, s.walkSpeed);
     v.field(kScriptBlock + 0x16, s.brokenArms);
 }
-void part38(LayoutVisitor& v, void* p0) { // od::port::glyde_attack_cast_state::DescentScriptBytes
-    auto& s = *static_cast<od::port::glyde_attack_cast_state::DescentScriptBytes*>(p0);
-    v.field(kScriptBlock + 0xc, s.released);
-}
 void part39(LayoutVisitor& v, void* p0) { // od::port::st16_script33_state::CatchScriptFields
     auto& s = *static_cast<od::port::st16_script33_state::CatchScriptFields*>(p0);
     v.field(kScriptBlock + 0xc, s.carrier);
@@ -530,7 +526,6 @@ const std::unordered_map<std::type_index, PartLayout>& partLayouts() {
         {typeid(od::port::manda_ruin_scripts_state::TerminalScriptBytes), &part35},
         {typeid(od::port::pokte_rooms_state::PokteVillageState), &part36},
         {typeid(od::port::st25_tron_scenes_state::PokteScriptBytes), &part37},
-        {typeid(od::port::glyde_attack_cast_state::DescentScriptBytes), &part38},
         {typeid(od::port::st16_script33_state::CatchScriptFields), &part39},
         {typeid(od::port::ShipFightBlock), &part40},
         {typeid(od::port::fire_ruin_visit_scripts_state::VisitScriptFields), &part41},

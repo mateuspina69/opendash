@@ -96,9 +96,4 @@ struct RiserFields : ActorClassState {
     }
 };
 
-// Script 0x39's own bytes: the release of the cast that comes down (0 until the script lets it)
-struct DescentScriptBytes : ScriptPart<DescentScriptBytes> {
-    uint8_t released = 0; // +0xc
-};
-
 } // namespace od::port::glyde_attack_cast_state
