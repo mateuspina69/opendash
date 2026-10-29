@@ -77,5 +77,26 @@ int main(int argc, char** argv) {
     std::printf("%d SFX banks, %d rebuilt from the disc as the folder's\n", sfxBanks, sfxRebuilt);
     std::printf("%d message banks, %d exe banks, font, widths, CLUTs, %d voice tracks of %d files identical\n", banks,
                 exeBanks, voiceTracks, voiceFiles);
+
+    // the PT-BR pack beside the English one: the files its folder lacks (the quiz) come from the disc its manifest
+    // names, the USA image with the fan patch read in place; the folder's own files stay the folder's
+    const fs::path ptbr = fs::path(argv[2]).parent_path() / "ptbr";
+    if (fs::exists(ptbr / "manifest.json") && !fs::exists(ptbr / "exe" / "quiz.bin")) {
+        const auto pack = od::lang::folderPack(ptbr);
+        CHECK(pack->file("font.bin") == od::readFile(ptbr / "font.bin"));
+        CHECK(pack->has("exe/quiz.bin") && pack->has("exe/quiz_answers.bin"));
+        if (!pack->has("exe/quiz.bin")) try {
+                pack->file("exe/quiz.bin");
+            } catch (const std::exception& e) {
+                std::fprintf(stderr, "%s\n", e.what());
+            }
+        if (pack->has("exe/quiz.bin") && pack->has("exe/quiz_answers.bin")) {
+            const auto quiz = pack->file("exe/quiz.bin");
+            CHECK(quiz.size() > 2 && od::rd16(quiz.data()) == 2 * 212);
+            CHECK(quiz != fromDisc->file("exe/quiz.bin"));                                   // translated
+            CHECK(pack->file("exe/quiz_answers.bin") == fromDisc->file("exe/quiz_answers.bin")); // the same answers
+        }
+        std::printf("ptbr: the quiz from its patched disc\n");
+    }
     return testResult("test_lang_pack");
 }

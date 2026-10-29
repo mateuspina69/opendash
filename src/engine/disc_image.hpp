@@ -18,6 +18,8 @@
 #include <string>
 #include <vector>
 
+#include "engine/vcdiff.hpp"
+
 namespace od {
 
 inline constexpr uint32_t kRawSectorBytes = 2352;
@@ -58,6 +60,9 @@ struct DiscFile {
 class DiscImage {
 public:
     explicit DiscImage(const std::filesystem::path& cue);
+    // the disc with its first track file made by a VCDIFF patch of the cue's (engine/vcdiff: a fan translation over
+    // track 1), read in place; vcdiff errors throw as they are
+    DiscImage(const std::filesystem::path& cue, const std::filesystem::path& firstTrackPatch);
     ~DiscImage();
     DiscImage(const DiscImage&) = delete;
     DiscImage& operator=(const DiscImage&) = delete;
@@ -82,6 +87,7 @@ private:
     struct TrackFile {
         std::filesystem::path path;
         mutable std::ifstream stream;
+        std::unique_ptr<VcdiffTarget> patched; // the file as the patch makes it (the stream unused)
         uint32_t sectors = 0;
     };
     // a run of disc sectors stored contiguously in one track file (a cue PREGAP splits a file into two runs)
@@ -91,7 +97,7 @@ private:
         uint32_t fileSector = 0;
     };
 
-    void parseCue(const std::filesystem::path& cue);
+    void parseCue(const std::filesystem::path& cue, const std::filesystem::path& firstTrackPatch);
     void readFileSystem();
     void readDirectory(const std::string& prefix, uint32_t lba, uint32_t size, int depth);
 

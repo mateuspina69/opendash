@@ -1,6 +1,7 @@
 // A language pack's files by the pack layout's names (engine/lang: msg/<STEM>.bin, font.bin, widths.bin,
 // colours.bin, buttons.bin, exe/<bank>.bin, art/, sfx/, snd/), whichever source holds them:
-//   * a pack folder (<root>/<code>/);
+//   * a pack folder (<root>/<code>/), and for the files it lacks the disc its manifest.json names (the "source" cue,
+//     with the "patch" VCDIFF over track 1 read in place: the PT-BR fan translation), read as below;
 //   * the USA PS1 disc image itself: the message banks (the 0x12 block of DAT/<STEM>.BIN), the font page (the first
 //     image of COMMON/INIT.BIN), the glyph widths and the width limit (SLUS_011.40), the text and button CLUTs (the
 //     CLUT ids in SLUS_011.40, their colours in INIT.BIN's VRAM), the PS1 copies of the banks the PC keeps in dash2.exe

@@ -1,13 +1,98 @@
 // The disc image reader (engine/disc_image) over the user's PS1 image: the cue sheet's tracks, the sectors' headers,
-// the ISO9660 tree, every form 1 file read whole and every streamed file's sectors form 2.
+// the ISO9660 tree, every form 1 file read whole and every streamed file's sectors form 2. First the VCDIFF reader a
+// patched disc reads its track through (engine/vcdiff), on a patch made by hand.
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <stdexcept>
+#include <string>
+#include <vector>
 
 #include "check.hpp"
 #include "engine/disc_image.hpp"
+#include "engine/vcdiff.hpp"
+
+namespace {
+
+uint32_t adler32(const std::string& d) {
+    uint32_t a = 1, b = 0;
+    for (const char c : d) {
+        a = (a + uint8_t(c)) % 65521;
+        b = (b + a) % 65521;
+    }
+    return b << 16 | a;
+}
+
+// source "abcdefghij"; window 1 (VCD_SOURCE, the whole source): ADD "XY", COPY 5 from source 0 (mode self), COPY 8
+// from its own target 2 (mode here: overlaps the bytes it makes), RUN 3 'Z'; window 2 (VCD_TARGET, the target's first
+// 4 bytes, with xdelta3's checksum): COPY 4 from 0 twice
+void vcdiffByHand() {
+    namespace fs = std::filesystem;
+    const fs::path dir = fs::temp_directory_path() / "opendash_test_vcdiff";
+    fs::create_directories(dir);
+    const fs::path source = dir / "source.bin", patch = dir / "patch.vcdiff";
+    std::ofstream(source, std::ios::binary) << "abcdefghij";
+    const std::string want = "XYabcdeabcdeabcZZZ", want2 = "XYabXYab";
+    auto window = [](std::vector<uint8_t> head, size_t target, std::vector<uint8_t> data, std::vector<uint8_t> inst,
+                     std::vector<uint8_t> addr, const uint32_t* adler) {
+        std::vector<uint8_t> delta = {uint8_t(target), 0, uint8_t(data.size()), uint8_t(inst.size()),
+                                      uint8_t(addr.size())};
+        if (adler)
+            for (int k = 3; k >= 0; --k) delta.push_back(uint8_t(*adler >> (8 * k)));
+        for (const auto* sec : {&data, &inst, &addr}) delta.insert(delta.end(), sec->begin(), sec->end());
+        head.push_back(uint8_t(delta.size()));
+        head.insert(head.end(), delta.begin(), delta.end());
+        return head;
+    };
+    auto write = [&](uint32_t adler2) {
+        std::vector<uint8_t> p = {0xd6, 0xc3, 0xc4, 0x00, 0x04, 3, 'a', 'p', 'p'}; // with an application header
+        const auto w1 = window({0x01, 10, 0}, want.size(), {'X', 'Y', 'Z'}, {3, 21, 40, 0, 3}, {0, 5}, nullptr);
+        const auto w2 = window({0x06, 4, 0}, want2.size(), {}, {20, 20}, {0, 0}, &adler2);
+        p.insert(p.end(), w1.begin(), w1.end());
+        p.insert(p.end(), w2.begin(), w2.end());
+        std::ofstream(patch, std::ios::binary).write(reinterpret_cast<const char*>(p.data()), std::streamsize(p.size()));
+    };
+    auto readAll = [](const od::VcdiffTarget& t, uint64_t at, size_t n) {
+        std::vector<uint8_t> out(n);
+        t.read(at, out);
+        return std::string(out.begin(), out.end());
+    };
+    write(adler32(want2));
+    {
+        const od::VcdiffTarget t(source, patch);
+        CHECK(t.size() == want.size() + want2.size());
+        CHECK(readAll(t, 0, size_t(t.size())) == want + want2);
+        CHECK(readAll(t, 16, 6) == "ZZXYab"); // across the windows
+        bool past = false;
+        try {
+            readAll(t, t.size() - 2, 3);
+        } catch (const std::runtime_error&) {
+            past = true;
+        }
+        CHECK(past);
+    }
+    write(adler32(want2) ^ 1);
+    {
+        const od::VcdiffTarget t(source, patch);
+        CHECK(readAll(t, 0, 4) == "XYab");
+        bool bad = false;
+        try {
+            readAll(t, want.size(), 1);
+        } catch (const std::runtime_error&) {
+            bad = true;
+        }
+        CHECK(bad); // the second window's checksum
+    }
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+} // namespace
 
 int main(int argc, char** argv) {
+    vcdiffByHand();
     if (argc < 2) return 2;
     const od::DiscImage disc(argv[1]);
 

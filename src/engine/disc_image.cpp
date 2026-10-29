@@ -68,14 +68,16 @@ std::string normalPath(std::string_view path) {
 
 } // namespace
 
-DiscImage::DiscImage(const std::filesystem::path& cue) {
-    parseCue(cue);
+DiscImage::DiscImage(const std::filesystem::path& cue) : DiscImage(cue, {}) {}
+
+DiscImage::DiscImage(const std::filesystem::path& cue, const std::filesystem::path& firstTrackPatch) {
+    parseCue(cue, firstTrackPatch);
     readFileSystem();
 }
 
 DiscImage::~DiscImage() = default;
 
-void DiscImage::parseCue(const std::filesystem::path& cue) {
+void DiscImage::parseCue(const std::filesystem::path& cue, const std::filesystem::path& firstTrackPatch) {
     std::ifstream in(cue);
     if (!in) fail("cannot open " + cue.string());
 
@@ -106,9 +108,15 @@ void DiscImage::parseCue(const std::filesystem::path& cue) {
             closeFile();
             auto tf = std::make_unique<TrackFile>();
             tf->path = cue.parent_path() / std::filesystem::path(std::u8string(w[1].begin(), w[1].end()));
-            tf->stream.open(tf->path, std::ios::binary);
-            if (!tf->stream) fail("cannot open the track file " + tf->path.string());
-            const auto bytes = std::filesystem::file_size(tf->path);
+            uint64_t bytes = 0;
+            if (trackFiles_.empty() && !firstTrackPatch.empty()) {
+                tf->patched = std::make_unique<VcdiffTarget>(tf->path, firstTrackPatch);
+                bytes = tf->patched->size();
+            } else {
+                tf->stream.open(tf->path, std::ios::binary);
+                if (!tf->stream) fail("cannot open the track file " + tf->path.string());
+                bytes = std::filesystem::file_size(tf->path);
+            }
             if (bytes % kRawSectorBytes != 0) fail(tf->path.string() + " is not made of 2352-byte sectors");
             tf->sectors = uint32_t(bytes / kRawSectorBytes);
             trackFiles_.push_back(std::move(tf));
@@ -176,9 +184,14 @@ RawSector DiscImage::rawSector(uint32_t lba) const {
     if (it == extents_.end()) fail("sector " + std::to_string(lba) + " is not stored in the image");
     RawSector out;
     const TrackFile& tf = *trackFiles_[it->file];
+    const uint64_t at = uint64_t(it->fileSector + (lba - it->lba)) * kRawSectorBytes;
+    if (tf.patched) {
+        tf.patched->read(at, out);
+        return out;
+    }
     std::lock_guard lock(readLock_);
     tf.stream.clear();
-    tf.stream.seekg(std::streamoff(it->fileSector + (lba - it->lba)) * kRawSectorBytes);
+    tf.stream.seekg(std::streamoff(at));
     if (!tf.stream.read(reinterpret_cast<char*>(out.data()), out.size()))
         fail("cannot read sector " + std::to_string(lba) + " of " + tf.path.string());
     return out;

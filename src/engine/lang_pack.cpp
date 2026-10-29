@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <functional>
 #include <map>
 #include <mutex>
 #include <stdexcept>
@@ -20,17 +21,152 @@ namespace od::lang {
 
 namespace {
 
+// The top-level string members of a JSON object (a pack's manifest.json: "source", "patch"); other values skipped.
+// Throws std::runtime_error on text that is not one JSON object.
+std::map<std::string, std::string> jsonStrings(std::string_view j) {
+    size_t p = 0;
+    auto bad = [&] { return std::runtime_error("manifest.json: bad JSON at byte " + std::to_string(p)); };
+    auto ws = [&] {
+        while (p < j.size() && std::isspace(uint8_t(j[p]))) ++p;
+    };
+    auto expect = [&](char c) {
+        ws();
+        if (p >= j.size() || j[p] != c) throw bad();
+        ++p;
+    };
+    auto hex4 = [&] {
+        if (p + 4 > j.size()) throw bad();
+        uint32_t v = 0;
+        for (int k = 0; k < 4; ++k) {
+            const char c = j[p++];
+            if (!std::isxdigit(uint8_t(c))) throw bad();
+            v = v << 4 | uint32_t(std::isdigit(uint8_t(c)) ? c - '0' : std::tolower(uint8_t(c)) - 'a' + 10);
+        }
+        return v;
+    };
+    auto utf8 = [](std::string& out, uint32_t c) {
+        if (c < 0x80) {
+            out += char(c);
+        } else if (c < 0x800) {
+            out += char(0xc0 | c >> 6);
+            out += char(0x80 | (c & 0x3f));
+        } else if (c < 0x10000) {
+            out += char(0xe0 | c >> 12);
+            out += char(0x80 | (c >> 6 & 0x3f));
+            out += char(0x80 | (c & 0x3f));
+        } else {
+            out += char(0xf0 | c >> 18);
+            out += char(0x80 | (c >> 12 & 0x3f));
+            out += char(0x80 | (c >> 6 & 0x3f));
+            out += char(0x80 | (c & 0x3f));
+        }
+    };
+    auto string = [&] {
+        expect('"');
+        std::string out;
+        while (true) {
+            if (p >= j.size()) throw bad();
+            const char c = j[p++];
+            if (c == '"') return out;
+            if (c != '\\') {
+                out += c;
+                continue;
+            }
+            if (p >= j.size()) throw bad();
+            switch (const char e = j[p++]) {
+            case '"': case '\\': case '/': out += e; break;
+            case 'b': out += '\b'; break;
+            case 'f': out += '\f'; break;
+            case 'n': out += '\n'; break;
+            case 'r': out += '\r'; break;
+            case 't': out += '\t'; break;
+            case 'u': {
+                uint32_t c1 = hex4();
+                if (c1 >= 0xd800 && c1 < 0xdc00) { // a surrogate pair
+                    if (j.substr(p, 2) != "\\u") throw bad();
+                    p += 2;
+                    const uint32_t c2 = hex4();
+                    if (c2 < 0xdc00 || c2 >= 0xe000) throw bad();
+                    c1 = 0x10000 + ((c1 - 0xd800) << 10) + (c2 - 0xdc00);
+                }
+                utf8(out, c1);
+                break;
+            }
+            default: throw bad();
+            }
+        }
+    };
+    std::function<void()> skip = [&] {
+        ws();
+        if (p >= j.size()) throw bad();
+        const char c = j[p];
+        if (c == '"') {
+            string();
+        } else if (c == '{' || c == '[') {
+            const char close = c == '{' ? '}' : ']';
+            ++p;
+            ws();
+            if (p < j.size() && j[p] == close) {
+                ++p;
+                return;
+            }
+            while (true) {
+                if (close == '}') {
+                    string();
+                    expect(':');
+                }
+                skip();
+                ws();
+                if (p < j.size() && j[p] == ',') {
+                    ++p;
+                    ws();
+                    continue;
+                }
+                expect(close);
+                return;
+            }
+        } else { // a number, true, false, null
+            const size_t start = p;
+            while (p < j.size() && (std::isalnum(uint8_t(j[p])) || j[p] == '-' || j[p] == '+' || j[p] == '.')) ++p;
+            if (p == start) throw bad();
+        }
+    };
+    std::map<std::string, std::string> out;
+    expect('{');
+    ws();
+    if (p < j.size() && j[p] == '}') return out;
+    while (true) {
+        ws();
+        std::string key = string();
+        expect(':');
+        ws();
+        if (p < j.size() && j[p] == '"') out[std::move(key)] = string();
+        else skip();
+        ws();
+        if (p < j.size() && j[p] == ',') {
+            ++p;
+            continue;
+        }
+        expect('}');
+        return out;
+    }
+}
+
+std::unique_ptr<LangPack> makeDiscPack(std::shared_ptr<const DiscImage> disc, std::string id);
+
+// A pack folder. The files it lacks are made from the disc its manifest.json names (the generator's "source" cue
+// and its "patch", the fan translation's VCDIFF over track 1, the disc the folder was made from), as the disc pack
+// makes them; the folder's own files come first.
 class FolderPack final : public LangPack {
 public:
     explicit FolderPack(std::filesystem::path dir) : dir_(std::move(dir)) {}
     std::string id() const override { return dir_.string(); }
-    bool has(const std::string& name) const override {
-        std::error_code ec;
-        return std::filesystem::is_regular_file(dir_ / name, ec);
-    }
+    bool has(const std::string& name) const override { return inFolder(name) || (disc() && disc()->has(name)); }
     std::vector<uint8_t> file(const std::string& name) const override {
-        if (!has(name)) throw std::runtime_error("language pack: no " + (dir_ / name).string());
-        return readFile(dir_ / name);
+        if (inFolder(name)) return readFile(dir_ / name);
+        if (disc() && disc()->has(name)) return disc()->file(name);
+        throw std::runtime_error("language pack: no " + (dir_ / name).string() +
+                                 (discError_.empty() ? "" : " (its disc: " + discError_ + ")"));
     }
     std::filesystem::path folder() const override { return dir_; }
     std::vector<uint8_t> voiceTrack(const std::string&, uint32_t) const override { return {}; } // the folder's snd/
@@ -38,11 +174,43 @@ public:
                                  std::span<const uint8_t>) const override {
         const std::string name = "sfx/" + std::filesystem::path(datName).stem().string() + "_" + std::to_string(arg) +
                                  "_" + std::to_string(extra) + ".bin";
-        return has(name) ? file(name) : std::vector<uint8_t>();
+        return inFolder(name) ? readFile(dir_ / name) : std::vector<uint8_t>();
     }
 
 private:
+    bool inFolder(const std::string& name) const {
+        std::error_code ec;
+        return std::filesystem::is_regular_file(dir_ / name, ec);
+    }
+    // the manifest's disc, opened on the first file the folder lacks; nullptr when no manifest names one, or when
+    // its image or patch cannot be read (discError_: why)
+    const LangPack* disc() const {
+        std::call_once(discOnce_, [this] {
+            std::error_code ec;
+            const auto manifest = dir_ / "manifest.json";
+            if (!std::filesystem::is_regular_file(manifest, ec)) return;
+            try {
+                const auto bytes = readFile(manifest);
+                const auto m = jsonStrings(std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+                const auto source = m.find("source");
+                if (source == m.end()) return;
+                const auto path = [](const std::string& s) { return std::filesystem::path(std::u8string(s.begin(), s.end())); };
+                const auto patch = m.find("patch"); // null (no string) for a pack of the disc as it is
+                auto image = patch == m.end()
+                                 ? std::make_shared<const DiscImage>(path(source->second))
+                                 : std::make_shared<const DiscImage>(path(source->second), path(patch->second));
+                disc_ = makeDiscPack(std::move(image), dir_.string() + " disc");
+            } catch (const std::exception& e) {
+                discError_ = e.what();
+            }
+        });
+        return disc_.get();
+    }
+
     std::filesystem::path dir_;
+    mutable std::once_flag discOnce_;
+    mutable std::unique_ptr<LangPack> disc_;
+    mutable std::string discError_;
 };
 
 // SLUS_011.40 (USA), RAM addresses (the glyph routine 0x800498c8 and its tables; docs/ps1_disc.md)
@@ -68,55 +236,63 @@ public:
             throw std::runtime_error("language pack: SLUS_011.40 is not a PS-X EXE");
         textAddr_ = rd32(exe_.data() + 0x18);
 
-        const GameFile init = ps1GameFile("INIT.DAT", disc_->file("COMMON/INIT.BIN"));
-        const FilePart* page = init.first(FilePart::Kind::Vram);
-        if (!page || page->rects.empty() || page->rects.back().pixels.size() != 0x8000)
-            throw std::runtime_error("language pack: COMMON/INIT.BIN's first image is not the 256x256 font page");
-        files_["font.bin"] = page->rects.back().pixels;
-
         std::vector<uint8_t> w(ram(kWidthTable, 256), ram(kWidthTable, 256) + 256);
         w.push_back(uint8_t(rd32(ram(kWidthLimitInsn, 4)) & 0xff)); // the immediate's low byte
         files_["widths.bin"] = std::move(w);
 
-        Vram vram;
-        vram.apply(init);
-        files_["colours.bin"] = cluts(vram, kTextCluts, 8);
-        files_["buttons.bin"] = cluts(vram, kButtonCluts, 4);
-
-        for (const Ps1ExeBank& b : ps1ExeBanks()) files_[std::string("exe/") + b.name + ".bin"] = ps1ExeBank(*disc_, b);
-        files_["exe/shop_prices.bin"] = ps1ShopPrices(*disc_);
-        files_["exe/quiz_answers.bin"] = ps1QuizAnswers(*disc_);
+        // the rest is made when it is first asked for: a file the disc does not hold as the USA one does (the PT-BR
+        // patch's COMMON/TITLE.BIN, its last block's header overwritten) fails only the files made from it
+        makers_["font.bin"] = [this] {
+            const FilePart* page = init().first(FilePart::Kind::Vram);
+            if (!page || page->rects.empty() || page->rects.back().pixels.size() != 0x8000)
+                throw std::runtime_error("language pack: COMMON/INIT.BIN's first image is not the 256x256 font page");
+            return page->rects.back().pixels;
+        };
+        makers_["colours.bin"] = [this] { return cluts(initVram(), kTextCluts, 8); };
+        makers_["buttons.bin"] = [this] { return cluts(initVram(), kButtonCluts, 4); };
+        for (const Ps1ExeBank& b : ps1ExeBanks())
+            makers_[std::string("exe/") + b.name + ".bin"] = [this, &b] { return ps1ExeBank(*disc_, b); };
+        makers_["exe/shop_prices.bin"] = [this] { return ps1ShopPrices(*disc_); };
+        makers_["exe/quiz_answers.bin"] = [this] { return ps1QuizAnswers(*disc_); };
 
         // art/TITLE.bin: b"ODVR", u32 count, {u16 x, y, w, h, w * h u16} (the rects over TITLE.DAT's)
-        const GameFile title = ps1GameFile("TITLE.DAT", disc_->file("COMMON/TITLE.BIN"));
-        std::vector<uint8_t> art = {'O', 'D', 'V', 'R'};
-        for (int k = 0; k < 4; ++k) art.push_back(uint8_t(kTitleRects.size() >> (8 * k)));
-        for (const auto& r : kTitleRects) {
-            const VramRect* found = nullptr;
-            for (const FilePart& p : title.parts)
-                for (const VramRect& v : p.rects)
-                    if (v.x == r[0] && v.y == r[1] && v.w == r[2] && v.h == r[3]) found = &v;
-            if (!found || found->pixels.size() != size_t(r[2]) * size_t(r[3]) * 2)
-                throw std::runtime_error("language pack (disc): COMMON/TITLE.BIN has no rect " + std::to_string(r[0]) +
-                                         "," + std::to_string(r[1]));
-            for (const int16_t v : r) {
-                art.push_back(uint8_t(v));
-                art.push_back(uint8_t(uint16_t(v) >> 8));
+        makers_["art/TITLE.bin"] = [this] {
+            const GameFile title = ps1GameFile("TITLE.DAT", disc_->file("COMMON/TITLE.BIN"));
+            std::vector<uint8_t> art = {'O', 'D', 'V', 'R'};
+            for (int k = 0; k < 4; ++k) art.push_back(uint8_t(kTitleRects.size() >> (8 * k)));
+            for (const auto& r : kTitleRects) {
+                const VramRect* found = nullptr;
+                for (const FilePart& p : title.parts)
+                    for (const VramRect& v : p.rects)
+                        if (v.x == r[0] && v.y == r[1] && v.w == r[2] && v.h == r[3]) found = &v;
+                if (!found || found->pixels.size() != size_t(r[2]) * size_t(r[3]) * 2)
+                    throw std::runtime_error("language pack (disc): COMMON/TITLE.BIN has no rect " +
+                                             std::to_string(r[0]) + "," + std::to_string(r[1]));
+                for (const int16_t v : r) {
+                    art.push_back(uint8_t(v));
+                    art.push_back(uint8_t(uint16_t(v) >> 8));
+                }
+                art.insert(art.end(), found->pixels.begin(), found->pixels.end());
             }
-            art.insert(art.end(), found->pixels.begin(), found->pixels.end());
-        }
-        files_["art/TITLE.bin"] = std::move(art);
+            return art;
+        };
     }
 
     std::string id() const override { return id_; }
     bool has(const std::string& name) const override {
-        if (files_.count(name)) return true;
+        if (files_.count(name) || makers_.count(name)) return true;
         const std::string bin = messageFile(name);
         if (bin.empty() || !disc_->find(bin)) return false;
         return ps1GameFile(name, disc_->file(bin)).has(FilePart::Kind::Ps1Messages);
     }
     std::vector<uint8_t> file(const std::string& name) const override {
         if (const auto it = files_.find(name); it != files_.end()) return it->second;
+        if (const auto it = makers_.find(name); it != makers_.end()) {
+            std::lock_guard lock(madeLock_);
+            auto m = made_.find(name);
+            if (m == made_.end()) m = made_.emplace(name, it->second()).first;
+            return m->second;
+        }
         const std::string bin = messageFile(name);
         if (bin.empty() || !disc_->find(bin)) throw std::runtime_error("language pack (disc): no " + name);
         return ps1GameFile(name, disc_->file(bin)).require(FilePart::Kind::Ps1Messages).bytes;
@@ -187,11 +363,29 @@ private:
         return out;
     }
 
+    // COMMON/INIT.BIN (the font page, the text / button CLUTs' colours) and its VRAM, read once; under madeLock_
+    const GameFile& init() const {
+        if (!init_) init_ = std::make_unique<GameFile>(ps1GameFile("INIT.DAT", disc_->file("COMMON/INIT.BIN")));
+        return *init_;
+    }
+    const Vram& initVram() const {
+        if (!initVram_) {
+            initVram_ = std::make_unique<Vram>();
+            initVram_->apply(init());
+        }
+        return *initVram_;
+    }
+
     std::shared_ptr<const DiscImage> disc_;
     std::string id_;
     std::vector<uint8_t> exe_;
     uint32_t textAddr_ = 0;
     std::map<std::string, std::vector<uint8_t>> files_;
+    std::map<std::string, std::function<std::vector<uint8_t>()>> makers_; // the files made on their first read
+    mutable std::mutex madeLock_;
+    mutable std::map<std::string, std::vector<uint8_t>> made_;
+    mutable std::unique_ptr<GameFile> init_;
+    mutable std::unique_ptr<Vram> initVram_;
     mutable std::mutex clipLock_;
     mutable std::map<std::string, std::vector<Ps1XaClip>> clips_; // per XA file, made on its first voice
 };
@@ -203,5 +397,11 @@ std::unique_ptr<LangPack> folderPack(std::filesystem::path dir) { return std::ma
 std::unique_ptr<LangPack> discPack(std::shared_ptr<const DiscImage> disc, std::string id) {
     return std::make_unique<DiscPack>(std::move(disc), std::move(id));
 }
+
+namespace {
+std::unique_ptr<LangPack> makeDiscPack(std::shared_ptr<const DiscImage> disc, std::string id) {
+    return std::make_unique<DiscPack>(std::move(disc), std::move(id));
+}
+} // namespace
 
 } // namespace od::lang
