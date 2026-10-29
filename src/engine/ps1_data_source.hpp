@@ -102,6 +102,8 @@ private:
     // n bytes of the part from address (fewer at its end), the region's pointer slots translated
     TableReader regionBytes(size_t part, uint32_t address, uint32_t n, std::optional<Region> region) const;
     void makeTables();
+    // a label of a stage overlay (DAT/STxx..T.BIN) given to the stage's other overlays holding its bytes at its address
+    void adoptSiblingLabels();
 
     std::shared_ptr<const DiscImage> disc_;
     mutable std::vector<Part> parts_;

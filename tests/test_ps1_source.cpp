@@ -499,5 +499,15 @@ int main(int argc, char** argv) {
     }
     std::printf("%zu tables on the disc: %zu read as the PC's\n", tables, equal);
     CHECK(tables > 0 && equal == tables);
+    { // ST30's overview step lists sit at one address in all its overlays; ps1_labels.inc places them in ST3001T only:
+      // read from ST30T (room 0, after its fight) their steps still name the routines (last: ST30T then is the loaded
+      // overlay, whose copies the tables read since would come from)
+        (void)ps1.gameFile("ST30T.DAT");
+        const auto lists = ps1.table({od::TableId::GlydeBaseOverviewSteps, 0}, 12);
+        CHECK(ps1.stateData(lists.u32(0), 16).routine(4).is(od::RoutineId::EmptyRoutine));
+        const auto tower = ps1.stateData(lists.u32(4), 24);
+        CHECK(tower.routine(4).is(od::RoutineId::GlydeBaseScriptsStepTowerFalls));
+        CHECK(tower.routine(12).is(od::RoutineId::EmptyRoutine));
+    }
     return testResult("test_ps1_source");
 }

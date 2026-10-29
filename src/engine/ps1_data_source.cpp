@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <set>
+#include <tuple>
 
 #include "engine/dat.hpp"
 #include "engine/file_data.hpp"
@@ -165,7 +166,65 @@ Ps1DataSource::Ps1DataSource(std::shared_ptr<const DiscImage> disc) : disc_(std:
         auto& bytes = voiceBytes_[{v.id, v.index}];
         bytes = std::max(bytes, v.count * 4);
     }
+    adoptSiblingLabels();
     makeTables();
+}
+
+// A stage's overlays (DAT/STxx..T.BIN, one per story part) load at one address and keep most of their tables there in
+// all of them: a label (its slots) stands for its bytes at its address in each overlay of the stage that holds the same
+// bytes and no label of its own over them. ps1_labels.inc places the named tables' copies in every overlay, not their
+// pointees' (a cutscene's step list, a story part's room handler list): without this, a pointee read from the other
+// overlays keeps its PS1 words (ST30 room 0's overview steps from ST30T.BIN, its copy placed in ST3001T.BIN only)
+void Ps1DataSource::adoptSiblingLabels() {
+    auto stageOf = [](const std::string& f) {
+        const bool overlay = f.size() >= 13 && f.compare(0, 6, "DAT/ST") == 0 && f.compare(f.size() - 5, 5, "T.BIN") == 0;
+        return overlay ? f.substr(0, 8) : std::string();
+    };
+    std::map<std::string, std::vector<std::string>> overlays; // stage "DAT/STxx" -> its overlay files
+    for (const DiscFile& f : disc_->files())
+        if (const std::string s = stageOf(f.path); !s.empty()) overlays[s].push_back(f.path);
+    std::map<std::string, std::vector<std::pair<uint32_t, std::vector<uint8_t>>>> code; // file -> its code blocks
+    auto bytesAt = [&](const std::string& file, uint32_t address, uint32_t n) -> const uint8_t* {
+        auto it = code.find(file);
+        if (it == code.end()) {
+            const auto bytes = disc_->file(file);
+            std::vector<std::pair<uint32_t, std::vector<uint8_t>>> blocks;
+            for (const Ps1Block& b : ps1Blocks(bytes))
+                if (b.type == kPs1Code) blocks.emplace_back(b.header[3], ps1Payload(bytes, b));
+            it = code.emplace(file, std::move(blocks)).first;
+        }
+        for (const auto& [base, data] : it->second)
+            if (address >= base && size_t(address - base) + n <= data.size()) return data.data() + (address - base);
+        return nullptr;
+    };
+    auto labelled = [&](const std::string& file, uint32_t address, uint32_t n) { // a label of the file meets the extent
+        const auto f = labels_.find(file);
+        if (f == labels_.end()) return false;
+        for (auto it = f->second.upper_bound(address + n - 1); it != f->second.begin();) {
+            --it;
+            if (it->first + it->second.bytes > address) return true;
+            if (address - it->first > kMaxLabelBytes) break;
+        }
+        return false;
+    };
+    std::vector<std::tuple<std::string, uint32_t, const Label*>> adopted;
+    for (const auto& [file, byAddress] : labels_) {
+        const std::string stage = stageOf(file);
+        if (stage.empty()) continue;
+        for (const auto& [address, label] : byAddress) {
+            if (label.slots.empty() || label.bytes == 0) continue;
+            const uint8_t* mine = bytesAt(file, address, label.bytes);
+            if (!mine) continue;
+            for (const std::string& other : overlays[stage]) {
+                if (other == file || labelled(other, address, label.bytes)) continue;
+                const uint8_t* theirs = bytesAt(other, address, label.bytes);
+                if (theirs && std::memcmp(mine, theirs, label.bytes) == 0) adopted.emplace_back(other, address, &label);
+            }
+        }
+    }
+    std::vector<std::tuple<std::string, uint32_t, Label>> copies;
+    for (const auto& [file, address, label] : adopted) copies.emplace_back(file, address, *label);
+    for (auto& [file, address, label] : copies) labels_[file].try_emplace(address, std::move(label));
 }
 
 size_t Ps1DataSource::addPart(std::string file, uint32_t base, std::vector<uint8_t> data) const {
