@@ -1,17 +1,13 @@
 // The lock-on reticle's triangles (the Prim::front prims of game/reticle_draw), kept apart from the per-tick
 // effects of scene_builder: a camera-facing 3D shape at the target point, built every rendered frame so it faces
-// that frame's camera. It stays in the world (perspective size, depth tested); RenderVertex::layer pushes it toward
-// the eye in the vertex shader (scene.hlsl, with the camera actually drawn) by kPush units -- along the view ray, so
-// its screen position is unchanged -- which puts it in front of the target's own model around the hit point.
+// that frame's camera. It stays in the world (perspective size); its layer kLayerInFront slides each vertex along its
+// eye ray to just past the near plane in the vertex shader (scene.hlsl, with the camera actually drawn): its screen
+// position and size are unchanged and no model, however large, ever covers it.
 #include "app/play_session.hpp"
 
 #include <cmath>
 
 namespace od::app {
-
-namespace {
-constexpr float kPush = 256.0f;           // game units toward the eye: past the surface of a target around its point
-} // namespace
 
 std::vector<od::DynamicObject> PlayerView::reticleOverlay(const RoomMesh& mesh, const od::Camera& cam) const {
     std::vector<od::DynamicObject> out;
@@ -23,7 +19,6 @@ std::vector<od::DynamicObject> PlayerView::reticleOverlay(const RoomMesh& mesh, 
     r[0] /= rl;
     r[2] /= rl;
     const float u[3] = {f[1] * r[2] - f[2] * r[1], f[2] * r[0] - f[0] * r[2], f[0] * r[1] - f[1] * r[0]}; // fwd x right
-    const float layer = kPush / od::kLayerStep;
     // the target point is in game units: the exe projects it << stage shift (0x5f2870), as the room is drawn here
     // (<< mesh.shift); the arrowheads are camera-plane offsets in projection units (live shift -> the mesh's)
     const float world = float(1 << mesh.shift), plane = liveShiftScale(mesh);
@@ -44,7 +39,7 @@ std::vector<od::DynamicObject> PlayerView::reticleOverlay(const RoomMesh& mesh, 
             for (int q = 0; q < 3; ++q) v[k].color[q] = s.color[q];
             v[k].slice = float(mesh.fxGradSlice);
             v[k].cull = 0.0f;
-            v[k].layer = layer;
+            v[k].layer = od::kLayerInFront;
         }
         if (p.n == 3)
             for (int k = 0; k < 3; ++k) obj.tris.push_back(v[k]);

@@ -19,6 +19,9 @@ namespace od {
 using TextureHandle = uint64_t; // UI texture (ui::Canvas, render/ui_canvas.hpp); also usable as an ImTextureID
 
 inline constexpr float kLayerStep = 3.0f; // scene.hlsl: a vertex is pushed layer * 3.0 world units toward the eye
+// a vertex layer in front of everything (the lock-on reticle): scene.hlsl slides it along its eye ray to twice the near
+// plane (same screen position, no model covers it)
+inline constexpr float kLayerInFront = -1.0f;
 
 struct RenderVertex {
     float pos[3];  // world units, Y-up
@@ -28,7 +31,7 @@ struct RenderVertex {
     float cull;    // 0 double-sided; 1 single-sided triangle (back face discarded); quad halves (the next / previous
                    // triangle is the other half): 2 / 3 drawn when either half faces the camera (actor models,
                    // FUN_005f4980), 4 / 5 the whole quad by the first half's facing (Megaman, 0x5f3820)
-    float layer;   // coplanar priority (PS1 OT order): pushed layer * kLayerStep toward the camera
+    float layer;   // coplanar priority (PS1 OT order): pushed layer * kLayerStep toward the camera; kLayerInFront: in front
     float color[3]{1.0f, 1.0f, 1.0f}; // vertex colour (gouraud), multiplied in; with slice < 0 the polygon is
                                       // untextured (PS1 shaded polygons, e.g. the sky gradient 0x5f03a0)
     float piece = 0.0f; // the see-through: the scenery piece it belongs to (app/see_through, SeeThroughPiece); 0 none

@@ -131,18 +131,29 @@ struct VSOut {
     nointerpolation float surface : TEXCOORD9;
 };
 
+// no z-buffer on the PS1: decals win by OT order; here they move a few units toward the eye. A negative layer (the
+// lock-on reticle, kLayerInFront) is in front of everything: the vertex slid along its own eye ray to twice the near
+// plane, so its screen position is unchanged and no model covers it
+float3 layerPush(float3 q, float3 from, float layer) {
+    if (layer >= 0.0) return q + normalize(from - q) * (layer * 3.0);
+    const float front = modelNear * 2.0;
+    const float d = dot(q - from, fwd);
+    return d > front ? from + (q - from) * (front / d) : q;
+}
+
 VSOut vs_main(VSIn i) {
     VSOut o;
-    // no z-buffer on the PS1: decals win by OT order; here they move a few units toward the eye
-    float3 p = i.pos + normalize(eye - i.pos) * (i.layer * 3.0);
-    float3 pp = i.prevPos + normalize(prevEye - i.prevPos) * (i.layer * 3.0);
+    float3 p = layerPush(i.pos, eye, i.layer);
+    float3 pp = layerPush(i.prevPos, prevEye, i.layer);
     o.pos = mul(float4(p, 1.0), viewProj);
     o.curClip = mul(float4(p, 1.0), viewProjNoJit);
     o.prevClip = mul(float4(pp, 1.0), prevViewProj);
     o.uvs = float3(i.uv, i.slice);
     o.shade = i.shade;
     o.cull = i.cull;
-    o.depth = dot(i.pos - eye, fwd); // camera depth, what the original's z = depth / 16384 encodes
+    // camera depth, what the original's z = depth / 16384 encodes; in front of everything: the slid depth (an
+    // effect's soft edge would fade it at the model it is drawn over)
+    o.depth = dot((i.layer < 0.0 ? p : i.pos) - eye, fwd);
     o.normal = i.normal;
     o.color = i.color;
     o.world = i.pos;
