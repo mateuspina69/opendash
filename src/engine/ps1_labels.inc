@@ -34127,7 +34127,6 @@ static constexpr Ps1LabelTable kPs1LabelTables[] = {
     {TableId::St32QuizCourse3Questions, 0x0, 11397, false, 0},
     {TableId::St32QuizHostRecords, 0x0, 4351, false, 0},
     {TableId::St32QuizPlateRecord, 0x0, 4355, false, 0},
-    {TableId::St32QuizQuestionBank, 0x0, 7406, true, 0},
     {TableId::St32QuizQuestionLines, 0x0, 4357, false, 0},
     {TableId::St32QuizRankFlags, 0x0, 4358, false, 0},
     {TableId::St32QuizSecondHostRecord, 0x0, 4353, false, 0},

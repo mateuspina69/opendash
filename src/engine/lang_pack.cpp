@@ -85,6 +85,7 @@ public:
 
         for (const Ps1ExeBank& b : ps1ExeBanks()) files_[std::string("exe/") + b.name + ".bin"] = ps1ExeBank(*disc_, b);
         files_["exe/shop_prices.bin"] = ps1ShopPrices(*disc_);
+        files_["exe/quiz_answers.bin"] = ps1QuizAnswers(*disc_);
 
         // art/TITLE.bin: b"ODVR", u32 count, {u16 x, y, w, h, w * h u16} (the rects over TITLE.DAT's)
         const GameFile title = ps1GameFile("TITLE.DAT", disc_->file("COMMON/TITLE.BIN"));

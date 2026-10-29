@@ -38,7 +38,11 @@ constexpr Ps1ExeBank kBanks[] = {
     {"load_menu", TableId::SaveMenusLoadTextBank, "COMMON/DEMO.BIN", 0x419c, 8},
     {"save_menu", TableId::SaveMenusSaveTextBank, "DAT/ST04T.BIN", 0x9400, 9},
     {"dev_room", TableId::DevRoomBank, "DAT/ST04T.BIN", 0xb5e4, 75},
+    {"quiz", TableId::St32QuizQuestionBank, "DAT/ST32T.BIN", 0x4b58, 212}, // the quiz show's questions (USA: 212)
 };
+// the quiz show's right answers (1..4) of its 200 questions, in the overlay's data before the question bank
+constexpr const char* kQuizFile = "DAT/ST32T.BIN";
+constexpr uint32_t kQuizAnswers = 0x4a74;
 constexpr const char* kShopPricesFile = "DAT/ST0AT.BIN";
 constexpr uint32_t kShopPrices = 0xa894;
 constexpr int kSystemNoSave = 0xb, kSystemNoSaveText = 0xd;
@@ -69,6 +73,15 @@ std::vector<uint8_t> ps1ExeBank(const DiscImage& disc, const Ps1ExeBank& b) {
     if (b.table == TableId::SaveMenusCardMessageBank)
         std::copy_n(bank.begin() + 2 * kSystemNoSaveText, 2, bank.begin() + 2 * kSystemNoSave);
     return bank;
+}
+
+std::vector<uint8_t> ps1QuizAnswers(const DiscImage& disc) {
+    const std::vector<uint8_t> d = disc.file(kQuizFile);
+    if (kQuizAnswers + kPs1QuizQuestions > d.size()) throw std::runtime_error("PS1 exe banks: no quiz answers");
+    const auto first = d.begin() + std::ptrdiff_t(kQuizAnswers);
+    if (!std::all_of(first, first + kPs1QuizQuestions, [](uint8_t a) { return a >= 1 && a <= 4; }))
+        throw std::runtime_error(std::string("PS1 exe banks: the quiz answers are not at ") + kQuizFile);
+    return {first, first + kPs1QuizQuestions};
 }
 
 std::vector<uint8_t> ps1ShopPrices(const DiscImage& disc) {

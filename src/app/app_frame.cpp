@@ -755,6 +755,9 @@ void App::drawOverlays() {
         }
         if (!playerView.quizPrims.empty()) { // the ST32 quiz's mark / counter (OT +0x78): over the windows
             if (!playerView.menuVram.ready) playerView.menuVram.reset();
+            // the USA quiz's mark samples a stage page (tpage 0x1b): the field's pages, as the minimap's
+            if (!playerView.menuVram.fieldBase || playerView.menuVram.baseGen != g_roomVramGen)
+                playerView.menuVram.setFieldBase(g_roomVram);
             const float s = float(height) / 240.0f;
             const ui::Vec2 o((float(width) - 320.0f * s) * 0.5f, 0.0f);
             menuPainter.draw(*renderer, playerView.menuVram, canvas, playerView.quizPrims, s, o,

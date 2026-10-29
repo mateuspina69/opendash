@@ -110,6 +110,7 @@ struct PlayerView {
     // own; a language pack's PS1 copies are mapped at kLangBanks and the message VM (fb 20 / fb 3d) and game/menu_banks
     // pointed at them. A missing file keeps the exe's bank (Japanese).
     static constexpr uint32_t kLangBanks = 0x7c800000;
+    static constexpr uint32_t kLangBanksSize = 0x20000;
     bool startWasDown = false;
     void loadExeBanks();
     uint32_t bankAt = 0;        // where the bank is mapped

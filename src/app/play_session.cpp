@@ -224,8 +224,9 @@ void PlayerView::setLanguage(od::lang::Language l) {
 void PlayerView::loadExeBanks() {
     od::port::MenuBanks b = od::port::exeMenuBanks();
     std::vector<std::pair<uint32_t, uint32_t>> redirects;
+    uint32_t quizAnswers = 0; // the pack's quiz (content/calbania/st32_quiz): its answers, with its question bank
     if (pack) {
-        if (!files.mapped(kLangBanks, 0x10000)) files.zero(kLangBanks, 0x10000);
+        if (!files.mapped(kLangBanks, kLangBanksSize)) files.zero(kLangBanks, kLangBanksSize);
         uint32_t at = kLangBanks;
         auto put = [&](const char* name, uint32_t& field) {
             const std::string f = "exe/" + std::string(name) + ".bin";
@@ -234,7 +235,10 @@ void PlayerView::loadExeBanks() {
                 return;
             }
             const auto d = pack->file(f);
-            if (at + d.size() > kLangBanks + 0x10000) return;
+            if (at + d.size() > kLangBanks + kLangBanksSize) {
+                SDL_Log("lang: %s does not fit the pack's bank area: Japanese", f.c_str());
+                return;
+            }
             files.map(at, d);
             field = at;
             at = (at + uint32_t(d.size()) + 3u) & ~3u;
@@ -271,15 +275,25 @@ void PlayerView::loadExeBanks() {
         put("places", places);
         uint32_t dev = 0; // Roll's development room (content/yosyonke/dev_room): the PS1 Flutter overlay's bank
         put("dev_room", dev);
+        // ST32's quiz show: the pack's questions and their answers (the USA quiz), the two together or neither
+        uint32_t quiz = 0;
+        put("quiz", quiz);
+        put("quiz_answers", quizAnswers);
+        if (quiz == 0 || quizAnswers == 0) {
+            if (quiz != 0 || quizAnswers != 0) SDL_Log("lang: the quiz of %s is incomplete: Japanese", pack->id().c_str());
+            quiz = quizAnswers = 0;
+        }
         redirects = {{od::stateAddress(od::TableId::SaveMenusCardMessageBank), sys},
                      {od::stateAddress(od::TableId::SaveMenusLoadTextBank), load},
                      {od::stateAddress(od::TableId::SaveMenusSaveTextBank), save},
                      {od::stateAddress(od::TableId::TextScriptPlaceNameBank), places},
-                     {od::stateAddress(od::TableId::DevRoomBank), dev}};
+                     {od::stateAddress(od::TableId::DevRoomBank), dev},
+                     {od::stateAddress(od::TableId::St32QuizQuestionBank), quiz}};
     }
     od::port::clearBankRedirects();
     for (auto [exe, pack] : redirects) od::port::setBankRedirect(exe, pack);
     od::port::setMenuBanks(b);
+    od::port::setQuizLocale(quizAnswers);
     od::port::setPs1Text(pack != nullptr);
     { // the layout pass's advance = the pack font's (game/message)
         std::vector<uint8_t> w;

@@ -19,6 +19,7 @@
 #include "game/event_state.hpp"
 #include "game/fade_state.hpp"
 #include "game/hit_list.hpp"
+#include "game/loaded_data.hpp"
 #include "game/menu_draw.hpp"
 #include "game/message.hpp"
 #include "game/message_state.hpp"
@@ -48,8 +49,44 @@ namespace {
 using address_forms::E;
 
 std::vector<ScreenPrim>* gQuizDraw = nullptr; // setQuizDraw
+uint32_t gPackAnswers = 0; // setQuizLocale: the language pack quiz's answers (0: the source's own quiz)
 
 // ---- the scripts' 2D packets (game/menu_draw) ----------------------------------------------------------------------
+// The USA quiz (the language pack's: its questions, its answers, its counter's place; DAT/ST32T.BIN). Its packets
+// sample the disc's VRAM, drawn so from the disc; the PC files' pages hold other art there, so from the PC the exe's
+// own packets (the font glyphs of 0x526840 / 0x5268f0) draw them, the counter at the USA's place.
+// 0x800e97d4(x, y, right): the answer mark, a 24 x 24 SPRT in OT +0x78 at (x - 10, y - 7) under the draw mode
+// 0xe100001b: right at texel (0x78, 0) clut 0x7f3e, wrong at (0x90, 0) clut 0x7f7c
+void quizMarkDrawUsa(int x, int y, bool right, std::vector<ScreenPrim>* draw) {
+    using namespace menu_draw;
+    begin(draw);
+    const size_t c = otOpen(kOtOverlay);
+    otDrawMode(c, 0x1b);
+    otSprite(c, int16_t(x - 10), int16_t(y - 7), right ? spriteUv(0x7f3e, 0x78, 0) : spriteUv(0x7f7c, 0x90, 0), 0x18, 0x18);
+    end();
+}
+// 0x800e98c4(n): the remaining-question counter while window 3 waits: the digits of n (the leading zeros skipped, the
+// ones always) as 8 x 12 SPRTs of tpage 0x0d in OT +0x78 at x 0x40 / 0x49 / 0x52, y 0x1a (past the text "#Left:"),
+// digit d at texel (d * 8 + 0x80, 0x6c) clut 0x7f11
+void quizCounterDrawUsa(int n, std::vector<ScreenPrim>* draw) {
+    using namespace menu_draw;
+    if (!(windowStatus(3) & kWindowStatusWaiting)) return;
+    begin(draw);
+    const size_t c = otOpen(kOtOverlay);
+    otDrawMode(c, 0x0d);
+    int v = int16_t(n), div = 100;
+    bool lead = false;
+    for (int i = 0; i < 3; ++i) {
+        const int d = int16_t(v / div);
+        v = int16_t(v) % div;
+        div /= 10;
+        if (d != 0) lead = true;
+        else if (!lead && i != 2) continue;
+        otSprite(c, i * 9 + 0x40, 0x1a, spriteUv(0x7f11, uint8_t(d * 8 - 0x80), 0x6c), 8, 0xc);
+    }
+    end();
+}
+
 // exe 0x526840(x, y, right): the quiz's answer mark, a 0x84 packet in the overlay entry: font slot 1 (size 0x30), glyph
 // 0xb palette 4 (right) or 0xc palette 2, at (x - 10, y - 7)
 void quizMarkDraw(int x, int y, bool right, std::vector<ScreenPrim>* draw) {
@@ -61,20 +98,21 @@ void quizMarkDraw(int x, int y, bool right, std::vector<ScreenPrim>* draw) {
     end();
 }
 // exe 0x5268f0(n): the quiz's remaining-question counter while window 3 waits: the digits of n (hundreds, tens, ones;
-// the leading zeros skipped, the ones always) as 0x84 packets in the overlay entry at x 0x28 / 0x31 / 0x3a, y 25: font
-// slot 0, size 0x18, palette 4, glyph '0' + digit
-void quizCounterDraw(int n, std::vector<ScreenPrim>* draw) {
+// the leading zeros skipped, the ones always) as 0x84 packets in the overlay entry at x 0x28 / 0x31 / 0x3a (from
+// `left`: the USA quiz's 0x40 / 0x49 / 0x52), y 25: font slot 0, size 0x18, palette 4, glyph '0' + digit
+constexpr int kCounterLeft = 0x28, kCounterLeftUsa = 0x40;
+void quizCounterDraw(int n, std::vector<ScreenPrim>* draw, int left = kCounterLeft) {
     using namespace menu_draw;
     if (!(windowStatus(3) & kWindowStatusWaiting)) return;
     begin(draw);
     int v = int16_t(n), div = 100;
     bool lead = false;
-    for (int x = 0x28; x < 0x43; x += 9) {
+    for (int x = left; x < left + 0x1b; x += 9) {
         const int d = int16_t(v / div);
         v = int16_t(v) % div;
         div /= 10;
         if (d != 0) lead = true;
-        else if (!lead && x != 0x3a) continue;
+        else if (!lead && x != left + 0x12) continue;
         const size_t c = otOpen(kOtOverlay);
         otGlyph(c, x, 25, uint16_t(d + 0x30), kNeutral, 0, 0x18);
         otLast(c).palette = 4;
@@ -158,6 +196,8 @@ const DataTable<ScalarTable<uint8_t, 16 * kQuestionsLong>> course3Questions{Tabl
 const DataTable<ScalarTable<uint8_t, 0x100>> questionLines{TableId::St32QuizQuestionLines}; // [course + question / 5 * 4]: the host's line
 const DataTable<ScalarTable<uint8_t, 0x100>> answers{TableId::St32QuizAnswers}; // the right answer (1..) of each question
 const DataTable<ScalarTable<uint16_t, 4 * kRanks>> rankFlags{TableId::St32QuizRankFlags};
+// the right answer (1..) of question q: the language pack quiz's, else the source's own
+uint8_t rightAnswer(uint8_t q) { return gPackAnswers ? loadedScalar<uint8_t>(gPackAnswers + q) : answers[q]; }
 // the record of course c (rank | misses << 4): the bytes the save keeps after the buster upgrades (game/shop)
 uint8_t& courseRecord(size_t c) { return shopUpgrades().unreadBytes[1 + c]; }
 
@@ -168,8 +208,9 @@ bool opened(int8_t win, uint32_t bank, int16_t id) { return uint8_t(windowOpen(w
 // exe 0x526840(x, y, right) at window 0's position plus its hand's target
 void quizMark(bool right) {
     MessageWindow& w = messageWindow(0);
-    quizMarkDraw(int16_t(uint16_t(w.x) + uint16_t(w.handTargetX)), int16_t(uint16_t(w.y) + uint16_t(w.handTargetY)),
-                 right, gQuizDraw);
+    const int x = int16_t(uint16_t(w.x) + uint16_t(w.handTargetX)), y = int16_t(uint16_t(w.y) + uint16_t(w.handTargetY));
+    if (gPackAnswers && dataSource().isPs1()) quizMarkDrawUsa(x, y, right, gQuizDraw);
+    else quizMarkDraw(x, y, right, gQuizDraw);
 }
 // exe 0x525e30: the course, the host, the question set, the record; the jingle once the fade and the music are done
 void quizSetUp(QuizShowBlock& show) {
@@ -273,7 +314,7 @@ void quizAsk(QuizShowBlock& show) {
         return;
     case AskStep::WaitAnswer:
         if (!(windowStatus(kTalkWindow) & kWindowStatusWaiting)) return;
-        if (answers[show.question] == messageSystem().answerOf(0) + 1) {
+        if (rightAnswer(show.question) == messageSystem().answerOf(0) + 1) {
             show.subState = uint8_t(QuizPhase::Right);
             show.step = 0;
             ++show.rightAnswers;
@@ -475,7 +516,10 @@ void quizQuestions(QuizShowBlock& show) {
     case QuizPhase::Wrong: quizWrong(show); break;
     default: break;
     }
-    quizCounterDraw(int16_t(show.questions - show.rightAnswers), gQuizDraw); // exe 0x5268f0
+    const int left = int16_t(show.questions - show.rightAnswers);
+    if (!gPackAnswers) quizCounterDraw(left, gQuizDraw); // exe 0x5268f0
+    else if (dataSource().isPs1()) quizCounterDrawUsa(left, gQuizDraw); // 0x800e98c4
+    else quizCounterDraw(left, gQuizDraw, kCounterLeftUsa);
 }
 // exe 0x526a00: the record and the done bit
 void quizRecord(QuizShowBlock& show) {
@@ -951,6 +995,7 @@ bool st32QuizScriptTick(const PlayerEnv& env, RoutineId handler) {
 }
 
 void setQuizDraw(std::vector<ScreenPrim>* draw) { gQuizDraw = draw; }
+void setQuizLocale(uint32_t packAnswers) { gPackAnswers = packAnswers; }
 
 void quizCastUpdate(const PlayerEnv& env, uint32_t actor) {
     E = &env;

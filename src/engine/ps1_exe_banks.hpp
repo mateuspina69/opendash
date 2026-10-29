@@ -28,6 +28,11 @@ std::span<const Ps1ExeBank> ps1ExeBanks();
 // 0xb for "no save data", the bytes of its 0xd.
 std::vector<uint8_t> ps1ExeBank(const DiscImage& disc, const Ps1ExeBank& bank);
 
+// the quiz show's 200 right answers (1..4, one byte per question of the quiz bank) of DAT/ST32T.BIN: the USA quiz's
+// (its questions are not the PC's), the pack's exe/quiz_answers.bin; throws std::runtime_error when they are not there
+constexpr size_t kPs1QuizQuestions = 200;
+std::vector<uint8_t> ps1QuizAnswers(const DiscImage& disc);
+
 // the shop list's 7 price strings (7 x 12 bytes: u16 2, 7 digits, the zenny sign, fb 1f) of DAT/ST0AT.BIN, the PC's
 // MenuBankShopPriceStrings; throws std::runtime_error when they are not there
 std::vector<uint8_t> ps1ShopPrices(const DiscImage& disc);

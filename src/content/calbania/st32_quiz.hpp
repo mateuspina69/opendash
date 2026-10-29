@@ -65,6 +65,9 @@ void quizCastUpdate(const PlayerEnv& env, uint32_t actor);
 // into a set sink (null = not collected): the answer mark / remaining-question counter (exe 0x526840 / 0x5268f0:
 // 0x84 glyphs in OT +0x78, over the windows)
 void setQuizDraw(std::vector<ScreenPrim>* draw);
+// The quiz of the language: the pack's (the USA quiz of its disc: its question bank redirected by the caller, its
+// answers at `packAnswers` in loaded memory, the USA's mark and counter) or, with 0, the data source's own
+void setQuizLocale(uint32_t packAnswers);
 
 // script 0x2b, by its handler [0x89b6d0 + id * 4]
 bool st32QuizScriptPorted(RoutineId handler);
