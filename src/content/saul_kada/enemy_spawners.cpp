@@ -310,8 +310,7 @@ constexpr uint8_t kBlockDustType = 0x11, kBlockMarkerType = 0xf;
 constexpr uint8_t kBlockShockVariant = 8;
 // The block's dust cloud's parameters (static type 0x11; hypothesis names)
 struct BlockDustParams {
-    explicit BlockDustParams(const ControllerActor& actor) : BlockDustParams(const_cast<ControllerActor&>(actor)) {}
-    explicit BlockDustParams(ControllerActor& actor) : spread(actor.params, 0), shade(actor.params[2]), puffs(actor.params[3]) {}
+    explicit BlockDustParams(ActorHeader& actor) : spread(actor.params, 0), shade(actor.params[2]), puffs(actor.params[3]) {}
     BytesField<uint16_t, 4> spread;
     uint8_t& shade;
     uint8_t& puffs;
@@ -349,7 +348,7 @@ void breakBlock(const SpawnerFields& spawner) {
     dust.pos.x.whole = spawner.x;
     dust.pos.y.whole = spawner.y;
     dust.pos.z.whole = spawner.z;
-    BlockDustParams dustParams(controllerActorAt(slot));
+    BlockDustParams dustParams(dust);
     dustParams.spread = 0x100;
     dustParams.shade = 0x80;
     dustParams.puffs = 8;
