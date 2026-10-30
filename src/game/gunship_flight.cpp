@@ -37,28 +37,28 @@ enum class CrashSub : uint8_t { Start = 0, Fall = 1, Blast = 2 };
 } // namespace
 
 int steerRate(StaticActor& actor, uint32_t angle, int lim, int16_t acc) {
-    GunshipFields& ship = classState<GunshipFields>(actor);
+    int16_t& turnStep = actor.spin.spare; // GunshipFields::turnStep: a lane of the slot, whichever class of the family
     const int d = angleDiff(uint32_t(int32_t(actor.rotation.y)), angle);
     if (uint32_t(d * 0x10 + lim) <= uint32_t(lim * 2)) return 0;
-    ship.turnStep = 0;
-    if (d < 0) ship.turnStep = int16_t(-acc);
-    if (d > 0) ship.turnStep = acc;
+    turnStep = 0;
+    if (d < 0) turnStep = int16_t(-acc);
+    if (d > 0) turnStep = acc;
     const int16_t r = actor.spin.y;
     actor.rotation.y = int16_t(actor.rotation.y + (r >> 4));
-    actor.spin.y = int16_t(r + ship.turnStep);
+    actor.spin.y = int16_t(r + turnStep);
     if (actor.spin.y > lim) actor.spin.y = int16_t(lim);
     if (actor.spin.y < -lim) actor.spin.y = int16_t(-lim);
     return d;
 }
 
 int steerDamp(StaticActor& actor, int16_t acc) {
-    GunshipFields& ship = classState<GunshipFields>(actor);
-    if (actor.spin.y < 0) ship.turnStep = acc;
-    if (actor.spin.y > 0) ship.turnStep = int16_t(-acc);
+    int16_t& turnStep = actor.spin.spare; // GunshipFields::turnStep: a lane of the slot, whichever class of the family
+    if (actor.spin.y < 0) turnStep = acc;
+    if (actor.spin.y > 0) turnStep = int16_t(-acc);
     actor.rotation.y = int16_t(actor.rotation.y + (actor.spin.y >> 4));
-    const int16_t r = int16_t(actor.spin.y + ship.turnStep);
+    const int16_t r = int16_t(actor.spin.y + turnStep);
     actor.spin.y = r;
-    if (r == ship.turnStep) {
+    if (r == turnStep) {
         actor.spin.y = 0;
         return 1;
     }
@@ -103,21 +103,21 @@ void bobVertical(StaticActor& actor) {
 }
 
 void rockInit(StaticActor& actor) {
-    GunshipFields& ship = classState<GunshipFields>(actor);
+    int16_t& rollSpeed = actor.acceleration.x; // GunshipFields::rollSpeed: a lane of the slot, whichever class of the family
     actor.rotation.z = int16_t(actor.rotation.z >> 2);
     actor.spin.z = 0x400;
-    ship.rollSpeed = int16_t((uint16_t(actor.rotation.z) & 0xfff) < 0x800 ? 0x400 : 0xfc00);
+    rollSpeed = int16_t((uint16_t(actor.rotation.z) & 0xfff) < 0x800 ? 0x400 : 0xfc00);
 }
 
 int rock(StaticActor& actor) {
-    GunshipFields& ship = classState<GunshipFields>(actor);
+    int16_t& rollSpeed = actor.acceleration.x; // GunshipFields::rollSpeed: a lane of the slot, whichever class of the family
     const int16_t amp = actor.spin.z;
     const uint32_t r = uint16_t(actor.rotation.z) & 0xfff;
-    actor.rotation.z = int16_t((ship.rollSpeed >> 4) + uint16_t(actor.rotation.z));
-    if (r < 0x800) ship.rollSpeed = int16_t(ship.rollSpeed - 0x200);
-    if (r > 0x800) ship.rollSpeed = int16_t(ship.rollSpeed + 0x200);
-    if (amp < ship.rollSpeed) ship.rollSpeed = amp;
-    if (ship.rollSpeed < -int(amp)) ship.rollSpeed = int16_t(-amp);
+    actor.rotation.z = int16_t((rollSpeed >> 4) + uint16_t(actor.rotation.z));
+    if (r < 0x800) rollSpeed = int16_t(rollSpeed - 0x200);
+    if (r > 0x800) rollSpeed = int16_t(rollSpeed + 0x200);
+    if (amp < rollSpeed) rollSpeed = amp;
+    if (rollSpeed < -int(amp)) rollSpeed = int16_t(-amp);
     if ((uint16_t(actor.prevRotation.z) ^ uint16_t(actor.rotation.z)) & 0x800) {
         const int16_t n = int16_t(amp - (amp >> 2));
         actor.spin.z = n;
