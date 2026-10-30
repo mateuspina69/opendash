@@ -650,21 +650,33 @@ TableReader Ps1DataSource::pointee(uint32_t pointer, uint32_t n) const {
 }
 
 std::optional<Ps1DataSource::Region> Ps1DataSource::regionInside(uint32_t pointer) const {
-    // the nearest table the game holds the address of whose bytes read so far (its typed load's extent) hold the
-    // pointer: its slots from the pointer's offset
+    // the nearest table the game holds the address of whose bytes read so far (its typed load's extent) or whose PS1
+    // label (a list read a record at a time, past the first record's load) hold the pointer: its slots from the
+    // pointer's offset. Labels do not overlap, so a table further back never holds a pointer its nearer one's label
+    // does.
     for (auto it = regionAt_.upper_bound(pointer); it != regionAt_.begin();) {
         --it;
         const uint32_t d = pointer - it->first;
         if (d > kMaxLabelBytes) break;
         if (it->second.region != 0) continue;
         const auto e = readExtent_.find(it->second.key);
-        if (e != readExtent_.end() && d < e->second) {
+        const uint32_t extent = std::max(e != readExtent_.end() ? e->second : 0u, labelBytesOf(it->second.key));
+        if (d < extent) {
             Region r = it->second;
             r.offset = d;
             return r;
         }
     }
     return std::nullopt;
+}
+
+uint32_t Ps1DataSource::labelBytesOf(TableKey key) const {
+    const auto t = tables_.find(key);
+    if (t == tables_.end() || t->second.made || t->second.state) return 0;
+    const auto f = labels_.find(t->second.file);
+    if (f == labels_.end()) return 0;
+    const auto l = f->second.find(t->second.address);
+    return l == f->second.end() ? 0 : l->second.bytes;
 }
 
 std::string Ps1DataSource::pointeeString(uint32_t pointer, size_t maxLength) const {

@@ -97,6 +97,8 @@ private:
     // the table a read inside it starts in (read from its start before: its address and extent are known), at the
     // read's offset; lock_ held
     std::optional<Region> regionInside(uint32_t pointer) const;
+    // the bytes of the PS1 label a disc table is placed at (0: a made / state table, or no label there)
+    uint32_t labelBytesOf(TableKey key) const;
     // the address in this source's space of (part, PS1 address); records the region it starts
     uint32_t virtualOf(size_t part, uint32_t address, std::optional<Region> region) const;
     // n bytes of the part from address (fewer at its end), the region's pointer slots translated
