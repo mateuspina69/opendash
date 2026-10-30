@@ -48,8 +48,7 @@ struct RidingSmoke {
 };
 // The debris' lifetime (the velocity's spare lane of the stage's static type 0x26)
 struct DebrisFields {
-    explicit DebrisFields(const ProjectileActor& actor) : DebrisFields(const_cast<ProjectileActor&>(actor)) {}
-    explicit DebrisFields(ProjectileActor& actor) : ticks(actor.velocity.spare) {}
+    explicit DebrisFields(StaticActor& actor) : ticks(actor.velocity.spare) {}
     int16_t& ticks;
 };
 
@@ -295,7 +294,7 @@ void destroyed(AnimatedActor& actor) {
                 debris.pos = actor.pos;
                 debris.rotation.y = int16_t(t.yaw);
                 debris.velocity.setWords(t.xy, t.zYaw);
-                DebrisFields(projectileActorAt(e)).ticks = 0xf0;
+                DebrisFields(debris).ticks = 0xf0;
             }
             e = allocActor60(kActorStageClass);
             if (e != 0) {
