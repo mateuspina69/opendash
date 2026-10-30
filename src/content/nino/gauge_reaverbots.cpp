@@ -153,7 +153,9 @@ uint16_t glowTint(uint8_t level) { return uint16_t(0x4200u | uint32_t(level >> 1
 // ==== 0x4fb670: the reaverbot =========================================================================================
 enum class GaugeState : uint8_t { Init = 0, Swim = 1, Walk = 2, Stand = 3, Down = 4 };
 enum class SwimSub : uint8_t { Circle = 0, Dash = 1, Shoot = 2, KeepAway = 3, Hurt = 4, SpinBack = 5 };
-enum class WalkSub : uint8_t { Circle = 0, Dash = 1, Burst = 2, SpinBack = 3 };
+// 4 / 5 past the walk table ([0x897a68] runs on into the stand table [0x897a78]): a swimmer that walks as a wall turns
+// it (the swim sets its SpinBack, 5, after the switch to walking) waits / fires the stand's volley
+enum class WalkSub : uint8_t { Circle = 0, Dash = 1, Burst = 2, SpinBack = 3, WaitPastTable = 4, VolleyPastTable = 5 };
 enum class StandSub : uint8_t { Wait = 0, Volley = 1, Hurt = 2, HurtPastTable = 3 };
 enum class DashPhase : uint8_t { Start = 0, Aim = 1, Charge = 2, Recover = 3 };
 enum class ShootPhase : uint8_t { Start = 0, Charge = 1, Cool = 2 };
@@ -730,6 +732,8 @@ void walkBurst(AnimatedActor& actor, GaugeFields& fields) {
     default: return;
     }
 }
+void standWait(AnimatedActor& actor, GaugeFields& fields);
+void standVolley(AnimatedActor& actor, GaugeFields& fields);
 // exe 0x4fc100
 void gaugeWalk(const PlayerEnv& env, AnimatedActor& actor, GaugeFields& fields) {
     actor.tint = glowTint(fields.glow);
@@ -743,6 +747,8 @@ void gaugeWalk(const PlayerEnv& env, AnimatedActor& actor, GaugeFields& fields) 
     case WalkSub::Dash: walkDash(actor, fields); break;
     case WalkSub::Burst: walkBurst(actor, fields); break;
     case WalkSub::SpinBack: spinBack(actor, fields, 0x100, 0x1f, false); break;
+    case WalkSub::WaitPastTable: standWait(actor, fields); break;     // exe 0x4fc920
+    case WalkSub::VolleyPastTable: standVolley(actor, fields); break; // exe 0x4fc9e0
     default: notPortedAt(kStoryPort, "0x4fb670 state 2 sub (table 0x897a68)", actor.subState);
     }
     collide(env, actor, fields.contact, fields.mode);
