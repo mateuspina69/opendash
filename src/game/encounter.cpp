@@ -338,10 +338,15 @@ void zoneSlot(EncounterSlot& slot) {
 int16_t wrap16(int32_t v) { return int16_t(uint16_t(uint32_t(v))); }
 
 // exe 0x510d60(x0, x1, z0, z1): every grid cell x0..x1 / z0..z1 (16-bit counters) of the room is a plain floor cell
-// (collides, floor, not special): 0; else -1
+// (collides, floor, not special): 0; else -1. The exe's unchecked index (a column past the row's edge: the
+// neighbouring row's cell, as it reads it); an index past the grid's cells (the area at the grid's first / last row's
+// edge: the exe reads the memory around the grid) is no floor cell: blocked
 int cellsBlocked(int16_t x0, int32_t x1, int16_t z0, int32_t z1) {
+    const RoomGridState& g = roomGrid();
+    const uint32_t cells = uint32_t(g.width) * uint32_t(g.depth);
     for (int16_t z = z0; int32_t(z) <= z1; z = wrap16(z + 1)) {
         for (int16_t x = x0; int32_t(x) <= x1; x = wrap16(x + 1)) {
+            if (gridCellNumberUnchecked(g.bounds(), uint32_t(int32_t(x)), uint32_t(int32_t(z))) >= cells) return -1;
             const uint16_t c = GridCell(gridCellAtIndex(uint32_t(int32_t(x)), uint32_t(int32_t(z)))).word;
             if (int16_t(c) >= 0 || !(c & kCellFloor) || (c & kCellSpecial)) return -1;
         }
