@@ -297,7 +297,6 @@ namespace od::port::manda_ruin_scripts_state { struct GroundedFigureFields; }
 namespace od::port::mission_gunships_state { struct MissionGunshipFields; }
 namespace od::port::mission_tank_state { struct TankFields; }
 namespace od::port::mission_targets_state { struct SmokeColumnsFields; }
-namespace od::port::nino_return_scripts_state { struct FlyPointFields; }
 namespace od::port::nino_ruin_spawners_state { struct RuinSpawnerFields; }
 namespace od::port::opening_cast_state { struct CrewFields; }
 namespace od::port::opening_cast_state { struct OpeningFlutterFields; }
@@ -860,7 +859,6 @@ void layoutValue(LayoutVisitor&, uint32_t, od::port::manda_ruin_scripts_state::G
 void layoutValue(LayoutVisitor&, uint32_t, od::port::mission_gunships_state::MissionGunshipFields&);
 void layoutValue(LayoutVisitor&, uint32_t, od::port::mission_tank_state::TankFields&);
 void layoutValue(LayoutVisitor&, uint32_t, od::port::mission_targets_state::SmokeColumnsFields&);
-void layoutValue(LayoutVisitor&, uint32_t, od::port::nino_return_scripts_state::FlyPointFields&);
 void layoutValue(LayoutVisitor&, uint32_t, od::port::nino_ruin_spawners_state::RuinSpawnerFields&);
 void layoutValue(LayoutVisitor&, uint32_t, od::port::opening_cast_state::CrewFields&);
 void layoutValue(LayoutVisitor&, uint32_t, od::port::opening_cast_state::OpeningFlutterFields&);

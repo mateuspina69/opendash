@@ -287,14 +287,6 @@ void layoutValue(LayoutVisitor& v, uint32_t a, od::port::glyde_base_turret_state
     layoutValue(v, a + 0x16a, s.shotTicks);
 }
 
-void layoutValue(LayoutVisitor& v, uint32_t a, od::port::nino_return_scripts_state::FlyPointFields& s) {
-    using namespace od::port::nino_return_scripts_state;
-    layoutValue(v, a + 0xc, s.ticks);
-    layoutValue(v, a + 0xe, s.flag);
-    layoutValue(v, a + 0x10, s.from);
-    layoutValue(v, a + 0x18, s.to);
-}
-
 void layoutValue(LayoutVisitor& v, uint32_t a, od::port::st1f_birdbot_tank_state::BirdbotTankFields& s) {
     using namespace od::port::st1f_birdbot_tank_state;
     layoutValue(v, a + 0xc, s.circleBack);
@@ -470,7 +462,6 @@ bool classes_calbania(LayoutVisitor& v, uint32_t a, ActorClassState& s) {
     if (typeid(s) == typeid(od::port::calbania_spawners_state::St1fSpawnerFields)) { layoutValue(v, a, static_cast<od::port::calbania_spawners_state::St1fSpawnerFields&>(s)); return true; }
     if (typeid(s) == typeid(od::port::calbania_cast_state::SittingPuppetFields)) { layoutValue(v, a, static_cast<od::port::calbania_cast_state::SittingPuppetFields&>(s)); return true; }
     if (typeid(s) == typeid(od::port::ch3_script_cast_state::Script20AppoDahFields)) { layoutValue(v, a, static_cast<od::port::ch3_script_cast_state::Script20AppoDahFields&>(s)); return true; }
-    if (typeid(s) == typeid(od::port::nino_return_scripts_state::FlyPointFields)) { layoutValue(v, a, static_cast<od::port::nino_return_scripts_state::FlyPointFields&>(s)); return true; }
     if (typeid(s) == typeid(od::port::AppoDahFightFields)) { layoutValue(v, a, static_cast<od::port::AppoDahFightFields&>(s)); return true; }
     if (typeid(s) == typeid(od::port::tron_boss_state::TronFields)) { layoutValue(v, a, static_cast<od::port::tron_boss_state::TronFields&>(s)); return true; }
     if (typeid(s) == typeid(od::port::appo_dah_b_state::ScriptPuppetFields)) { layoutValue(v, a, static_cast<od::port::appo_dah_b_state::ScriptPuppetFields&>(s)); return true; }
