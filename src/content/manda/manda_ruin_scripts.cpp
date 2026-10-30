@@ -21,6 +21,7 @@
 #include "game/event_state.hpp"
 #include "game/explosions.hpp"
 #include "game/fade_state.hpp"
+#include "game/game_state.hpp"
 #include "game/field_alias.hpp"
 #include "game/global_class_types.hpp"
 #include "game/hit_list.hpp"
@@ -1322,6 +1323,53 @@ bool mandaRuinScriptTick(const PlayerEnv&, RoutineId handler) {
 
 void mandaRuinGroundedFigureUpdate(const PlayerEnv& env, uint32_t actor) { groundedFigure(env, animatedActorAt(actor)); }
 void mandaRuinBurningWreckUpdate(const PlayerEnv& env, uint32_t actor) { burningWreck(env, animatedActorAt(actor)); }
-void mandaRuinKeyItemUpdate(const PlayerEnv&, uint32_t actor) { keyItem(staticActorAt(actor)); }
+namespace {
+
+// ---- the PS1's ST37 key (DAT/ST37T.BIN 0x800f2554, states 0x800fc7f4: 0 0x800f2590, 1 0x800f25fc) --------------------
+// The stage's own class where the PC shares 0x5b12c0: its model of the actor's variant (0x8003dfc4, the PS1 bank's key
+// is variant 1), always at half scale, no talk box: taken by touch (no music fade) with its event (window 1, message
+// 0x13), its flag set, freed
+constexpr uint8_t kPs1KeyStage = 0x37;
+constexpr uint32_t kPs1KeyEvent = 0x20000;
+constexpr uint16_t kPs1KeyWindow = 1, kPs1KeyMessage = 0x13;
+void ps1St37Key(StaticActor& a) {
+    KeyItemFields f(a);
+    if (a.state == 0) { // 0x800f2590
+        if (!bindActorModel(a, a.variant)) {
+            freeActor(a); // 0x8003eb24
+            return;
+        }
+        a.state = 1;
+        a.subState = 0;
+        f.touchBox.result = 0;
+        a.scale.x = kSmallKeyItemScale;
+        a.scale.y = kSmallKeyItemScale;
+        a.scale.z = kSmallKeyItemScale;
+        a.interaction = 0;
+        a.flags |= kActorDrawn;
+        return;
+    }
+    if (a.state != 1) notPortedAt(kRuinArea, "ST37T 0x800f2554 state", a.state);
+    if (f.touchBox.result & kKeyItemTouched) { // 0x800f25fc
+        eventStartAtActor(a, kPs1KeyEvent, kPs1KeyWindow, kPs1KeyMessage); // 0x800be2e0
+        setStoryFlag(f.flag);                                               // 0x800c0558
+        freeActor(a);                                                       // 0x800f26d0
+        return;
+    }
+    if (f.spins != 0) a.rotation.y += 0x20u;
+    f.touchBox.previousX = a.prevPos.x.whole;
+    f.touchBox.previousZ = a.prevPos.z.whole;
+    f.touchBox.result = 0;
+    const int16_t pt[3] = {a.pos.x.whole, a.pos.y.whole, a.pos.z.whole};
+    hitListSubmit(pt, f.touchBox, (uint32_t(a.slot) << 24) | kKeyItemShape, kKeyItemAttack); // 0x80042700
+}
+
+} // namespace
+
+void mandaRuinKeyItemUpdate(const PlayerEnv&, uint32_t actor) {
+    StaticActor& a = staticActorAt(actor);
+    if (dataSource().isPs1() && gameState().stage == kPs1KeyStage) ps1St37Key(a);
+    else keyItem(a);
+}
 
 } // namespace od::port
