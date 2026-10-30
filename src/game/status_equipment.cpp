@@ -899,6 +899,16 @@ void equipBuster(StatusScreen& s) {
 
 } // namespace
 
+int panelSwitchRefusal() {
+    const Player& p = player();
+    uint32_t i = kFirstOwnedWeapon;
+    while (i < kWeaponsEnd && !storyFlag(i + kSpecialWeaponItems)) ++i;
+    if (i == kWeaponsEnd) return kRefusedNoWeapon;
+    if (p.variant != 0) return kRefusedVariant;
+    if (p.carryFlags != 0 || p.subState == uint8_t(PlayerSub::Lift)) return kRefusedBusy;
+    return -1;
+}
+
 void equipmentPage(StatusScreen& s) {
     const uint8_t st = s.state;
     if (st <= uint8_t(EquipState::Back)) equipRows(s);

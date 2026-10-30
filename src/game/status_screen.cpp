@@ -303,6 +303,43 @@ void pageHeaderDraw(StatusScreen& s) {
     otSprite(c, 0x68, 0xd0, kMenuBarArt, 0x80, 0x10);
 }
 
+// exe 0x5e7095: the panel's quick switch (triangle): the hand / special weapon switched in the room's weapon mode and
+// the switch sound, or the refusal's message (the weapon switch messages, window 1) until it closes; then the rows
+void panelQuickSwitch(StatusScreen& s) {
+    constexpr int8_t kMessageWindow = 1;
+    constexpr uint16_t kSwitchSound = 0x81;
+    menuCursorStep(s, 1);
+    switch (QuickSwitchStep(s.sub)) {
+    case QuickSwitchStep::Enter:
+        s.sub = uint8_t(QuickSwitchStep::Check);
+        [[fallthrough]];
+    case QuickSwitchStep::Check:
+        if (const int msg = panelSwitchRefusal(); msg >= 0) {
+            menuWindowOpen(kMessageWindow, menuBanks().misc, int16_t(msg)); // exe 0x557390
+            s.sub = uint8_t(QuickSwitchStep::WaitMessage);
+            break;
+        }
+        s.sub = uint8_t(QuickSwitchStep::Switch);
+        [[fallthrough]];
+    case QuickSwitchStep::Switch: {
+        Player& p = player();
+        p.specialAllowed = p.specialAllowed == 0 ? 1u : 0u;
+        weaponMode(p.weaponMode);              // exe 0x573570
+        soundPlayFlatForced(kSwitchSound);     // exe 0x5d5260
+        s.state = uint8_t(PanelState::Rows);
+        s.sub = 0;
+        break;
+    }
+    case QuickSwitchStep::WaitMessage:
+        if (windowStatus(uint8_t(kMessageWindow)) == 0) { // exe 0x557810
+            s.state = uint8_t(PanelState::Rows);
+            s.sub = 0;
+        }
+        break;
+    default: break;
+    }
+}
+
 // exe 0x5e6f90: page 1, the panel (its rows -> the pages); the panel drawn on every path
 void panel(StatusScreen& s) {
     switch (PanelState(s.state)) {
@@ -325,9 +362,12 @@ void panel(StatusScreen& s) {
                 break;
             }
             if (menuPadPressed() & kPadCross) s.cursor = kPanelCloseRow;
+        } else if (player().weaponMode != kWeaponModeTown) {
+            s.state = uint8_t(PanelState::QuickSwitch);
+            s.sub = uint8_t(QuickSwitchStep::Enter);
         }
-        // triangle with a special weapon: the panel's weapon switch -- not ported
         break;
+    case PanelState::QuickSwitch: panelQuickSwitch(s); break;
     case PanelState::ToTitle: panelTitleQuestion(s); break;
     case PanelState::Close:
         // exe 0x5e7dd0: the display buffer copied over the screen for the closing frames -- the host keeps the last

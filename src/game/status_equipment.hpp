@@ -12,5 +12,8 @@ struct StatusScreen;
 
 // exe 0x5eb180: page 5 one frame (its state's handler, the page's rows / title / frame)
 void equipmentPage(StatusScreen& s);
+// exe 0x5e70c3: why the panel's quick switch (triangle) refuses, its message of the weapon switch messages: no special
+// weapon owned, the player's variant, something carried / lifted; -1 = it switches
+int panelSwitchRefusal();
 
 } // namespace od::port
