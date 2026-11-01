@@ -3,6 +3,7 @@
 #include "game/field_alias.hpp"
 #include "game/player/player_weapons.hpp"
 
+#include <array>
 #include <cstdio>
 #include <stdexcept>
 #include <string>
@@ -517,7 +518,31 @@ bool specialArmPorted(uint32_t weapon) {
     }
 }
 
-uint8_t weaponShotType(uint32_t weapon) { return weaponTable[weapon].shotType; }
+namespace {
+// The PS1 keeps a special weapon's code in its file's overlay (COMMON/PL00R##.BIN, loaded at 0x8010a000): the shot
+// types 2..16 of its global class table (SLUS 0x8006b3b4) all name that code, so its weapon table's type does not name
+// the class (the drill arm's is 7, the vacuum arm's). The port's classes keep the PC's numbering: each overlay
+// weapon's shot class there, OpenDash's own (the PC weapon table's 0x8c4b68 types). The buster's types (0 / 1) are
+// the SLUS code: read from the table.
+struct OverlayShot {
+    uint8_t weapon;
+    GlobalShotType type;
+};
+constexpr std::array<OverlayShot, 14> kOverlayShots = {{
+    {0x03, GlobalShotType::Crusher},       {0x04, GlobalShotType::BusterCannon}, {0x05, GlobalShotType::HyperShell},
+    {0x06, GlobalShotType::HomingMissile}, {0x07, GlobalShotType::GroundCrawler}, {0x08, GlobalShotType::VacuumArm},
+    {0x09, GlobalShotType::Reflector},     {0x0b, GlobalShotType::BladeArm},      {0x0c, GlobalShotType::ShiningLaser},
+    {0x0d, GlobalShotType::MachineGun},    {0x0e, GlobalShotType::SpreadBuster}, {0x0f, GlobalShotType::Extinguisher},
+    {0x10, GlobalShotType::HunterSeeker},  {0x11, GlobalShotType::DrillArm},
+}};
+} // namespace
+
+uint8_t weaponShotType(uint32_t weapon) {
+    if (dataSource().isPs1())
+        for (const OverlayShot& o : kOverlayShots)
+            if (o.weapon == weapon) return typeByte(o.type);
+    return weaponTable[weapon].shotType;
+}
 
 int8_t weaponLevel(const Player& p, int weapon, WeaponStat stat) {
 
@@ -758,7 +783,7 @@ void specialArmUpdate(Player& p) {
     if (a == 0) return;
     ShotActor& shot = shotActorAt(a);
     shot.flags = kActorLive;
-    shot.type = weaponRecord(p.activeSpecial).shotType;
+    shot.type = weaponShotType(uint32_t(int32_t(p.activeSpecial)));
     shot.loopFlags |= kShotSweepGroup;
     aimShot(p, shot);
     for (size_t i = 0; i < shot.params.size(); ++i) shot.params[i] = 0;
