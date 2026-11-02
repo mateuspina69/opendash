@@ -10,12 +10,12 @@
 
 namespace od::port::quicksand_state {
 
-// The pit's parameters: the pull's strength, its radius; its point (the spawn record's)
+// The pit's parameters: the pull's strength, its radius; its point (the spawn record's, +0x10)
 struct PitParams : ActorClassState {
-    explicit PitParams(ControllerActor& actor) : pullStrength(actor.params, 0), radius(actor.params, 2) {}
+    explicit PitParams(ControllerActor& actor) : pullStrength(actor.params, 0), radius(actor.params, 2), point(actor.recordPoint) {}
     BytesField<uint16_t, 4> pullStrength;
     BytesField<uint16_t, 4> radius;
-    ShortVec3 point;
+    ShortVec3& point;
 };
 
 } // namespace od::port::quicksand_state

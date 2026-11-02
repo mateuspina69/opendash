@@ -6,6 +6,7 @@
 
 #include "game/actor_pools.hpp"
 #include "game/actor_state.hpp"
+#include "game/audio_logic.hpp"
 #include "game/distances.hpp"
 #include "game/vectors.hpp"
 #include "game/game_state.hpp"
@@ -55,8 +56,14 @@ void quicksand(ControllerActor& actor) {
     spray.type = typeByte(GlobalEffectType::SkidSparks);
     spray.loopFlags |= kActorSweepGroup1 | kActorLateLoop;
     spray.variant = kSprayVariant;
-    // the foot's bone point (the bone points are << the stage shift), back to world units
-    const ShortVec3& footPoint = p.bonePoints[size_t(foot) * kFootBones + kFirstFootBone];
+    // the foot's bone point (the bone points are << the stage shift), back to world units. Foot 1 is bone 14 (the
+    // right foot); foot 2's index, 17, is past the 15 bone points (exe 0xa721b0 + 17 * 8 = 0xa72238): the exe reads the
+    // words after the player struct there, x and y two words nothing writes (0) and z the sound queue's count
+    // (0xa7223c), so that spray starts near the world's origin
+    ShortVec3 footPoint;
+    const size_t bone = size_t(foot) * kFootBones + kFirstFootBone;
+    if (bone < kPlayerBones) footPoint = p.bonePoints[bone];
+    else footPoint = ShortVec3{0, 0, int16_t(uint16_t(soundQueue().count))};
     const int shift = stage().coordinateShift;
     spray.pos.x = int16_t(footPoint.x >> shift);
     spray.pos.y = int16_t(footPoint.y >> shift);
