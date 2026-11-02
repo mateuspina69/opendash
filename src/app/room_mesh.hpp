@@ -115,7 +115,7 @@ struct RoomMesh {
     int skyGradHofs = 0x240, skyGradW = 0x50;
     std::map<std::pair<int, int>, std::vector<od::RenderVertex>> partGeom; // model space, game axes
     std::map<std::pair<int, int>, PartSource> partSrc;                     // partGeom's source vertices
-    std::vector<uint8_t> slices; // sliceCount * 256*256 RGBA
+    std::vector<uint8_t> slices; // sliceCount * od::sliceEdge()^2 RGBA (engine/texture_pack)
     // the (tpage << 16 | clut) each slice was decoded from, bit 32 set (0 = not a plain VRAM slice): the animated
     // CLUTs re-decode the slices whose CLUT they change
     std::vector<uint64_t> sliceTex;

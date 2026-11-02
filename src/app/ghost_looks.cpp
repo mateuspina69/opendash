@@ -9,6 +9,7 @@
 #include <map>
 
 #include "engine/dat.hpp"
+#include "engine/texture_pack.hpp"
 #include "game/player/player_model.hpp"
 
 namespace od::app {
@@ -85,7 +86,7 @@ void GhostLooks::build(const od::port::PlayerLook& look, const od::Vram& vram, c
         auto slice = [&](uint32_t tex) { // tex = (tpage << 16) | clut
             auto [it, added] = sliceOf.try_emplace(tex, 0);
             if (!added) return it->second;
-            auto rgba = gv.decode(uint16_t(tex >> 16), uint16_t(tex & 0xFFFF), true);
+            auto rgba = od::pageSlice(gv, uint16_t(tex >> 16), uint16_t(tex & 0xFFFF), true);
             if (freeUsed < free_.size()) {
                 it->second = free_[free_.size() - 1 - freeUsed++];
                 reused.emplace_back(it->second, std::move(rgba));

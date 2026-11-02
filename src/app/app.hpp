@@ -127,6 +127,7 @@ struct App {
     std::string aaArg, aaQualityArg; // --aa / --aa-quality override opendash.ini
     int vsyncArg = -1;               // --vsync 0|1 overrides vsync=
     std::string langArg;             // --lang jp|en|ptbr overrides opendash.ini lang=
+    std::string textureDumpArg;      // --texture-dump <dir> overrides opendash.ini texture_dump=
     bool audioDeviceArg = false;     // --audio-device 1: scripted runs open the real audio device (shutdown test)
     std::string voiceTestArg;        // --voice-test xa10_18.dat:3 -- play one voice-pack track (silent mixer), log it
     float camArg[5]{};

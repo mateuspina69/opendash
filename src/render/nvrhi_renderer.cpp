@@ -10,6 +10,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstring>
+#include <list>
 #include <memory>
 #include <unordered_map>
 
@@ -357,6 +358,8 @@ public:
                 const std::array<uint32_t, 4>& semiStart, int sliceSize) override {
         sliceSize_ = sliceSize;
         sliceUpdates_.clear();
+        poolShows_.clear(); // the last room's slices (the pool itself stays)
+        sliceWants_.clear();
         staticGv_.clear();
         uvDirtyLo_ = UINT32_MAX;
         uvDirtyHi_ = 0;
@@ -438,14 +441,95 @@ public:
     bool rayTracingSupported() const override { return rt_; }
 
     void updateSlice(int slice, const std::vector<uint8_t>& rgba) override {
-        if (pages_ && sliceSize_ == 256 && slice >= 0 && uint32_t(slice) < pages_->getDesc().arraySize &&
-            rgba.size() == size_t(256) * 256 * 4)
+        if (pages_ && slice >= 0 && uint32_t(slice) < pages_->getDesc().arraySize &&
+            rgba.size() == size_t(sliceSize_) * size_t(sliceSize_) * 4) {
             sliceUpdates_[slice] = rgba;
+            poolShows_.erase(slice);
+            sliceWants_.erase(slice);
+        }
+    }
+
+    bool showPage(int slice, uint64_t page) override {
+        if (!pages_ || slice < 0 || uint32_t(slice) >= pages_->getDesc().arraySize) return false;
+        sliceWants_[slice] = page;
+        const auto it = poolEdge_ == sliceSize_ ? poolLayer_.find(page) : poolLayer_.end();
+        if (it == poolLayer_.end()) return false;
+        poolOrder_.splice(poolOrder_.begin(), poolOrder_, it->second.second);
+        poolShows_[slice] = it->second.first;
+        sliceUpdates_.erase(slice);
+        return true;
+    }
+
+    void poolPage(uint64_t page, const std::vector<uint8_t>& rgba) override {
+        const size_t bytes = size_t(sliceSize_) * size_t(sliceSize_) * 4;
+        if (rgba.size() != bytes) return;
+        if (poolEdge_ != sliceSize_) { // another pack scale: the pool starts over
+            pool_ = nullptr;
+            poolEdge_ = sliceSize_;
+            poolUsed_ = 0;
+            poolOrder_.clear();
+            poolLayer_.clear();
+            poolWrites_.clear();
+            poolShows_.clear();
+        }
+        if (poolLayer_.contains(page)) return;
+        const uint32_t most = uint32_t(std::clamp<size_t>(kPoolBytes / bytes, 1, 2048));
+        uint32_t layer = 0;
+        if (pool_ && poolUsed_ < pool_->getDesc().arraySize) {
+            layer = poolUsed_++;
+        } else if (!pool_ || pool_->getDesc().arraySize < most) {
+            if (!growPool(pool_ ? std::min(most, pool_->getDesc().arraySize * 2) : std::min(most, 16u))) return;
+            layer = poolUsed_++;
+        } else { // full: the least recently shown page no queued copy reads
+            auto old = poolOrder_.end();
+            bool found = false;
+            while (!found && old != poolOrder_.begin()) {
+                --old;
+                const uint32_t l = poolLayer_[*old].first;
+                found = std::none_of(poolShows_.begin(), poolShows_.end(), [&](const auto& s) { return s.second == l; });
+            }
+            if (!found) return; // every layer is read this frame
+            layer = poolLayer_[*old].first;
+            poolLayer_.erase(*old);
+            poolOrder_.erase(old);
+        }
+        poolOrder_.push_front(page);
+        poolLayer_[page] = {layer, poolOrder_.begin()};
+        poolWrites_[layer] = rgba;
+        for (const auto& [slice, want] : sliceWants_)
+            if (want == page) poolShows_[slice] = layer;
+    }
+
+    // pool_ with `layers` layers, the pooled ones copied (their pending writes still apply)
+    bool growPool(uint32_t layers) {
+        nvrhi::IDevice* d = dev_.device();
+        nvrhi::TextureDesc td;
+        td.width = td.height = uint32_t(poolEdge_);
+        td.arraySize = layers;
+        td.dimension = nvrhi::TextureDimension::Texture2DArray;
+        td.format = nvrhi::Format::RGBA8_UNORM;
+        td.initialState = nvrhi::ResourceStates::CopySource;
+        td.keepInitialState = true;
+        td.debugName = "page pool";
+        nvrhi::TextureHandle grown = d->createTexture(td);
+        if (!grown) return false;
+        if (pool_) {
+            d->waitForIdle();
+            nvrhi::CommandListHandle cl = d->createCommandList();
+            cl->open();
+            for (uint32_t i = 0; i < poolUsed_; ++i)
+                cl->copyTexture(grown, nvrhi::TextureSlice().setArraySlice(i), pool_, nvrhi::TextureSlice().setArraySlice(i));
+            cl->close();
+            d->executeCommandList(cl);
+            d->waitForIdle();
+        }
+        pool_ = grown;
+        return true;
     }
 
     bool appendSlices(const std::vector<uint8_t>& rgba, int count) override {
-        constexpr size_t kSliceBytes = size_t(256) * 256 * 4;
-        if (!pages_ || sliceSize_ != 256 || count <= 0 || rgba.size() != size_t(count) * kSliceBytes) return false;
+        const size_t sliceBytes = size_t(sliceSize_) * size_t(sliceSize_) * 4;
+        if (!pages_ || count <= 0 || rgba.size() != size_t(count) * sliceBytes) return false;
         nvrhi::IDevice* d = dev_.device();
         d->waitForIdle();
         nvrhi::TextureDesc td = pages_->getDesc();
@@ -458,7 +542,7 @@ public:
         for (uint32_t i = 0; i < old; ++i) // the slices so far (their pending updateSlice writes still apply)
             cl->copyTexture(grown, nvrhi::TextureSlice().setArraySlice(i), pages_, nvrhi::TextureSlice().setArraySlice(i));
         for (int k = 0; k < count; ++k)
-            cl->writeTexture(grown, old + uint32_t(k), 0, rgba.data() + size_t(k) * kSliceBytes, size_t(256) * 4);
+            cl->writeTexture(grown, old + uint32_t(k), 0, rgba.data() + size_t(k) * sliceBytes, size_t(sliceSize_) * 4);
         cl->close();
         d->executeCommandList(cl);
         d->waitForIdle();
@@ -802,8 +886,15 @@ public:
         nvrhi::ITexture* back = dev_.backbuffer();
         cl_->open();
         for (const auto& [slice, rgba] : sliceUpdates_) // animated CLUTs (updateSlice)
-            cl_->writeTexture(pages_, uint32_t(slice), 0, rgba.data(), size_t(256) * 4);
+            cl_->writeTexture(pages_, uint32_t(slice), 0, rgba.data(), size_t(sliceSize_) * 4);
         sliceUpdates_.clear();
+        for (const auto& [layer, rgba] : poolWrites_) // poolPage
+            cl_->writeTexture(pool_, layer, 0, rgba.data(), size_t(poolEdge_) * 4);
+        poolWrites_.clear();
+        for (const auto& [slice, layer] : poolShows_) // showPage: the animated pages' frames
+            cl_->copyTexture(pages_, nvrhi::TextureSlice().setArraySlice(uint32_t(slice)), pool_,
+                             nvrhi::TextureSlice().setArraySlice(layer));
+        poolShows_.clear();
         flushStaticUvs(); // the room UV animation (updateStaticUvs)
         for (PreviewSlot& ps : preview_) // renderPreview: before the overlay samples them
             if (ps.pending) drawPreview(ps);
@@ -1852,7 +1943,17 @@ private:
     nvrhi::TextureHandle pages_;
     int sliceSize_ = 256;
     std::map<int, std::vector<uint8_t>> sliceUpdates_;
-    std::vector<GpuVertex> staticGv_;                 // the uploaded room vertices (updateStaticUvs patches them)
+    // the page pool (showPage / poolPage): pool_'s layers by page name, poolOrder_ most recently shown first
+    static constexpr size_t kPoolBytes = size_t(1) << 30;
+    nvrhi::TextureHandle pool_;
+    int poolEdge_ = 0;          // pool_'s edge: the sliceSize it was made for
+    uint32_t poolUsed_ = 0;     // layers handed out
+    std::list<uint64_t> poolOrder_;
+    std::unordered_map<uint64_t, std::pair<uint32_t, std::list<uint64_t>::iterator>> poolLayer_;
+    std::map<uint32_t, std::vector<uint8_t>> poolWrites_; // next frame, before the copies
+    std::map<int, uint32_t> poolShows_;                   // slice <- layer, next frame
+    std::map<int, uint64_t> sliceWants_;                  // the page each slice is to show (showPage)
+    std::vector<GpuVertex> staticGv_;                // the uploaded room vertices (updateStaticUvs patches them)
     uint32_t uvDirtyLo_ = UINT32_MAX, uvDirtyHi_ = 0; // their range not yet written to vbuf_
     Targets t_;
     std::unordered_map<nvrhi::ITexture*, nvrhi::BindingSetHandle> outSets_;

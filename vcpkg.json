@@ -24,6 +24,7 @@
       "platform": "windows"
     },
     "stb",
-    "nanosvg"
+    "nanosvg",
+    "xxhash"
   ]
 }

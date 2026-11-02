@@ -46,6 +46,14 @@ foreach(layer engine game content)
 endforeach()
 target_link_libraries(odgame PUBLIC odengine)
 target_link_libraries(odcontent PUBLIC odgame)
+# the texture pack (engine/texture_pack): stb_image reads its images, stb_image_write dumps the pages, xxHash
+# (header only) names them
+find_package(Stb QUIET)
+if(NOT Stb_FOUND) # no vcpkg: the system's headers
+    find_path(Stb_INCLUDE_DIR stb_truetype.h PATH_SUFFIXES stb REQUIRED)
+endif()
+find_path(XXHASH_INCLUDE_DIR xxhash.h REQUIRED)
+target_include_directories(odengine PRIVATE ${Stb_INCLUDE_DIR} ${XXHASH_INCLUDE_DIR})
 
 # --- net: the netplay transport, protocol and session (plain Winsock / BSD sockets UDP, docs/adr/0005-netplay-transport.md); no
 # game code, the app glues it to the game ---
@@ -64,10 +72,7 @@ endif()
 add_library(odrender STATIC src/render/render_logic.cpp src/render/scene_pieces.cpp src/render/ui_canvas.cpp
     src/render/ui_font.cpp src/render/ui_svg.cpp)
 target_include_directories(odrender PUBLIC src)
-find_package(Stb QUIET) # stb_truetype: the UI font (render/ui_font); stb_image_write: dev dumps
-if(NOT Stb_FOUND) # no vcpkg: the system's headers
-    find_path(Stb_INCLUDE_DIR stb_truetype.h PATH_SUFFIXES stb REQUIRED)
-endif()
+# stb (found with the engine above): stb_truetype the UI font (render/ui_font); stb_image_write: dev dumps
 target_include_directories(odrender PUBLIC ${Stb_INCLUDE_DIR})
 find_package(NanoSVG CONFIG REQUIRED) # the vector UI's pictures (render/ui_svg)
 target_link_libraries(odrender PRIVATE NanoSVG::nanosvg NanoSVG::nanosvgrast)
@@ -209,6 +214,11 @@ add_executable(test_config tests/test_config.cpp)
 target_link_libraries(test_config PRIVATE odengine)
 target_include_directories(test_config PRIVATE tests)
 add_test(NAME test_config COMMAND test_config)
+
+add_executable(test_texture_pack tests/test_texture_pack.cpp)
+target_link_libraries(test_texture_pack PRIVATE odengine)
+target_include_directories(test_texture_pack PRIVATE tests ${Stb_INCLUDE_DIR})
+add_test(NAME test_texture_pack COMMAND test_texture_pack)
 
 add_executable(test_ps1_files tests/test_ps1_files.cpp)
 target_link_libraries(test_ps1_files PRIVATE odengine)

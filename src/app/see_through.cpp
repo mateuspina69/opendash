@@ -44,10 +44,20 @@ bool SeeThrough::seeThroughFace(const od::RenderVertex* v) const {
 
 void SeeThrough::roomLoaded(std::vector<od::RenderVertex>& tris, size_t opaqueEnd, const std::vector<uint8_t>& slices,
                             int sliceCount) {
+    // the slices' side: kSliceSize times a texture pack's scale (engine/texture_pack); the mask samples one texel of
+    // each enlarged PS1 texel
     const size_t texels = size_t(kSliceSize) * kSliceSize;
-    clearSlices_ = slices.size() == size_t(std::max(sliceCount, 0)) * texels * 4 ? sliceCount : 0;
+    size_t scale = 0;
+    if (sliceCount > 0)
+        for (size_t s = 1; s <= 16 && !scale; ++s)
+            if (slices.size() == size_t(sliceCount) * texels * s * s * 4) scale = s;
+    clearSlices_ = scale ? sliceCount : 0;
     clear_.assign(size_t(clearSlices_) * texels, 0);
-    for (size_t i = 0; i < clear_.size(); ++i) clear_[i] = slices[i * 4 + 3] < kClearAlpha ? 1 : 0;
+    const size_t edge = size_t(kSliceSize) * scale;
+    for (size_t i = 0; i < clear_.size(); ++i) {
+        const size_t slice = i / texels, y = i / kSliceSize % kSliceSize, x = i % kSliceSize;
+        clear_[i] = slices[((slice * edge + y * scale) * edge + x * scale) * 4 + 3] < kClearAlpha ? 1 : 0;
+    }
     const od::ScenePieces sp = od::scenePieces(tris.data(), tris.size());
     pieces_.clear();
     states_.clear();

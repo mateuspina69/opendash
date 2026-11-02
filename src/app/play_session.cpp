@@ -23,6 +23,7 @@
 #include "content/nino/field_spawners.hpp"
 #include "engine/dat.hpp"
 #include "engine/data_source.hpp"
+#include "engine/texture_pack.hpp"
 #include "engine/room.hpp"
 #include "engine/vram.hpp"
 #include "game/actor_collision.hpp"
@@ -445,8 +446,17 @@ void PlayerView::vramMovesApply(const RoomMesh& mesh, od::Renderer& r) {
         }
     }
     for (size_t s = 0; s < dirty.size(); ++s)
-        if (dirty[s])
-            r.updateSlice(int(s), g_roomVram.decode(uint16_t(mesh.sliceTex[s] >> 16), uint16_t(mesh.sliceTex[s] & 0xFFFF), true));
+        if (dirty[s]) showSlicePage(mesh, s, r);
+}
+
+void PlayerView::showSlicePage(const RoomMesh& mesh, size_t slice, od::Renderer& r) {
+    std::vector<uint8_t> ps1 = g_roomVram.decode(uint16_t(mesh.sliceTex[slice] >> 16), uint16_t(mesh.sliceTex[slice] & 0xFFFF), true);
+    const uint64_t page = od::pageName(ps1);
+    if (!r.showPage(int(slice), page)) od::pageLoader().request(page, std::move(ps1));
+}
+
+void PlayerView::pagesMadeApply(od::Renderer& r) {
+    for (const auto& [page, rgba] : od::pageLoader().takeReady()) r.poolPage(page, rgba);
 }
 
 void PlayerView::clutAnimationSync(const RoomMesh& mesh, od::Renderer& r) {
@@ -467,10 +477,10 @@ void PlayerView::clutAnimationSync(const RoomMesh& mesh, od::Renderer& r) {
     if (changedHigh) g_roomVram.loadImage(0, 496, 256, 8, std::span<const uint8_t>(clutShown.data() + 0x1000, 0x1000));
     for (size_t s = 0; s < mesh.sliceTex.size(); ++s) {
         if (!(mesh.sliceTex[s] >> 32)) continue;
-        const uint16_t clut = uint16_t(mesh.sliceTex[s] & 0xFFFF), tpage = uint16_t(mesh.sliceTex[s] >> 16);
+        const uint16_t clut = uint16_t(mesh.sliceTex[s] & 0xFFFF);
         const int cy = clut >> 6;
         if ((changedLow && lowRows && cy >= 240 && cy < 248) || (changedHigh && cy >= 496 && cy < 504))
-            r.updateSlice(int(s), g_roomVram.decode(tpage, clut, true));
+            showSlicePage(mesh, s, r);
     }
 }
 

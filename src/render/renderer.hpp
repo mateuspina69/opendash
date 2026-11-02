@@ -187,17 +187,24 @@ public:
                                bool heat = false) {
         (void)amplitude, (void)phase, (void)tint, (void)remaster, (void)seconds, (void)heat;
     }
-    // slices: count * 256*256 RGBA8
+    // slices: count * sliceSize^2 RGBA8
     // semiStart[m] (m = 0 avg, 1 add, 2 sub): first vertex of each PS1 semi-transparent range; the
     // ranges follow the opaque vertices in that order (semiStart[3] = end). Empty = all opaque.
-    // sliceSize: texture page edge in texels (256 = original PS1 pages; larger for replacement textures)
+    // sliceSize: texture page edge in texels (256 = original PS1 pages; larger with a texture pack, engine/texture_pack)
     virtual bool upload(const std::vector<RenderVertex>& tris, const std::vector<uint8_t>& slices,
                         int sliceCount, const std::array<uint32_t, 4>& semiStart = {}, int sliceSize = 256) = 0;
     // background: clear colour (0..1) and sky triangles drawn first without depth. screenSpace:
     // pos = NDC x, y (PS1-style 2D layers); otherwise world positions around the eye (sky dome)
-    // replaces one 256 x 256 RGBA8 slice of the uploaded room textures (the animated CLUTs re-decoded), next frame
+    // replaces one RGBA8 slice (the uploaded sliceSize) of the room textures (the animated CLUTs re-decoded), next frame
     virtual void updateSlice(int slice, const std::vector<uint8_t>& rgba) { (void)slice, (void)rgba; }
-    // appends `count` 256 x 256 RGBA8 slices after the uploaded ones (the slices so far and the room geometry kept,
+    // The page pool: page images kept on the GPU by name (engine/texture_pack pageName), across rooms, so an animated
+    // page's frames are uploaded once; the least recently shown go past its budget.
+    // showPage: the slice is to show the page (until the next upload / updateSlice / showPage of it); a pooled page is
+    // copied into it next frame, else false and the slice keeps what it shows until poolPage brings the page
+    virtual bool showPage(int slice, uint64_t page) { (void)slice, (void)page; return false; }
+    // poolPage: adds a page image (the uploaded sliceSize^2 RGBA8), on the GPU and in the slices showPage gave it next frame
+    virtual void poolPage(uint64_t page, const std::vector<uint8_t>& rgba) { (void)page, (void)rgba; }
+    // appends `count` RGBA8 slices (the uploaded sliceSize) after the uploaded ones (the slices so far and the room geometry kept,
     // no history reset): their indices are the old slice count onward. false = not done (no room uploaded, pages of
     // another size, a failed allocation)
     virtual bool appendSlices(const std::vector<uint8_t>& rgba, int count) { (void)rgba, (void)count; return false; }

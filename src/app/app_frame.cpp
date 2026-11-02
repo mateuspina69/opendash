@@ -16,6 +16,7 @@
 #include "content/late_game/st54_clear_screen.hpp"
 #include "engine/dat.hpp"
 #include "engine/data_source.hpp"
+#include "engine/texture_pack.hpp"
 #include "game/vectors.hpp"
 #include "engine/lang.hpp"
 #include "engine/screen_prim.hpp"
@@ -245,7 +246,7 @@ void App::simStep(int gameFrames) {
                 seeThrough.roomLoaded(mesh.tris, mesh.semiStart[3] ? mesh.semiStart[0] : mesh.tris.size(), mesh.slices,
                                       mesh.sliceCount);
                 modelClearance.roomLoaded(mesh.tris, mesh.semiStart[3] ? mesh.semiStart[0] : mesh.tris.size());
-                if (!renderer->upload(mesh.tris, mesh.slices, mesh.sliceCount, mesh.semiStart)) SDL_Log("upload failed");
+                if (!renderer->upload(mesh.tris, mesh.slices, mesh.sliceCount, mesh.semiStart, od::sliceEdge())) SDL_Log("upload failed");
                 mesh.camTris = std::move(current.camTris);
                 mesh.tris.clear();
                 mesh.slices.clear();
@@ -614,6 +615,7 @@ void App::updateScene() {
     }
     playerView.vramMovesApply(current, *renderer);
     playerView.clutAnimationSync(current, *renderer);
+    playerView.pagesMadeApply(*renderer);
     { // the screen ripples (pool a0 class 0x438750 variant 0, e.g. the ST18 machine's pulse of script 0x3b, 0x52b180):
         // ring radius +0x18 .. +0x18 + (+0x1a >> 8) around the screen point +0x10 / +0x12, shifted by s8 +0xe;
         // none while 0x6d000a (the exe skips them then)

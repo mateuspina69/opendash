@@ -21,6 +21,7 @@
 #include "engine/lang.hpp"
 #include "engine/room.hpp"
 #include "engine/screen_prim.hpp"
+#include "engine/texture_pack.hpp"
 #include "game/status_options.hpp"
 #include "game/message.hpp"
 #include "game/player/player_input.hpp"
@@ -95,6 +96,7 @@ void App::parseArgs(int argc, char** argv) {
         else if (a == "--shot") shotPath = argv[++i];
         else if (a == "--aa") aaArg = argv[++i];
         else if (a == "--lang") langArg = argv[++i];
+        else if (a == "--texture-dump") textureDumpArg = argv[++i];
         else if (a == "--voice-test") voiceTestArg = argv[++i];
         else if (a == "--aa-quality") aaQualityArg = argv[++i];
         else if (a == "--vsync") vsyncArg = std::stoi(argv[++i]) != 0;
@@ -300,6 +302,35 @@ int App::init() {
             data = std::make_unique<od::PcDataSource>(cfg.datDir, cfg.exePath);
         }
         od::bindDataSource(data.get());
+        { // the texture pack (the pages' larger images, engine/texture_pack): textures/ next to the executable unless
+          // texture_pack= says otherwise; texture_dump= (or --texture-dump) the folder the pages it lacks go to
+          // (relative paths are from the executable's folder)
+            const char* base = SDL_GetBasePath();
+            const std::filesystem::path exeDir = base ? base : "";
+            std::error_code ec;
+            if (cfg.texturePack.empty()) {
+                if (std::filesystem::is_directory(exeDir / "textures", ec)) cfg.texturePack = exeDir / "textures";
+            } else if (cfg.texturePack.is_relative()) {
+                cfg.texturePack = exeDir / cfg.texturePack;
+            }
+            if (!textureDumpArg.empty()) cfg.textureDump = textureDumpArg;
+            if (!cfg.textureDump.empty()) {
+                if (cfg.textureDump.is_relative()) cfg.textureDump = exeDir / cfg.textureDump;
+                od::bindPageDump(cfg.textureDump);
+                SDL_Log("texture dump: %s", cfg.textureDump.string().c_str());
+            }
+        }
+        if (!cfg.texturePack.empty()) {
+            try {
+                const uint64_t t0 = SDL_GetTicks();
+                auto pack = std::make_shared<const od::TexturePack>(cfg.texturePack);
+                SDL_Log("texture pack %s: %zu images, scale %d (%llu ms)", cfg.texturePack.string().c_str(), pack->size(),
+                        pack->scale(), (unsigned long long)(SDL_GetTicks() - t0));
+                od::bindTexturePack(std::move(pack));
+            } catch (const std::exception& e) {
+                SDL_Log("texture pack %s not used: %s", cfg.texturePack.string().c_str(), e.what());
+            }
+        }
         { // netplay and the ghost mirror (app/netplay): the session runs between game ticks only
             if (mirrorArg && ghostLookArg) mirrorArg->look = ghostLookArg;
             NetSettings net;
@@ -415,7 +446,7 @@ int App::init() {
                 seeThrough.roomLoaded(mesh.tris, mesh.semiStart[3] ? mesh.semiStart[0] : mesh.tris.size(), mesh.slices,
                                       mesh.sliceCount);
                 modelClearance.roomLoaded(mesh.tris, mesh.semiStart[3] ? mesh.semiStart[0] : mesh.tris.size());
-                if (!renderer->upload(mesh.tris, mesh.slices, mesh.sliceCount, mesh.semiStart)) SDL_Log("upload failed");
+                if (!renderer->upload(mesh.tris, mesh.slices, mesh.sliceCount, mesh.semiStart, od::sliceEdge())) SDL_Log("upload failed");
                 current = std::move(mesh);
                 playerView.enterPlay(current);
                 applyFlags();
@@ -554,7 +585,7 @@ void App::reload(int newStage, int newSub, bool transition) {
         seeThrough.roomLoaded(mesh.tris, mesh.semiStart[3] ? mesh.semiStart[0] : mesh.tris.size(), mesh.slices,
                               mesh.sliceCount);
         modelClearance.roomLoaded(mesh.tris, mesh.semiStart[3] ? mesh.semiStart[0] : mesh.tris.size());
-        if (!renderer->upload(mesh.tris, mesh.slices, mesh.sliceCount, mesh.semiStart)) SDL_Log("upload failed");
+        if (!renderer->upload(mesh.tris, mesh.slices, mesh.sliceCount, mesh.semiStart, od::sliceEdge())) SDL_Log("upload failed");
         {
             std::vector<od::DynamicObject> dyn;
             dyn.push_back({od::objectId(od::kKindPlayer, 0), playerView.build(mesh)});

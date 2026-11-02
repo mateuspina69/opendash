@@ -145,6 +145,10 @@ struct PlayerView {
     // destination touches are re-decoded
     void vramMovesApply(const RoomMesh& mesh, od::Renderer& r);
     void clutAnimationSync(const RoomMesh& mesh, od::Renderer& r);
+    // A re-decoded slice shows its page from the renderer's page pool (od::Renderer::showPage); a page not pooled yet
+    // is made by od::pageLoader's threads and pooled when made (pagesMadeApply), the slice keeping its last page meanwhile
+    void showSlicePage(const RoomMesh& mesh, size_t slice, od::Renderer& r);
+    void pagesMadeApply(od::Renderer& r);
 
     // param: FUN_005d5b30's (>= 0: room / stage load, the actors are killed first; < 0: in-stage switch)
     void bindRoomData(const RoomMesh& mesh, int param = 0);

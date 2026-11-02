@@ -23,6 +23,8 @@ game's folder, and writes back the settings changed in the game's options.
 | Key | Values | Default |
 | --- | --- | --- |
 | `display` | `windowed`, `borderless`, `exclusive` | `windowed` |
+| `texture_pack` | the texture pack's folder: the pages' larger images (see [texture_pack.md](texture_pack.md)); a relative path is from the exe's folder | `textures/` next to the exe, when present |
+| `texture_dump` | the folder the pages missing from the texture pack are written to, the upscaler's input (see [texture_pack.md](texture_pack.md)); a relative path is from the exe's folder | none |
 | `window` | the window's size, `WxH` (pixels) | 1280x720 |
 | `fullscreen_mode` | the exclusive full screen's mode, `WxH@Hz` | the desktop's |
 | `aa` | `auto`, `none`, `dlss`, `fsr`, `xess`, `nis` (each upscaler only when its DLL is next to the exe and the GPU supports it; outside Windows FSR 3.1 is built from the SDK), `msaa` (4x), `ssaa` (2x2 supersampling; both on any GPU, `aa_quality` has no say) | `auto` |

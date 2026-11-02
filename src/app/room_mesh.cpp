@@ -15,6 +15,7 @@
 #include "app/sky.hpp"
 #include "engine/dat.hpp"
 #include "engine/data_source.hpp"
+#include "engine/texture_pack.hpp"
 #include "game/camera.hpp"
 #include "game/collision.hpp"
 #include "game/player/player_model.hpp"
@@ -464,10 +465,16 @@ RoomMesh loadRoom(int stage, int sub) {
     loadSky(mesh, stage, sub < 0 ? 0 : sub);
     loadSkyGradient(mesh, stage, sub < 0 ? 0 : sub);
     std::map<uint32_t, int> sliceOf;
+    int packPages = 0; // the texture pack's (engine/texture_pack) pages with images
+    uint64_t packNs = 0;
     auto slice = [&](uint32_t tex) { // tex = (tpage << 16) | clut
         auto [it, added] = sliceOf.try_emplace(tex, mesh.sliceCount);
         if (added) {
-            const auto rgba = vram.decode(uint16_t(tex >> 16), uint16_t(tex & 0xFFFF), true);
+            int images = 0;
+            const uint64_t t0 = SDL_GetTicksNS();
+            const auto rgba = od::pageSlice(vram, uint16_t(tex >> 16), uint16_t(tex & 0xFFFF), true, &images);
+            packNs += SDL_GetTicksNS() - t0;
+            packPages += images;
             if (std::getenv("OD_SLICEPROBE")) { // dev: pages / CLUTs that decode fully transparent (missing VRAM)
                 size_t opaque = 0;
                 for (size_t i = 3; i < rgba.size(); i += 4) opaque += rgba[i] != 0;
@@ -549,7 +556,7 @@ RoomMesh loadRoom(int stage, int sub) {
         for (const od::fx::Texture& t : od::storm::textures(stage)) g_fxTextures.index(t.tpage, t.clut, t.tint);
         g_fxTextures.takeDirty();
         for (const od::fx::Texture& t : g_fxTextures.entries()) {
-            auto rgba = vram.decode(t.tpage, t.clut, true);
+            auto rgba = od::pageSlice(vram, t.tpage, t.clut, true);
             if (t.tint != 0x808080)
                 for (size_t i = 0; i + 3 < rgba.size(); i += 4)
                     for (int c = 0; c < 3; ++c)
@@ -571,7 +578,8 @@ RoomMesh loadRoom(int stage, int sub) {
                 }
             }
         mesh.fxGradSlice = mesh.sliceCount++;
-        mesh.slices.insert(mesh.slices.end(), grad.begin(), grad.end());
+        const std::vector<uint8_t> gradSlice = od::pictureSlice(grad);
+        mesh.slices.insert(mesh.slices.end(), gradSlice.begin(), gradSlice.end());
     }
     try { // Megaman: model-space parts (game axes, double sided like the props)
         const od::GameFile* weaponFile = g_playerWeaponDat.empty() ? nullptr : &datCache().file(g_playerWeaponDat);
@@ -623,6 +631,9 @@ RoomMesh loadRoom(int stage, int sub) {
     }
     buildTrackStrip(mesh, roomShift, warps); // the room's exits (the data source's)
     SDL_Log("%s: %zu triangles, %d texture slices", name, mesh.tris.size() / 3, mesh.sliceCount);
+    if (od::texturePack())
+        SDL_Log("%s: texture pack: %d of %zu pages with images, %.0f ms", name, packPages, sliceOf.size(),
+                double(packNs) / 1e6);
     return mesh;
 }
 
