@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <system_error>
@@ -302,7 +303,18 @@ void PlayerView::loadExeBanks() {
     od::port::setMenuBanks(b);
     od::port::setQuizLocale(quizAnswers);
     od::port::setPs1Text(pack != nullptr);
-    { // the layout pass's advance = the pack font's (game/message)
+    std::optional<std::array<uint8_t, 256>> latin; // no pack: the .DAT files' own text may be Latin (engine/lang)
+    if (!pack) {
+        for (const od::FilePart& part : od::dataSource().gameFile("INIT.DAT").parts)
+            if (part.kind == od::FilePart::Kind::PcFont && part.arg == 0)
+                latin = od::lang::latinDatWidths(part.bytes, int(part.extra));
+        if (latin) SDL_Log("lang: the .DAT files hold Latin text (a proportional font 0)");
+    }
+    od::port::setLatinDat(latin.has_value());
+    if (latin) {
+        static constexpr int kSingleByteGlyphs = 0xd0;
+        od::port::setPs1Widths(latin->data(), kSingleByteGlyphs);
+    } else { // the layout pass's advance = the pack font's (game/message)
         std::vector<uint8_t> w;
         if (pack && pack->has("widths.bin")) w = pack->file("widths.bin");
         od::port::setPs1Widths(w.size() >= 256 ? w.data() : nullptr, w.size() > 256 ? w[256] : 0x6b);

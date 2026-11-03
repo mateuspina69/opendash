@@ -18,6 +18,11 @@ game's folder, and writes back the settings changed in the game's options.
 | `restored_voices` | `1`: a language pack's restored voices when it has them; `0`: its original voices | `1` |
 | `story_save` | the save whose story state free play (F2, the stage browser) starts from: a slot number (`DASH2-NN.DAT` next to `dash2.exe`, only read), a path, or `none` | `DASH2-00.DAT` when it exists |
 
+With `lang=jp`, the text is whatever the `.DAT` files hold. OpenDash recognises the `.DAT` files of the dash2eng fan patch
+by their font and lays their English text out properly. Keep the original `dash2.exe`: the patch's executable is not
+needed, and the banks kept in the executable (menus, item names, Data's hints) stay in Japanese. This is not fully
+tested yet: not every screen is known to work with the patch.
+
 ## Video
 
 | Key | Values | Default |

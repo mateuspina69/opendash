@@ -27,7 +27,12 @@ uint32_t bankRedirect(uint32_t exeBank); // the bank read for `exeBank`
 // the number / time formatters' digits (fb 21 / 23, the shop's prices) the PS1's (SLUS_011.40 0x80048ff4: glyph d,
 // pad 0x50, minus 0x4f) instead of the PC font's ('0' + d, ' ', '-')
 void setPs1Text(bool on);
-bool ps1Text();
+bool ps1Text(); // the PS1's glyph encoding is on
+// The game's own .DAT files hold Latin text (engine/lang latinDatWidths: the banks' windows have the PS1's 2 px columns
+// and the widths given to setPs1Widths, their glyphs stay the PC's, ASCII); no pack is on. dash2.exe's banks stay the PC's
+void setLatinDat(bool on);
+bool latinDat();
+bool latinBank(uint32_t bank); // the bank's strings are that text
 // The pack font's widths (widths.bin: 256 + the limit): a pack window's layout pass advances its pen by them (the PS1
 // glyph routine 0x800498c8) instead of 12 px; nullptr = 12 px (Japanese)
 void setPs1Widths(const uint8_t* widths, int limit);

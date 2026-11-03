@@ -215,6 +215,11 @@ target_link_libraries(test_config PRIVATE odengine)
 target_include_directories(test_config PRIVATE tests)
 add_test(NAME test_config COMMAND test_config)
 
+add_executable(test_latin_dat tests/test_latin_dat.cpp)
+target_link_libraries(test_latin_dat PRIVATE odengine)
+target_include_directories(test_latin_dat PRIVATE tests)
+add_test(NAME test_latin_dat COMMAND test_latin_dat)
+
 add_executable(test_texture_pack tests/test_texture_pack.cpp)
 target_link_libraries(test_texture_pack PRIVATE odengine)
 target_include_directories(test_texture_pack PRIVATE tests ${Stb_INCLUDE_DIR})
