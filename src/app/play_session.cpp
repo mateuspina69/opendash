@@ -872,11 +872,15 @@ void PlayerView::setupHooks() {
             camPrev.eye[c] += d[c];
             camCur.eye[c] += d[c];
         }
-        const float s = room ? float(1 << room->shift) : 1.0f;
-        for (int c = 0; c < 3; ++c) renderOffset[c] -= d[c] * s;
-        // past the strip's far end (a fight of ~9 minutes): back by a whole number of periods -- the strip is
-        // periodic, so the picture is the same; only the frame-to-frame blend / AA history restart once
-        if (room && room->trackAxis >= 0) {
+        // no strip (a script's warp inside a room, ST2F sub 6's critter scene): the scenery stays where it is, so the
+        // move is a cut, as on the exe. The travel frame moves the camera only in the rooms that tile their scenery and
+        // their actors with it (App::updateScene); elsewhere it left the eye off the player for the rest of the room
+        if (!room || room->trackAxis < 0) snap = true;
+        else {
+            const float s = float(1 << room->shift);
+            for (int c = 0; c < 3; ++c) renderOffset[c] -= d[c] * s;
+            // past the strip's far end (a fight of ~9 minutes): back by a whole number of periods -- the strip is
+            // periodic, so the picture is the same; only the frame-to-frame blend / AA history restart once
             const int a = room->trackAxis;
             const float span = room->trackPeriod * float(RoomMesh::kTrackTilesAhead - 8);
             if (std::abs(renderOffset[a]) > span) {
