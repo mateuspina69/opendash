@@ -21,9 +21,10 @@ StaticActor& defendedVehicle();
 // the defended vehicle's slot word (0: none)
 uint32_t defendedVehicleAddress();
 // ST0E's stage block (game/stage_state StageState::block): the defended vehicle's hit points carried into the second
-// room (flag 0x5a1; the turret's end stores them, the vehicle's bind reads their low half)
+// room (flag 0x5a1; the turret's end stores them, ST53's scene passes between, the vehicle's bind reads their low half)
 struct VehicleChaseBlock : StagePart<VehicleChaseBlock> {
     int32_t carriedHp = 0; // +0x00
+    bool readByLaterStage() const override { return true; }
 };
 
 // an s16 point
