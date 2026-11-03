@@ -61,7 +61,7 @@ constexpr uint32_t kNoActor = 0xffffffffu;
 
 // the turret's bytes
 struct TurretFields : ActorClassState {
-    explicit TurretFields(AnimatedActor& actor) : beamStep(actor.stepCounter), volleySlot(actor.params[0]), bombsLeft(actor.params[1]), rounds(actor.params[2]), beamTimer(actor.params[3]), hurtVoiceTimer(actor.spin.x), blastMark(actor.spin.y, 0), voicesSaid(actor.spin.y, 1), flagsLow(actor.townBirdHits), flagsHigh(actor.townBirdHitsHigh), objectState(actor.hopperTimer) {}
+    explicit TurretFields(AnimatedActor& actor) : beamStep(actor.stepCounter), volleySlot(actor.params[0]), bombsLeft(actor.params[1]), rounds(actor.params[2]), beamTimer(actor.params[3]), hurtVoiceTimer(actor.spin.x), blastMark(actor.spin.y, 0), voicesSaid(actor.spin.y, 1), objectState(actor.hopperTimer) {}
     uint8_t& beamStep; // the step counter's byte
     FieldAlias<int8_t, uint8_t> volleySlot;
     uint8_t& bombsLeft;
@@ -70,8 +70,6 @@ struct TurretFields : ActorClassState {
     int16_t& hurtVoiceTimer; // the spin's x lane
     PartField<uint8_t, int16_t> blastMark; // set to 3 by the blasts (its reader is not traced)
     PartField<uint8_t, int16_t> voicesSaid;
-    uint8_t& flagsLow;
-    uint8_t& flagsHigh;
     uint8_t& objectState;
     BoneBlockArea<TurretBlock> block;
     uint32_t beam = 0; // the beam (static 0x56; kNoActor: none)
@@ -82,7 +80,9 @@ struct TurretFields : ActorClassState {
     StateArray<int16_t, 2> cannonYaw{};
     StateArray<int16_t, 2> cannonPitch{};
     int16_t coreTimer = 0;
-    uint16_t flags = 0; // kTurret*
+    uint16_t flags = 0; // kTurret* (the exe's word +0x168, read and written as a word and as its two bytes)
+    PartField<uint8_t, uint16_t> flagsLow{flags, 0};
+    PartField<uint8_t, uint16_t> flagsHigh{flags, 1};
     uint8_t damageCoolDown = 0;
     void clearPitchesWord() {
         cannonPitch = {};

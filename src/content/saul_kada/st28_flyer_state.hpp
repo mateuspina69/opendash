@@ -13,8 +13,7 @@ namespace od::port::st28_flyer_state {
 // The flyer's own bytes: its hit box, the hits left before a stun, its timer, its sway and bob angles, its turn speed,
 // its flags, the bob's carry, whether its drop gives pickups, the key entry of its next animation
 struct FlyerFields : ActorClassState {
-    explicit FlyerFields(AnimatedActor& actor) : flagsLow(actor.hopperBytes[4]), bobCarry(actor.townBirdHits), dropsPickups(actor.townBirdHitsHigh), animEntry(actor.hopperTimer), velocity(actor.velocity) {}
-    uint8_t& flagsLow;
+    explicit FlyerFields(AnimatedActor& actor) : bobCarry(actor.townBirdHits), dropsPickups(actor.townBirdHitsHigh), animEntry(actor.hopperTimer), velocity(actor.velocity) {}
     uint8_t& bobCarry;
     uint8_t& dropsPickups;
     uint8_t& animEntry;
@@ -25,7 +24,8 @@ struct FlyerFields : ActorClassState {
     int16_t swayAngle = 0;
     int16_t bobAngle = 0;
     int16_t spin = 0;
-    uint16_t flags = 0;
+    uint16_t flags = 0; // the exe's word +0x166, read and written as a word and as its low byte
+    PartField<uint8_t, uint16_t> flagsLow{flags, 0};
     PartField<uint8_t, int16_t> timerLow{timer, 0};
     // the velocity's six bytes stored one at a time: 0, 0, 0, 0, 0, 0xff (x 0, y 0, z -0x100)
     void setAppearVelocity() {

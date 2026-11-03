@@ -12,8 +12,7 @@ namespace od::port::st41_enemy_generator_state {
 // The generator's own bytes: its hit box, the hits left before a flinch, its timer, its flags, the key entry of its
 // next animation; the flyer family's sway / bob / turn bytes (set at the bind, not read by the generator)
 struct GeneratorFields : ActorClassState {
-    explicit GeneratorFields(AnimatedActor& actor) : flagsLow(actor.hopperBytes[4]), bobCarry(actor.townBirdHits), animEntry(actor.hopperTimer) {}
-    uint8_t& flagsLow;
+    explicit GeneratorFields(AnimatedActor& actor) : bobCarry(actor.townBirdHits), animEntry(actor.hopperTimer) {}
     uint8_t& bobCarry;
     uint8_t& animEntry;
     HitBox hitBox; // with its contact output (+0x154: the hit entry asks for the other's last move)
@@ -22,7 +21,8 @@ struct GeneratorFields : ActorClassState {
     uint16_t swayAngle = 0;
     uint16_t bobAngle = 0;
     uint16_t spin = 0;
-    uint16_t flags = 0;
+    uint16_t flags = 0; // the exe's word +0x166, read and written as a word and as its low byte
+    PartField<uint8_t, uint16_t> flagsLow{flags, 0};
     PartField<uint8_t, uint16_t> timerLow{timer, 0};
 
     void clearBlock() override {

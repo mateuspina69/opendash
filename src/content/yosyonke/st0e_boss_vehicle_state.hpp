@@ -50,10 +50,9 @@ struct FireballFields : ActorClassState {
 
 // the vehicle's bytes
 struct VehicleFields : ActorClassState {
-    explicit VehicleFields(AnimatedActor& actor) : fireballsSpawned(actor.stepCounter), turret(actor.bossFlags), flagsHigh(actor.guardianBits), cratesBeforeTilt(actor.hopperTimer) {}
+    explicit VehicleFields(AnimatedActor& actor) : fireballsSpawned(actor.stepCounter), turret(actor.bossFlags), cratesBeforeTilt(actor.hopperTimer) {}
     uint8_t& fireballsSpawned; // the charge's fireball spawned (the step counter's byte)
     uint32_t& turret;
-    uint8_t& flagsHigh;
     uint8_t& cratesBeforeTilt;
     uint32_t headWord_ = 0;
     BoneBlockArea<VehicleBlock> block;
@@ -67,14 +66,14 @@ struct VehicleFields : ActorClassState {
     uint8_t voiceDelay = 0;
     PartField<uint8_t, int16_t> timerLow{timer, 0};
     PartField<uint8_t, int16_t> timerHigh{timer, 1};
-    PartField<uint8_t, uint16_t> flagsLow{flags, 0};
+    PartField<uint8_t, uint16_t> flagsLow{flags, 0}; // the exe's word +0x15e, read and written as a word and as its bytes
+    PartField<uint8_t, uint16_t> flagsHigh{flags, 1};
     void clearHead() {
         headWord_ = 0;
     }
     void clearFlagsWord() {
         flags = 0;
         fireballAim = 0;
-        flagsHigh = 0;
     }
     void resetVoiceWord() { set_voiceWord_(uint32_t(0x3c000000u)); }
 

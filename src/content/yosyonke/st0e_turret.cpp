@@ -21,6 +21,7 @@
 #include "content/yosyonke/st0e_turret.hpp"
 #include "content/yosyonke/st0e_turret_state.hpp"
 
+#include "content/intro/crash_landing.hpp"
 #include "content/yosyonke/st0e_vehicles.hpp"
 #include "engine/data_source.hpp"
 #include "game/loaded_data.hpp"
@@ -1127,7 +1128,7 @@ void turretBomb(const PlayerEnv& env, ProjectileActor& a) {
             e.pos.x = a.pos.x.whole;
             e.pos.y = a.pos.y.whole;
             e.pos.z = a.pos.z.whole;
-            classState<HitSparkFields>(e).size = 0xc0;
+            classState<CrashFlashFields>(e).size = 0xc0;
         }
         cameraShakeAt(0x2000, 0x300, 0x100, 0x1c00, a.pos); // exe 0x40eab0
         padVibrateAt(0x201, 0x208b0, 0x100, 0x1c00, a.pos); // exe 0x55cd80
@@ -1181,7 +1182,7 @@ void shotPop(ProjectileActor& a, uint8_t v) {
         e.pos.x = a.pos.x.whole;
         e.pos.y = a.pos.y.whole;
         e.pos.z = a.pos.z.whole;
-        classState<HitSparkFields>(e).size = uint16_t(((a.variant & 3) + 2) * 0x40);
+        classState<CrashFlashFields>(e).size = uint16_t(((a.variant & 3) + 2) * 0x40);
     }
     freeActor(a); // exe 0x5e1500
 }
