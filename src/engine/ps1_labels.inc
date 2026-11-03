@@ -12919,8 +12919,11 @@ static constexpr Ps1Label kPs1Labels[] = {
     {"DAT/ST03T.BIN", 0x800f5d58u, 0x4},
     {"DAT/ST46T.BIN", 0x800f248cu, 0x8},
     {"SLUS_011.40", 0x8006b890u, 0x28},
+    {"DAT/ST5CT.BIN", 0x80101224u, 0x8},
 };
 static constexpr Ps1LabelSlot kPs1LabelSlots[] = {
+    {12912, 0x0, SlotKind::Data, RoutineId::None, 0x0},
+    {12912, 0x4, SlotKind::Data, RoutineId::None, 0x0},
     {6936, 0x180, SlotKind::Data, RoutineId::None, 0x0},
     {6936, 0x188, SlotKind::Data, RoutineId::None, 0x0},
     {6936, 0x26c, SlotKind::Data, RoutineId::None, 0x0},
@@ -34704,7 +34707,7 @@ static constexpr Ps1LabelTable kPs1LabelTables[] = {
     {TableId::St5cBossBox, 0x0, 9832, true, 0},
     {TableId::St5cDefeatBox, 0x0, 6926, false, 0},
     {TableId::St5cDefeatEyes, 0x0, 6930, false, 0},
-    {TableId::St5cDefeatMouth, 0x0, 9018, true, 0},
+    {TableId::St5cDefeatMouth, 0x0, 12912, false, 0},
     {TableId::St5cFx2BeamBox, 0x0, 9833, true, 0},
     {TableId::St5cFx2BlastBox, 0x0, 458, false, 0},
     {TableId::St5cFx2SparkFrames, 0x0, 11510, false, 0},
