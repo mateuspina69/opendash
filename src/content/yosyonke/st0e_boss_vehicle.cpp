@@ -270,7 +270,7 @@ void fireball(AnimatedActor& a, VehicleFields& f) {
 }
 // exe 0x503720 (flag 0x5a1): the burning sequence: 0 / 2 wait for HP < [0x897cf8 + i] * max / 9; 1 / 3 a fire emitter
 // (variant 0x15) at [0x897ce8 + (i >> 1) * 8]; 4 below max / 3: the burn's ticks of sparks + random fires every other
-// tick; 5 the emitters end, flag 0x582 cleared, animation 1, the parts 2 / 3 hidden
+// tick; 5 the emitters end, flag 0x582 cleared, animation 1, the parts 1 / 2 hidden
 void burning(AnimatedActor& a, VehicleFields& f) {
     const int16_t mx = a.maxHitPoints;
     VehicleBlock& blk = *f.block;
@@ -306,8 +306,8 @@ void burning(AnimatedActor& a, VehicleFields& f) {
         ++blk.burnStep;
         clearStoryFlag(kFlagFrontBroken);
         a.anim = 1;
-        a.parts[2].flags |= kPartHidden;
-        a.parts[3].flags |= kPartHidden;
+        a.parts[1].flags |= kPartHidden; // exe +0xf3
+        a.parts[2].flags |= kPartHidden; // exe +0xf7
         return;
     default: return;
     }
