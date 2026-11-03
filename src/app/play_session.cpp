@@ -456,7 +456,48 @@ void PlayerView::showSlicePage(const RoomMesh& mesh, size_t slice, od::Renderer&
 }
 
 void PlayerView::pagesMadeApply(od::Renderer& r) {
-    for (const auto& [page, rgba] : od::pageLoader().takeReady()) r.poolPage(page, rgba);
+    for (auto& [page, chain] : od::pageLoader().takeReady()) r.poolPage(page, chain);
+}
+
+void PlayerView::effectTexturesApply(RoomMesh& mesh, od::Renderer& r) {
+    const std::vector<od::fx::Texture>& met = g_fxTextures.entries();
+    while (mesh.fxSlices.size() + mesh.fxMaking.size() < met.size()) {
+        if (mesh.fxSpareLeft == 0) { // the slices so far copied to a larger array; the room stays as it is
+            const int first = r.sliceTotal();
+            if (!r.reserveSlices(od::kSpareSlices)) {
+                SDL_Log("fxtex: %zu effect textures, the renderer did not take more slices", met.size());
+                return;
+            }
+            mesh.fxNextSlice = first;
+            mesh.fxSpareLeft = od::kSpareSlices;
+            mesh.fxReserved += od::kSpareSlices;
+        }
+        const od::fx::Texture& t = met[mesh.fxSlices.size() + mesh.fxMaking.size()];
+        --mesh.fxSpareLeft;
+        RoomMesh::FxMaking m{mesh.fxNextSlice++, 0, g_roomVram.decode(t.tpage, t.clut, true)};
+        SDL_Log("fxtex: effect texture %04x %04x met in play: slice %d (%d spare left)", unsigned(t.tpage), unsigned(t.clut),
+                m.slice, mesh.fxSpareLeft);
+        if (t.tint != 0x808080) { // not a page of the pool: its colours are this texture's own
+            std::vector<uint8_t> rgba = od::pageSliceOf(m.ps1, od::texturePack());
+            tintSlice(rgba, t.tint);
+            r.updateSlice(m.slice, rgba);
+            m.ps1.clear(); // written: nothing to wait for
+            mesh.fxMaking.push_back(std::move(m));
+            continue;
+        }
+        m.page = od::pageName(m.ps1);
+        mesh.fxMaking.push_back(std::move(m));
+    }
+    // in the entries' order: fxSlices[i] is entry i's slice
+    while (!mesh.fxMaking.empty()) {
+        RoomMesh::FxMaking& m = mesh.fxMaking.front();
+        if (!m.ps1.empty() && !r.showPage(m.slice, m.page)) {
+            od::pageLoader().request(m.page, m.ps1);
+            return;
+        }
+        mesh.fxSlices.push_back(m.slice);
+        mesh.fxMaking.pop_front();
+    }
 }
 
 void PlayerView::clutAnimationSync(const RoomMesh& mesh, od::Renderer& r) {
@@ -1606,10 +1647,6 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
                     "%d unknown) -> %zu prims", dcStats.records, dcStats.b2c, dcStats.f0, dcStats.f4, dcStats.f8,
                     dcStats.culled, dcStats.unknown, dcPrims.size());
         dcLast = dcStats;
-        if (g_fxTextures.takeDirty()) { // an effect sampled a texture the room has no slice for: rebuild them
-            SDL_Log("fxtex: %zu effect textures, rebuilding the room's slices", g_fxTextures.entries().size());
-            assetsDirty = true;
-        }
         if (game.gameMode() != od::port::GameMode::StageLoad) logEffects(); // (the last stage's actors: see above)
         { // scripted-run evidence: the storm's element counts whenever they change
             ++stormLogTick;

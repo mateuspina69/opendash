@@ -101,8 +101,11 @@ int main() {
         }
         for (auto& m : loader.takeReady()) made.push_back(std::move(m));
         CHECK(made.size() == 2);
-        for (const auto& [name, slice] : made)
-            CHECK(name == od::pageName(ps1) ? slice == img : name == od::pageName(other) && slice == enlarged);
+        CHECK(od::pageMipLevels(512) == 2 && od::pageMipLevels(256) == 1);
+        for (const auto& [name, slice] : made) { // the slice, then its level of 256 x 256
+            const std::vector<uint8_t>& want = name == od::pageName(ps1) ? img : enlarged;
+            CHECK(slice.size() == want.size() + size_t(256) * 256 * 4 && std::equal(want.begin(), want.end(), slice.begin()));
+        }
     }
 
     od::bindPageDump({});

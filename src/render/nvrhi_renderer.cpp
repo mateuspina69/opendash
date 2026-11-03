@@ -15,6 +15,7 @@
 #include <unordered_map>
 
 #ifdef _WIN32
+#include "engine/texture_pack.hpp"
 #include "device_d3d12.hpp"
 #else
 #include "device_vulkan.hpp"
@@ -60,8 +61,9 @@ struct GpuVertex {
     float surface; // bits 0..2: kSurfaceModel a model's face (actors, the player, bank models), clipped at the game's
                    // near plane; kSurfaceEffect an effect (particles, billboards, rings): its blended texels fade at
                    // the scenery. Above them (* 8): RenderVertex::piece, the see-through's scenery piece
+    float uvRect[4]; // the triangle's UVs' bounds (min u, v, max u, v): what the page filter may read of its page
 };
-static_assert(sizeof(RenderVertex) == 52 && sizeof(GpuVertex) == 104);
+static_assert(sizeof(RenderVertex) == 52 && sizeof(GpuVertex) == 120);
 constexpr uint32_t kSurfaceModel = 1, kSurfaceEffect = 4;
 
 // scene.hlsl cbuffer Frame
@@ -91,7 +93,7 @@ struct FrameConstants {
     float sunScatter; // remaster fog brightened toward the sun (0 = sun off)
     float fogSky;     // remaster fog of a sky draw (the ray never ends): 0 not sky, 1 dome, 2 screen-space layer
     float seeClock;   // the see-through lens's clock (seconds)
-    float pad2;
+    float pageBias; // the page filter's mip bias: log2(render size / output size)
     float water[4];     // remaster medium look: on, clock (seconds), sky draw, kind (0 water, 1 hot air)
     float waterTint[4]; // the room's water colour
     XMFLOAT4X4 skyRay;  // screen-space sky: NDC -> view direction (inverse of the unjittered rotation-only viewProj)
@@ -142,6 +144,16 @@ XMMATRIX withJitter(XMMATRIX p, float jx, float jy, int rw, int rh) {
 // particles / rings / billboards, many of them starting on one point) keeps its flat face normal -- averaged over the
 // whole buffer, an effect's hundreds of coincident corners made this quadratic (the ST4B sub 5 clash: 1.5 s a frame)
 // and one object took its neighbours' normals.
+// GpuVertex::uvRect of the triangle whose first vertex is `first`
+void setUvRect(GpuVertex* first) {
+    const float* a = first[0].v.uv;
+    const float* b = first[1].v.uv;
+    const float* c = first[2].v.uv;
+    const float rect[4] = {std::min({a[0], b[0], c[0]}), std::min({a[1], b[1], c[1]}), std::max({a[0], b[0], c[0]}),
+                           std::max({a[1], b[1], c[1]})};
+    for (int k = 0; k < 3; ++k) std::memcpy(first[k].uvRect, rect, sizeof rect);
+}
+
 void toGpu(const std::vector<RenderVertex>& tris, const float* prevPos, std::vector<GpuVertex>& out,
            const std::vector<std::pair<size_t, size_t>>* smoothRanges = nullptr,
            const std::vector<std::pair<size_t, size_t>>* surfaceRanges = nullptr,
@@ -184,6 +196,7 @@ void toGpu(const std::vector<RenderVertex>& tris, const float* prevPos, std::vec
         std::memcpy(out[k].prevPos, prevPos ? prevPos + k * 3 : tris[k].pos, sizeof out[k].prevPos);
         out[k].surface = tris[k].piece * 8.0f;
     }
+    for (size_t f = 0; f < faces; ++f) setUvRect(&out[f * 3]);
     if (surfaceRanges)
         for (size_t r = 0; r < surfaceRanges->size(); ++r)
             for (size_t k = (*surfaceRanges)[r].first; k < (*surfaceRanges)[r].second; ++k)
@@ -253,6 +266,11 @@ public:
         linearClamp_ = d->createSampler(nvrhi::SamplerDesc()
                                             .setAllFilters(true)
                                             .setAllAddressModes(nvrhi::SamplerAddressMode::Clamp));
+        // a texture pack's pages (trilinear, anisotropic); without a pack, pointClamp_: the PS1's texels
+        anisoClamp_ = d->createSampler(nvrhi::SamplerDesc()
+                                           .setAllFilters(true)
+                                           .setMaxAnisotropy(16.0f)
+                                           .setAllAddressModes(nvrhi::SamplerAddressMode::Clamp));
 
         // the ray-query scene shader is SM 6.5
         rt_ = d->queryFeatureSupport(nvrhi::Feature::RayQuery) && dev_.rayQueryShaders();
@@ -288,14 +306,15 @@ public:
             attr("PREVPOS", nvrhi::Format::RGB32_FLOAT, offsetof(GpuVertex, prevPos)),
             attr("FACEN", nvrhi::Format::RGB32_FLOAT, offsetof(GpuVertex, faceN)),
             attr("PAIRN", nvrhi::Format::RGB32_FLOAT, offsetof(GpuVertex, pairN)),
-            attr("SURFACE", nvrhi::Format::R32_FLOAT, offsetof(GpuVertex, surface))};
+            attr("SURFACE", nvrhi::Format::R32_FLOAT, offsetof(GpuVertex, surface)),
+            attr("UVRECT", nvrhi::Format::RGBA32_FLOAT, offsetof(GpuVertex, uvRect))};
         inputLayout_ = d->createInputLayout(attrs, uint32_t(std::size(attrs)), sceneVs_);
 
         nvrhi::BindingLayoutDesc bl;
         bl.visibility = nvrhi::ShaderType::All;
         bl.bindings = {nvrhi::BindingLayoutItem::VolatileConstantBuffer(0), nvrhi::BindingLayoutItem::Texture_SRV(0),
-                       nvrhi::BindingLayoutItem::Sampler(0), nvrhi::BindingLayoutItem::Texture_SRV(5),
-                       nvrhi::BindingLayoutItem::Texture_SRV(6)};
+                       nvrhi::BindingLayoutItem::Sampler(0), nvrhi::BindingLayoutItem::Sampler(1),
+                       nvrhi::BindingLayoutItem::Texture_SRV(5), nvrhi::BindingLayoutItem::Texture_SRV(6)};
         if (rt_) {
             bl.bindings.push_back(nvrhi::BindingLayoutItem::RayTracingAccelStruct(1));
             bl.bindings.push_back(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2));
@@ -354,8 +373,8 @@ public:
         if (dev_.device()) dev_.device()->waitForIdle();
     }
 
-    bool upload(const std::vector<RenderVertex>& tris, const std::vector<uint8_t>& slices, int sliceCount,
-                const std::array<uint32_t, 4>& semiStart, int sliceSize) override {
+    bool upload(const std::vector<RenderVertex>& tris, int sliceCount, const std::array<uint32_t, 4>& semiStart,
+                int sliceSize) override {
         sliceSize_ = sliceSize;
         sliceUpdates_.clear();
         poolShows_.clear(); // the last room's slices (the pool itself stays)
@@ -391,7 +410,8 @@ public:
 
         nvrhi::TextureDesc td;
         td.width = td.height = uint32_t(sliceSize);
-        td.arraySize = uint32_t(sliceCount);
+        td.arraySize = uint32_t(sliceCount + kSpareSlices);
+        td.mipLevels = pageMips(sliceSize);
         td.dimension = nvrhi::TextureDimension::Texture2DArray;
         td.format = nvrhi::Format::RGBA8_UNORM;
         td.initialState = nvrhi::ResourceStates::ShaderResource;
@@ -403,9 +423,6 @@ public:
         nvrhi::CommandListHandle cl = d->createCommandList();
         cl->open();
         cl->writeBuffer(vbuf_, gv.data(), bd.byteSize);
-        const size_t sliceBytes = size_t(sliceSize) * size_t(sliceSize) * 4;
-        for (int i = 0; i < sliceCount; ++i)
-            cl->writeTexture(pages_, uint32_t(i), 0, slices.data() + size_t(i) * sliceBytes, size_t(sliceSize) * 4);
         if (rt_) { // shadow casters: the opaque range (semi-transparent water / glass lets the sun through)
             std::vector<float> attr;
             toAttr(gv, semiStart_[0], attr);
@@ -460,9 +477,9 @@ public:
         return true;
     }
 
-    void poolPage(uint64_t page, const std::vector<uint8_t>& rgba) override {
+    bool poolPage(uint64_t page, std::vector<uint8_t>& chain) override {
         const size_t bytes = size_t(sliceSize_) * size_t(sliceSize_) * 4;
-        if (rgba.size() != bytes) return;
+        if (chain.size() < bytes) return false;
         if (poolEdge_ != sliceSize_) { // another pack scale: the pool starts over
             pool_ = nullptr;
             poolEdge_ = sliceSize_;
@@ -472,13 +489,13 @@ public:
             poolWrites_.clear();
             poolShows_.clear();
         }
-        if (poolLayer_.contains(page)) return;
+        if (poolLayer_.contains(page)) return true;
         const uint32_t most = uint32_t(std::clamp<size_t>(kPoolBytes / bytes, 1, 2048));
         uint32_t layer = 0;
         if (pool_ && poolUsed_ < pool_->getDesc().arraySize) {
             layer = poolUsed_++;
         } else if (!pool_ || pool_->getDesc().arraySize < most) {
-            if (!growPool(pool_ ? std::min(most, pool_->getDesc().arraySize * 2) : std::min(most, 16u))) return;
+            if (!growPool(pool_ ? std::min(most, pool_->getDesc().arraySize * 2) : std::min(most, kPoolFirstLayers))) return false;
             layer = poolUsed_++;
         } else { // full: the least recently shown page no queued copy reads
             auto old = poolOrder_.end();
@@ -488,16 +505,36 @@ public:
                 const uint32_t l = poolLayer_[*old].first;
                 found = std::none_of(poolShows_.begin(), poolShows_.end(), [&](const auto& s) { return s.second == l; });
             }
-            if (!found) return; // every layer is read this frame
+            if (!found) return false; // every layer is read this frame
             layer = poolLayer_[*old].first;
             poolLayer_.erase(*old);
             poolOrder_.erase(old);
         }
         poolOrder_.push_front(page);
         poolLayer_[page] = {layer, poolOrder_.begin()};
-        poolWrites_[layer] = rgba;
+        poolWrites_[layer] = std::move(chain);
         for (const auto& [slice, want] : sliceWants_)
             if (want == page) poolShows_[slice] = layer;
+        return true;
+    }
+
+    static uint32_t pageMips(int edge) { return pageMipLevels(edge); }
+    // a sliceSize_^2 RGBA8 page and its smaller levels, one after the other (appendPageMips)
+    void writeChain(nvrhi::ICommandList* cl, nvrhi::ITexture* tex, uint32_t layer, const uint8_t* chain) {
+        for (uint32_t level = 0, edge = uint32_t(sliceSize_); level < pageMips(sliceSize_); ++level, edge /= 2) {
+            cl->writeTexture(tex, layer, level, chain, size_t(edge) * 4);
+            chain += size_t(edge) * edge * 4;
+        }
+    }
+    void writePage(nvrhi::ICommandList* cl, nvrhi::ITexture* tex, uint32_t layer, const uint8_t* rgba) {
+        std::vector<uint8_t> chain(rgba, rgba + size_t(sliceSize_) * size_t(sliceSize_) * 4);
+        appendPageMips(chain, sliceSize_);
+        writeChain(cl, tex, layer, chain.data());
+    }
+    static void copyPage(nvrhi::ICommandList* cl, nvrhi::ITexture* to, uint32_t toLayer, nvrhi::ITexture* from, uint32_t fromLayer) {
+        for (uint32_t level = 0; level < from->getDesc().mipLevels; ++level)
+            cl->copyTexture(to, nvrhi::TextureSlice().setArraySlice(toLayer).setMipLevel(level), from,
+                            nvrhi::TextureSlice().setArraySlice(fromLayer).setMipLevel(level));
     }
 
     // pool_ with `layers` layers, the pooled ones copied (their pending writes still apply)
@@ -506,6 +543,7 @@ public:
         nvrhi::TextureDesc td;
         td.width = td.height = uint32_t(poolEdge_);
         td.arraySize = layers;
+        td.mipLevels = pageMips(poolEdge_);
         td.dimension = nvrhi::TextureDimension::Texture2DArray;
         td.format = nvrhi::Format::RGBA8_UNORM;
         td.initialState = nvrhi::ResourceStates::CopySource;
@@ -517,8 +555,7 @@ public:
             d->waitForIdle();
             nvrhi::CommandListHandle cl = d->createCommandList();
             cl->open();
-            for (uint32_t i = 0; i < poolUsed_; ++i)
-                cl->copyTexture(grown, nvrhi::TextureSlice().setArraySlice(i), pool_, nvrhi::TextureSlice().setArraySlice(i));
+            for (uint32_t i = 0; i < poolUsed_; ++i) copyPage(cl, grown, i, pool_, i);
             cl->close();
             d->executeCommandList(cl);
             d->waitForIdle();
@@ -530,6 +567,15 @@ public:
     bool appendSlices(const std::vector<uint8_t>& rgba, int count) override {
         const size_t sliceBytes = size_t(sliceSize_) * size_t(sliceSize_) * 4;
         if (!pages_ || count <= 0 || rgba.size() != size_t(count) * sliceBytes) return false;
+        return growSlices(count, rgba.data());
+    }
+
+    bool reserveSlices(int count) override { return pages_ && count > 0 && growSlices(count, nullptr); }
+    int sliceTotal() const override { return pages_ ? int(pages_->getDesc().arraySize) : 0; }
+
+    // pages_ with `count` more slices (written from rgba, if any), the ones so far copied
+    bool growSlices(int count, const uint8_t* rgba) {
+        const size_t sliceBytes = size_t(sliceSize_) * size_t(sliceSize_) * 4;
         nvrhi::IDevice* d = dev_.device();
         d->waitForIdle();
         nvrhi::TextureDesc td = pages_->getDesc();
@@ -540,9 +586,8 @@ public:
         nvrhi::CommandListHandle cl = d->createCommandList();
         cl->open();
         for (uint32_t i = 0; i < old; ++i) // the slices so far (their pending updateSlice writes still apply)
-            cl->copyTexture(grown, nvrhi::TextureSlice().setArraySlice(i), pages_, nvrhi::TextureSlice().setArraySlice(i));
-        for (int k = 0; k < count; ++k)
-            cl->writeTexture(grown, old + uint32_t(k), 0, rgba.data() + size_t(k) * sliceBytes, size_t(sliceSize_) * 4);
+            copyPage(cl, grown, i, pages_, i);
+        for (int k = 0; rgba && k < count; ++k) writePage(cl, grown, old + uint32_t(k), rgba + size_t(k) * sliceBytes);
         cl->close();
         d->executeCommandList(cl);
         d->waitForIdle();
@@ -558,6 +603,11 @@ public:
             staticGv_[p.vertex].v.uv[1] = p.uv[1];
             uvDirtyLo_ = std::min(uvDirtyLo_, p.vertex);
             uvDirtyHi_ = std::max(uvDirtyHi_, p.vertex + 1);
+            if (const uint32_t first = p.vertex / 3 * 3; first + 3 <= staticGv_.size()) {
+                setUvRect(&staticGv_[first]);
+                uvDirtyLo_ = std::min(uvDirtyLo_, first);
+                uvDirtyHi_ = std::max(uvDirtyHi_, first + 3);
+            }
         }
     }
     // the dirty vertex range of updateStaticUvs into the room vertex buffer (+ the shadow rays' alpha-test UVs)
@@ -603,7 +653,10 @@ public:
         sky_ = tris; // GPU copy made in draw(): the dome's previous positions need the camera
     }
 
+    FrameCosts frameCosts() const override { return costs_; }
+
     void uploadDynamic(const std::vector<DynamicObject>& objects) override {
+        const auto began = std::chrono::steady_clock::now();
         // opaque objects first, then the blended ones by PS1 mode; dynStart_[m] = vertices with blend <= m
         std::vector<DynamicObject> sorted = objects;
         std::stable_sort(sorted.begin(), sorted.end(),
@@ -632,6 +685,9 @@ public:
         }
         history_.apply(sorted, dynPrev_);
         toGpu(dyn_, dynPrev_.data(), dynGpu_, &models, &surfaces, &surfaceBits);
+        costs_.dynamicMs = msSince(began);
+        costs_.dynamicVertices = uint32_t(dyn_.size());
+        costs_.dynamicOpaque = dynStart_[0];
     }
 
     void resetHistory() override {
@@ -884,17 +940,21 @@ public:
         }
         nvrhi::IDevice* d = dev_.device();
         nvrhi::ITexture* back = dev_.backbuffer();
+        const auto began = std::chrono::steady_clock::now();
         cl_->open();
+        costs_.pagesWritten = int(sliceUpdates_.size() + poolWrites_.size());
+        costs_.pagesShown = int(poolShows_.size());
         for (const auto& [slice, rgba] : sliceUpdates_) // animated CLUTs (updateSlice)
-            cl_->writeTexture(pages_, uint32_t(slice), 0, rgba.data(), size_t(sliceSize_) * 4);
+            writePage(cl_, pages_, uint32_t(slice), rgba.data());
         sliceUpdates_.clear();
-        for (const auto& [layer, rgba] : poolWrites_) // poolPage
-            cl_->writeTexture(pool_, layer, 0, rgba.data(), size_t(poolEdge_) * 4);
+        for (const auto& [layer, chain] : poolWrites_) // poolPage
+            writeChain(cl_, pool_, layer, chain.data());
         poolWrites_.clear();
         for (const auto& [slice, layer] : poolShows_) // showPage: the animated pages' frames
-            cl_->copyTexture(pages_, nvrhi::TextureSlice().setArraySlice(uint32_t(slice)), pool_,
-                             nvrhi::TextureSlice().setArraySlice(layer));
+            copyPage(cl_, pages_, uint32_t(slice), pool_, layer);
         poolShows_.clear();
+        costs_.pagesMs = msSince(began);
+        const auto recorded = std::chrono::steady_clock::now();
         flushStaticUvs(); // the room UV animation (updateStaticUvs)
         for (PreviewSlot& ps : preview_) // renderPreview: before the overlay samples them
             if (ps.pending) drawPreview(ps);
@@ -933,12 +993,21 @@ public:
             cl_->copyTexture(staging, nvrhi::TextureSlice(), back, nvrhi::TextureSlice());
         }
         cl_->close();
+        costs_.recordMs = msSince(recorded);
+        const auto submitted = std::chrono::steady_clock::now();
         d->executeCommandList(cl_);
         if (readback) readBack(staging, *readback);
+        costs_.submitMs = msSince(submitted);
+        const auto presented = std::chrono::steady_clock::now();
         dev_.present(vsync_);
+        costs_.presentMs = msSince(presented);
     }
 
 private:
+    static float msSince(std::chrono::steady_clock::time_point from) {
+        return std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - from).count();
+    }
+
     void drawPreview(PreviewSlot& ps) {
         ps.pending = false;
         const PreviewRequest& r = ps.req;
@@ -1529,8 +1598,9 @@ private:
         }
         nvrhi::BindingSetDesc bs;
         bs.bindings = {nvrhi::BindingSetItem::ConstantBuffer(0, frameCb_), nvrhi::BindingSetItem::Texture_SRV(0, pages_),
-                       nvrhi::BindingSetItem::Sampler(0, pointClamp_), nvrhi::BindingSetItem::Texture_SRV(5, depthCopy_),
-                       nvrhi::BindingSetItem::Texture_SRV(6, sceneCopy_)};
+                       nvrhi::BindingSetItem::Sampler(0, pointClamp_),
+                       nvrhi::BindingSetItem::Sampler(1, sliceSize_ > 256 ? anisoClamp_ : pointClamp_),
+                       nvrhi::BindingSetItem::Texture_SRV(5, depthCopy_), nvrhi::BindingSetItem::Texture_SRV(6, sceneCopy_)};
         if (rt_) {
             bs.bindings.push_back(nvrhi::BindingSetItem::RayTracingAccelStruct(1, tlas_));
             bs.bindings.push_back(nvrhi::BindingSetItem::StructuredBuffer_SRV(2, staticAttr_));
@@ -1621,6 +1691,7 @@ private:
         f.motionMode = motionMode;
         f.blendMode = frameBlend_;
         f.semiPass = frameSemiPass_;
+        f.pageBias = std::log2(float(t_.renderW) / float(t_.outW));
         const float len = std::sqrt(sun_.dir[0] * sun_.dir[0] + sun_.dir[1] * sun_.dir[1] + sun_.dir[2] * sun_.dir[2]);
         for (int c = 0; c < 3; ++c) f.sunDir[c] = len > 0.0f ? sun_.dir[c] / len : 0.0f;
         f.sunStrength = sun_.strength;
@@ -1906,7 +1977,7 @@ private:
     bool vsync_ = true;
     nvrhi::CommandListHandle cl_;
     nvrhi::BufferHandle frameCb_, vbuf_, skyBuf_, dynBuf_;
-    nvrhi::SamplerHandle pointClamp_, linearClamp_;
+    nvrhi::SamplerHandle pointClamp_, linearClamp_, anisoClamp_;
     nvrhi::ShaderHandle sceneVs_, scenePs_, outVs_, outPs_;
     nvrhi::InputLayoutHandle inputLayout_;
     struct OutConsts { // output.hlsl's push constants (128 bytes, HLSL cbuffer packing)
@@ -1945,6 +2016,7 @@ private:
     std::map<int, std::vector<uint8_t>> sliceUpdates_;
     // the page pool (showPage / poolPage): pool_'s layers by page name, poolOrder_ most recently shown first
     static constexpr size_t kPoolBytes = size_t(1) << 30;
+    static constexpr uint32_t kPoolFirstLayers = 64; // a room's pages fit: no growing, with its stall, on the first room
     nvrhi::TextureHandle pool_;
     int poolEdge_ = 0;          // pool_'s edge: the sliceSize it was made for
     uint32_t poolUsed_ = 0;     // layers handed out
@@ -1991,6 +2063,7 @@ private:
     // sun shadows (ray queries)
     bool rt_ = false;
     SunLight sun_;
+    FrameCosts costs_;
     std::vector<SeeThroughBody> seeBodies_; // setSeeThrough
     std::vector<SeeThroughPiece> seePieces_;
     bool seeDebug_ = false;

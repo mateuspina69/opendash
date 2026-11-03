@@ -706,7 +706,6 @@ int TextureCache::index(uint16_t tpage, uint16_t clut, uint32_t tint) {
     const int i = find(tpage, clut, tint);
     if (i >= 0) return i;
     list_.push_back({tpage, clut, tint & 0xffffff});
-    dirty_ = true;
     return int(list_.size()) - 1;
 }
 

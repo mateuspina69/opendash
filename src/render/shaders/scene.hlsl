@@ -27,7 +27,7 @@ cbuffer Frame : register(b0) {
     float sunScatter;       // remaster: fog brightened toward the sun (0 = sun off)
     float fogSky;           // remaster fog of a sky draw (the ray never ends): 0 not sky, 1 dome, 2 screen-space layer
     float seeClock;         // the see-through lens's clock (seconds): its rim's slow ripple
-    float pad2;
+    float pageBias;         // the page filter's mip bias: log2(render size / output size), sharp when upscaled
     float4 water;           // remaster medium: x on, y clock (seconds), z 1 = sky draw (replaced), w 0 water / 1 hot air
                             // (cave) / 2 hot air under an open sky (waterTint = the sky colour)
     float4 waterTint;       // the room's water colour (the game's wave tint / 0x80)
@@ -48,6 +48,7 @@ cbuffer Frame : register(b0) {
 };
 Texture2DArray pages : register(t0);
 SamplerState pointClamp : register(s0);
+SamplerState pageFilter : register(s1); // a page's colour: anisotropic with a texture pack, nearest (pointClamp) without
 Texture2D<float> heightMap : register(t4);  // precipitation: the room seen from above (depth 0 = top, 1 = no surface)
 Texture2D<float> sceneDepth : register(t5); // the opaque scene's raw depth (R32F copy, before the blended draws)
 Texture2D<float4> sceneColor : register(t6); // the scene's colour before the see-through's lens (what lies behind it)
@@ -114,6 +115,7 @@ struct VSIn {
     float3 pairN : PAIRN; // ... and of the quad's other half (cull 2..5)
     float surface : SURFACE; // bits: 1 a model's face (actors, the player, bank models), 4 an effect; * 8 the
                              // see-through's scenery piece (RenderVertex::piece)
+    float4 uvRect : UVRECT;  // the triangle's UVs' bounds (min u, v, max u, v)
 };
 struct VSOut {
     float4 pos : SV_Position;
@@ -129,6 +131,7 @@ struct VSOut {
     nointerpolation float3 faceN : TEXCOORD7;
     nointerpolation float3 pairN : TEXCOORD8;
     nointerpolation float surface : TEXCOORD9;
+    nointerpolation float4 uvRect : TEXCOORD10;
 };
 
 // no z-buffer on the PS1: decals win by OT order; here they move a few units toward the eye. A negative layer (the
@@ -149,6 +152,7 @@ VSOut vs_main(VSIn i) {
     o.curClip = mul(float4(p, 1.0), viewProjNoJit);
     o.prevClip = mul(float4(pp, 1.0), prevViewProj);
     o.uvs = float3(i.uv, i.slice);
+    o.uvRect = i.uvRect;
     o.shade = i.shade;
     o.cull = i.cull;
     // camera depth, what the original's z = depth / 16384 encodes; in front of everything: the slid depth (an
@@ -335,6 +339,23 @@ struct PSOut {
 #endif
 };
 
+// A page's colour through pageFilter. With a texture pack the filter's reach stays inside the triangle's UVs: a page
+// packs unrelated pieces side by side (the sky's tiles), and one's edge must not read its neighbour. The reach: half the
+// footprint of a pixel on the page, at most what the mip levels (down to the PS1's texel) blend
+float3 pageColor(float3 uvs, float4 rect) {
+    float w, h, count;
+    pages.GetDimensions(w, h, count);
+    const float2 dx = ddx(uvs.xy), dy = ddy(uvs.xy);
+    float2 uv = uvs.xy;
+    if (w > 256.0) {
+        const float2 reach = min(max(0.5 / w, 0.5 * (abs(dx) + abs(dy))), 0.5 / 256.0 + 0.5 / w);
+        const float2 lo = rect.xy + reach, hi = rect.zw - reach;
+        uv = lerp(0.5 * (rect.xy + rect.zw), clamp(uv, lo, hi), float2(lo <= hi));
+    }
+    const float grad = pow(2.0, pageBias);
+    return pages.SampleGrad(pageFilter, float3(uv, uvs.z), dx * grad, dy * grad).rgb;
+}
+
 PSOut ps_main(VSOut i, bool front : SV_IsFrontFace) {
     // a model's face is clipped at the game's near plane (focal / 5): the exe's model draws (0x5f4980 / 0x5f3820)
     // drop a face whose vertices all lie before it (0x40d0c0) and clip the others there (0x40d670), so a model
@@ -399,7 +420,9 @@ PSOut ps_main(VSOut i, bool front : SV_IsFrontFace) {
         const bool visible = cullMode == 1 || cullMode == 4 ? own : cullMode == 5 ? pair : (own || pair);
         if (!visible) discard;
     }
-    float4 c = i.uvs.z < 0 ? float4(1, 1, 1, 1) : pages.Sample(pointClamp, i.uvs); // slice < 0: untextured
+    // slice < 0: untextured. The alpha is the texel's own (0 / the STP bit / 255: a meaning, not a level to filter)
+    float4 c = i.uvs.z < 0 ? float4(1, 1, 1, 1)
+                           : float4(pageColor(i.uvs, i.uvRect), pages.SampleLevel(pointClamp, i.uvs, 0).a);
     clip(c.a - 0.25); // PS1 colour 0 = transparent (alpha 0; a texel with the STP bit has alpha Vram::kStpAlpha)
     // a semi-transparent polygon blends only its texels with the STP bit (an untextured one all of it); the others are
     // opaque: drawn by the opaque pass over the same range, skipped by the blended one
@@ -498,7 +521,7 @@ HeightOut vs_height(VSIn i) {
 }
 
 void ps_height(HeightOut i) {
-    if (i.uvs.z >= 0) clip(pages.Sample(pointClamp, i.uvs).a - 0.25);
+    if (i.uvs.z >= 0) clip(pages.SampleLevel(pointClamp, i.uvs, 0).a - 0.25);
 }
 
 // the first surface below the point (x, z) from above; -1e30 = none (outside the room, or open to the void)

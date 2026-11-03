@@ -31,6 +31,13 @@ namespace od::app {
 
 std::string g_playerBodyDat = "PL00P000.DAT", g_playerWeaponDat;
 od::fx::TextureCache g_fxTextures;
+
+void tintSlice(std::vector<uint8_t>& rgba, uint32_t tint) {
+    for (size_t i = 0; i + 3 < rgba.size(); i += 4)
+        for (int c = 0; c < 3; ++c)
+            rgba[i + size_t(c)] = uint8_t(std::min(255u, uint32_t(rgba[i + size_t(c)]) * ((tint >> (8 * c)) & 0xff) / 128u));
+}
+
 std::vector<std::string> g_stageDats;
 std::array<std::string, 2> g_altBankDat;
 int g_stageFilesStage = -1;
@@ -371,6 +378,30 @@ static void buildTrackStrip(RoomMesh& mesh, int roomShift, bool warps) {
     mesh.uvAnim.remapStatic(firstOf); // UV animation patches the middle tile's faces
 }
 
+// With a page dump: how the room's floor lays its tiles, one line a cell, for the upscaler (the tiles of a page are not
+// its neighbours on the floor): floors/<geometry file>_<sub>.txt, "gx gz page" and for the four corners "right far u v"
+static void dumpFloorLayout(const std::string& geometryFile, int sub, const std::vector<od::RoomQuad>& floor, int shift,
+                            const od::Vram& vram) {
+    std::error_code ec;
+    const std::filesystem::path dir = od::pageDumpDir() / "floors";
+    std::filesystem::create_directories(dir, ec);
+    const std::filesystem::path path = dir / (std::filesystem::path(geometryFile).stem().string() + "_" + std::to_string(sub) + ".txt");
+    std::FILE* out = std::fopen(path.string().c_str(), "w");
+    if (!out) return;
+    std::map<uint32_t, uint64_t> pages;
+    for (const od::RoomQuad& q : floor) {
+        auto [it, added] = pages.try_emplace(q.tex, 0);
+        if (added) it->second = od::pageName(vram.decode(uint16_t(q.tex >> 16), uint16_t(q.tex & 0xFFFF), true));
+        const int gx = (q.lodPoint[0] + 0x7f00) >> 9, gz = (q.lodPoint[2] + 0x7f00) >> 9;
+        const int16_t x0 = int16_t((gx - 0x40) * 0x200 << shift), z0 = int16_t((gz - 0x40) * 0x200 << shift);
+        std::fprintf(out, "%d %d %016llx", gx, gz, static_cast<unsigned long long>(it->second));
+        for (size_t c = 0; c < 4; ++c)
+            std::fprintf(out, " %d %d %u %u", q.verts[c][0] != x0, q.verts[c][2] != z0, q.uvs[c][0], q.uvs[c][1]);
+        std::fputc('\n', out);
+    }
+    std::fclose(out);
+}
+
 RoomMesh loadRoom(int stage, int sub) {
     char name[8];
     std::snprintf(name, sizeof name, "ST%02X", stage);
@@ -448,6 +479,7 @@ RoomMesh loadRoom(int stage, int sub) {
     }
     g_roomVram = vram;
     ++g_roomVramGen;
+    if (!od::pageDumpDir().empty()) dumpFloorLayout(geometryFile, sub < 0 ? 0 : sub, floor, roomShift, vram);
 
     RoomMesh mesh;
     {
@@ -465,16 +497,10 @@ RoomMesh loadRoom(int stage, int sub) {
     loadSky(mesh, stage, sub < 0 ? 0 : sub);
     loadSkyGradient(mesh, stage, sub < 0 ? 0 : sub);
     std::map<uint32_t, int> sliceOf;
-    int packPages = 0; // the texture pack's (engine/texture_pack) pages with images
-    uint64_t packNs = 0;
     auto slice = [&](uint32_t tex) { // tex = (tpage << 16) | clut
         auto [it, added] = sliceOf.try_emplace(tex, mesh.sliceCount);
         if (added) {
-            int images = 0;
-            const uint64_t t0 = SDL_GetTicksNS();
-            const auto rgba = od::pageSlice(vram, uint16_t(tex >> 16), uint16_t(tex & 0xFFFF), true, &images);
-            packNs += SDL_GetTicksNS() - t0;
-            packPages += images;
+            const auto rgba = vram.decode(uint16_t(tex >> 16), uint16_t(tex & 0xFFFF), true);
             if (std::getenv("OD_SLICEPROBE")) { // dev: pages / CLUTs that decode fully transparent (missing VRAM)
                 size_t opaque = 0;
                 for (size_t i = 3; i < rgba.size(); i += 4) opaque += rgba[i] != 0;
@@ -554,13 +580,13 @@ RoomMesh loadRoom(int stage, int sub) {
         // the cache keeps what play met (any stage); the known emitters' pages are registered up front
         for (const od::fx::Texture& t : od::fx::textures()) g_fxTextures.index(t.tpage, t.clut, t.tint);
         for (const od::fx::Texture& t : od::storm::textures(stage)) g_fxTextures.index(t.tpage, t.clut, t.tint);
-        g_fxTextures.takeDirty();
         for (const od::fx::Texture& t : g_fxTextures.entries()) {
-            auto rgba = od::pageSlice(vram, t.tpage, t.clut, true);
-            if (t.tint != 0x808080)
-                for (size_t i = 0; i + 3 < rgba.size(); i += 4)
-                    for (int c = 0; c < 3; ++c)
-                        rgba[i + size_t(c)] = uint8_t(std::min(255u, uint32_t(rgba[i + size_t(c)]) * ((t.tint >> (8 * c)) & 0xff) / 128u));
+            const auto rgba = vram.decode(t.tpage, t.clut, true);
+            if (t.tint != 0x808080) { // not a page of the pool: its colours are this texture's own
+                std::vector<uint8_t> tinted = od::pageSliceOf(rgba, od::texturePack());
+                tintSlice(tinted, t.tint);
+                mesh.pictureSlices[mesh.sliceCount] = std::move(tinted);
+            }
             mesh.fxSlices.push_back(mesh.sliceCount++);
             mesh.slices.insert(mesh.slices.end(), rgba.begin(), rgba.end());
         }
@@ -578,8 +604,8 @@ RoomMesh loadRoom(int stage, int sub) {
                 }
             }
         mesh.fxGradSlice = mesh.sliceCount++;
-        const std::vector<uint8_t> gradSlice = od::pictureSlice(grad);
-        mesh.slices.insert(mesh.slices.end(), gradSlice.begin(), gradSlice.end());
+        mesh.pictureSlices[mesh.fxGradSlice] = od::pictureSlice(grad);
+        mesh.slices.insert(mesh.slices.end(), grad.begin(), grad.end());
     }
     try { // Megaman: model-space parts (game axes, double sided like the props)
         const od::GameFile* weaponFile = g_playerWeaponDat.empty() ? nullptr : &datCache().file(g_playerWeaponDat);
@@ -630,11 +656,49 @@ RoomMesh loadRoom(int stage, int sub) {
         warps = od::roomHasTrigger(od::collisionRoom(block, grids[size_t(gi)]), od::kTriggerWarpType);
     }
     buildTrackStrip(mesh, roomShift, warps); // the room's exits (the data source's)
+    mesh.fxNextSlice = mesh.sliceCount;
     SDL_Log("%s: %zu triangles, %d texture slices", name, mesh.tris.size() / 3, mesh.sliceCount);
-    if (od::texturePack())
-        SDL_Log("%s: texture pack: %d of %zu pages with images, %.0f ms", name, packPages, sliceOf.size(),
-                double(packNs) / 1e6);
     return mesh;
+}
+
+bool uploadRoom(od::Renderer& r, const RoomMesh& mesh) {
+    if (!r.upload(mesh.tris, mesh.sliceCount, mesh.semiStart, od::sliceEdge())) return false;
+    if (mesh.tris.empty() || mesh.sliceCount <= 0) return true;
+    const uint64_t t0 = SDL_GetTicksNS();
+    const size_t pageBytes = size_t(256) * 256 * 4;
+    std::map<uint64_t, std::vector<int>> making; // page -> the slices that show it
+    int pooled = 0;
+    for (int s = 0; s < mesh.sliceCount; ++s) {
+        if (const auto it = mesh.pictureSlices.find(s); it != mesh.pictureSlices.end()) {
+            r.updateSlice(s, it->second);
+            continue;
+        }
+        const uint8_t* at = mesh.slices.data() + size_t(s) * pageBytes;
+        std::vector<uint8_t> ps1(at, at + pageBytes);
+        const uint64_t page = od::pageName(ps1);
+        if (r.showPage(s, page)) {
+            ++pooled;
+        } else {
+            making[page].push_back(s);
+            od::pageLoader().request(page, std::move(ps1));
+        }
+    }
+    const size_t made = making.size();
+    while (!making.empty()) {
+        od::pageLoader().waitReady();
+        for (auto& [page, chain] : od::pageLoader().takeReady()) {
+            const auto it = making.find(page);
+            if (!r.poolPage(page, chain) && it != making.end()) { // the pool is too small for this scale: the slices alone
+                chain.resize(size_t(od::sliceEdge()) * size_t(od::sliceEdge()) * 4);
+                for (const int s : it->second) r.updateSlice(s, chain);
+            } else if (it != making.end()) {
+                for (const int s : it->second) r.showPage(s, page);
+            }
+            if (it != making.end()) making.erase(it);
+        }
+    }
+    SDL_Log("room pages: %d slices from the page pool, %zu pages made, %.0f ms", pooled, made, double(SDL_GetTicksNS() - t0) * 1e-6);
+    return true;
 }
 
 int stageRoomCount(int stage, size_t grids) {

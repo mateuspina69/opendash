@@ -26,11 +26,19 @@ as the PS1 page's texels: 0 transparent, 128 the semi-transparency bit (blended 
 opaque.
 
 Every different decode is another page: the same texels through another CLUT (a palette swap, an animated CLUT's
-frame, a fog shade), or a page whose VRAM an animation moved. A page with no image is the PS1 page enlarged, nearest.
-Images are read when a room needs them and kept in a 512 MB cache, so a room entered again costs nothing. An animated
-page's frames (an animated CLUT, VRAM tiles moved) are read by two worker threads and kept on the GPU (a 1 GB pool,
-the least recently shown going first), so each frame is read and uploaded once; until a frame's image is read, its
-polygons keep the frame before.
+frame, a fog shade), or a page whose VRAM an animation moved. A page with no image is the PS1 page enlarged, nearest,
+its transparent texels beside a drawn one taking that one's colour (the filter below reads them).
+Pages are made by worker threads (half the CPU's threads) with their mip levels, and kept on the GPU (a 1 GB pool, the
+least recently shown going first; the images read also in a 512 MB cache), so each is read and uploaded once. A room's
+pages are named from their PS1 decode: one in the pool is copied on the GPU, a room load waits only for the others. An
+animated page's frame (an animated CLUT, VRAM tiles moved) goes the same way; until its image is read, its polygons keep
+the frame before. An effect's texture met in play takes one of the slices kept free after the room's (32, more reserved
+if they run out) and is drawn once its page is there: the room is not touched.
+
+With a pack, a page's colour is filtered (trilinear, anisotropic 16x, mip levels down to the PS1's 256 x 256, biased
+by the render size over the output's); its alpha stays the nearest texel's, since 0 / 128 / 255 are meanings, not
+levels. The filter's reach stays inside the triangle's UVs: a page packs unrelated pieces side by side, and one's edge
+must not read its neighbour. Without a pack the pages are drawn nearest, the PS1's texels.
 
 ## Making it
 
@@ -42,8 +50,11 @@ polygons keep the frame before.
    python tools/dump_pages.py --exe <copy>/opendash.exe --dump pages
    ```
 
-   It opens a window per room; run it on a copy of the game (its log and saves are the copy's). Pages the sweep does
-   not meet (cutscenes, menus, a story state's NPCs) are dumped by playing with `texture_dump=` set.
+   It opens a window per room; run it on a copy of the game (its log and saves are the copy's). With `--save
+   DASH2-NN.DAT` (read only) it also opens each story state's own files, which hold their own characters. The game
+   never clears VRAM, so a page can carry what the stage before left and be another page: the pages the sweep does not
+   meet (cutscenes, menus, a stage reached from another) are dumped by playing with `texture_dump=` set. The dump also
+   gets `floors/<geometry file>_<sub>.txt`, how each room's floor lays its tiles.
 
 2. **Enlarge them.** `tools/upscale_pages.py` runs the image model over the dump into the pack, skipping the pages
    already there:
@@ -62,3 +73,7 @@ polygons keep the frame before.
    - Alpha: the page's drawn mask through the same model, cut at half. The outlines follow the shapes (a diagonal is
      a line, not the texels' steps) where an enlarged mask would keep the steps. Each drawn texel takes the level
      (128 / 255) of its nearest drawn PS1 texel.
+   - `--floors [geometry file prefixes]`: after the pages, each room's floor through the model as one image, so a
+     tile is enlarged next to its neighbours on the floor. A tile repeats next to different tiles, so at its edges it
+     goes back to the floor's own texels, smooth; each tile's image is the mean of its places. This softens the cut
+     between tiles and does not remove it: the PS1's tiles themselves do not connect there.

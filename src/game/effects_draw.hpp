@@ -54,30 +54,21 @@ struct Texture {
     uint32_t tint = 0x808080;
 };
 // The effect textures met so far, (tpage, clut, tint) -> a stable index. The draws register what they sample (index());
-// the app decodes one slice per entry from the current stage's VRAM when it builds a room, and rebuilds the room's slices
-// when a draw met a new key (takeDirty()): prims whose index has no slice yet are not drawn until then. Any stage can use
+// the app decodes one slice per entry from the current stage's VRAM when it builds a room, and gives a key met during play
+// a slice of its own (PlayerView::effectTexturesApply): prims whose index has no slice yet are not drawn until then. Any stage can use
 // any (tpage, clut): the texture is whatever that VRAM area holds in the loaded stage.
 class TextureCache {
 public:
-    int index(uint16_t tpage, uint16_t clut, uint32_t tint = 0x808080); // registers a new key (marks dirty)
+    int index(uint16_t tpage, uint16_t clut, uint32_t tint = 0x808080); // registers a new key
     int find(uint16_t tpage, uint16_t clut, uint32_t tint = 0x808080) const; // -1: not registered
     const std::vector<Texture>& entries() const { return list_; }
-    bool takeDirty() {
-        const bool d = dirty_;
-        dirty_ = false;
-        return d;
-    }
-    void clear() {
-        list_.clear();
-        dirty_ = false;
-    }
+    void clear() { list_.clear(); }
 
 private:
     std::vector<Texture> list_;
-    bool dirty_ = false;
 };
-// The textures known to be sampled by the draws (registered up front so a room built with them needs no rebuild when
-// the first effect appears; the content's lists after the game's, game/content_registry effectTextures); the tables
+// The textures known to be sampled by the draws (registered up front so a room is built with their slices and the first
+// effect draws at once; the content's lists after the game's, game/content_registry effectTextures); the tables
 // come from the bound data source.
 std::vector<Texture> textures();
 // Gradient rows of the untextured (gouraud) primitives: row r goes from colour [0] (u = 0) to [1] (u = 1), 0xBBGGRR

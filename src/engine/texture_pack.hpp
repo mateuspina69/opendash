@@ -87,6 +87,7 @@ const TexturePack* texturePack();
 // The folder the pages with no image are written to (opendash.ini's texture_dump=; empty: none), each once, as
 // <name>.png at 256 x 256: the upscaler's input
 void bindPageDump(std::filesystem::path dir);
+const std::filesystem::path& pageDumpDir();
 
 // The edge of the renderer's texture slices: 256 times the bound pack's scale
 int sliceEdge();
@@ -95,8 +96,15 @@ std::vector<uint8_t> pageSlice(const Vram& vram, uint16_t tpage, uint16_t clut, 
 // The same from the page as Vram::decode made it, through `pack` (none: the page as it is)
 std::vector<uint8_t> pageSliceOf(const std::vector<uint8_t>& ps1, const TexturePack* pack, int* images = nullptr);
 
-// Pages made off the frame's thread: an animated page's frame (its image read and decoded, about 30 ms at 4x) is made
-// by worker threads, so a frame never waits on a file
+// A page's mip levels at this edge: down to the PS1's own texel (256 x 256); further ones would blend a page's unrelated
+// pieces
+uint32_t pageMipLevels(int edge);
+// rgba (edge^2 RGBA8) followed by its smaller levels, largest first, each texel the mean of 4 (the alpha is only read at
+// level 0)
+void appendPageMips(std::vector<uint8_t>& rgba, int edge);
+
+// Pages made off the frame's thread: an animated page's frame or a page a room lacks (its image read and decoded, about
+// 30 ms at 4x, and its mip levels) is made by worker threads, so a frame never waits on a file
 class PageLoader {
 public:
     explicit PageLoader(int threads);
@@ -104,8 +112,10 @@ public:
     // queues the page (Vram::decode) under its name (pageName), made through the pack bound now; a name queued, being
     // made or made and not taken yet is not queued again
     void request(uint64_t name, std::vector<uint8_t> ps1);
-    // the pages made since the last call: their names and pageSliceOf
+    // the pages made since the last call: their names and pageSliceOf with its mip levels (appendPageMips)
     std::vector<std::pair<uint64_t, std::vector<uint8_t>>> takeReady();
+    // blocks until a page is ready to take (at once when none is queued or being made)
+    void waitReady();
 
 private:
     struct Job {
@@ -116,14 +126,14 @@ private:
     void run();
 
     std::mutex lock_;
-    std::condition_variable wake_;
+    std::condition_variable wake_, made_;
     std::deque<Job> queue_;
     std::unordered_set<uint64_t> pending_; // queued, being made or ready
     std::vector<std::pair<uint64_t, std::vector<uint8_t>>> ready_;
     bool stop_ = false;
     std::vector<std::thread> threads_;
 };
-// The app's loader (two threads, started at the first call)
+// The app's loader (half the CPU's threads, at least two; started at the first call)
 PageLoader& pageLoader();
 // A 256 x 256 RGBA8 picture that is no VRAM page (the effects' gradients) as a slice of sliceEdge()
 std::vector<uint8_t> pictureSlice(const std::vector<uint8_t>& rgba);

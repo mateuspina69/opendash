@@ -44,6 +44,9 @@ void GhostLooks::sync(const std::vector<od::port::PlayerLook>& wanted, uint32_t 
         failed_.clear();
         free_.clear();
         roomSlices_ = nextSlice_ = roomSlices;
+    } else if (roomSlices != roomSlices_) { // the effects reserved slices: the array's end moved past them
+        nextSlice_ += roomSlices - roomSlices_;
+        roomSlices_ = roomSlices;
     }
     // the looks no slot wants any more: dropped, their slices free for the next look
     for (auto it = looks_.begin(); it != looks_.end();) {

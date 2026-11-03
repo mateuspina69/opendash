@@ -118,6 +118,7 @@ void App::parseArgs(int argc, char** argv) {
         else if (a == "--play") startPlay = std::stoi(argv[++i]) != 0;            // start in play mode
         else if (a == "--load") loadArg = argv[++i];
         else if (a == "--fps-log") fpsLog = true;
+        else if (a == "--frame-log") frameLog = true;
         else if (a == "--newgame") newGameArg = std::stoi(argv[++i]);
         else if (a == "--newgame-stage" && i + 2 < argc) { // dev: "--newgame-stage 3a 0" (with --newgame D)
             newGameStageArg = std::stoi(argv[++i], nullptr, 16);
@@ -446,7 +447,7 @@ int App::init() {
                 seeThrough.roomLoaded(mesh.tris, mesh.semiStart[3] ? mesh.semiStart[0] : mesh.tris.size(), mesh.slices,
                                       mesh.sliceCount);
                 modelClearance.roomLoaded(mesh.tris, mesh.semiStart[3] ? mesh.semiStart[0] : mesh.tris.size());
-                if (!renderer->upload(mesh.tris, mesh.slices, mesh.sliceCount, mesh.semiStart, od::sliceEdge())) SDL_Log("upload failed");
+                if (!uploadRoom(*renderer, mesh)) SDL_Log("upload failed");
                 current = std::move(mesh);
                 playerView.enterPlay(current);
                 applyFlags();
@@ -581,11 +582,16 @@ void App::reload(int newStage, int newSub, bool transition) {
         playerView.audioSilence();
     }
     try {
+        const uint64_t loadAt = SDL_GetTicksNS();
         RoomMesh mesh = loadRoom(newStage, newSub);
+        const uint64_t loadedAt = SDL_GetTicksNS();
         seeThrough.roomLoaded(mesh.tris, mesh.semiStart[3] ? mesh.semiStart[0] : mesh.tris.size(), mesh.slices,
                               mesh.sliceCount);
         modelClearance.roomLoaded(mesh.tris, mesh.semiStart[3] ? mesh.semiStart[0] : mesh.tris.size());
-        if (!renderer->upload(mesh.tris, mesh.slices, mesh.sliceCount, mesh.semiStart, od::sliceEdge())) SDL_Log("upload failed");
+        const uint64_t uploadAt = SDL_GetTicksNS();
+        if (!uploadRoom(*renderer, mesh)) SDL_Log("upload failed");
+        SDL_Log("room load: files and pages %.0f ms, see-through and clearance %.0f ms, upload %.0f ms",
+                double(loadedAt - loadAt) * 1e-6, double(uploadAt - loadedAt) * 1e-6, double(SDL_GetTicksNS() - uploadAt) * 1e-6);
         {
             std::vector<od::DynamicObject> dyn;
             dyn.push_back({od::objectId(od::kKindPlayer, 0), playerView.build(mesh)});

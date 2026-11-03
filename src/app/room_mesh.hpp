@@ -4,6 +4,7 @@
 
 #include <array>
 #include <cstdint>
+#include <deque>
 #include <filesystem>
 #include <map>
 #include <memory>
@@ -115,7 +116,8 @@ struct RoomMesh {
     int skyGradHofs = 0x240, skyGradW = 0x50;
     std::map<std::pair<int, int>, std::vector<od::RenderVertex>> partGeom; // model space, game axes
     std::map<std::pair<int, int>, PartSource> partSrc;                     // partGeom's source vertices
-    std::vector<uint8_t> slices; // sliceCount * od::sliceEdge()^2 RGBA (engine/texture_pack)
+    std::vector<uint8_t> slices; // sliceCount * 256^2 RGBA: each slice's page as Vram::decode made it
+    std::map<int, std::vector<uint8_t>> pictureSlices; // the slices that are no pool page, at od::sliceEdge()^2 (a tint, the gradients)
     // the (tpage << 16 | clut) each slice was decoded from, bit 32 set (0 = not a plain VRAM slice): the animated
     // CLUTs re-decode the slices whose CLUT they change
     std::vector<uint64_t> sliceTex;
@@ -145,7 +147,20 @@ struct RoomMesh {
     // colour modulation), and the gradient page of the gouraud primitives (rows of od::fx::gradients())
     std::vector<int> fxSlices;
     int fxGradSlice = 0;
+    // the entries met since the build, in order, each in a spare slice (od::kSpareSlices) until its page is there
+    // (PlayerView::effectTexturesApply)
+    struct FxMaking {
+        int slice;
+        uint64_t page;
+        std::vector<uint8_t> ps1; // the page as Vram::decode made it
+    };
+    std::deque<FxMaking> fxMaking;
+    int fxNextSlice = 0, fxSpareLeft = od::kSpareSlices; // the next spare slice, how many are left
+    int fxReserved = 0;                                  // the slices reserved after the upload's
 };
+
+// an effect texture's slice times its PS1 colour modulation (od::fx::Texture::tint, 0x80 = 1)
+void tintSlice(std::vector<uint8_t>& rgba, uint32_t tint);
 
 // The player files of the running game (Maybe_RequestPlayerFiles 0x5d5c40 = od::playerDatRequest at stage load, see
 // PlayerView::playerFiles): the body PL00P0xx and the special weapon's PL00R##; loadRoom builds Megaman's mesh from
@@ -153,7 +168,7 @@ struct RoomMesh {
 extern std::string g_playerBodyDat, g_playerWeaponDat;
 
 // The effect textures (tpage, clut, tint) the effect emitters met (game/effects_draw TextureCache): loadRoom decodes
-// one slice per entry from the stage's VRAM; a new entry met during play rebuilds the room's slices (assetsDirty).
+// one slice per entry from the stage's VRAM; a new entry met during play takes a spare slice (effectTexturesApply).
 extern od::fx::TextureCache g_fxTextures;
 
 // DAT files a script loaded during the stage (Maybe_RequestDatLoad 0x40efe0 -> the queue 0xa79fe0, drained by
@@ -215,6 +230,9 @@ od::Fog fogFor(const RoomMesh& mesh, od::FogMode mode, float distance, FogSource
 // Loads ST{stage}.DAT geometry + floor, textures from INIT/GAME/ST{stage}T, and flattens quads into
 // one triangle list (game Y-down -> Y-up).
 RoomMesh loadRoom(int stage, int sub);
+// The room to the renderer. A slice's page already in the renderer's page pool is copied there on the GPU; the others are
+// made by od::pageLoader's threads and pooled, this call waiting for them: the next frame shows the room whole.
+bool uploadRoom(od::Renderer& r, const RoomMesh& mesh);
 // The rooms of a stage whose room block has `grids` grids: its last grids without room params (ST0F 13, ST4F 14: on
 // the PC and the PS1, no exit leads there) are not rooms
 int stageRoomCount(int stage, size_t grids);

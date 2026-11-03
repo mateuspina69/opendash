@@ -1,5 +1,6 @@
 #include "texture_pack.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <fstream>
@@ -73,10 +74,30 @@ TexturePack::TexturePack(const std::filesystem::path& dir) {
 
 std::vector<uint8_t> TexturePack::enlarge(const std::vector<uint8_t>& rgba, int scale) {
     if (scale == 1) return rgba;
+    // the renderer filters a pack's pages: a transparent texel beside a drawn one takes its colour, not its black
+    std::vector<uint8_t> filled = rgba;
+    for (int pass = 0; pass < 2; ++pass) {
+        const std::vector<uint8_t> from = filled;
+        for (int y = 0; y < 256; ++y)
+            for (int x = 0; x < 256; ++x) {
+                uint8_t* t = &filled[(size_t(y) * 256 + size_t(x)) * 4];
+                if (t[3]) continue;
+                int sum[3] = {0, 0, 0}, n = 0;
+                for (const auto& [dx, dy] : {std::pair{1, 0}, std::pair{-1, 0}, std::pair{0, 1}, std::pair{0, -1}}) {
+                    if (x + dx < 0 || x + dx > 255 || y + dy < 0 || y + dy > 255) continue;
+                    const uint8_t* s = &from[(size_t(y + dy) * 256 + size_t(x + dx)) * 4];
+                    if (!s[3] && !(s[0] | s[1] | s[2])) continue; // transparent and not filled yet
+                    for (int c = 0; c < 3; ++c) sum[c] += s[c];
+                    ++n;
+                }
+                if (n)
+                    for (int c = 0; c < 3; ++c) t[c] = uint8_t(sum[c] / n);
+            }
+    }
     const size_t edge = size_t(256) * size_t(scale);
     std::vector<uint8_t> out(edge * edge * 4);
     for (size_t y = 0; y < edge; ++y) {
-        const uint8_t* src = rgba.data() + (y / size_t(scale)) * 256 * 4;
+        const uint8_t* src = filled.data() + (y / size_t(scale)) * 256 * 4;
         uint8_t* dst = out.data() + y * edge * 4;
         for (size_t x = 0; x < edge; ++x) std::memcpy(dst + x * 4, src + (x / size_t(scale)) * 4, 4);
     }
@@ -133,6 +154,7 @@ void bindPageDump(std::filesystem::path dir) {
     if (!dir.empty()) std::filesystem::create_directories(dir, ec);
     g_dump = std::move(dir);
 }
+const std::filesystem::path& pageDumpDir() { return g_dump; }
 
 int sliceEdge() { return g_pack ? 256 * g_pack->scale() : 256; }
 
@@ -181,6 +203,11 @@ std::vector<std::pair<uint64_t, std::vector<uint8_t>>> PageLoader::takeReady() {
     return std::exchange(ready_, {});
 }
 
+void PageLoader::waitReady() {
+    std::unique_lock lock(lock_);
+    made_.wait(lock, [this] { return !ready_.empty() || pending_.empty(); });
+}
+
 void PageLoader::run() {
     for (;;) {
         Job job;
@@ -192,14 +219,44 @@ void PageLoader::run() {
             queue_.pop_front();
         }
         std::vector<uint8_t> img = pageSliceOf(job.ps1, job.pack.get());
-        std::lock_guard lock(lock_);
-        ready_.emplace_back(job.name, std::move(img));
+        appendPageMips(img, job.pack ? 256 * job.pack->scale() : 256);
+        {
+            std::lock_guard lock(lock_);
+            ready_.emplace_back(job.name, std::move(img));
+        }
+        made_.notify_all();
     }
 }
 
 PageLoader& pageLoader() {
-    static PageLoader loader(2);
+    static PageLoader loader(std::max(2, int(std::thread::hardware_concurrency()) / 2));
     return loader;
+}
+
+uint32_t pageMipLevels(int edge) {
+    uint32_t levels = 1;
+    while ((edge >> levels) >= 256) ++levels;
+    return levels;
+}
+
+void appendPageMips(std::vector<uint8_t>& rgba, int edge) {
+    const uint32_t levels = pageMipLevels(edge);
+    size_t total = 0;
+    for (uint32_t level = 0; level < levels; ++level) total += size_t(edge >> level) * size_t(edge >> level) * 4;
+    size_t from = 0, to = rgba.size();
+    rgba.resize(total);
+    for (uint32_t level = 1; level < levels; ++level) {
+        const size_t size = size_t(edge >> level), row = size * 2 * 4;
+        for (size_t y = 0; y < size; ++y) {
+            const uint8_t* a = rgba.data() + from + y * 2 * row;
+            const uint8_t* b = a + row;
+            uint8_t* out = rgba.data() + to + y * size * 4;
+            for (size_t x = 0; x < size * 4; x += 4, a += 8, b += 8)
+                for (size_t c = 0; c < 4; ++c) out[x + c] = uint8_t((a[c] + a[c + 4] + b[c] + b[c + 4] + 2) >> 2);
+        }
+        from = to;
+        to += size * size * 4;
+    }
 }
 
 std::vector<uint8_t> pictureSlice(const std::vector<uint8_t>& rgba) {
