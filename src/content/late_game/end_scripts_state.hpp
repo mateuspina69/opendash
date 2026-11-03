@@ -4,6 +4,7 @@
 
 #include <cstdint>
 
+#include "content/late_game/end_scripts.hpp"
 #include "game/script_state.hpp"
 
 namespace od::port::end_scripts_state {
@@ -63,12 +64,13 @@ struct Script75Fields : ScriptPart<Script75Fields> {
 
 // 0x53be40, its phases [0x8adc9c + phase * 4]), pages 0x8adad8 (0x10 bytes each: +1 the page's length in units of 0x13
 // ticks, +2 the hold ticks; 0xff ends)). dat\staff.dat's segments are parsed one per page. The page (exe 0x53c0c0)
-// and background (exe 0x53c2b0) draws are render output.
+// and background (exe 0x53c2b0) draws: StaffPicture, drawn by app/ui/hud_ui.
 // The staff roll's globals: the next segment, the file's buffer, the skip taken
 struct StaffRollState {
     uint32_t segment = 0; // 0xa59fa0
     uint32_t buffer = 0; // 0xa59fa4
     uint8_t skipped = 0; // 0x7ce236
+    StaffPicture picture; // what this tick drew (the OT's packets)
 };
 inline StaffRollState& staffRoll() {
     static StaffRollState s;

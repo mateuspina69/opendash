@@ -2879,6 +2879,8 @@ namespace od {
     X(EndScriptsStaffRollSteps)                                                                                     \
     X(EndScriptsSt5cSpawns)                                                                                         \
     X(EndScriptsFaderRecord)                                                                                        \
+    X(EndScriptsTakeoffSprites)                                                                                     \
+    X(EndScriptsStaffDecor)                                                                                         \
     X(EndScriptsStaffPages)                                                                                         \
     /* ---- content/late_game/late_cast */                                                                          \
     X(LateCastTalkerAFirstRows)                                                                                     \

@@ -17,6 +17,7 @@
 #include <tuple>
 
 #include "content/calbania/ch3_story.hpp"
+#include "content/late_game/end_scripts.hpp"
 #include "content/late_game/st59.hpp"
 #include "content/calbania/st32_quiz.hpp"
 #include "content/yosyonke/st05_entry_list.hpp"
@@ -914,6 +915,27 @@ void PlayerView::setupHooks() {
         }
         warpPending = true;
     };
+    // the staff roll's file (exe 0x40b410 ..): its n-th image segment into the VRAM as the script asks (exe 0x40eb90);
+    // the PC's segment 0 is the music, the disc's images are its blocks between the music's
+    od::port::StaffRollHost staffHost;
+    staffHost.staffLoad = [this] {
+        staffFile = std::make_unique<od::GameFile>(od::dataSource().gameFile("STAFF.DAT"));
+        return 1u;
+    };
+    staffHost.staffSegment = [this](uint32_t, uint32_t seg) {
+        if (!staffFile || seg == 0) return;
+        uint32_t n = 0;
+        for (const od::FilePart& part : staffFile->parts) {
+            if (part.kind != od::FilePart::Kind::Vram || ++n != seg) continue;
+            for (const od::VramRect& r : part.rects) {
+                g_roomVram.loadImage(r.x, r.y, r.w, r.h, r.pixels);
+                g_roomVramLoaded.loadImage(r.x, r.y, r.w, r.h, r.pixels);
+            }
+            return;
+        }
+    };
+    staffHost.staffFree = [this](uint32_t) { staffFile.reset(); };
+    od::port::staffRollSetHost(std::move(staffHost));
     // Maybe_TickRoomScripts' per-stage handler (story spawns)
     hooks.roomHandler = [this] {
         od::port::RoomScriptState& roomScript = od::port::roomScriptState();
@@ -1646,6 +1668,7 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
         if (game.gameMode() != od::port::GameMode::StatusMenu && game.gameMode() != od::port::GameMode::StageLoad) {
             hud.tick(); // FUN_00415fe0 (presentation: own state, reads the game's)
             hud.tickEnemyGauges(); // its type-3 elements (boss gauges) live in the game state
+            staffPicture = od::port::staffRollPictureTake();
             overlayPrims = od::hud::overlayDrawPass(); // FUN_005f2690 (draw pass): the scripted sprite banner
             for (const od::hud::Prim& q : od::port::escapeTimerDraw()) overlayPrims.push_back(q); // 0x4270a0's packets
             for (const od::hud::Prim& q : od::port::alarmFlashDraw()) overlayPrims.push_back(q); // 0x428de0's packet

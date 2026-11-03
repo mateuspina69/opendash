@@ -732,6 +732,7 @@ void App::drawOverlays() {
         }
         if (!titleScreen.demoShown) // the demo hides the HUD elements (FUN_00542460: +0 &= ~2)
             hudUi.draw(canvas, playerView.hud.draw(), float(width), float(height));
+        hudUi.drawStaff(canvas, *renderer, playerView.staffPicture, float(width), float(height));
         hudUi.draw(canvas, playerView.overlayPrims, float(width), float(height));
         if (!playerView.menuPrims.empty()) { // the status sub-screen (game/status_screen), under its windows
             const float s = float(height) / 240.0f;
@@ -774,8 +775,19 @@ void App::drawOverlays() {
                              });
         }
         // script 0x76's game-clear screen (content/late_game/st54_clear_screen: FUN_005e7fe0(1) backdrop + the clear-time sprites)
+        if (const auto& title = od::port::takeoffScreenPrims(); !title.empty()) { // script 0x6f's title sprite
+            if (!playerView.menuVram.ready) playerView.menuVram.reset();
+            if (!playerView.menuVram.fieldBase || playerView.menuVram.baseGen != g_roomVramGen)
+                playerView.menuVram.setFieldBase(g_roomVram); // the stage's page
+            const float s = float(height) / 240.0f;
+            const ui::Vec2 o((float(width) - 320.0f * s) * 0.5f, 0.0f);
+            menuPainter.draw(*renderer, playerView.menuVram, canvas, title, s, o,
+                             [&](const od::port::ScreenPrim& p) { messageUi.menuText(canvas, p, s, o); });
+        }
         if (const auto& clear = od::port::clearScreenPrims(); !clear.empty()) {
             if (!playerView.menuVram.ready) playerView.menuVram.reset();
+            if (!playerView.menuVram.fieldBase || playerView.menuVram.baseGen != g_roomVramGen)
+                playerView.menuVram.setFieldBase(g_roomVram); // its sprites sample the stage's page
             const float s = float(height) / 240.0f;
             const ui::Vec2 o((float(width) - 320.0f * s) * 0.5f, 0.0f);
             menuPainter.draw(*renderer, playerView.menuVram, canvas, clear, s, o,

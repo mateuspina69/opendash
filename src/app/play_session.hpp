@@ -10,6 +10,9 @@
 #include <functional>
 #include <map>
 #include <memory>
+
+#include "content/late_game/end_scripts.hpp"
+#include "engine/game_file.hpp"
 #include <set>
 #include <span>
 #include <string>
@@ -464,6 +467,8 @@ struct PlayerView {
     float viewAspect = 4.0f / 3.0f; // the window's aspect (the storm's screen glow), set by the render loop
     // The field HUD (game/hud): ticked with the logic, drawn by HudUi over the scene
     od::hud::Hud hud;
+    od::port::StaffPicture staffPicture; // the staff roll's picture of the last tick (HudUi::drawStaff)
+    std::unique_ptr<od::GameFile> staffFile; // dat\\staff.dat while the staff roll runs
     std::vector<od::hud::Prim> overlayPrims; // the draw pass's sprite banner (od::hud::overlayDrawPass), last tick
     // world-space triangles (port axes) of the posed model
     std::vector<od::RenderVertex> build(const RoomMesh& mesh);

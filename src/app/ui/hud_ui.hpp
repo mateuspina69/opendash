@@ -8,6 +8,7 @@
 #include <map>
 #include <vector>
 
+#include "content/late_game/end_scripts.hpp"
 #include "game/hud.hpp"
 #include "render/renderer.hpp"
 
@@ -22,6 +23,11 @@ struct HudUi {
     uint32_t vramGen = 0; // g_roomVramGen the pages were decoded from (0 = INIT.DAT + GAME.DAT only)
     void load(od::Renderer& r);
     void draw(ui::Canvas& cv, const std::vector<od::hud::Prim>& prims, float width, float height) const;
+    // the staff roll (script 0x6e): its sprites composed as the GPU blends them on the 320 x 240 screen
+    void drawStaff(ui::Canvas& cv, od::Renderer& r, const od::port::StaffPicture& pic, float width, float height);
+    od::TextureHandle staffTex{};
+    od::port::StaffPicture staffShown;
+    std::vector<uint32_t> staffPixels;
 };
 
 } // namespace od::app

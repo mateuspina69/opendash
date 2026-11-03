@@ -1102,6 +1102,29 @@ void act(uint32_t slot, uint8_t action, uint8_t phase) { // the cast's action an
 }
 constexpr uint8_t kCastFreed = 2; // the cast's state 2: freed
 
+// exe 0x53cf50(i, colour, slot, -1): one sprite of the table 0x8ae108 at its place (10 bytes each: x, y, u, v, height,
+// width, flags 1 semi-transparent, 2 additive)
+std::vector<ScreenPrim> g_takeoffPrims;
+uint32_t g_takeoffFrame = 0;
+void takeoffSpriteDraw(uint8_t i, uint32_t colour) {
+    const auto r = dataAt(stateAddress(TableId::EndScriptsTakeoffSprites) + uint32_t(i) * 10u, 10);
+    const uint8_t flags = r.read<uint8_t>(8);
+    ScreenPrim p;
+    p.kind = ScreenPrim::Sprite;
+    p.x = r.read<int16_t>(0);
+    p.y = r.read<int16_t>(2);
+    p.u = r.read<uint8_t>(4);
+    p.v = r.read<uint8_t>(5);
+    p.h = int16_t(r.read<uint8_t>(6));
+    p.w = int16_t(r.read<uint8_t>(7));
+    p.clut = 0x3e08;
+    p.colour = colour & 0xffffff;
+    p.semi = (flags & 1) != 0;
+    p.tpage = (flags & 2) ? 0x3a : 0x1a; // draw modes 0xe100023a / 0xe100021a
+    g_takeoffPrims.assign(1, p);
+    g_takeoffFrame = gameState().frame;
+}
+
 void takeoffStep(const RoutineRef& routine) {
     ScriptState& s = scriptState();
     Script6fFields& f = script6fFields();
@@ -1361,7 +1384,8 @@ void takeoffStep(const RoutineRef& routine) {
         }
     case RoutineId::EndTakeoffStep15:
         // before 0x96 the grey ramps up by 2 to 0x80; then fade 0x12 and next. Every tick the sprite 0xb
-        // (exe 0x53cf50, table 0x8ae108) tinted by the grey (render output)
+        // (exe 0x53cf50, table 0x8ae108) tinted by the grey
+        takeoffSpriteDraw(0xb, uint32_t(f.grey) * 0x010101u);
         if (s.stepTick < 0x96) {
             f.grey = f.grey < 0x80 ? uint8_t(f.grey + 2u) : uint8_t(0x80);
         } else if (s.subState == 0) {
@@ -1450,18 +1474,45 @@ void script6f() {
 Script6eFields& script6eFields() {
     return scriptState().part<Script6eFields>();
 }
-// one page row (exe data): its end mark, its length in units, its hold ticks
+// one page row (exe data): its end mark / decoration (s8), its length in units, its hold ticks, its texture, its place
 struct StaffPage : DataRecord {
-    static constexpr uint32_t kBytes = 0x4;
+    static constexpr uint32_t kBytes = 0x10;
     uint8_t end = 0; // +0x0
     uint8_t length = 0; // +0x1
     uint16_t hold = 0; // +0x2
+    int16_t vramX = 0; // +0x4
+    int16_t vramY = 0; // +0x6
+    int16_t clutY = 0; // +0x8
+    uint8_t buffer = 0; // +0xa: the other half of the two page buffers (x + buffer * the page width, the next CLUT line)
+    uint8_t mode = 0; // +0xb
+    int16_t x = 0; // +0xc
+    int16_t y = 0; // +0xe
     template <class R> static StaffPage load(const R& r) {
         StaffPage v;
         v.end = r.template read<uint8_t>(0x0);
         v.length = r.template read<uint8_t>(0x1);
         v.hold = r.template read<uint16_t>(0x2);
+        v.vramX = r.template read<int16_t>(0x4);
+        v.vramY = r.template read<int16_t>(0x6);
+        v.clutY = r.template read<int16_t>(0x8);
+        v.buffer = r.template read<uint8_t>(0xa);
+        v.mode = r.template read<uint8_t>(0xb);
+        v.x = r.template read<int16_t>(0xc);
+        v.y = r.template read<int16_t>(0xe);
         return v;
+    }
+};
+// a page's decoration (exe data 0x8adca8, by the page's +0): its texels' rectangle
+struct StaffDecor : DataRecord {
+    static constexpr uint32_t kBytes = 0x8;
+    int16_t u = 0, v = 0, w = 0, h = 0;
+    template <class R> static StaffDecor load(const R& r) {
+        StaffDecor d;
+        d.u = r.template read<int16_t>(0x0);
+        d.v = r.template read<int16_t>(0x2);
+        d.w = r.template read<int16_t>(0x4);
+        d.h = r.template read<int16_t>(0x6);
+        return d;
     }
 };
 constexpr uint32_t kStaffPageSize = 0x10;
@@ -1489,6 +1540,37 @@ void staffUnits() { // the ticks counted by 0x13 into the units
         f.units += 1u;
         f.ticks = 0;
     }
+}
+
+// exe 0x53c0c0: the page's sprites
+void staffPageDraw() {
+    const Script6eFields& f = script6eFields();
+    const StaffPage page = dataRecord<StaffPage>(f.page, StaffPage::kBytes);
+    StaffPicture& pic = staffRoll().picture;
+    pic.page = true;
+    pic.brightness = f.pageBrightness;
+    pic.vramX = int16_t(page.vramX + (int32_t(page.buffer) << ((page.mode & 0x1f) + 6)));
+    pic.vramY = page.vramY;
+    pic.clutY = int16_t(page.clutY + page.buffer);
+    pic.mode = page.mode & 3;
+    pic.x = page.x;
+    pic.y = page.y;
+    pic.decor = int8_t(page.end) != 0;
+    if (pic.decor) {
+        const StaffDecor d = dataRecord<StaffDecor>(stateAddress(TableId::EndScriptsStaffDecor) +
+                                                        uint32_t(int32_t(int8_t(page.end))) * StaffDecor::kBytes,
+                                                    StaffDecor::kBytes);
+        pic.decorU = d.u;
+        pic.decorV = d.v;
+        pic.decorW = d.w;
+        pic.decorH = d.h;
+    }
+}
+// exe 0x53c2b0: the background's sprites
+void staffBackgroundDraw() {
+    StaffPicture& pic = staffRoll().picture;
+    pic.background = true;
+    pic.backgroundLevel = uint8_t(uint16_t(script6eFields().background) >> 4);
 }
 
 void staffStep(const RoutineRef& routine) {
@@ -1574,7 +1656,7 @@ void staffStep(const RoutineRef& routine) {
             break;
         default: break;
         }
-        // exe 0x53c0c0: the page drawn (render output)
+        staffPageDraw(); // exe 0x53c0c0
         break;
     case StaffPhase::Finish: // exe 0x53c0a0: the loader idle -> fade 0x12, next (-> the wrap-up)
         if (!fileLoading()) {
@@ -1601,7 +1683,7 @@ void staffStep(const RoutineRef& routine) {
         break;
     default: break;
     }
-    // exe 0x53c2b0: the background drawn (render output)
+    staffBackgroundDraw(); // exe 0x53c2b0
 }
 
 void staffEnd() { // exe 0x53bd40: -> ST54 sub 0 (request 2 at (0, -0x281, 0), fades 2 / 0xff)
@@ -1612,7 +1694,7 @@ void staffEnd() { // exe 0x53bd40: -> ST54 sub 0 (request 2 at (0, -0x281, 0), f
         s.subState += 1u;
         [[fallthrough]];
     case 1:
-        // exe 0x53c2b0: the background drawn (render output)
+        staffBackgroundDraw(); // exe 0x53c2b0
         if (fadeBusy()) return;
         requestTransition(2, 0x54, 0, 0, -0x281, 0, 0, 2, 0xff);
         s.subState += 1u;
@@ -1733,6 +1815,18 @@ bool endScriptTick(const PlayerEnv&, RoutineId handler) {
 }
 
 void staffRollSetHost(StaffRollHost host) { g_host = std::move(host); }
+
+const std::vector<ScreenPrim>& takeoffScreenPrims() {
+    static const std::vector<ScreenPrim> kNone;
+    return gameState().frame - g_takeoffFrame <= 1 ? g_takeoffPrims : kNone;
+}
+
+StaffPicture staffRollPictureTake() {
+    StaffPicture pic = staffRoll().picture;
+    pic.segment = staffRoll().segment;
+    staffRoll().picture = StaffPicture{};
+    return pic;
+}
 
 } // namespace od::port
 

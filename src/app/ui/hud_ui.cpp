@@ -2,6 +2,8 @@
 
 #include <SDL3/SDL.h>
 
+#include <algorithm>
+#include <array>
 #include <cstring>
 #include <exception>
 
@@ -37,6 +39,84 @@ void HudUi::load(od::Renderer& r) {
     } catch (const std::exception& e) {
         SDL_Log("hud: %s", e.what());
     }
+}
+
+namespace {
+
+constexpr int kScreenW = 320, kScreenH = 240, kStaffScale = 4; // nearest-enlarged: the UI's sampler is linear
+enum class SpriteBlend { Opaque, Add, Subtract };
+struct Rgb5 {
+    int r = 0, g = 0, b = 0;
+};
+// A textured sprite as the GPU draws it: texel 0 is not drawn, the colour scales it (0x80 = as it is), a semi-transparent
+// sprite blends only the texels with the mask bit
+void drawSprite(std::array<Rgb5, kScreenW * kScreenH>& screen, int pageX, int pageY, int mode, uint16_t clut, int x, int y,
+                int u0, int v0, int w, int h, int level, SpriteBlend blend) {
+    const od::Vram& vram = g_roomVram;
+    const int cx = (clut & 0x3f) * 16, cy = (clut >> 6) & 0x1ff;
+    for (int j = 0; j < h; ++j)
+        for (int i = 0; i < w; ++i) {
+            const int sx = x + i, sy = y + j;
+            if (sx < 0 || sy < 0 || sx >= kScreenW || sy >= kScreenH) continue;
+            const int u = (u0 + i) & 0xff, v = (v0 + j) & 0xff;
+            uint16_t c;
+            if (mode == 0) c = vram.pixel(cx + ((vram.pixel(pageX + (u >> 2), pageY + v) >> ((u & 3) * 4)) & 0xf), cy);
+            else if (mode == 1) c = vram.pixel(cx + ((vram.pixel(pageX + (u >> 1), pageY + v) >> ((u & 1) * 8)) & 0xff), cy);
+            else c = vram.pixel(pageX + u, pageY + v);
+            if (c == 0) continue;
+            auto scaled = [&](int bits) { return std::min(31, (bits * level) >> 7); };
+            const Rgb5 t{scaled(c & 0x1f), scaled((c >> 5) & 0x1f), scaled((c >> 10) & 0x1f)};
+            Rgb5& d = screen[size_t(sy) * kScreenW + sx];
+            if (blend == SpriteBlend::Opaque || !(c & 0x8000)) d = t;
+            else if (blend == SpriteBlend::Add) d = {std::min(31, d.r + t.r), std::min(31, d.g + t.g), std::min(31, d.b + t.b)};
+            else d = {std::max(0, d.r - t.r), std::max(0, d.g - t.g), std::max(0, d.b - t.b)};
+        }
+}
+
+} // namespace
+
+void HudUi::drawStaff(ui::Canvas& cv, od::Renderer& r, const od::port::StaffPicture& pic, float width, float height) {
+    if (!pic.background && !pic.page) return;
+    const auto same = [](const od::port::StaffPicture& a, const od::port::StaffPicture& b) {
+        return a.background == b.background && a.backgroundLevel == b.backgroundLevel && a.page == b.page &&
+               a.brightness == b.brightness && a.vramX == b.vramX && a.clutY == b.clutY && a.segment == b.segment &&
+               a.decor == b.decor;
+    };
+    if (!staffTex || !same(pic, staffShown)) {
+        static std::array<Rgb5, kScreenW * kScreenH> screen;
+        screen.fill({});
+        // the OT: the background's list (0x88) before the page's (0x84); each list's last packet first
+        if (pic.background) {
+            drawSprite(screen, 0x380, 0x100, 1, 0x7dc0, 0x100, 0, 0, 0, 0x40, 0xf0, pic.backgroundLevel, SpriteBlend::Opaque); // tpage 0xbe
+            drawSprite(screen, 0x300, 0x100, 1, 0x7dc0, 0, 0, 0, 0, 0x100, 0xf0, pic.backgroundLevel, SpriteBlend::Opaque); // tpage 0xbc
+        }
+        if (pic.page) {
+            const int pageX = pic.vramX & ~0x3f, pageY = pic.vramY & 0x100;
+            if (pic.decor)
+                drawSprite(screen, pageX, pageY, pic.mode, 0x7cc0, pic.x + pic.decorU, pic.y + pic.decorV, pic.decorU & 0xff,
+                           pic.decorV & 0xff, pic.decorW, pic.decorH, pic.brightness, SpriteBlend::Subtract);
+            // the PC's pages are 0xd0 lines at y 0x18, the disc's the whole screen
+            const int lines = od::dataSource().isPs1() ? 0xf0 : 0xd0;
+            drawSprite(screen, pageX, pageY, pic.mode, uint16_t(int(pic.clutY) << 6), pic.x, pic.y, 0, 0, 0x100, lines, pic.brightness,
+                       SpriteBlend::Add);
+        }
+        const int W = kScreenW * kStaffScale, H = kScreenH * kStaffScale;
+        staffPixels.resize(size_t(W) * H);
+        for (int y = 0; y < H; ++y)
+            for (int x = 0; x < W; ++x) {
+                const Rgb5& c = screen[size_t(y / kStaffScale) * kScreenW + x / kStaffScale];
+                const auto e = [](int v) { return uint32_t((v << 3) | (v >> 2)); };
+                staffPixels[size_t(y) * W + x] = e(c.r) | e(c.g) << 8 | e(c.b) << 16 | 0xff000000u;
+            }
+        if (staffTex) r.updateTexture(staffTex, staffPixels.data());
+        else staffTex = r.createTexture(W, H, staffPixels.data());
+        staffShown = pic;
+    }
+    const float s = height / float(kScreenH);
+    const ui::Vec2 a((width - kScreenW * s) * 0.5f, 0.0f), b(a.x + kScreenW * s, height);
+    cv.quadFilled(ui::Vec2(0.0f, 0.0f), ui::Vec2(width, 0.0f), ui::Vec2(width, height), ui::Vec2(0.0f, height), ui::rgba(0, 0, 0, 255));
+    cv.imageQuad(staffTex, a, ui::Vec2(b.x, a.y), b, ui::Vec2(a.x, b.y), ui::Vec2(0.0f, 0.0f), ui::Vec2(1.0f, 0.0f), ui::Vec2(1.0f, 1.0f),
+                 ui::Vec2(0.0f, 1.0f), ui::rgba(255, 255, 255));
 }
 
 void HudUi::draw(ui::Canvas& cv, const std::vector<od::hud::Prim>& prims, float width, float height) const {

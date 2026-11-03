@@ -5,9 +5,11 @@
 
 #include <cstdint>
 #include <functional>
+#include <vector>
 
 #include "engine/routine_ids.hpp"
 #include "game/actor_movement.hpp"
+#include "game/menu_draw.hpp"
 
 namespace od::port {
 
@@ -28,5 +30,23 @@ struct StaffRollHost {
     std::function<void(uint32_t ch, uint32_t slot)> musicStart;
 };
 void staffRollSetHost(StaffRollHost host);
+// What the staff roll draws this tick, in the exe's packets' terms: the background (exe 0x53c2b0) and the page with its
+// optional decoration (exe 0x53c0c0)
+struct StaffPicture {
+    bool background = false;
+    uint8_t backgroundLevel = 0; // the sprites' colour
+    bool page = false;
+    uint8_t brightness = 0;      // the page's colour
+    int16_t vramX = 0, vramY = 0, clutY = 0; // the page's texture, its CLUT line
+    uint8_t mode = 0;            // its colour depth (the texture page's bits 7..8)
+    int16_t x = 0, y = 0;        // its screen place
+    bool decor = false;
+    int16_t decorU = 0, decorV = 0, decorW = 0, decorH = 0; // a second sprite of the page's own texels
+    uint32_t segment = 0;        // the segments loaded so far (a new one changes the VRAM)
+};
+// script 0x6f's last step: its title sprite (exe 0x53cf50), while the step draws it
+const std::vector<ScreenPrim>& takeoffScreenPrims();
+// the tick's picture, once (none when the staff roll drew nothing since the last ask)
+StaffPicture staffRollPictureTake();
 
 } // namespace od::port

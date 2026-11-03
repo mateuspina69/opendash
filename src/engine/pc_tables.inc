@@ -2799,6 +2799,8 @@
 {TableId::EndScriptsStaffRollSteps, 0x8adc80u},
 {TableId::EndScriptsSt5cSpawns, 0x8cd8c0u},
 {TableId::EndScriptsFaderRecord, 0x8a7a70u},
+{TableId::EndScriptsTakeoffSprites, 0x8ae108u},
+{TableId::EndScriptsStaffDecor, 0x8adca8u},
 {TableId::EndScriptsStaffPages, 0x8adad8u},
 // content/late_game/late_cast
 {TableId::LateCastTalkerAFirstRows, 0x88f580u},
