@@ -6943,7 +6943,7 @@ static constexpr Ps1Label kPs1Labels[] = {
     {"DAT/ST5CT.BIN", 0x8010151cu, 0x3c},
     {"DAT/ST5CT.BIN", 0x80101530u, 0x14},
     {"DAT/ST5CT.BIN", 0x80101544u, 0x14},
-    {"DAT/ST5CT.BIN", 0x80101558u, 0x180},
+    {"DAT/ST5CT.BIN", 0x80101558u, 0x3dc},
     {"DAT/ST5CT.BIN", 0x80101984u, 0xc},
     {"DAT/ST5CT.BIN", 0x80101990u, 0xc},
     {"DAT/ST5CT.BIN", 0x8010199cu, 0xc},
@@ -12921,6 +12921,9 @@ static constexpr Ps1Label kPs1Labels[] = {
     {"SLUS_011.40", 0x8006b890u, 0x28},
 };
 static constexpr Ps1LabelSlot kPs1LabelSlots[] = {
+    {6936, 0x180, SlotKind::Data, RoutineId::None, 0x0},
+    {6936, 0x188, SlotKind::Data, RoutineId::None, 0x0},
+    {6936, 0x26c, SlotKind::Data, RoutineId::None, 0x0},
     {7048, 0x0, SlotKind::Data, RoutineId::None, 0x0},
     {7048, 0x4, SlotKind::Data, RoutineId::None, 0x0},
     {7048, 0x8, SlotKind::Data, RoutineId::None, 0x0},
