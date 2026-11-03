@@ -1593,8 +1593,7 @@ void phaseTwo(const PlayerEnv& env, AnimatedActor& actor, BossFields& boss, Boss
 }
 void goldStatueBoss(const PlayerEnv& env, AnimatedActor& actor) { // exe 0x4f6e60
     BossFields& boss = classState<BossFields>(actor);
-    st3cGoldBossGlobals().bossBlock = boss.block.address();
-    BossBlock& b = *boss.block;
+    st3cGoldBossGlobals().bossBlock = boss.block.address(); // 0 on its first tick: bind sets it
     actor.prevAnim = actor.anim;
     actor.prevPos = actor.pos;
     actor.tint = kTintNeutral;
@@ -1602,9 +1601,9 @@ void goldStatueBoss(const PlayerEnv& env, AnimatedActor& actor) { // exe 0x4f6e6
     actor.savePreviousContact();
     if (boss.statueSignals & kStatueDestroyed) {
         balanceAdd(-0x1194); // exe 0x5e51d0
-        clearFlags(b, kTauntPending);
+        clearFlags(*boss.block, kTauntPending);
         if (!(boss.status & kStatusDying)) {
-            b.phaseTwoTimer = 0x12c;
+            boss.block->phaseTwoTimer = 0x12c;
             boss.statueSignals = 0;
             actor.enterState(uint8_t(BossState::PhaseTwo));
         }
@@ -1619,8 +1618,8 @@ void goldStatueBoss(const PlayerEnv& env, AnimatedActor& actor) { // exe 0x4f6e6
     }
     switch (BossState(actor.state)) { // [0x897398]
     case BossState::Bind: bind(actor, boss); break;
-    case BossState::PhaseOne: phaseOne(env, actor, boss, b); break;
-    case BossState::PhaseTwo: phaseTwo(env, actor, boss, b); break;
+    case BossState::PhaseOne: phaseOne(env, actor, boss, *boss.block); break;
+    case BossState::PhaseTwo: phaseTwo(env, actor, boss, *boss.block); break;
     case BossState::End: // exe 0x4f72c0
         setStoryFlag(kFlagBossDone); // exe 0x510e10
         freeActor(actor);            // exe 0x5e1490
