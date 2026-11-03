@@ -277,6 +277,9 @@ void PlayerView::loadExeBanks() {
         put("places", places);
         uint32_t dev = 0; // Roll's development room (content/yosyonke/dev_room): the PS1 Flutter overlay's bank
         put("dev_room", dev);
+        uint32_t hints = 0, entryList = 0; // Data's hints window, ST05's entry list
+        put("hints", hints);
+        put("entry_list", entryList);
         // ST32's quiz show: the pack's questions and their answers (the USA quiz), the two together or neither
         uint32_t quiz = 0;
         put("quiz", quiz);
@@ -290,6 +293,8 @@ void PlayerView::loadExeBanks() {
                      {od::stateAddress(od::TableId::SaveMenusSaveTextBank), save},
                      {od::stateAddress(od::TableId::TextScriptPlaceNameBank), places},
                      {od::stateAddress(od::TableId::DevRoomBank), dev},
+                     {od::stateAddress(od::TableId::TalkingNpcHintsBank), hints},
+                     {od::stateAddress(od::TableId::St05EntryListEntryTexts), entryList},
                      {od::stateAddress(od::TableId::St32QuizQuestionBank), quiz}};
     }
     od::port::clearBankRedirects();
