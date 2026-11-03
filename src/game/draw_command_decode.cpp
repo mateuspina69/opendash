@@ -83,6 +83,12 @@ void centreOf(fx::Prim& p, const int16_t c[3], int sh) {
 void decode2c(const uint32_t* w, fx::TextureCache& tex, std::vector<fx::Prim>& out, uint32_t object) {
     int16_t c[3];
     if (culled(w, false, c)) return;
+    // A size word past 0x7fff is a negative size: the disc's contrail rows (st0a_fx's trail, ST4BT.BIN 0x800f9b08) shrink
+    // by 128..512 a billboard, 512 down to -384, where the PC's rows shrink by 16..64 and never get there. Both handlers
+    // read it unsigned (SLUS 0x8003925c, exe 0x5f0685) and store the corners as s16: -128 lands them at +-(24042, 14975)
+    // in the view plane, and the PS1's GPU drops a polygon spanning 1024 x 512 pixels, at any depth up to 22464 (focal
+    // 384). Here nothing limits a polygon: it would be a quad of 65408 units over the whole screen
+    if (w[6] & 0x8000u) return;
     const uint16_t clut = uint16_t(w[3] >> 16), tpage = uint16_t(w[5] >> 16);
     fx::Prim p;
     centreOf(p, c, shiftOf());
