@@ -24,7 +24,7 @@ files still come from your copy (see below).
 
 - An installed copy of the PC version of *Mega Man Legends 2* (the `dat/` folder and `dash2.exe`).
 - Windows 10/11, Visual Studio 2026 (C++ workload), CMake 3.28+, [vcpkg](https://vcpkg.io) (manifest mode); or
-  Linux with GCC 13+ / Clang 17+, CMake 3.28+, Ninja, SDL3, stb, NanoSVG, DXC and a Vulkan 1.3 driver.
+  Linux with GCC 13+ / Clang 17+, CMake 3.28+, Ninja, SDL3, stb, NanoSVG, xxHash, DXC and a Vulkan 1.3 driver.
 - Python 3.11+, and Git with Git LFS (the configure fetches the upscaler SDKs).
 
 ## Building
@@ -39,7 +39,7 @@ The configure fetches the pinned upscaler SDKs (DLSS, FSR, XeSS, NIS) into `thir
 `tools/fetch_sdks.py`. Every build includes all four; each one is offered at run time
 when its DLL is next to the exe and the GPU supports it.
 
-On Linux (Arch: `pacman -S cmake ninja sdl3 stb nanosvg directx-shader-compiler vulkan-icd-loader`; NVRHI, Dear ImGui
+On Linux (Arch: `pacman -S cmake ninja sdl3 stb nanosvg xxhash directx-shader-compiler vulkan-icd-loader`; NVRHI, Dear ImGui
 and DirectXMath are fetched by the configure at pinned versions):
 
 ```

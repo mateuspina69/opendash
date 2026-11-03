@@ -137,6 +137,52 @@ bool packAvailable(const std::filesystem::path& root, Language l) {
            std::filesystem::exists(dir / "widths.bin", ec) && std::filesystem::is_directory(dir / "msg", ec);
 }
 
+std::optional<std::array<uint8_t, 256>> latinDatWidths(std::span<const uint8_t> font, int cell) {
+    constexpr int kInkFrom = 3; // a texel below it is the glyph's soft edge
+    constexpr int kGlyphPx = 12;
+    if (cell <= 0 || cell % kGlyphPx != 0 || cell % 2 != 0) return std::nullopt;
+    const size_t bytes = size_t(cell / 2) * size_t(cell);
+    if (font.size() < bytes * 0x80) return std::nullopt;
+    const int perPx = cell / kGlyphPx;
+    // the first and last column with ink of glyph g; {cell, -1} for an empty cell
+    auto ink = [&](int g) {
+        const uint8_t* b = font.data() + size_t(g) * bytes;
+        int first = cell, last = -1;
+        for (int y = 0; y < cell; ++y)
+            for (int x = 0; x < cell; ++x) {
+                const uint8_t v = b[(y * cell + x) / 2];
+                if (((x & 1) ? v >> 4 : v & 15) >= kInkFrom) {
+                    first = std::min(first, x);
+                    last = std::max(last, x);
+                }
+            }
+        return std::pair{first, last};
+    };
+    std::array<uint8_t, 256> w;
+    w.fill(kGlyphPx);
+    for (const auto [from, to] : {std::pair{'A', 'Z'}, std::pair{'a', 'z'}})
+        for (int g = from; g <= to; ++g) {
+            const auto [first, last] = ink(g);
+            if (first != perPx) return std::nullopt; // not flush left: not this font
+            w[size_t(g)] = uint8_t((last + 1) / perPx);
+        }
+    static constexpr std::pair<char, uint8_t> kOthers[] = {
+        {' ', 6}, {'!', 10}, {'"', 8}, {'#', 8}, {'\'', 4}, {'(', 5}, {')', 5}, {'+', 11}, {',', 5}, {'-', 8},
+        {'.', 8}, {'/', 8},  {':', 7}, {';', 7}, {'=', 8},
+    };
+    for (const auto [c, width] : kOthers) w[uint8_t(c)] = width;
+    for (char d = '0'; d <= '9'; ++d) w[uint8_t(d)] = 10;
+    return w;
+}
+
+int latinDatDrop(uint8_t g) {
+    switch (g) {
+    case 'g': case 'j': case ',': case '.': return 1;
+    case 'p': case 'q': case 'y': return 2;
+    default: return 0;
+    }
+}
+
 std::optional<XaTrack> parseXaTrack(std::span<const uint8_t> t) {
     if (t.size() < 12 || std::memcmp(t.data(), "ODXA", 4) != 0) return std::nullopt;
     XaTrack x;

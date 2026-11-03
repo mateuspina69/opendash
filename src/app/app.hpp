@@ -45,6 +45,7 @@
 namespace od::app {
 
 constexpr uint64_t kSimStepNs = 1'000'000'000ull / 30; // game logic runs at 30 Hz
+constexpr uint64_t kSlowFrameNs = 25'000'000ull;       // --frame-log: a frame this long (ms: 25) is logged
 // --playscript wait markers (no real pad state has every bit set): see parsePlayScript / ptNextPad
 constexpr uint16_t kPtCalm = 0xffff, kPtMash = 0xfffe;
 constexpr int kPtWaitLimit = 30000;
@@ -122,11 +123,14 @@ struct App {
     uint64_t nextEveryShot = 0;
     int debugView = 0;          // --view final|color|motion|normal|depth|reactive (index of od::DebugView)
     bool fpsLog = false;         // --fps-log: log frames per second + average frame time once a second
+    bool frameLog = false;       // --frame-log: log each slow frame and what it spent its time on
+    float pagesSyncMs = 0.0f;    // this frame's vramMovesApply + clutAnimationSync + pagesMadeApply
     bool motionSelfTest = false; // --motion-selftest: render two camera poses, check the motion vectors, exit
     bool resizeTest = false;     // --resize-test: in --shot mode, resize to 640x360, 1x1, back, reset history
     std::string aaArg, aaQualityArg; // --aa / --aa-quality override opendash.ini
     int vsyncArg = -1;               // --vsync 0|1 overrides vsync=
     std::string langArg;             // --lang jp|en|ptbr overrides opendash.ini lang=
+    std::string textureDumpArg;      // --texture-dump <dir> overrides opendash.ini texture_dump=
     bool audioDeviceArg = false;     // --audio-device 1: scripted runs open the real audio device (shutdown test)
     std::string voiceTestArg;        // --voice-test xa10_18.dat:3 -- play one voice-pack track (silent mixer), log it
     float camArg[5]{};

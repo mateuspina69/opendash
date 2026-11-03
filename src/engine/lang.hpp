@@ -7,6 +7,7 @@
 // Japanese = the PC game's own data (no pack). No game data ships with OpenDash.
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <filesystem>
 #include <optional>
@@ -39,6 +40,16 @@ const char* ps1GlyphText(uint8_t g);
 bool ps1GlyphSpace(uint8_t g);
 // UTF-8 -> PS1 glyph codes (OpenDash's own strings drawn in the pack font); unknown characters are dropped
 std::vector<uint8_t> ps1Encode(std::string_view t);
+
+// ---- Latin text in the PC game's own .DAT files (the dash2eng fan patch) ----
+// That patch puts the PS1 scripts (their 2 px columns, their glyphs as ASCII) in the type-6 banks and a proportional
+// Latin font in INIT.DAT's font 0, and keeps the glyph widths in its own exe, which OpenDash does not need.
+// The advances of the font `font` (4bpp cells of `cell` x `cell` texels, drawn in a 12 px square) when its letters are
+// that font's, flush left in their cells; nullopt for any other font (the PC's own centres them). A letter's advance
+// is its ink's right edge; digits and punctuation have OpenDash's own table; everything else 12.
+std::optional<std::array<uint8_t, 256>> latinDatWidths(std::span<const uint8_t> font, int cell);
+// how far below the line that font's glyph g is drawn (its descenders and low punctuation), in 12 px cell pixels
+int latinDatDrop(uint8_t g);
 
 // ---- CD-XA ADPCM ----
 inline constexpr size_t kXaSectorBytes = 2304; // 18 sound groups x 128 bytes

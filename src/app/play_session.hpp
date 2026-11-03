@@ -145,6 +145,13 @@ struct PlayerView {
     // destination touches are re-decoded
     void vramMovesApply(const RoomMesh& mesh, od::Renderer& r);
     void clutAnimationSync(const RoomMesh& mesh, od::Renderer& r);
+    // A re-decoded slice shows its page from the renderer's page pool (od::Renderer::showPage); a page not pooled yet
+    // is made by od::pageLoader's threads and pooled when made (pagesMadeApply), the slice keeping its last page meanwhile
+    void showSlicePage(const RoomMesh& mesh, size_t slice, od::Renderer& r);
+    void pagesMadeApply(od::Renderer& r);
+    // The effect textures play met since the room was built: each takes a spare slice (od::kSpareSlices), its page made
+    // the same way, and is drawn once the page is there; with none left, the renderer reserves more (the room untouched)
+    void effectTexturesApply(RoomMesh& mesh, od::Renderer& r);
 
     // param: FUN_005d5b30's (>= 0: room / stage load, the actors are killed first; < 0: in-stage switch)
     void bindRoomData(const RoomMesh& mesh, int param = 0);
@@ -325,6 +332,8 @@ struct PlayerView {
     void orbit(float dx, float dy);
     uint16_t steer(uint16_t ps1, float lx, float ly);
     bool fireFacing(uint16_t& ps1, float lx, float ly); // firing: face the camera, strafe (app/fire_facing)
+    // the free aim's ray (game/modern_aim) through the game's aim centre of the view `cam`; pivot: the player's, drawn
+    void setAimRay(const RoomMesh& mesh, const od::Camera& cam, const float* pivot);
     // the orbit camera around the interpolated player position (distance / height from the game camera)
     // modern mode: the orbit camera, except while the game camera is not following the player (talk camera mode 2,
     // scripted mode 1) or an event runs; when it is back in follow mode the orbit camera resumes from its pose

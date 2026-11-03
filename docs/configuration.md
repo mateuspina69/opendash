@@ -18,11 +18,18 @@ game's folder, and writes back the settings changed in the game's options.
 | `restored_voices` | `1`: a language pack's restored voices when it has them; `0`: its original voices | `1` |
 | `story_save` | the save whose story state free play (F2, the stage browser) starts from: a slot number (`DASH2-NN.DAT` next to `dash2.exe`, only read), a path, or `none` | `DASH2-00.DAT` when it exists |
 
+With `lang=jp`, the text is whatever the `.DAT` files hold. OpenDash recognises the `.DAT` files of the dash2eng fan patch
+by their font and lays their English text out properly. Keep the original `dash2.exe`: the patch's executable is not
+needed, and the banks kept in the executable (menus, item names, Data's hints) stay in Japanese. This is not fully
+tested yet: not every screen is known to work with the patch.
+
 ## Video
 
 | Key | Values | Default |
 | --- | --- | --- |
 | `display` | `windowed`, `borderless`, `exclusive` | `windowed` |
+| `texture_pack` | the texture pack's folder: the pages' larger images (see [texture_pack.md](texture_pack.md)); a relative path is from the exe's folder | `textures/` next to the exe, when present |
+| `texture_dump` | the folder the pages missing from the texture pack are written to, the upscaler's input (see [texture_pack.md](texture_pack.md)); a relative path is from the exe's folder | none |
 | `window` | the window's size, `WxH` (pixels) | 1280x720 |
 | `fullscreen_mode` | the exclusive full screen's mode, `WxH@Hz` | the desktop's |
 | `aa` | `auto`, `none`, `dlss`, `fsr`, `xess`, `nis` (each upscaler only when its DLL is next to the exe and the GPU supports it; outside Windows FSR 3.1 is built from the SDK), `msaa` (4x), `ssaa` (2x2 supersampling; both on any GPU, `aa_quality` has no say) | `auto` |

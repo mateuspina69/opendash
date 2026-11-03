@@ -18,6 +18,7 @@ constexpr int kPs1Column = 2;   // the PS1 scripts' unit (2 px)
 uint32_t gNameBank = 0; // the name bank set (0: none, the exe's system strings TableId::MenuBankItemNames)
 std::map<uint32_t, uint32_t> gRedirect; // exe bank -> the pack's copy
 bool gPs1Text = false;                  // a Latin pack's PS1 conventions are on (in a window's scope: for its text)
+bool gLatinDat = false;                 // the .DAT files' own text is Latin: PS1 columns, the PC's encoding
 std::array<uint8_t, 256> gPs1Widths{};
 int gPs1Limit = 0; // 0 = no table: 12 px
 
@@ -43,14 +44,17 @@ uint32_t bankRedirect(uint32_t b) {
 }
 
 void setPs1Text(bool on) { gPs1Text = on; }
-bool ps1Text() { return gPs1Text; }
+bool ps1Text() { return gPs1Text && !gLatinDat; }
+void setLatinDat(bool on) { gLatinDat = on; }
+bool latinDat() { return gLatinDat; }
+bool latinBank(uint32_t bank) { return gLatinDat && !exeBank(bank); }
 void setPs1Widths(const uint8_t* widths, int limit) {
     gPs1Limit = widths ? limit : 0;
     if (widths) std::copy_n(widths, 256, gPs1Widths.begin());
 }
 int ps1Advance(uint8_t g) { return gPs1Limit != 0 && g < gPs1Limit ? gPs1Widths[g] : kPcColumn; }
 bool ps1WidthsLoaded() { return gPs1Limit != 0; }
-bool ps1Window(const MessageWindow& w) { return gPs1Text && !exeBank(w.bank.value()); }
+bool ps1Window(const MessageWindow& w) { return (gPs1Text || gLatinDat) && !exeBank(w.bank.value()); }
 int columnUnit() { return gPs1Text ? kPs1Column : kPcColumn; }
 
 Ps1TextScope::Ps1TextScope(const MessageWindow& w) : previous_(gPs1Text) { gPs1Text = ps1Window(w); }

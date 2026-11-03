@@ -12,6 +12,8 @@
 #include "game/global_class_types.hpp"
 #include "game/hit_effects.hpp"
 #include "game/hit_list.hpp"
+#include "game/modern_aim.hpp"
+#include "game/modern_play.hpp"
 #include "game/player/player_state.hpp"
 #include "game/player/player_weapons.hpp"
 #include "game/stage_state.hpp"
@@ -49,6 +51,12 @@ void aimAlongPlayer(ShotActor& shot) {
     shot.rotation.x = player().rotation.x;
     shot.rotation.y = player().rotation.y;
     shot.rotation.z = 0;
+    const int32_t from[3] = {shot.pos.x, shot.pos.y, shot.pos.z};
+    int16_t pitch, yaw;
+    if (modernAimAngles(from, pitch, yaw)) { // OpenDash's free aim: from the muzzle to the crosshair's point
+        shot.rotation.x = pitch;
+        shot.rotation.y = yaw;
+    }
 }
 
 void stopHalfway(ShotActor& shot) {
@@ -176,6 +184,13 @@ void submitShotCapsule(ShotActor& shot, uint16_t r, uint32_t shape, uint32_t att
                           wrap16(shot.prevPos.z.whole + o[2])};
     hitListSubmitCapsule(p, r, q, r, PlayerShotFields(shot).hitBox, hitOwner(shot.slot) | shape, attack);
     clearHitBox(shot);
+}
+
+void submitShotSweep(ShotActor& shot, bool moved, uint16_t r, uint32_t shape, uint32_t attack) {
+    if (modernPlay() && moved)
+        submitShotCapsule(shot, r, shape | hitCapsule(3), attack);
+    else
+        submitShotHit(shot, shape | r, attack);
 }
 
 uint32_t drawXY(const ShotActor& shot) {

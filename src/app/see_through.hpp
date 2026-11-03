@@ -14,7 +14,8 @@
 class SeeThrough {
 public:
     // A room was loaded: numbers its pieces into tris (RenderVertex::piece, 1 ..) and keeps its opaque triangles
-    // (tris[0 .. opaqueEnd)) for the segments; slices: its texture slices (RGBA, sliceCount of kSliceSize squared),
+    // (tris[0 .. opaqueEnd)) for the segments; slices: its texture slices (RGBA, sliceCount of kSliceSize squared,
+    // or a texture pack's multiple of it),
     // what a face shows through. A face one already sees through (a fence's or a grate's transparent texels, a
     // semi-transparent one: glass, water) is no piece and never in the way. Every piece state of the last room is
     // dropped
@@ -31,7 +32,7 @@ public:
     void clear() { states_.clear(); }
 
     static constexpr uint32_t kDynamicPieces = 1u << 20; // the room's pieces stay below (RenderVertex::piece)
-    static constexpr int kSliceSize = 256;               // the texture slices' side (Renderer::upload)
+    static constexpr int kSliceSize = 256;               // the PS1 texture pages' side (its clear-texel mask's)
 
 private:
     struct Tri {

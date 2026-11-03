@@ -16,6 +16,12 @@ struct Config {
     std::string data = "pc";       // data= pc|disc / OPENDASH_DATA: the game's files and tables from the PC install or
                                    // the disc image (engine/ps1_data_source)
     bool restoredVoices = true;    // restored_voices= 0|1: the pack's AI-restored voices (snd_restored) when present
+    // texture_pack= the texture pack's folder (the pages' larger images, engine/texture_pack), a relative path from
+    // the executable's folder; unset: textures/ next to the executable when present, else the PS1 pages as they are
+    std::filesystem::path texturePack;
+    // texture_dump= the folder the pages with no image in the pack are written to (the upscaler's input,
+    // tools/upscale_pages.py), a relative path from the executable's folder; unset: none
+    std::filesystem::path textureDump;
     // story_save= the save whose story state / event flags free play (F2, the stage browser) uses: a slot number
     // (DASH2-NN.DAT next to dash2.exe, read only), a path, or nenhum / none (story 0). Unset: DASH2-00 if present.
     std::string storySave;

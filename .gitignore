@@ -4,6 +4,8 @@
 /tools/*
 !/tools/fetch_sdks.py
 !/tools/ffx_sc_glsl.py
+!/tools/dump_pages.py
+!/tools/upscale_pages.py
 /tests/data/
 /lang/
 /screenshots/

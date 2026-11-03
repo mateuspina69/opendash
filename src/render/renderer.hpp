@@ -123,6 +123,21 @@ struct ParticleLighting {
 };
 constexpr size_t kMaxParticleLights = 32; // the brightest / largest ones a frame
 
+// The slices a room's upload keeps free after its own: an effect's texture met during play takes one without touching
+// the room or the other slices
+constexpr int kSpareSlices = 32;
+
+// What a frame's rendering took on the CPU, in ms (--frame-log); submit and present also wait on the GPU
+struct FrameCosts {
+    float dynamicMs = 0.0f; // uploadDynamic: the objects sorted and their vertices made
+    float pagesMs = 0.0f;   // the page writes and copies recorded
+    float recordMs = 0.0f;  // the rest of draw's commands recorded
+    float submitMs = 0.0f;
+    float presentMs = 0.0f;
+    int pagesWritten = 0, pagesShown = 0;
+    uint32_t dynamicVertices = 0, dynamicOpaque = 0;
+};
+
 struct Precipitation {
     float snow = 0.0f;     // 0..1: the falling flakes' density
     float blizzard = 0.0f; // 0..1: the blown snow's density (more, faster, streaked flakes and the drifting medium)
@@ -187,20 +202,32 @@ public:
                                bool heat = false) {
         (void)amplitude, (void)phase, (void)tint, (void)remaster, (void)seconds, (void)heat;
     }
-    // slices: count * 256*256 RGBA8
+    // slices: count * sliceSize^2 RGBA8
     // semiStart[m] (m = 0 avg, 1 add, 2 sub): first vertex of each PS1 semi-transparent range; the
     // ranges follow the opaque vertices in that order (semiStart[3] = end). Empty = all opaque.
-    // sliceSize: texture page edge in texels (256 = original PS1 pages; larger for replacement textures)
-    virtual bool upload(const std::vector<RenderVertex>& tris, const std::vector<uint8_t>& slices,
-                        int sliceCount, const std::array<uint32_t, 4>& semiStart = {}, int sliceSize = 256) = 0;
+    // sliceSize: texture page edge in texels (256 = original PS1 pages; larger with a texture pack, engine/texture_pack)
+    // sliceCount + kSpareSlices slices, unwritten until updateSlice / showPage fills them (app/room_mesh uploadRoom)
+    virtual bool upload(const std::vector<RenderVertex>& tris, int sliceCount,
+                        const std::array<uint32_t, 4>& semiStart = {}, int sliceSize = 256) = 0;
     // background: clear colour (0..1) and sky triangles drawn first without depth. screenSpace:
     // pos = NDC x, y (PS1-style 2D layers); otherwise world positions around the eye (sky dome)
-    // replaces one 256 x 256 RGBA8 slice of the uploaded room textures (the animated CLUTs re-decoded), next frame
+    // replaces one RGBA8 slice (the uploaded sliceSize) of the room textures (the animated CLUTs re-decoded), next frame
     virtual void updateSlice(int slice, const std::vector<uint8_t>& rgba) { (void)slice, (void)rgba; }
-    // appends `count` 256 x 256 RGBA8 slices after the uploaded ones (the slices so far and the room geometry kept,
+    // The page pool: page images kept on the GPU by name (engine/texture_pack pageName), across rooms, so an animated
+    // page's frames are uploaded once; the least recently shown go past its budget.
+    // showPage: the slice is to show the page (until the next upload / updateSlice / showPage of it); a pooled page is
+    // copied into it next frame, else false and the slice keeps what it shows until poolPage brings the page
+    virtual bool showPage(int slice, uint64_t page) { (void)slice, (void)page; return false; }
+    // poolPage: adds a page image (the uploaded sliceSize^2 RGBA8 and its mip levels, od::appendPageMips), on the GPU and
+    // in the slices showPage gave it next frame. false = not taken (every layer in use): `chain` is left as it was
+    virtual bool poolPage(uint64_t page, std::vector<uint8_t>& chain) { (void)page, (void)chain; return false; }
+    // appends `count` RGBA8 slices (the uploaded sliceSize) after the uploaded ones (the slices so far and the room geometry kept,
     // no history reset): their indices are the old slice count onward. false = not done (no room uploaded, pages of
     // another size, a failed allocation)
     virtual bool appendSlices(const std::vector<uint8_t>& rgba, int count) { (void)rgba, (void)count; return false; }
+    // the same with `count` slices left unwritten, as kSpareSlices are; sliceTotal: how many slices there are
+    virtual bool reserveSlices(int count) { (void)count; return false; }
+    virtual int sliceTotal() const { return 0; }
     // rewrites the UVs of vertices of the uploaded static geometry (positions unchanged: no BLAS rebuild), next frame
     virtual void updateStaticUvs(const std::vector<StaticUvPatch>& patches) { (void)patches; }
     virtual void setClearColor(float r, float g, float b) = 0;
@@ -210,6 +237,8 @@ public:
     virtual void setPrecipitation(const Precipitation& p) = 0;
     // the light of the particles (ParticleLighting above)
     virtual void setParticleLighting(const ParticleLighting& l) { (void)l; }
+    // --frame-log: what the last uploadDynamic and draw took (FrameCosts above)
+    virtual FrameCosts frameCosts() const { return {}; }
     // sky: a dome around the eye or screen-space layers; isSky false = a 2D layer that is not the sky (ST01's travel
     // map), which the remaster fog leaves alone
     virtual void uploadSky(const std::vector<RenderVertex>& tris, bool screenSpace, bool isSky) = 0;

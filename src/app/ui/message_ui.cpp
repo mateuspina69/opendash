@@ -385,6 +385,7 @@ void MessageUi::draw(ui::Canvas& cv, float width, float height, int pass) const 
         // pass runs (flags 1 | 2)
         const bool framed = (win.flags & 0x8000) != 0;
         const bool pk = usePs1 && ps1.tex && od::port::ps1Window(win); // the pack's text (else the exe's own bank)
+        const bool latin = od::port::latinDat() && od::port::ps1Window(win); // the .DAT files' own Latin text
         if (!framed && (win.flags & 3) != 3) continue;
         // the frame (FUN_005583f0: linked after the text into the same OT entry, so drawn under it)
         frame.clear();
@@ -497,8 +498,8 @@ void MessageUi::draw(ui::Canvas& cv, float width, float height, int pass) const 
             const bool skip = c == 0xfb && rd(p + 1) != 0x0f;
             if ((!skip || !typed) && runEnds()) break;
             if (c < 0xd0) {
-                glyph(cv, 0, c, x0 + cx, y0 + cy, 12.0f, s, o, col);
-                cx += 12.0f;
+                glyph(cv, 0, c, x0 + cx, y0 + cy + (latin ? float(od::lang::latinDatDrop(c)) : 0.0f), 12.0f, s, o, col);
+                cx += latin ? float(od::port::ps1Advance(c)) : 12.0f;
                 ++p;
             } else if (c < 0xe0) {
                 glyph(cv, 0, (c - 0xd0) << 8 | od::port::TextBytes(p).byte(1), x0 + cx, y0 + cy, 12.0f, s, o, col);
@@ -669,13 +670,14 @@ void MessageUi::drawString(ui::Canvas& cv, uint32_t bank, int id, float x, float
     if (!strings.entryMapped(id)) return;
     uint32_t p = strings.message(id); // the system banks' strings have no page header
     float cx = 0.0f, cy = 0.0f;
+    const bool latin = od::port::latinBank(bank); // the .DAT files' own Latin text
     for (int guard = 0; guard < 256 && od::port::textMapped(p, 4); ++guard) {
         const od::port::TextBytes t(p);
         const uint8_t c = t.byte(0);
         if (c == 0xff || (c == 0xfb && t.byte(1) == 0x1f)) break; // as FUN_005578c0: fb 1f ends a string
         if (c < 0xd0) {
-            glyph(cv, 0, c, x + cx, y + cy, 12.0f, s, o, col);
-            cx += 12.0f;
+            glyph(cv, 0, c, x + cx, y + cy + (latin ? float(od::lang::latinDatDrop(c)) : 0.0f), 12.0f, s, o, col);
+            cx += latin ? float(od::port::ps1Advance(c)) : 12.0f;
             ++p;
         } else if (c < 0xe0) {
             glyph(cv, 0, (c - 0xd0) << 8 | t.byte(1), x + cx, y + cy, 12.0f, s, o, col);

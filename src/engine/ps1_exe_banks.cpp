@@ -38,6 +38,8 @@ constexpr Ps1ExeBank kBanks[] = {
     {"load_menu", TableId::SaveMenusLoadTextBank, "COMMON/DEMO.BIN", 0x419c, 8},
     {"save_menu", TableId::SaveMenusSaveTextBank, "DAT/ST04T.BIN", 0x9400, 9},
     {"dev_room", TableId::DevRoomBank, "DAT/ST04T.BIN", 0xb5e4, 75},
+    {"hints", TableId::TalkingNpcHintsBank, "DAT/ST04T.BIN", 0x9668, 87}, // Data's "What should I do?"
+    {"entry_list", TableId::St05EntryListEntryTexts, "DAT/ST05T.BIN", 0x30e0, 43},
     {"quiz", TableId::St32QuizQuestionBank, "DAT/ST32T.BIN", 0x4b58, 212}, // the quiz show's questions (USA: 212)
 };
 // the quiz show's right answers (1..4) of its 200 questions, in the overlay's data before the question bank

@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <system_error>
@@ -23,6 +24,7 @@
 #include "content/nino/field_spawners.hpp"
 #include "engine/dat.hpp"
 #include "engine/data_source.hpp"
+#include "engine/texture_pack.hpp"
 #include "engine/room.hpp"
 #include "engine/vram.hpp"
 #include "game/actor_collision.hpp"
@@ -67,6 +69,7 @@
 #include "game/actors.hpp"
 #include "game/audio_logic.hpp"
 #include "game/camera_state.hpp"
+#include "game/modern_aim.hpp"
 #include "game/event_state.hpp"
 #include "game/fade_state.hpp"
 #include "game/message_state.hpp"
@@ -275,6 +278,9 @@ void PlayerView::loadExeBanks() {
         put("places", places);
         uint32_t dev = 0; // Roll's development room (content/yosyonke/dev_room): the PS1 Flutter overlay's bank
         put("dev_room", dev);
+        uint32_t hints = 0, entryList = 0; // Data's hints window, ST05's entry list
+        put("hints", hints);
+        put("entry_list", entryList);
         // ST32's quiz show: the pack's questions and their answers (the USA quiz), the two together or neither
         uint32_t quiz = 0;
         put("quiz", quiz);
@@ -288,6 +294,8 @@ void PlayerView::loadExeBanks() {
                      {od::stateAddress(od::TableId::SaveMenusSaveTextBank), save},
                      {od::stateAddress(od::TableId::TextScriptPlaceNameBank), places},
                      {od::stateAddress(od::TableId::DevRoomBank), dev},
+                     {od::stateAddress(od::TableId::TalkingNpcHintsBank), hints},
+                     {od::stateAddress(od::TableId::St05EntryListEntryTexts), entryList},
                      {od::stateAddress(od::TableId::St32QuizQuestionBank), quiz}};
     }
     od::port::clearBankRedirects();
@@ -295,7 +303,18 @@ void PlayerView::loadExeBanks() {
     od::port::setMenuBanks(b);
     od::port::setQuizLocale(quizAnswers);
     od::port::setPs1Text(pack != nullptr);
-    { // the layout pass's advance = the pack font's (game/message)
+    std::optional<std::array<uint8_t, 256>> latin; // no pack: the .DAT files' own text may be Latin (engine/lang)
+    if (!pack) {
+        for (const od::FilePart& part : od::dataSource().gameFile("INIT.DAT").parts)
+            if (part.kind == od::FilePart::Kind::PcFont && part.arg == 0)
+                latin = od::lang::latinDatWidths(part.bytes, int(part.extra));
+        if (latin) SDL_Log("lang: the .DAT files hold Latin text (a proportional font 0)");
+    }
+    od::port::setLatinDat(latin.has_value());
+    if (latin) {
+        static constexpr int kSingleByteGlyphs = 0xd0;
+        od::port::setPs1Widths(latin->data(), kSingleByteGlyphs);
+    } else { // the layout pass's advance = the pack font's (game/message)
         std::vector<uint8_t> w;
         if (pack && pack->has("widths.bin")) w = pack->file("widths.bin");
         od::port::setPs1Widths(w.size() >= 256 ? w.data() : nullptr, w.size() > 256 ? w[256] : 0x6b);
@@ -433,6 +452,8 @@ void PlayerView::vramMovesApply(const RoomMesh& mesh, od::Renderer& r) {
         buf.resize(size_t(v.w) * size_t(v.h) * 2);
         g_roomVram.readImage(v.sx, v.sy, v.w, v.h, buf.data());
         g_roomVram.loadImage(v.dx, v.dy, v.w, v.h, buf);
+        g_roomVramLoaded.readImage(v.sx, v.sy, v.w, v.h, buf.data());
+        g_roomVramLoaded.loadImage(v.dx, v.dy, v.w, v.h, buf);
         for (size_t s = 0; s < mesh.sliceTex.size(); ++s) {
             if (!(mesh.sliceTex[s] >> 32)) continue;
             const uint32_t tpage = uint32_t(mesh.sliceTex[s] >> 16) & 0xFFFF, clut = uint32_t(mesh.sliceTex[s]) & 0xFFFF;
@@ -445,8 +466,61 @@ void PlayerView::vramMovesApply(const RoomMesh& mesh, od::Renderer& r) {
         }
     }
     for (size_t s = 0; s < dirty.size(); ++s)
-        if (dirty[s])
-            r.updateSlice(int(s), g_roomVram.decode(uint16_t(mesh.sliceTex[s] >> 16), uint16_t(mesh.sliceTex[s] & 0xFFFF), true));
+        if (dirty[s]) showSlicePage(mesh, s, r);
+}
+
+void PlayerView::showSlicePage(const RoomMesh& mesh, size_t slice, od::Renderer& r) {
+    std::vector<uint8_t> ps1 = g_roomVram.decode(uint16_t(mesh.sliceTex[slice] >> 16), uint16_t(mesh.sliceTex[slice] & 0xFFFF), true);
+    const uint64_t page = od::pageName(ps1);
+    if (!r.showPage(int(slice), page))
+        od::pageLoader().request(page, std::move(ps1),
+                                 g_roomVramLoaded.decode(uint16_t(mesh.sliceTex[slice] >> 16), uint16_t(mesh.sliceTex[slice] & 0xFFFF), true));
+}
+
+void PlayerView::pagesMadeApply(od::Renderer& r) {
+    for (auto& [page, chain] : od::pageLoader().takeReady()) r.poolPage(page, chain);
+}
+
+void PlayerView::effectTexturesApply(RoomMesh& mesh, od::Renderer& r) {
+    const std::vector<od::fx::Texture>& met = g_fxTextures.entries();
+    while (mesh.fxSlices.size() + mesh.fxMaking.size() < met.size()) {
+        if (mesh.fxSpareLeft == 0) { // the slices so far copied to a larger array; the room stays as it is
+            const int first = r.sliceTotal();
+            if (!r.reserveSlices(od::kSpareSlices)) {
+                SDL_Log("fxtex: %zu effect textures, the renderer did not take more slices", met.size());
+                return;
+            }
+            mesh.fxNextSlice = first;
+            mesh.fxSpareLeft = od::kSpareSlices;
+            mesh.fxReserved += od::kSpareSlices;
+        }
+        const od::fx::Texture& t = met[mesh.fxSlices.size() + mesh.fxMaking.size()];
+        --mesh.fxSpareLeft;
+        RoomMesh::FxMaking m{mesh.fxNextSlice++, 0, g_roomVram.decode(t.tpage, t.clut, true)};
+        SDL_Log("fxtex: effect texture %04x %04x met in play: slice %d (%d spare left)", unsigned(t.tpage), unsigned(t.clut),
+                m.slice, mesh.fxSpareLeft);
+        if (t.tint != 0x808080) { // not a page of the pool: its colours are this texture's own
+            std::vector<uint8_t> rgba = od::pageSliceOf(m.ps1, od::texturePack(), nullptr, g_roomVramLoaded.decode(t.tpage, t.clut, true));
+            tintSlice(rgba, t.tint);
+            r.updateSlice(m.slice, rgba);
+            m.ps1.clear(); // written: nothing to wait for
+            mesh.fxMaking.push_back(std::move(m));
+            continue;
+        }
+        m.page = od::pageName(m.ps1);
+        mesh.fxMaking.push_back(std::move(m));
+    }
+    // in the entries' order: fxSlices[i] is entry i's slice
+    while (!mesh.fxMaking.empty()) {
+        RoomMesh::FxMaking& m = mesh.fxMaking.front();
+        if (!m.ps1.empty() && !r.showPage(m.slice, m.page)) {
+            const od::fx::Texture& t = met[mesh.fxSlices.size()]; // the front of fxMaking: the next entry
+            od::pageLoader().request(m.page, m.ps1, g_roomVramLoaded.decode(t.tpage, t.clut, true));
+            return;
+        }
+        mesh.fxSlices.push_back(m.slice);
+        mesh.fxMaking.pop_front();
+    }
 }
 
 void PlayerView::clutAnimationSync(const RoomMesh& mesh, od::Renderer& r) {
@@ -463,14 +537,16 @@ void PlayerView::clutAnimationSync(const RoomMesh& mesh, od::Renderer& r) {
     for (size_t i = 0; i < 0x2000; ++i)
         if (cur[i] != clutShown[i]) (i < 0x1000 ? changedLow : changedHigh) = true;
     clutShown.assign(cur.begin(), cur.end());
-    if (changedLow && lowRows) g_roomVram.loadImage(0, 240, 256, 8, std::span<const uint8_t>(clutShown.data(), 0x1000));
-    if (changedHigh) g_roomVram.loadImage(0, 496, 256, 8, std::span<const uint8_t>(clutShown.data() + 0x1000, 0x1000));
+    for (od::Vram* v : {&g_roomVram, &g_roomVramLoaded}) {
+        if (changedLow && lowRows) v->loadImage(0, 240, 256, 8, std::span<const uint8_t>(clutShown.data(), 0x1000));
+        if (changedHigh) v->loadImage(0, 496, 256, 8, std::span<const uint8_t>(clutShown.data() + 0x1000, 0x1000));
+    }
     for (size_t s = 0; s < mesh.sliceTex.size(); ++s) {
         if (!(mesh.sliceTex[s] >> 32)) continue;
-        const uint16_t clut = uint16_t(mesh.sliceTex[s] & 0xFFFF), tpage = uint16_t(mesh.sliceTex[s] >> 16);
+        const uint16_t clut = uint16_t(mesh.sliceTex[s] & 0xFFFF);
         const int cy = clut >> 6;
         if ((changedLow && lowRows && cy >= 240 && cy < 248) || (changedHigh && cy >= 496 && cy < 504))
-            r.updateSlice(int(s), g_roomVram.decode(tpage, clut, true));
+            showSlicePage(mesh, s, r);
     }
 }
 
@@ -820,11 +896,15 @@ void PlayerView::setupHooks() {
             camPrev.eye[c] += d[c];
             camCur.eye[c] += d[c];
         }
-        const float s = room ? float(1 << room->shift) : 1.0f;
-        for (int c = 0; c < 3; ++c) renderOffset[c] -= d[c] * s;
-        // past the strip's far end (a fight of ~9 minutes): back by a whole number of periods -- the strip is
-        // periodic, so the picture is the same; only the frame-to-frame blend / AA history restart once
-        if (room && room->trackAxis >= 0) {
+        // no strip (a script's warp inside a room, ST2F sub 6's critter scene): the scenery stays where it is, so the
+        // move is a cut, as on the exe. The travel frame moves the camera only in the rooms that tile their scenery and
+        // their actors with it (App::updateScene); elsewhere it left the eye off the player for the rest of the room
+        if (!room || room->trackAxis < 0) snap = true;
+        else {
+            const float s = float(1 << room->shift);
+            for (int c = 0; c < 3; ++c) renderOffset[c] -= d[c] * s;
+            // past the strip's far end (a fight of ~9 minutes): back by a whole number of periods -- the strip is
+            // periodic, so the picture is the same; only the frame-to-frame blend / AA history restart once
             const int a = room->trackAxis;
             const float span = room->trackPeriod * float(RoomMesh::kTrackTilesAhead - 8);
             if (std::abs(renderOffset[a]) > span) {
@@ -1572,6 +1652,7 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
             for (const od::hud::Prim& q : od::port::examTimerDraw()) overlayPrims.push_back(q); // 0x422d60's packets
             for (const od::hud::Prim& q : od::port::ninoGaugeDraw()) overlayPrims.push_back(q); // 0x41ecd0's packets
             for (const od::hud::Prim& q : od::port::st59HudDraw()) overlayPrims.push_back(q); // 0x427b90's packets
+            if (!talking) for (const od::hud::Prim& q : od::port::modernAimDraw()) overlayPrims.push_back(q); // OpenDash
             for (const od::hud::Prim& q : od::hud::scriptWhiteDraw()) overlayPrims.push_back(q); // FUN_005f30e0
             fxPrims.clear();
             od::fx::collect(fx, g_fxTextures, fxPrims);
@@ -1596,10 +1677,6 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
                     "%d unknown) -> %zu prims", dcStats.records, dcStats.b2c, dcStats.f0, dcStats.f4, dcStats.f8,
                     dcStats.culled, dcStats.unknown, dcPrims.size());
         dcLast = dcStats;
-        if (g_fxTextures.takeDirty()) { // an effect sampled a texture the room has no slice for: rebuild them
-            SDL_Log("fxtex: %zu effect textures, rebuilding the room's slices", g_fxTextures.entries().size());
-            assetsDirty = true;
-        }
         if (game.gameMode() != od::port::GameMode::StageLoad) logEffects(); // (the last stage's actors: see above)
         { // scripted-run evidence: the storm's element counts whenever they change
             ++stormLogTick;

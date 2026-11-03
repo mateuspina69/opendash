@@ -95,6 +95,7 @@ void App::frame() {
     dt = float(step) * 1e-9f;
     last = now;
 
+    const uint64_t simAt = SDL_GetTicksNS();
     if (paced()) { // the title / game frames run when the exe's pacer has them due (app/game_pacer)
         accumulator = 0;
         pacer.tick(step);
@@ -106,12 +107,23 @@ void App::frame() {
             accumulator -= kSimStepNs;
         }
     }
+    const uint64_t sceneAt = SDL_GetTicksNS();
     rumble();
     updateCamera();
     updateScene();
+    const uint64_t overlaysAt = SDL_GetTicksNS();
     drawOverlays();
     if (showMenu) drawDebugMenu();
+    const uint64_t presentAt = SDL_GetTicksNS();
     present();
+    if (const uint64_t end = SDL_GetTicksNS(); frameLog && end - simAt >= kSlowFrameNs) {
+        const od::FrameCosts c = renderer->frameCosts();
+        SDL_Log("slow frame %.1f ms: sim %.1f scene %.1f (dynamic %.1f, pages sync %.1f) overlays %.1f draw %.1f (pages %.1f, "
+                "record %.1f, submit %.1f, present %.1f) | pages written %d shown %d | dynamic vertices %u opaque %u",
+                float(end - simAt) * 1e-6f, float(sceneAt - simAt) * 1e-6f, float(overlaysAt - sceneAt) * 1e-6f, c.dynamicMs,
+                pagesSyncMs, float(presentAt - overlaysAt) * 1e-6f, float(end - presentAt) * 1e-6f, c.pagesMs, c.recordMs,
+                c.submitMs, c.presentMs, c.pagesWritten, c.pagesShown, c.dynamicVertices, c.dynamicOpaque);
+    }
 }
 
 // The game's motors (game/player/player_input: what its vibration tick hands 0x409f90) on the gamepad: the small one

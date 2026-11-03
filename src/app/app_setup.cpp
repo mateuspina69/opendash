@@ -21,6 +21,7 @@
 #include "engine/lang.hpp"
 #include "engine/room.hpp"
 #include "engine/screen_prim.hpp"
+#include "engine/texture_pack.hpp"
 #include "game/status_options.hpp"
 #include "game/message.hpp"
 #include "game/player/player_input.hpp"
@@ -95,6 +96,11 @@ void App::parseArgs(int argc, char** argv) {
         else if (a == "--shot") shotPath = argv[++i];
         else if (a == "--aa") aaArg = argv[++i];
         else if (a == "--lang") langArg = argv[++i];
+        else if (a == "--texture-dump") textureDumpArg = argv[++i];
+        else if (a == "--vram-before") { // dev: "--vram-before ST53T.DAT,ST5301T.DAT" (g_vramBefore)
+            std::stringstream files(argv[++i]);
+            for (std::string f; std::getline(files, f, ',');) g_vramBefore.push_back(f);
+        }
         else if (a == "--voice-test") voiceTestArg = argv[++i];
         else if (a == "--aa-quality") aaQualityArg = argv[++i];
         else if (a == "--vsync") vsyncArg = std::stoi(argv[++i]) != 0;
@@ -116,6 +122,7 @@ void App::parseArgs(int argc, char** argv) {
         else if (a == "--play") startPlay = std::stoi(argv[++i]) != 0;            // start in play mode
         else if (a == "--load") loadArg = argv[++i];
         else if (a == "--fps-log") fpsLog = true;
+        else if (a == "--frame-log") frameLog = true;
         else if (a == "--newgame") newGameArg = std::stoi(argv[++i]);
         else if (a == "--newgame-stage" && i + 2 < argc) { // dev: "--newgame-stage 3a 0" (with --newgame D)
             newGameStageArg = std::stoi(argv[++i], nullptr, 16);
@@ -300,6 +307,35 @@ int App::init() {
             data = std::make_unique<od::PcDataSource>(cfg.datDir, cfg.exePath);
         }
         od::bindDataSource(data.get());
+        { // the texture pack (the pages' larger images, engine/texture_pack): textures/ next to the executable unless
+          // texture_pack= says otherwise; texture_dump= (or --texture-dump) the folder the pages it lacks go to
+          // (relative paths are from the executable's folder)
+            const char* base = SDL_GetBasePath();
+            const std::filesystem::path exeDir = base ? base : "";
+            std::error_code ec;
+            if (cfg.texturePack.empty()) {
+                if (std::filesystem::is_directory(exeDir / "textures", ec)) cfg.texturePack = exeDir / "textures";
+            } else if (cfg.texturePack.is_relative()) {
+                cfg.texturePack = exeDir / cfg.texturePack;
+            }
+            if (!textureDumpArg.empty()) cfg.textureDump = textureDumpArg;
+            if (!cfg.textureDump.empty()) {
+                if (cfg.textureDump.is_relative()) cfg.textureDump = exeDir / cfg.textureDump;
+                od::bindPageDump(cfg.textureDump);
+                SDL_Log("texture dump: %s", cfg.textureDump.string().c_str());
+            }
+        }
+        if (!cfg.texturePack.empty()) {
+            try {
+                const uint64_t t0 = SDL_GetTicks();
+                auto pack = std::make_shared<const od::TexturePack>(cfg.texturePack);
+                SDL_Log("texture pack %s: %zu images, scale %d (%llu ms)", cfg.texturePack.string().c_str(), pack->size(),
+                        pack->scale(), (unsigned long long)(SDL_GetTicks() - t0));
+                od::bindTexturePack(std::move(pack));
+            } catch (const std::exception& e) {
+                SDL_Log("texture pack %s not used: %s", cfg.texturePack.string().c_str(), e.what());
+            }
+        }
         { // netplay and the ghost mirror (app/netplay): the session runs between game ticks only
             if (mirrorArg && ghostLookArg) mirrorArg->look = ghostLookArg;
             NetSettings net;
@@ -415,7 +451,7 @@ int App::init() {
                 seeThrough.roomLoaded(mesh.tris, mesh.semiStart[3] ? mesh.semiStart[0] : mesh.tris.size(), mesh.slices,
                                       mesh.sliceCount);
                 modelClearance.roomLoaded(mesh.tris, mesh.semiStart[3] ? mesh.semiStart[0] : mesh.tris.size());
-                if (!renderer->upload(mesh.tris, mesh.slices, mesh.sliceCount, mesh.semiStart)) SDL_Log("upload failed");
+                if (!uploadRoom(*renderer, mesh)) SDL_Log("upload failed");
                 current = std::move(mesh);
                 playerView.enterPlay(current);
                 applyFlags();
@@ -550,11 +586,16 @@ void App::reload(int newStage, int newSub, bool transition) {
         playerView.audioSilence();
     }
     try {
+        const uint64_t loadAt = SDL_GetTicksNS();
         RoomMesh mesh = loadRoom(newStage, newSub);
+        const uint64_t loadedAt = SDL_GetTicksNS();
         seeThrough.roomLoaded(mesh.tris, mesh.semiStart[3] ? mesh.semiStart[0] : mesh.tris.size(), mesh.slices,
                               mesh.sliceCount);
         modelClearance.roomLoaded(mesh.tris, mesh.semiStart[3] ? mesh.semiStart[0] : mesh.tris.size());
-        if (!renderer->upload(mesh.tris, mesh.slices, mesh.sliceCount, mesh.semiStart)) SDL_Log("upload failed");
+        const uint64_t uploadAt = SDL_GetTicksNS();
+        if (!uploadRoom(*renderer, mesh)) SDL_Log("upload failed");
+        SDL_Log("room load: files and pages %.0f ms, see-through and clearance %.0f ms, upload %.0f ms",
+                double(loadedAt - loadAt) * 1e-6, double(uploadAt - loadedAt) * 1e-6, double(SDL_GetTicksNS() - uploadAt) * 1e-6);
         {
             std::vector<od::DynamicObject> dyn;
             dyn.push_back({od::objectId(od::kKindPlayer, 0), playerView.build(mesh)});

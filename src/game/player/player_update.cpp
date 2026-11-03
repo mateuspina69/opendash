@@ -1,6 +1,7 @@
 // The player's tick (see player_update.hpp).
 #include "game/player/player_update.hpp"
 
+#include <algorithm>
 #include <cstdlib>
 
 #include <cstdio>
@@ -17,6 +18,7 @@
 #include "game/fixed_point.hpp"
 #include "game/game_state.hpp"
 #include "game/hit_list.hpp"
+#include "game/modern_aim.hpp"
 #include "game/modern_play.hpp"
 #include "game/player/moving_fire.hpp"
 #include "game/player/player_animation.hpp"
@@ -53,6 +55,9 @@ constexpr uint32_t kFlagNoLook = 0x24d;     // the look mode and the camera stic
 constexpr int kStickDeadZone = 0x38;
 constexpr int kLookAimMax = 0x40;
 constexpr int kAimFollowStep = 0x20;        // the aim pitch's return toward the camera's look pitch
+constexpr int kFreeAimFollowStep = 0x80;    // OpenDash's free aim (game/modern_aim): its follow of the crosshair's point
+constexpr int kAimPitchRange = 0x200;       // the aim pitch's range (+-)
+constexpr int32_t kAimChestHeight = 0x800000; // the aim's origin above the feet (16.16)
 constexpr int16_t kLockHoldTicks = 8;       // a trigger's lock request holds this long after it is released
 constexpr uint8_t kLockReleaseTicks = 0xc;  // the lock button released: the remembered target kept this long
 constexpr int8_t kLockTimeMax = 0x40;
@@ -213,7 +218,12 @@ void updateLockOn(Player& p, uint16_t held) {
     if (lock & p.released) p.recentreAim = 1;
     if (!(lock & held) && !(p.lockRequest & (kLockSpecial | kLockBuster))) { // no lock: the aim back to the camera
         if (cameraDriven()) p.recentreAim = 0; // modern: the camera is the player's, nothing to recentre (camera_drive)
-        if (p.recentreAim == 0)
+        const int32_t chest[3] = {p.pos.x, int32_t(uint32_t(int32_t(p.pos.y)) - uint32_t(kAimChestHeight)), p.pos.z};
+        int16_t aimPitch, aimYaw;
+        if (modernAimAngles(chest, aimPitch, aimYaw)) // OpenDash's free aim: the upper body toward the crosshair's point
+            p.rotation.x = int16_t(approachAngle(std::clamp(int(aimPitch), -kAimPitchRange, kAimPitchRange), p.rotation.x,
+                                                 kFreeAimFollowStep));
+        else if (p.recentreAim == 0)
             p.rotation.x = int16_t(approachAngle(cameraState().lookPitch, p.rotation.x, kAimFollowStep));
         else
             recentreAim(p);

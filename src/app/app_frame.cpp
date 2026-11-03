@@ -16,6 +16,7 @@
 #include "content/late_game/st54_clear_screen.hpp"
 #include "engine/dat.hpp"
 #include "engine/data_source.hpp"
+#include "engine/texture_pack.hpp"
 #include "game/vectors.hpp"
 #include "engine/lang.hpp"
 #include "engine/screen_prim.hpp"
@@ -245,7 +246,7 @@ void App::simStep(int gameFrames) {
                 seeThrough.roomLoaded(mesh.tris, mesh.semiStart[3] ? mesh.semiStart[0] : mesh.tris.size(), mesh.slices,
                                       mesh.sliceCount);
                 modelClearance.roomLoaded(mesh.tris, mesh.semiStart[3] ? mesh.semiStart[0] : mesh.tris.size());
-                if (!renderer->upload(mesh.tris, mesh.slices, mesh.sliceCount, mesh.semiStart)) SDL_Log("upload failed");
+                if (!uploadRoom(*renderer, mesh)) SDL_Log("upload failed");
                 mesh.camTris = std::move(current.camTris);
                 mesh.tris.clear();
                 mesh.slices.clear();
@@ -261,7 +262,7 @@ void App::simStep(int gameFrames) {
         netStepped = true;
         const SliceSink sink{[&](const std::vector<uint8_t>& rgba, int count) { return renderer->appendSlices(rgba, count); },
                              [&](int slice, const std::vector<uint8_t>& rgba) { renderer->updateSlice(slice, rgba); }};
-        ghosts.update({g_roomVramGen, current.sliceCount, &g_roomVram, current.shift},
+        ghosts.update({g_roomVramGen, current.sliceCount + od::kSpareSlices + current.fxReserved, &g_roomVram, current.shift},
                       od::port::loadedDataFingerprint(loadedDataIdentity()),
                       [](const std::string& dat) -> const od::GameFile& { return datCache().file(dat); }, sink);
         playscriptLog(); // --playscript trace / timeline / end (app/playthrough)
@@ -536,20 +537,23 @@ void App::updateScene() {
                             for (int c = 0; c < 3; ++c) a[i * 3 + size_t(c)] = o.tris[i].pos[c];
                         for (size_t i = 0; i < n.tris.size(); ++i)
                             for (int c = 0; c < 3; ++c) b[i * 3 + size_t(c)] = n.tris[i].pos[c];
-                        const size_t unit = od::effectUnit(o.tris.size(), n.tris.size());
-                        const long k = od::effectShift(a.data(), o.tris.size(), b.data(), n.tris.size(), unit) * long(unit);
+                        const std::vector<long> prevOf = od::effectPairs(a.data(), o.tris.size(), b.data(), n.tris.size());
                         float pm = 0.0f;
+                        size_t fresh = 0;
                         for (long i = 0; i < long(n.tris.size()); ++i) {
-                            const long j = i + k;
-                            if (j < 0 || j >= long(o.tris.size())) continue;
+                            const long j = prevOf[size_t(i)];
+                            if (j < 0) {
+                                ++fresh;
+                                continue;
+                            }
                             float d2 = 0.0f;
                             for (int c = 0; c < 3; ++c) d2 += (b[size_t(i) * 3 + size_t(c)] - a[size_t(j) * 3 + size_t(c)]) * (b[size_t(i) * 3 + size_t(c)] - a[size_t(j) * 3 + size_t(c)]);
                             pm = std::max(pm, d2);
                         }
-                        SDL_Log("travel tick %zu: effect %08x %zu -> %zu vertices, shift %ld, aligned move %.0f", poseKey,
-                                n.id, o.tris.size(), n.tris.size(), k, std::sqrt(pm));
+                        SDL_Log("travel tick %zu: effect %08x %zu -> %zu vertices, %zu new, aligned move %.0f", poseKey,
+                                n.id, o.tris.size(), n.tris.size(), fresh, std::sqrt(pm));
                     }
-                    if (o.id == n.id && o.tris.size() != n.tris.size()) {
+                    if (o.id == n.id && (n.id >> 24) != od::kKindEffect && o.tris.size() != n.tris.size()) {
                         float pm = 0.0f; // the common prefix's largest per-vertex move
                         for (size_t i = 0; i < std::min(o.tris.size(), n.tris.size()); ++i) {
                             float d2 = 0.0f;
@@ -612,8 +616,12 @@ void App::updateScene() {
         }
         renderer->uploadDynamic(dynFrame);
     }
+    const uint64_t pagesSyncAt = SDL_GetTicksNS();
     playerView.vramMovesApply(current, *renderer);
     playerView.clutAnimationSync(current, *renderer);
+    playerView.pagesMadeApply(*renderer);
+    playerView.effectTexturesApply(current, *renderer);
+    pagesSyncMs = float(SDL_GetTicksNS() - pagesSyncAt) * 1e-6f;
     { // the screen ripples (pool a0 class 0x438750 variant 0, e.g. the ST18 machine's pulse of script 0x3b, 0x52b180):
         // ring radius +0x18 .. +0x18 + (+0x1a >> 8) around the screen point +0x10 / +0x12, shifted by s8 +0xe;
         // none while 0x6d000a (the exe skips them then)

@@ -8,6 +8,8 @@
 
 #include "game/actor_pools.hpp"
 #include "game/camera_drive.hpp"
+#include "game/lock_on_targets.hpp"
+#include "game/modern_aim.hpp"
 #include "game/camera_script.hpp"
 #include "game/camera_state.hpp"
 #include "game/event_state.hpp"
@@ -114,6 +116,7 @@ bool PlayerView::gameCameraActive() const {
 bool PlayerView::orbitCamera(const RoomMesh& mesh, od::Camera& cam, float alpha, float dt) {
     lockCamShown = false;
     od::port::cameraSetDrive({}); // set again below while this camera is the one on screen
+    od::port::modernAimSetRay({});
     if (!play || !modern) return false;
     if (gameCameraActive()) {
         usingGameCamera = true;
@@ -289,8 +292,45 @@ bool PlayerView::orbitCamera(const RoomMesh& mesh, od::Camera& cam, float alpha,
         od::port::cameraSetDrive({true, int(std::lround(cam.yaw * 4096.0f / 6.2831853f)) & 0xfff,
                                   int(std::lround(-cam.pitch * 4096.0f / 6.2831853f)),
                                   int(std::lround(std::sqrt(ex * ex + ey * ey + ez * ez) / scale))});
+        if (!locked) setAimRay(mesh, cam, from);
     }
     return true;
+}
+
+void PlayerView::setAimRay(const RoomMesh& mesh, const od::Camera& cam, const float* pivot) {
+    constexpr float kAimReach = 13000.0f; // game units (about the lock-on's reach, lock_on_targets)
+    const float scale = float(1 << mesh.shift);
+    const float f[3] = {std::sin(cam.yaw) * std::cos(cam.pitch), std::sin(cam.pitch), std::cos(cam.yaw) * std::cos(cam.pitch)};
+    float r[3] = {f[2], 0.0f, -f[0]}; // LookToLH: right = up x forward
+    const float rl = std::sqrt(r[0] * r[0] + r[2] * r[2]);
+    if (rl < 1e-6f) return;
+    r[0] /= rl;
+    r[2] /= rl;
+    const float u[3] = {f[1] * r[2] - f[2] * r[1], f[2] * r[0] - f[0] * r[2], f[0] * r[1] - f[1] * r[0]}; // fwd x right
+    // through the game's aim centre on the 320 x 240 screen (above the player, who is at the centre)
+    const float up = std::tan(cam.fovY * 0.5f) * float(120 - od::port::kAimCentreY) / 120.0f;
+    float d[3];
+    for (int i = 0; i < 3; ++i) d[i] = f[i] + u[i] * up;
+    const float dl = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+    for (float& v : d) v /= dl;
+    // from the player's depth: what is between the eye and the player is not aimed at
+    float toPivot = 0.0f;
+    for (int i = 0; i < 3; ++i) toPivot += (pivot[i] - cam.eye[i]) * d[i];
+    toPivot = std::max(toPivot, 0.0f);
+    float o[3], ray[3];
+    for (int i = 0; i < 3; ++i) {
+        o[i] = cam.eye[i] + d[i] * toPivot;
+        ray[i] = d[i] * kAimReach * scale;
+    }
+    od::port::AimRay aim;
+    aim.on = true;
+    aim.length = kAimReach * rayHit(mesh, o, ray);
+    for (int i = 0; i < 3; ++i) {
+        const float sign = i == 1 ? -1.0f : 1.0f; // the room is drawn y up, << mesh.shift
+        aim.origin[i] = sign * o[i] / scale;
+        aim.dir[i] = sign * d[i];
+    }
+    od::port::modernAimSetRay(aim);
 }
 
 float PlayerView::rayHit(const RoomMesh& mesh, const float* o, const float* d) {

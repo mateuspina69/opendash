@@ -56,6 +56,8 @@ uint32_t dlssPhaseCount(int renderW, int outW) {
     return uint32_t(std::ceil(8.0f * r * r));
 }
 
+namespace {
+
 // Effects are particle lists (smoke / trails / rings) that grow, shrink and recycle FIFO: the puff at index i now is
 // the puff at i + k a tick ago. The shift k (in prims of `unit` vertices, |k| <= 8) whose pairs of prim centres are
 // closest; 0 when nothing fits. Vertex positions as xyz triples in p / c.
@@ -89,7 +91,65 @@ int effectShift(const float* p, size_t np, const float* c, size_t nc, size_t uni
     }
     return best;
 }
-size_t effectUnit(size_t a, size_t b) { return (a % 6 == 0 && b % 6 == 0) ? 6 : 3; }
+
+} // namespace
+
+// The list's shift also changes inside the list: an effect's quads are culled one by one (the ending's spinning wall, a
+// quad leaving the view mid list), so the walk follows the shift prim by prim, from the list's own (effectShift). A
+// previous prim belongs to the current prim closest to it: the others are new, whatever their distance.
+std::vector<long> effectPairs(const float* p, size_t prevVerts, const float* c, size_t curVerts) {
+    const size_t unit = (prevVerts % 6 == 0 && curVerts % 6 == 0) ? 6 : 3;
+    const long pn = long(prevVerts / unit), cn = long(curVerts / unit);
+    auto centres = [unit](const float* v, long n) {
+        std::vector<float> out(size_t(n) * 3, 0.0f);
+        for (size_t i = 0; i < size_t(n) * unit; ++i)
+            for (size_t a = 0; a < 3; ++a) out[i / unit * 3 + a] += v[i * 3 + a] / float(unit);
+        return out;
+    };
+    const std::vector<float> pc = centres(p, pn), cc = centres(c, cn);
+    auto distance2 = [&](long i, long j) {
+        float d2 = 0.0f;
+        for (size_t a = 0; a < 3; ++a) {
+            const float d = cc[size_t(i) * 3 + a] - pc[size_t(j) * 3 + a];
+            d2 += d * d;
+        }
+        return d2;
+    };
+    std::vector<long> prevOf(static_cast<size_t>(cn), -1), owner(static_cast<size_t>(pn), -1);
+    std::vector<float> ownerD2(static_cast<size_t>(pn));
+    long k = effectShift(p, prevVerts, c, curVerts, unit);
+    for (long i = 0; i < cn; ++i) {
+        long best = -1;
+        float bestCost = 3.4e38f;
+        for (long step = 0; step <= 16; ++step) { // k, then k + 1, k - 1, ...; ties: the smaller change
+            const long change = (step & 1) ? (step + 1) / 2 : -step / 2, j = i + k + change;
+            if (j < 0 || j >= pn) continue;
+            const float cost = distance2(i, j) * (1.0f + 0.02f * float(std::abs(change)));
+            if (cost < bestCost) {
+                bestCost = cost;
+                best = j;
+            }
+        }
+        if (best < 0) continue;
+        k = best - i;
+        prevOf[size_t(i)] = best;
+        const float d2 = distance2(i, best);
+        if (owner[size_t(best)] < 0 || d2 < ownerD2[size_t(best)]) {
+            owner[size_t(best)] = i;
+            ownerD2[size_t(best)] = d2;
+        }
+    }
+    std::vector<long> out(curVerts, -1);
+    long paired = 0;
+    for (long i = 0; i < cn; ++i) paired += prevOf[size_t(i)] >= 0 && owner[size_t(prevOf[size_t(i)])] == i;
+    if (paired * 2 < cn) return out; // most of it is new (a camera cut culls another part of the wall): no list to follow
+    for (long i = 0; i < cn; ++i) {
+        const long j = prevOf[size_t(i)];
+        if (j < 0 || owner[size_t(j)] != i) continue;
+        for (size_t v = 0; v < unit; ++v) out[size_t(i) * unit + v] = j * long(unit) + long(v);
+    }
+    return out;
+}
 
 std::vector<DynamicObject> interpolateObjects(const std::vector<DynamicObject>& prev,
                                               const std::vector<DynamicObject>& cur, float alpha) {
@@ -100,17 +160,16 @@ std::vector<DynamicObject> interpolateObjects(const std::vector<DynamicObject>& 
         const auto it = byId.find(o.id);
         if (it == byId.end() || it->second->layout != o.layout) continue;
         const auto& p = it->second->tris;
-        if ((o.id >> 24) == kKindEffect) { // each puff with the same puff a tick ago (effectShift)
-            const size_t unit = effectUnit(p.size(), o.tris.size());
+        if ((o.id >> 24) == kKindEffect) { // each puff with the same puff a tick ago (effectPairs)
             std::vector<float> pp(p.size() * 3), cp(o.tris.size() * 3);
             for (size_t i = 0; i < p.size(); ++i)
                 for (int c = 0; c < 3; ++c) pp[i * 3 + size_t(c)] = p[i].pos[c];
             for (size_t i = 0; i < o.tris.size(); ++i)
                 for (int c = 0; c < 3; ++c) cp[i * 3 + size_t(c)] = o.tris[i].pos[c];
-            const long k = effectShift(pp.data(), p.size(), cp.data(), o.tris.size(), unit) * long(unit);
+            const std::vector<long> prevOf = effectPairs(pp.data(), p.size(), cp.data(), o.tris.size());
             for (long i = 0; i < long(o.tris.size()); ++i) {
-                const long j = i + k;
-                if (j < 0 || j >= long(p.size())) continue; // a new puff: as is
+                const long j = prevOf[size_t(i)];
+                if (j < 0) continue; // a new puff: as is
                 for (int c = 0; c < 3; ++c)
                     o.tris[size_t(i)].pos[c] = p[size_t(j)].pos[c] + (o.tris[size_t(i)].pos[c] - p[size_t(j)].pos[c]) * alpha;
             }
@@ -136,13 +195,13 @@ void MotionHistory::apply(const std::vector<DynamicObject>& objs, std::vector<fl
         const bool have = it != last_.end() && it->second.pos.size() == curPos.size() && it->second.layout == o.layout;
         const auto& src = have ? it->second.pos : curPos;
         if (it != last_.end() && it->second.layout == o.layout && (o.id >> 24) == kKindEffect) {
-            // an effect: each puff's motion from the same puff last frame (effectShift), a new one none
+            // an effect: each puff's motion from the same puff last frame (effectPairs), a new one none
             const auto& lp = it->second.pos;
-            const size_t nv = curPos.size() / 3, pv = lp.size() / 3, unit = effectUnit(pv, nv);
-            const long k = effectShift(lp.data(), pv, curPos.data(), nv, unit) * long(unit);
+            const size_t nv = curPos.size() / 3;
+            const std::vector<long> prevOf = effectPairs(lp.data(), lp.size() / 3, curPos.data(), nv);
             for (long i = 0; i < long(nv); ++i) {
-                const long j = i + k;
-                const float* src = (j >= 0 && j < long(pv)) ? &lp[size_t(j) * 3] : &curPos[size_t(i) * 3];
+                const long j = prevOf[size_t(i)];
+                const float* src = j >= 0 ? &lp[size_t(j) * 3] : &curPos[size_t(i) * 3];
                 prevPos.insert(prevPos.end(), src, src + 3);
             }
             next[o.id] = Entry{o.layout, std::move(curPos)};
