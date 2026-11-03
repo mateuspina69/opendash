@@ -56,12 +56,14 @@ public:
         }
         parts_.clear();
     }
-    // the owner's parts dropped, the block's bytes kept (a new owner starts; the exe leaves the bytes, no owner reads
-    // them)
-    void drop() {
-        if (observer_)
-            for (auto& p : parts_) observer_->dropped(*p);
-        parts_.clear();
+    // the owner's parts dropped, the block's bytes kept (a new owner starts; the exe leaves the bytes), but for the
+    // parts `kept` names: a later owner reads those bytes
+    template <class F> void dropExcept(F&& kept) {
+        std::erase_if(parts_, [&](const std::unique_ptr<Base>& p) {
+            if (kept(*p)) return false;
+            if (observer_) observer_->dropped(*p);
+            return true;
+        });
     }
     // the block's bytes `which` cleared (the parts' members there: the caller clears them)
     void bytesCleared(unsigned which) {

@@ -69,11 +69,13 @@ inline StageState& stage() {
 // A part of the stage's own block (0x40 bytes; game/block_parts): each stage's scripts and classes name the bytes they
 // keep there in parts of their own (a struct deriving StagePart<itself>; the offsets in the comments are the exe's,
 // from the block's start): the fire mission's, the guardian's, the licence exam's clock, the quiz's ... Made zero on
-// the first ask, dropped at the next stage's setup.
+// the first ask, dropped at the next stage's setup unless a later stage reads its bytes.
 struct StageBlockPart {
     virtual ~StageBlockPart() = default;
     // its members zeroed (the block cleared)
     virtual void clear() = 0;
+    // a later stage reads its bytes: the next stage's setup keeps it
+    virtual bool readByLaterStage() const { return false; }
 };
 template <class T> struct StagePart : StageBlockPart {
     void clear() override { static_cast<T&>(*this) = T{}; }
@@ -93,8 +95,10 @@ struct StageBlock {
                               // past the static pool reads it, game/carry)
     // the stage's part T of the block (made zero on its first ask)
     template <class T> T& part() { return parts.part<T>(); }
-    // a new stage's setup: the previous stage's parts dropped (the exe keeps the bytes; no stage reads them)
-    void newStage() { parts.drop(); }
+    // a new stage's setup: the previous stage's parts dropped (the exe keeps the bytes), but for those a later stage reads
+    void newStage() {
+        parts.dropExcept([](const StageBlockPart& p) { return p.readByLaterStage(); });
+    }
     // exe 0x40dc40 over the block: the parts' members zeroed
     void clearAll() {
         unwritten28 = 0;
