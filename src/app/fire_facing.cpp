@@ -1,8 +1,9 @@
-// OpenDash (modern controls, not the exe): while the buster fires, Megaman faces where the camera looks.
+// OpenDash (modern controls, not the exe): while a weapon fires, Megaman faces where the camera looks.
 //
 // Modern steering turns the body toward the move direction and runs "forward", so firing while turning the camera
-// swung the camera round to Megaman's face. While the buster is held (the game's fire mask +0x12e; not a special
-// weapon in use, arm +0x13c & 0x40; not locked on, not skating), the body yaw +0x2a turns toward the camera's forward
+// swung the camera round to Megaman's face. While the buster is held (the game's fire mask +0x12e) or a special
+// weapon's arm is up (arm +0x13c & 0x40: its shot goes to the crosshair's point, game/modern_aim, and leaves the arm
+// only if the body faces it; not locked on, not skating), the body yaw +0x2a turns toward the camera's forward
 // (orbitYaw - pi, see orbitBehind) by up to kTurn per tick, and the stick becomes the body-relative d-pad (8 ways:
 // up = ahead, sideways = strafe, down = back off), as the original plays while firing.
 #include "app/play_session.hpp"
@@ -20,9 +21,9 @@ constexpr int kTurn = 0x200; // per tick (a quarter turn in two ticks)
 bool PlayerView::fireFacing(uint16_t& ps1, float lx, float ly) {
     od::port::Player& pl = od::port::player();
     // not the kick (buster type +0x18d == 1: towns / weapon mode 2): it cancels the walk as in the exe
+    const bool buster = (ps1 & pl.button(od::port::PlayerButton::Fire)) && pl.activeBuster != od::port::kTownBuster;
     if (skating() || lockedOn() || pl.playerState() != od::port::PlayerState::Playing ||
-        !(ps1 & pl.button(od::port::PlayerButton::Fire)) || (pl.armFlags & od::port::kArmSpecial) ||
-        pl.activeBuster == od::port::kTownBuster)
+        !(buster || (pl.armFlags & od::port::kArmSpecial)))
         return false;
     const uint8_t sub = pl.subState;
     if (sub == 0 || sub == 1 || sub == 2 || sub == 5 || sub == 6) { // on the ground, moving or standing

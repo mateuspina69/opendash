@@ -21,6 +21,7 @@
 #include "game/fixed_point.hpp"
 #include "game/game_state.hpp"
 #include "game/hit_list.hpp"
+#include "game/modern_aim.hpp"
 #include "game/player/player_state.hpp"
 #include "game/port_gap.hpp"
 #include "game/projection.hpp"
@@ -77,9 +78,12 @@ SpreadEnd spawn(const PlayerEnv& env, ShotActor& shot, SpreadFields& fields) { /
     }
     shot.velocity.y = 0;
     placeAtBone(shot, kLeftHandBone, 0);
-    shot.rotation.x = p.rotation.x;
+    int16_t pitch = p.rotation.x, yaw = p.rotation.y;
+    const int32_t from[3] = {shot.pos.x, shot.pos.y, shot.pos.z};
+    modernAimAngles(from, pitch, yaw); // OpenDash's free aim: the fan around the crosshair's point
+    shot.rotation.x = pitch;
     shot.rotation.z = 0;
-    shot.rotation.y = wrap16((int(fields.copy) - n - 1) * kFanStep + int(uint16_t(p.rotation.y)));
+    shot.rotation.y = wrap16((int(fields.copy) - n - 1) * kFanStep + int(uint16_t(yaw)));
     moveAlongRotation(shot.prevPos, shot.rotation, 0, 0, -int(shot.velocity.z) * 2);
     fillShotStats(fields.stats);
     shot.collisionBox.pointAt(spreadBox.stateAddress());
@@ -216,9 +220,9 @@ void sparkleFade(StaticActor& actor, SparkleFields& f) {
 
 // ---- the spread buster ------------------------------------------------------------------------------------------------
 // exe 0x570470: the hit entry at the shot (radius 0x40 / 4)
-void submitSpreadHit(ShotActor& shot, const ShotStats& stats) {
-    submitShotHit(shot, hitGroup(kHitGroupPlayerAttacks) | kHitContactPoint | hitRadius(0x40),
-                  stats.attack | kHitAttackByPlayer);
+void submitSpreadHit(ShotActor& shot, const ShotStats& stats, bool moved) {
+    submitShotSweep(shot, moved, uint16_t(hitRadius(0x40)), hitGroup(kHitGroupPlayerAttacks) | kHitContactPoint,
+                    stats.attack | kHitAttackByPlayer);
 }
 // exe 0x570550: a sparkle (static global type 0x15) at the shot
 void spawnSparkle(const ShotActor& shot, uint8_t variant) {
@@ -247,6 +251,7 @@ void sparkleUpdate(const PlayerEnv&, uint32_t address) {
 void spreadBusterShotUpdate(const PlayerEnv& env, uint32_t address) {
     ShotActor& shot = shotActorAt(address);
     auto&& fields = classState<SpreadFields>(shot);
+    const bool moved = SpreadState(shot.state) == SpreadState::Fly;
     SpreadEnd end;
     switch (SpreadState(shot.state)) {
     case SpreadState::Spawn: end = spawn(env, shot, fields); break;
@@ -256,14 +261,14 @@ void spreadBusterShotUpdate(const PlayerEnv& env, uint32_t address) {
     switch (end) {
     case SpreadEnd::Flying:
         actorCollisionSubmitMover(shot);
-        submitSpreadHit(shot, fields.stats);
+        submitSpreadHit(shot, fields.stats, moved);
         return;
     case SpreadEnd::HitBody:
         spawnShotSpark(shot, fields.stats.level, 0); // exe 0x5704f0
         freeActor(shot);                             // exe 0x570590
         return;
     case SpreadEnd::HitWall:
-        submitSpreadHit(shot, fields.stats);
+        submitSpreadHit(shot, fields.stats, moved);
         spawnSparkle(shot, kSparkleOnWall);
         freeActor(shot);
         return;

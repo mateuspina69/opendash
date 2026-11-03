@@ -9,6 +9,8 @@
 
 namespace od::port {
 
+constexpr int kAimCentreX = 0xa0, kAimCentreY = 0x3c; // the screen point the centre candidate is measured from
+
 // exe 0x5e4b60(count, groupMask): the selection over the first `count` entries of the hit list
 void selectLockOnTargets(uint32_t count, uint32_t groupMask);
 // OpenDash (modern aim): the actor in `slot` is no longer a target (a fire put out, still smoking): a lock on it is

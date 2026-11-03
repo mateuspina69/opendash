@@ -68,6 +68,7 @@
 #include "game/actors.hpp"
 #include "game/audio_logic.hpp"
 #include "game/camera_state.hpp"
+#include "game/modern_aim.hpp"
 #include "game/event_state.hpp"
 #include "game/fade_state.hpp"
 #include "game/message_state.hpp"
@@ -1623,6 +1624,7 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
             for (const od::hud::Prim& q : od::port::examTimerDraw()) overlayPrims.push_back(q); // 0x422d60's packets
             for (const od::hud::Prim& q : od::port::ninoGaugeDraw()) overlayPrims.push_back(q); // 0x41ecd0's packets
             for (const od::hud::Prim& q : od::port::st59HudDraw()) overlayPrims.push_back(q); // 0x427b90's packets
+            if (!talking) for (const od::hud::Prim& q : od::port::modernAimDraw()) overlayPrims.push_back(q); // OpenDash
             for (const od::hud::Prim& q : od::hud::scriptWhiteDraw()) overlayPrims.push_back(q); // FUN_005f30e0
             fxPrims.clear();
             od::fx::collect(fx, g_fxTextures, fxPrims);

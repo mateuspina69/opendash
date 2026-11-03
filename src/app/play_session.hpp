@@ -332,6 +332,8 @@ struct PlayerView {
     void orbit(float dx, float dy);
     uint16_t steer(uint16_t ps1, float lx, float ly);
     bool fireFacing(uint16_t& ps1, float lx, float ly); // firing: face the camera, strafe (app/fire_facing)
+    // the free aim's ray (game/modern_aim) through the game's aim centre of the view `cam`; pivot: the player's, drawn
+    void setAimRay(const RoomMesh& mesh, const od::Camera& cam, const float* pivot);
     // the orbit camera around the interpolated player position (distance / height from the game camera)
     // modern mode: the orbit camera, except while the game camera is not following the player (talk camera mode 2,
     // scripted mode 1) or an event runs; when it is back in follow mode the orbit camera resumes from its pose

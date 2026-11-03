@@ -27,6 +27,7 @@
 #include "game/draw_commands.hpp"
 #include "game/fixed_point.hpp"
 #include "game/hit_list.hpp"
+#include "game/modern_aim.hpp"
 #include "game/matrix.hpp"
 #include "game/player/player_state.hpp"
 #include "game/player/player_weapons.hpp"
@@ -74,9 +75,16 @@ void traceBeam(const PlayerEnv& env, ShotActor& shot, LaserBlock& block) {
     block.aim.x = p.rotation.x;
     block.aim.y = p.rotation.y;
     block.aim.z = 0;
-    const int16_t rot[3] = {block.aim.x, block.aim.y, 0};
     const auto& hand = p.bonePoints[kLeftHandBone];
     const int16_t handPoint[3] = {hand.x, hand.y, hand.z};
+    const int32_t fromHand[3] = {int32_t(uint32_t(int32_t(handPoint[0])) << 16), int32_t(uint32_t(int32_t(handPoint[1])) << 16),
+                                 int32_t(uint32_t(int32_t(handPoint[2])) << 16)};
+    int16_t aimPitch, aimYaw;
+    if (modernAimAngles(fromHand, aimPitch, aimYaw)) { // OpenDash's free aim: from the hand to the crosshair's point
+        block.aim.x = aimPitch;
+        block.aim.y = aimYaw;
+    }
+    const int16_t rot[3] = {block.aim.x, block.aim.y, 0};
     int32_t o[3];
     rotateVector(rot, 0, 0, kMuzzleReach, o);
     block.muzzle.x = wrap16(int32_t(o[0] >> 16) + handPoint[0]);

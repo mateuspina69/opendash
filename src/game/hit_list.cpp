@@ -11,6 +11,8 @@
 #include "game/distances.hpp"
 #include "game/fixed_point.hpp"
 #include "game/lock_on_targets.hpp"
+#include "game/modern_aim.hpp"
+#include "game/modern_play.hpp"
 
 namespace od::port {
 
@@ -233,6 +235,7 @@ void hitListPass() {
     ActorSystemState& s = actorSystem();
     const uint32_t n = s.hitCount;
     s.hitCount = 0;
+    if (modernPlay()) modernAimCollectTargets(n); // OpenDash's free aim (game/modern_aim)
     selectLockOnTargets(n, kHitGroupsAll);
     if (n < 2) return;
     for (uint32_t i = 0; i < n - 1;) {

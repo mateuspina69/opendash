@@ -68,6 +68,10 @@ void clearHitBox(ShotActor& shot);
 void submitShotHit(ShotActor& shot, uint32_t shape, uint32_t attack);
 // exe 0x5e4190 from the shot's position to its previous one, radius r at both ends (offset by `offset` when given)
 void submitShotCapsule(ShotActor& shot, uint16_t r, uint32_t shape, uint32_t attack, const int16_t* offset = nullptr);
+// OpenDash (modern gameplay, not the exe): a fast shot's hit entry covers its whole move of this tick (`moved`; not the
+// tick it spawns, its previous position is behind the hand), so a body between two ticks' positions is not flown
+// through. The exe's sphere at the end of the move otherwise. r: the radius / 4
+void submitShotSweep(ShotActor& shot, bool moved, uint16_t r, uint32_t shape, uint32_t attack);
 // the shot's position as the draw commands' xy word (y << 16 | x)
 uint32_t drawXY(const ShotActor& shot);
 // exe 0x5704f0 / 0x56ed50 / 0x56fe40(shot, stats, variant): the hit spark (pool 0xa0 global type 0) at the shot (+

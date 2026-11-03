@@ -35,7 +35,6 @@ constexpr uint32_t kNearDistanceSq = 0x9c4000;   // a candidate this close (squa
 constexpr uint32_t kReachDistanceSq = 0xa900000; // the candidates farther than this are not targets
 constexpr uint16_t kScreenWidth = 0x140, kScreenHeight = 0xf0;
 constexpr uint8_t kLockHoldTicks = 15; // OpenDash (modern aim): a locked target sending no point keeps the lock this long
-constexpr int kAimCentreX = 0xa0, kAimCentreY = 0x3c; // the screen point the centre candidate is measured from
 constexpr int8_t kLockSoundDelay = 8;                 // the lock-on sound's countdown, set with every new candidate
 constexpr int kNone = -1;
 

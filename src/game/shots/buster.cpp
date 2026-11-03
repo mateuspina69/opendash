@@ -40,11 +40,9 @@ constexpr uint16_t kArmBusterLimitMask = 0x0bff; // the shots in flight reached 
                                                  // exe's mask also clears the queue / refire bits)
 
 // exe 0x56c580: the hit entry (group 1, the contact point; radius (level * 8 + 0x20) / 4, attack | the player's kind)
-void submitBusterHit(ShotActor& shot, const ShotStats& stats) {
-    submitShotHit(shot,
-                  hitGroup(kHitGroupPlayerAttacks) | kHitContactPoint |
-                      hitRadius(uint32_t(uint16_t(stats.level)) * 8 + 0x20),
-                  stats.attack | kHitAttackByPlayer);
+void submitBusterHit(ShotActor& shot, const ShotStats& stats, bool moved) {
+    submitShotSweep(shot, moved, uint16_t(hitRadius(uint32_t(uint16_t(stats.level)) * 8 + 0x20)),
+                    hitGroup(kHitGroupPlayerAttacks) | kHitContactPoint, stats.attack | kHitAttackByPlayer);
 }
 
 BusterEnd spawnBusterShot(const PlayerEnv& env, ShotActor& shot, BusterShotFields& fields) { // exe 0x56c060
@@ -142,6 +140,7 @@ void busterShotUpdate(const PlayerEnv& env, uint32_t address) {
     ShotActor& shot = shotActorAt(address);
     auto&& fields = classState<BusterShotFields>(shot);
     dropDeadTarget(shot);
+    const bool moved = BusterState(shot.state) == BusterState::Fly;
     BusterEnd end;
     switch (BusterState(shot.state)) {
     case BusterState::Spawn: end = spawnBusterShot(env, shot, fields); break;
@@ -159,7 +158,7 @@ void busterShotUpdate(const PlayerEnv& env, uint32_t address) {
     switch (end) {
     case BusterEnd::Flying:
         actorCollisionSubmitMover(shot); // exe 0x4140b0
-        submitBusterHit(shot, fields.stats);
+        submitBusterHit(shot, fields.stats, moved);
         return;
     case BusterEnd::HitBody:
         spawnShotSpark(shot, fields.stats.level, 0); // exe 0x5704f0
@@ -167,7 +166,7 @@ void busterShotUpdate(const PlayerEnv& env, uint32_t address) {
         return;
     case BusterEnd::HitWall:
         spawnShotBurst(shot, fields.stats, 0); // exe 0x56b880
-        submitBusterHit(shot, fields.stats);
+        submitBusterHit(shot, fields.stats, moved);
         ++shot.state;
         return;
     case BusterEnd::OutOfRange:
