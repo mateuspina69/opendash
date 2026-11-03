@@ -537,20 +537,23 @@ void App::updateScene() {
                             for (int c = 0; c < 3; ++c) a[i * 3 + size_t(c)] = o.tris[i].pos[c];
                         for (size_t i = 0; i < n.tris.size(); ++i)
                             for (int c = 0; c < 3; ++c) b[i * 3 + size_t(c)] = n.tris[i].pos[c];
-                        const size_t unit = od::effectUnit(o.tris.size(), n.tris.size());
-                        const long k = od::effectShift(a.data(), o.tris.size(), b.data(), n.tris.size(), unit) * long(unit);
+                        const std::vector<long> prevOf = od::effectPairs(a.data(), o.tris.size(), b.data(), n.tris.size());
                         float pm = 0.0f;
+                        size_t fresh = 0;
                         for (long i = 0; i < long(n.tris.size()); ++i) {
-                            const long j = i + k;
-                            if (j < 0 || j >= long(o.tris.size())) continue;
+                            const long j = prevOf[size_t(i)];
+                            if (j < 0) {
+                                ++fresh;
+                                continue;
+                            }
                             float d2 = 0.0f;
                             for (int c = 0; c < 3; ++c) d2 += (b[size_t(i) * 3 + size_t(c)] - a[size_t(j) * 3 + size_t(c)]) * (b[size_t(i) * 3 + size_t(c)] - a[size_t(j) * 3 + size_t(c)]);
                             pm = std::max(pm, d2);
                         }
-                        SDL_Log("travel tick %zu: effect %08x %zu -> %zu vertices, shift %ld, aligned move %.0f", poseKey,
-                                n.id, o.tris.size(), n.tris.size(), k, std::sqrt(pm));
+                        SDL_Log("travel tick %zu: effect %08x %zu -> %zu vertices, %zu new, aligned move %.0f", poseKey,
+                                n.id, o.tris.size(), n.tris.size(), fresh, std::sqrt(pm));
                     }
-                    if (o.id == n.id && o.tris.size() != n.tris.size()) {
+                    if (o.id == n.id && (n.id >> 24) != od::kKindEffect && o.tris.size() != n.tris.size()) {
                         float pm = 0.0f; // the common prefix's largest per-vertex move
                         for (size_t i = 0; i < std::min(o.tris.size(), n.tris.size()); ++i) {
                             float d2 = 0.0f;

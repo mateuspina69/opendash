@@ -93,6 +93,49 @@ static void interpolate_layout_change() {
     CHECK(near(interpolateObjects({a}, {b}, 0.5f)[0].tris[0].pos[0], 5)); // same layout: blended
 }
 
+// an effect's list of the given quads (quad q at x = q * 100 + move)
+static DynamicObject quadRow(std::initializer_list<int> quads, float move) {
+    DynamicObject o{objectId(kKindEffect, 1), {}};
+    for (int q : quads)
+        for (int v = 0; v < 6; ++v) o.tris.push_back(vtx(float(q) * 100.0f + move, 0, 0));
+    return o;
+}
+
+static void interpolate_effect_quad_culled_mid_list() {
+    // quad 2 of 12 left the view: the quads after it keep their own places (no shift of the whole list fits both ends)
+    const DynamicObject prev = quadRow({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}, 0.0f);
+    const DynamicObject cur = quadRow({0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11}, 1.0f);
+    const auto r = interpolateObjects({prev}, {cur}, 0.5f);
+    size_t v = 0;
+    for (int q : {0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11})
+        for (int k = 0; k < 6; ++k) CHECK(near(r[0].tris[v++].pos[0], float(q) * 100.0f + 0.5f));
+    MotionHistory h;
+    std::vector<float> from;
+    h.apply({prev}, from);
+    h.apply({cur}, from);
+    v = 0;
+    for (int q : {0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11})
+        for (int k = 0; k < 6; ++k, ++v) CHECK(near(from[v * 3], float(q) * 100.0f));
+}
+
+static void interpolate_effect_quad_entering_mid_list() {
+    // quad 2 came into view: it has no place a tick ago (shown as is), its neighbours keep theirs
+    const DynamicObject prev = quadRow({0, 1, 3, 4}, 0.0f), cur = quadRow({0, 1, 2, 3, 4}, 1.0f);
+    const auto r = interpolateObjects({prev}, {cur}, 0.5f);
+    CHECK(near(r[0].tris[6].pos[0], 100.5f));
+    CHECK(near(r[0].tris[12].pos[0], 201.0f)); // new: current position
+    CHECK(near(r[0].tris[18].pos[0], 300.5f));
+    CHECK(near(r[0].tris[24].pos[0], 400.5f));
+}
+
+static void interpolate_effect_list_replaced() {
+    // a camera cut: the list is another part of the wall, but for one quad near one of the old: nothing blends
+    const DynamicObject prev = quadRow({0, 1, 2}, 0.0f), cur = quadRow({2, 20, 21, 22}, 1.0f);
+    const auto r = interpolateObjects({prev}, {cur}, 0.5f);
+    CHECK(near(r[0].tris[0].pos[0], 201.0f));
+    CHECK(near(r[0].tris[6].pos[0], 2001.0f));
+}
+
 static void history_new_id_zero_motion() {
     MotionHistory h;
     std::vector<float> prev;
@@ -173,6 +216,9 @@ int main() {
     interpolate_spawn_same_total();
     interpolate_vertex_count_change();
     interpolate_layout_change();
+    interpolate_effect_quad_culled_mid_list();
+    interpolate_effect_quad_entering_mid_list();
+    interpolate_effect_list_replaced();
     history_new_id_zero_motion();
     motion_static_camera_zero();
     motion_pan_pixels();

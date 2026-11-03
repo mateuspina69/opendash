@@ -28,9 +28,9 @@ uint32_t dlssPhaseCount(int renderW, int outW); // ceil(8 * (out / render)^2)
 std::vector<DynamicObject> interpolateObjects(const std::vector<DynamicObject>& prev,
                                               const std::vector<DynamicObject>& cur, float alpha);
 
-// effects (particle lists that recycle FIFO): the prim shift k pairing the current prim i with the previous i + k
-int effectShift(const float* prevXyz, size_t prevVerts, const float* curXyz, size_t curVerts, size_t unit);
-size_t effectUnit(size_t prevVerts, size_t curVerts); // 6 (quads) when both counts allow, else 3
+// effects (particle lists that recycle FIFO, quads culled mid list): per current vertex, the previous vertex of the same
+// prim (6 vertices when both counts allow, else 3), -1 for a new prim
+std::vector<long> effectPairs(const float* prevXyz, size_t prevVerts, const float* curXyz, size_t curVerts);
 
 class MotionHistory {
 public:
