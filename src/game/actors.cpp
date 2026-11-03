@@ -235,8 +235,9 @@ PoolLoop poolLoop(ActorPool p) {
     throw std::logic_error("actors: unknown pool loop");
 }
 
-// The late controller loop's type 0: a controller that waits on a byte of the game state (its parameters hold the
-// byte's address; the exe frees it when the byte is 0, else keeps it live)
+// The late controller loop's type 0 (exe 0x55bf5f): a controller that watches a byte (its parameters hold the byte's
+// address; the exe frees it when the byte is 0, else sets its own byte +0 to 1). The spawners are ST0E's hit watchers
+// (content/yosyonke/st0e_vehicles), whose word names their parent's slot: the byte is that slot's +0
 constexpr uint8_t kByteWatchType = 0;
 
 } // namespace
@@ -307,9 +308,9 @@ int updatePool(const PlayerEnv& env, ActorContext& ctx, ActorPool pool) {
         loop.cursor = actor.at;
         if (pool == ActorPool::ControllersLate && actor.live() && (actor.loopFlags & kActorLateLoop) &&
             actor.type == kByteWatchType) {
-            // the byte is game state the exe names by its address; no ported class spawns such a watch, so the
-            // byte it names has no native member to read (the port gap names the address)
-            notPortedAt("actor pools", "a late controller of type 0 (a byte watch) on the byte at", actor.paramsWord());
+            if (actorHeaderAt(actor.paramsWord()).flags) actor.flags = kActorLive;
+            else freeActor(asController(actor)); // exe 0x5e15c0
+            continue;
         }
         const RoutineRef h = actorHandler(actor, pool);
         if (!h) continue;
