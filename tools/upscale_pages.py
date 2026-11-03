@@ -69,77 +69,52 @@ def tiled(model, rgb, dev, tile=256, pad=32):
     return out, t
 
 
-def corners_uv(corners, a, b):
-    """a tile's (u, v) at (a, b) in 0..1 across it, from its four corners {(right, far): (u, v)}"""
-    top = corners[0, 0] * (1 - a)[..., None] + corners[1, 0] * a[..., None]
-    bottom = corners[0, 1] * (1 - a)[..., None] + corners[1, 1] * a[..., None]
-    return top * (1 - b)[..., None] + bottom * b[..., None]
-
-
 def floors(model, dev, dump, pack, only):
-    """The floor tiles again, each next to its neighbours on the floor (a page's tiles are not): every room's floor as
-    one image through the model, its tones moved back; each tile's image is the mean of its places on the floors.
-    Only those rects of the pages' images change. floors/ is what the game wrote with the dump."""
-    P = 31  # a tile's texels across: its UVs span 31 (engine/room parseFloor)
-    acc, cached = {}, {}
-    grid = (np.arange(P) + 0.5) / P
-    big = (np.arange(P * 4) + 0.5) / (P * 4)
+    """The rooms' floor pages (app/room_mesh floorPages): each room's floor laid out whole through the model, its tones moved
+    back, so a tile meets its neighbours; each cell's part goes to its slot. floors/ is what the game wrote with the dump."""
+    P = 31  # a cell's texels across the floor; its slot has one more, half a texel each side of what its UVs read
+    pages, images = {}, {}
 
     def page_of(name):
-        if name not in cached:
-            p = dump / f'{name}.png'
-            cached[name] = np.asarray(Image.open(p).convert('RGB')) if p.exists() else None
-        return cached[name]
+        if name not in pages:
+            pages[name] = np.asarray(Image.open(dump / f'{name}.png').convert('RGBA'))
+        return pages[name]
 
     for f in sorted((dump / 'floors').glob('*.txt')):
         if only and not any(f.stem.startswith(s) for s in only):
             continue
-        cells = []
-        for line in f.read_text().splitlines():
-            w = line.split()
-            c = {(int(w[3 + i * 4]), int(w[4 + i * 4])): (int(w[5 + i * 4]), int(w[6 + i * 4])) for i in range(4)}
-            if len(c) == 4 and page_of(w[2]) is not None:
-                cells.append((int(w[0]), int(w[1]), w[2], {k: np.array(v, np.float32) for k, v in c.items()}))
+        cells = [line.split() for line in f.read_text().splitlines()]
+        cells = [(int(c[0]), int(c[1]), c[2], int(c[3])) for c in cells]
         if not cells:
             continue
         gx0, gz0 = min(c[0] for c in cells), min(c[1] for c in cells)
         W, H = max(c[0] for c in cells) - gx0 + 1, max(c[1] for c in cells) - gz0 + 1
-        rgb, have = np.zeros((H * P, W * P, 3), np.uint8), np.zeros((H * P, W * P), bool)
-        A, B = np.meshgrid(grid, grid)
-        for gx, gz, name, c in cells:
-            uv = np.floor(corners_uv(c, A, B)).astype(int).clip(0, 255)
+        rgb, drawn = np.zeros((H * P, W * P, 3), np.uint8), np.zeros((H * P, W * P), bool)
+        for gx, gz, name, slot in cells:
+            sx, sy = slot % 8 * 32, slot // 8 * 32
+            cell = page_of(name)[sy:sy + P, sx:sx + P]
             x, y = (gx - gx0) * P, (gz - gz0) * P
-            rgb[y:y + P, x:x + P] = page_of(name)[uv[..., 1], uv[..., 0]]
-            have[y:y + P, x:x + P] = True
-        rgb = spread(rgb, have)
+            rgb[y:y + P, x:x + P] = cell[..., :3]
+            drawn[y:y + P, x:x + P] = cell[..., 3] > 0
+        rgb = spread(rgb, drawn)
         out, page = tiled(model, rgb, dev)
-        # a tile repeats next to different tiles, so no one image of it meets them all: at its edges it goes back to
-        # the floor's own texels, smooth, which both sides of an edge share
-        edge = np.minimum(np.arange(P * 4), np.arange(P * 4)[::-1]) / 12
-        edge = edge.clip(0, 1)
-        edge = torch.from_numpy(np.minimum(*np.meshgrid(edge, edge))).float()
-        edge = (edge * edge * (3 - 2 * edge)).repeat(H, W)[None, None]
-        out = tone(out, page) * edge + F.interpolate(page, scale_factor=4, mode='bicubic').clamp(0, 1) * (1 - edge)
-        out = out[0].permute(1, 2, 0).numpy() * 255
-        A, B = np.meshgrid(big, big)
-        for gx, gz, name, c in cells:
-            uv = np.floor(corners_uv(c, A, B) * 4).astype(int).clip(0, 1023)
-            sum_, n = acc.setdefault(name, (np.zeros((1024, 1024, 3), np.float32), np.zeros((1024, 1024), np.float32)))
-            x, y = (gx - gx0) * P * 4, (gz - gz0) * P * 4
-            np.add.at(sum_, (uv[..., 1], uv[..., 0]), out[y:y + P * 4, x:x + P * 4])
-            np.add.at(n, (uv[..., 1], uv[..., 0]), 1)
+        out = (tone(out, page)[0].permute(1, 2, 0).numpy() * 255 + 0.5).astype(np.uint8)
+        for gx, gz, name, slot in cells:
+            sx, sy = slot % 8 * 128, slot // 8 * 128
+            img = images.setdefault(name, np.zeros((1024, 1024, 4), np.uint8))
+            # the slot's image: the cell's part of the floor, 2 pixels (the half texel) of what lies beyond it around it
+            x, y = (gx - gx0) * P * 4 - 2, (gz - gz0) * P * 4 - 2
+            x0, y0, x1, y1 = max(x, 0), max(y, 0), min(x + 128, out.shape[1]), min(y + 128, out.shape[0])
+            part = np.pad(out[y0:y1, x0:x1], ((y0 - y, y + 128 - y1), (x0 - x, x + 128 - x1), (0, 0)), mode='edge')
+            img[sy:sy + 128, sx:sx + 128, :3] = part
+            alpha = page_of(name)[sy // 4:sy // 4 + 32, sx // 4:sx // 4 + 32, 3]
+            img[sy:sy + 128, sx:sx + 128, 3] = alpha.repeat(4, 0).repeat(4, 1)
         print(f'{f.stem}: {len(cells)} tiles', flush=True)
-    for name, (sum_, n) in acc.items():
-        p = pack / f'{name}.png'
-        if not p.exists():
-            continue
-        img = np.array(Image.open(p).convert('RGBA'))
-        done = n > 0
-        img[done, :3] = (sum_[done] / n[done][:, None] + 0.5).astype(np.uint8)
+    for name, img in images.items():
         tmp = pack / f'{name}.tmp.png'
         Image.fromarray(img).save(tmp)
-        tmp.replace(p)
-    print(f'{len(acc)} floor pages', flush=True)
+        tmp.replace(pack / f'{name}.png')
+    print(f'{len(images)} floor pages', flush=True)
 
 
 def main():
@@ -147,7 +122,7 @@ def main():
     ap.add_argument('--model', required=True)
     ap.add_argument('--dump', required=True)
     ap.add_argument('--pack', required=True)
-    ap.add_argument('--floors', nargs='*', help="after the pages, the floors' tiles (of the geometry files starting so; none: all)")
+    ap.add_argument('--floors', nargs='*', help="after the pages, the rooms' floor pages (of the geometry files starting so; none: all)")
     o = ap.parse_args()
     dev = 'cuda' if torch.cuda.is_available() else 'cpu'
     model = spandrel.ModelLoader().load_from_file(o.model).eval().to(dev)
@@ -155,7 +130,8 @@ def main():
         sys.exit(f'{o.model}: a {model.scale}x model, the pack is 4x')
     dump, pack = pathlib.Path(o.dump), pathlib.Path(o.pack)
     pack.mkdir(parents=True, exist_ok=True)
-    todo = [p for p in sorted(dump.glob('*.png')) if len(p.stem) == 16 and not (pack / p.name).exists()]
+    floor_pages = {line.split()[2] for f in (dump / 'floors').glob('*.txt') for line in f.read_text().splitlines()}
+    todo = [p for p in sorted(dump.glob('*.png')) if len(p.stem) == 16 and p.stem not in floor_pages and not (pack / p.name).exists()]
     print(f'{len(todo)} pages to enlarge ({dev})', flush=True)
 
     def tensor(rgb):

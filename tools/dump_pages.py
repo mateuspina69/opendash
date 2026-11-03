@@ -18,6 +18,13 @@ STORY_FILES = [
     (0x26, 0, (0x3ed,)), (0x27, 0, (0x44, 0x45)), (0x29, 0x0d, ()), (0x30, 0, (0x23,)), (0x33, 0, (0x3ed,)),
     (0x35, 0, (0x94,)), (0x39, 0x11, ()), (0x3c, 0x0d, ()), (0x53, 0x0f, (0x5a1,)), (0x53, 0x0f, (0x5a0,)),
 ]
+# A stage whose texture file counts on what earlier ones left in VRAM (engine comment in app/room_mesh loadRoom): (stage, sub,
+# story, flags, those files in order). The route is the story's: their cast pages are met only this way
+LEFT_BEFORE = [
+    (0x53, 1, 0x0f, (0x5a1,), ('ST53T.DAT', 'ST0E01T.DAT')),
+    (0x0e, 2, 0x0f, (0x5a0,), ('ST53T.DAT',)),
+    (0x0e, 2, 0x0f, (0x5a1,), ('ST53T.DAT', 'ST0E01T.DAT', 'ST5301T.DAT')),
+]
 SAVE_STORY, SAVE_FLAGS = 0x12c, 0x400  # the save image's story byte, its event flags
 SAVE_BLOCKS = ((0, 0x5f, 0x5f), (0x80, 0x1f, 0x9f), (0xa0, 0x5f, 0xff), (0x100, 0x1ff, 0x2ff))  # game/save_image kBlocks
 
@@ -34,9 +41,11 @@ def story_save(base, story, flags, path):
     path.write_bytes(b)
 
 
-def run(exe, dump, stage, sub, ticks, save='none'):
+def run(exe, dump, stage, sub, ticks, save='none', before=()):
     cmd = [str(exe), '--net', 'off', '--story-save', str(save), '--stage', f'{stage:02X}', '--sub', str(sub),
            '--texture-dump', str(dump), '--playscript', f'{ticks} -']
+    if before:
+        cmd += ['--vram-before', ','.join(before)]
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, errors='replace', timeout=120, cwd=exe.parent)
         return r.stdout + r.stderr
@@ -82,6 +91,10 @@ def main():
                 subs = rooms(text)
                 print(f'ST{s:02X} story {story} flags {list(map(hex, flags))}: {files[-1] if files else "?"}, {subs} rooms', flush=True)
                 rest += [pool.submit(run, exe, dump, s, sub, o.ticks, save) for sub in range(1, subs)]
+            for i, (s, sub, story, flags, before) in enumerate(LEFT_BEFORE):
+                save = pathlib.Path(tmp) / f'left{i}.DAT'
+                story_save(base, story, flags, save)
+                rest.append(pool.submit(run, exe, dump, s, sub, o.ticks, save, before))
         for f in rest:
             f.result()
     print(f'{sum(1 for _ in dump.glob("*.png"))} pages in {dump}')

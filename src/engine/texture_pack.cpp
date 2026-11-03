@@ -155,15 +155,45 @@ void bindPageDump(std::filesystem::path dir) {
     g_dump = std::move(dir);
 }
 const std::filesystem::path& pageDumpDir() { return g_dump; }
+void dumpPage(const std::vector<uint8_t>& ps1) {
+    if (!g_dump.empty()) dump(ps1);
+}
 
 int sliceEdge() { return g_pack ? 256 * g_pack->scale() : 256; }
 
-std::vector<uint8_t> pageSliceOf(const std::vector<uint8_t>& ps1, const TexturePack* pack, int* images) {
-    int drawn = 0;
+std::vector<uint8_t> pageSliceOf(const std::vector<uint8_t>& ps1, const TexturePack* pack, int* images,
+                                 const std::vector<uint8_t>& loaded) {
+    const bool other = !loaded.empty() && loaded != ps1;
     if (!pack) {
-        if (!g_dump.empty()) dump(ps1);
+        if (!g_dump.empty()) {
+            dump(ps1);
+            if (other) dump(loaded);
+        }
         if (images) *images = 0;
         return ps1;
+    }
+    if (other && !g_dump.empty() && !pack->has(pageName(loaded))) dump(loaded);
+    int drawn = 0;
+    if (other && !pack->has(pageName(ps1)) && pack->has(pageName(loaded))) {
+        std::vector<uint8_t> out = pack->decode(loaded, &drawn);
+        if (drawn) { // the texels this route changed stay what they show now
+            const int scale = pack->scale();
+            const size_t edge = size_t(256) * size_t(scale);
+            for (size_t y = 0; y < 256; ++y)
+                for (size_t x = 0; x < 256; ++x) {
+                    const uint8_t* now = &ps1[(y * 256 + x) * 4];
+                    if (!std::memcmp(now, &loaded[(y * 256 + x) * 4], 4)) continue;
+                    for (size_t v = 0; v < size_t(scale); ++v)
+                        for (size_t u = 0; u < size_t(scale); ++u) {
+                            uint8_t* to = &out[((y * size_t(scale) + v) * edge + x * size_t(scale) + u) * 4];
+                            if (now[3]) std::memcpy(to, now, 3);
+                            to[3] = now[3];
+                        }
+                }
+            if (!g_dump.empty()) dump(ps1);
+            if (images) *images = drawn;
+            return out;
+        }
     }
     std::vector<uint8_t> out = pack->decode(ps1, &drawn);
     if (!drawn && !g_dump.empty()) dump(ps1);
@@ -188,11 +218,11 @@ PageLoader::~PageLoader() {
     for (std::thread& t : threads_) t.join();
 }
 
-void PageLoader::request(uint64_t name, std::vector<uint8_t> ps1) {
+void PageLoader::request(uint64_t name, std::vector<uint8_t> ps1, std::vector<uint8_t> loaded) {
     {
         std::lock_guard lock(lock_);
         if (!pending_.insert(name).second) return;
-        queue_.push_back({name, std::move(ps1), g_pack});
+        queue_.push_back({name, std::move(ps1), std::move(loaded), g_pack});
     }
     wake_.notify_one();
 }
@@ -218,7 +248,7 @@ void PageLoader::run() {
             job = std::move(queue_.front());
             queue_.pop_front();
         }
-        std::vector<uint8_t> img = pageSliceOf(job.ps1, job.pack.get());
+        std::vector<uint8_t> img = pageSliceOf(job.ps1, job.pack.get(), nullptr, job.loaded);
         appendPageMips(img, job.pack ? 256 * job.pack->scale() : 256);
         {
             std::lock_guard lock(lock_);

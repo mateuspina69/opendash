@@ -1,5 +1,9 @@
 # Texture pack
 
+**Experimental.** A pack does not cover the whole game: a page the dump never met is drawn nearest, and a page is still found
+by its decode, so a palette or a route the dump did not see has no image. Expect pixelated characters and outlines with
+steps in places, and floors with cuts in the rooms whose floor pages were not made.
+
 OpenDash can draw the PS1's texture pages from larger images: its texture pack, one image per page, made offline by
 an image model from the pages the game itself dumps. Put the images in `textures/` next to `opendash.exe`; OpenDash
 uses the folder when it is there. No pack ships with OpenDash.
@@ -28,6 +32,15 @@ opaque.
 Every different decode is another page: the same texels through another CLUT (a palette swap, an animated CLUT's
 frame, a fog shade), or a page whose VRAM an animation moved. A page with no image is the PS1 page enlarged, nearest,
 its transparent texels beside a drawn one taking that one's colour (the filter below reads them).
+
+The game never clears VRAM, so a page's unused texels hold what earlier stages left, another page by each route to a room.
+A page with no image of its own is looked up again as the room's own load makes it (the boot's files, the room's and what
+play moved since), the texels that differ drawn nearest from the page as it is.
+
+A tile of a floor repeats beside different tiles, so no image of a tile meets them all. A room's floor can have pages of its
+own: each cell in a slot of 32 texels, its UVs reading the 31 between the slot's half texels, named and made like any page.
+A room uses them when the pack has them all, and the tiles' pages otherwise. They are never decoded again, so an animated
+floor must not have them.
 Pages are made by worker threads (half the CPU's threads) with their mip levels, and kept on the GPU (a 1 GB pool, the
 least recently shown going first; the images read also in a 512 MB cache), so each is read and uploaded once. A room's
 pages are named from their PS1 decode: one in the pool is copied on the GPU, a room load waits only for the others. An
@@ -53,8 +66,9 @@ must not read its neighbour. Without a pack the pages are drawn nearest, the PS1
    It opens a window per room; run it on a copy of the game (its log and saves are the copy's). With `--save
    DASH2-NN.DAT` (read only) it also opens each story state's own files, which hold their own characters. The game
    never clears VRAM, so a page can carry what the stage before left and be another page: the pages the sweep does not
-   meet (cutscenes, menus, a stage reached from another) are dumped by playing with `texture_dump=` set. The dump also
-   gets `floors/<geometry file>_<sub>.txt`, how each room's floor lays its tiles.
+   meet (cutscenes, menus, a stage reached from another) are dumped by playing with `texture_dump=` set. With `--save` it
+   also opens the rooms whose texture file counts on what earlier stages left, with `--vram-before` naming those files.
+   The dump also gets each room's floor pages and `floors/<geometry file>_<sub>.txt`, the slot of each cell.
 
 2. **Enlarge them.** `tools/upscale_pages.py` runs the image model over the dump into the pack, skipping the pages
    already there:
@@ -73,7 +87,6 @@ must not read its neighbour. Without a pack the pages are drawn nearest, the PS1
    - Alpha: the page's drawn mask through the same model, cut at half. The outlines follow the shapes (a diagonal is
      a line, not the texels' steps) where an enlarged mask would keep the steps. Each drawn texel takes the level
      (128 / 255) of its nearest drawn PS1 texel.
-   - `--floors [geometry file prefixes]`: after the pages, each room's floor through the model as one image, so a
-     tile is enlarged next to its neighbours on the floor. A tile repeats next to different tiles, so at its edges it
-     goes back to the floor's own texels, smooth; each tile's image is the mean of its places. This softens the cut
-     between tiles and does not remove it: the PS1's tiles themselves do not connect there.
+   - `--floors [geometry file prefixes]`: after the pages, each room's floor through the model as one image, its tones
+     moved back, each cell's part going to its slot of the floor pages. The PS1's tiles connect as the floor lays them, so
+     the image does too. Two floor pages with the same texels are one page, with one image.

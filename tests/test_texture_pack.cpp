@@ -108,6 +108,20 @@ int main() {
         }
     }
 
+    { // a page with what an earlier stage left in a texel: the image of the page without it, that texel as it shows
+        std::vector<uint8_t> left = ps1;
+        left[(5 * 256 + 7) * 4 + 0] ^= 0xff;
+        left[(5 * 256 + 7) * 4 + 3] = 255;
+        int drawn = 0;
+        const std::vector<uint8_t> shown = od::pageSliceOf(left, od::texturePack(), &drawn, ps1);
+        CHECK(drawn == 1);
+        std::vector<uint8_t> want = img;
+        for (size_t v = 10; v < 12; ++v)
+            for (size_t u = 14; u < 16; ++u) std::memcpy(&want[(v * 512 + u) * 4], &left[(5 * 256 + 7) * 4], 4);
+        CHECK(shown == want);
+        CHECK(od::pageSliceOf(left, od::texturePack(), &drawn) != want && drawn == 0); // nothing to name it by: no image
+    }
+
     od::bindPageDump({});
     od::bindTexturePack(nullptr);
 

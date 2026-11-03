@@ -97,6 +97,10 @@ void App::parseArgs(int argc, char** argv) {
         else if (a == "--aa") aaArg = argv[++i];
         else if (a == "--lang") langArg = argv[++i];
         else if (a == "--texture-dump") textureDumpArg = argv[++i];
+        else if (a == "--vram-before") { // dev: "--vram-before ST53T.DAT,ST5301T.DAT" (g_vramBefore)
+            std::stringstream files(argv[++i]);
+            for (std::string f; std::getline(files, f, ',');) g_vramBefore.push_back(f);
+        }
         else if (a == "--voice-test") voiceTestArg = argv[++i];
         else if (a == "--aa-quality") aaQualityArg = argv[++i];
         else if (a == "--vsync") vsyncArg = std::stoi(argv[++i]) != 0;

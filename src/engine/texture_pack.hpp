@@ -3,6 +3,10 @@
 //   <XXH3-64 of the page as Vram::decode makes it, 16 lowercase hex digits>.png
 // (any folder depth), (256 * scale)^2 RGBA, alpha 0 / Vram::kStpAlpha / 255 as the PS1 page's texels. A page with no
 // image is the PS1 page enlarged, nearest.
+//
+// The game never clears VRAM, so a page's unused texels hold what the stages before left, a different page by every route
+// to a room. A page shown with no image of its own is looked up again by what the room's load alone puts there (`loaded`:
+// see app/room_mesh g_roomVramLoaded), the texels that differ drawn from the page as it is.
 #pragma once
 
 #include <condition_variable>
@@ -29,6 +33,7 @@ public:
 
     int scale() const { return scale_; }
     size_t size() const { return images_.size(); }
+    bool has(uint64_t name) const { return images_.contains(name); }
 
     // the page's name (pageName) and its image, or the PS1 page enlarged; *images: 1 when the image drew it
     std::vector<uint8_t> decode(const std::vector<uint8_t>& ps1, int* images = nullptr) const;
@@ -88,13 +93,17 @@ const TexturePack* texturePack();
 // <name>.png at 256 x 256: the upscaler's input
 void bindPageDump(std::filesystem::path dir);
 const std::filesystem::path& pageDumpDir();
+// writes the page there now (no folder bound: nothing), for a page no polygon shows yet (app/room_mesh's floor pages)
+void dumpPage(const std::vector<uint8_t>& ps1);
 
 // The edge of the renderer's texture slices: 256 times the bound pack's scale
 int sliceEdge();
 // A texture page as a slice of sliceEdge(): the bound pack's image of it (1 in *images), or Vram::decode enlarged
 std::vector<uint8_t> pageSlice(const Vram& vram, uint16_t tpage, uint16_t clut, bool stp, int* images = nullptr);
-// The same from the page as Vram::decode made it, through `pack` (none: the page as it is)
-std::vector<uint8_t> pageSliceOf(const std::vector<uint8_t>& ps1, const TexturePack* pack, int* images = nullptr);
+// The same from the page as Vram::decode made it, through `pack` (none: the page as it is). loaded: the page without what
+// earlier stages left (top of this file); empty: none known
+std::vector<uint8_t> pageSliceOf(const std::vector<uint8_t>& ps1, const TexturePack* pack, int* images = nullptr,
+                                 const std::vector<uint8_t>& loaded = {});
 
 // A page's mip levels at this edge: down to the PS1's own texel (256 x 256); further ones would blend a page's unrelated
 // pieces
@@ -111,7 +120,7 @@ public:
     ~PageLoader();
     // queues the page (Vram::decode) under its name (pageName), made through the pack bound now; a name queued, being
     // made or made and not taken yet is not queued again
-    void request(uint64_t name, std::vector<uint8_t> ps1);
+    void request(uint64_t name, std::vector<uint8_t> ps1, std::vector<uint8_t> loaded = {});
     // the pages made since the last call: their names and pageSliceOf with its mip levels (appendPageMips)
     std::vector<std::pair<uint64_t, std::vector<uint8_t>>> takeReady();
     // blocks until a page is ready to take (at once when none is queued or being made)
@@ -120,7 +129,7 @@ public:
 private:
     struct Job {
         uint64_t name;
-        std::vector<uint8_t> ps1;
+        std::vector<uint8_t> ps1, loaded;
         std::shared_ptr<const TexturePack> pack;
     };
     void run();

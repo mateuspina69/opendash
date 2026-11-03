@@ -452,6 +452,8 @@ void PlayerView::vramMovesApply(const RoomMesh& mesh, od::Renderer& r) {
         buf.resize(size_t(v.w) * size_t(v.h) * 2);
         g_roomVram.readImage(v.sx, v.sy, v.w, v.h, buf.data());
         g_roomVram.loadImage(v.dx, v.dy, v.w, v.h, buf);
+        g_roomVramLoaded.readImage(v.sx, v.sy, v.w, v.h, buf.data());
+        g_roomVramLoaded.loadImage(v.dx, v.dy, v.w, v.h, buf);
         for (size_t s = 0; s < mesh.sliceTex.size(); ++s) {
             if (!(mesh.sliceTex[s] >> 32)) continue;
             const uint32_t tpage = uint32_t(mesh.sliceTex[s] >> 16) & 0xFFFF, clut = uint32_t(mesh.sliceTex[s]) & 0xFFFF;
@@ -470,7 +472,9 @@ void PlayerView::vramMovesApply(const RoomMesh& mesh, od::Renderer& r) {
 void PlayerView::showSlicePage(const RoomMesh& mesh, size_t slice, od::Renderer& r) {
     std::vector<uint8_t> ps1 = g_roomVram.decode(uint16_t(mesh.sliceTex[slice] >> 16), uint16_t(mesh.sliceTex[slice] & 0xFFFF), true);
     const uint64_t page = od::pageName(ps1);
-    if (!r.showPage(int(slice), page)) od::pageLoader().request(page, std::move(ps1));
+    if (!r.showPage(int(slice), page))
+        od::pageLoader().request(page, std::move(ps1),
+                                 g_roomVramLoaded.decode(uint16_t(mesh.sliceTex[slice] >> 16), uint16_t(mesh.sliceTex[slice] & 0xFFFF), true));
 }
 
 void PlayerView::pagesMadeApply(od::Renderer& r) {
@@ -496,7 +500,7 @@ void PlayerView::effectTexturesApply(RoomMesh& mesh, od::Renderer& r) {
         SDL_Log("fxtex: effect texture %04x %04x met in play: slice %d (%d spare left)", unsigned(t.tpage), unsigned(t.clut),
                 m.slice, mesh.fxSpareLeft);
         if (t.tint != 0x808080) { // not a page of the pool: its colours are this texture's own
-            std::vector<uint8_t> rgba = od::pageSliceOf(m.ps1, od::texturePack());
+            std::vector<uint8_t> rgba = od::pageSliceOf(m.ps1, od::texturePack(), nullptr, g_roomVramLoaded.decode(t.tpage, t.clut, true));
             tintSlice(rgba, t.tint);
             r.updateSlice(m.slice, rgba);
             m.ps1.clear(); // written: nothing to wait for
@@ -510,7 +514,8 @@ void PlayerView::effectTexturesApply(RoomMesh& mesh, od::Renderer& r) {
     while (!mesh.fxMaking.empty()) {
         RoomMesh::FxMaking& m = mesh.fxMaking.front();
         if (!m.ps1.empty() && !r.showPage(m.slice, m.page)) {
-            od::pageLoader().request(m.page, m.ps1);
+            const od::fx::Texture& t = met[mesh.fxSlices.size()]; // the front of fxMaking: the next entry
+            od::pageLoader().request(m.page, m.ps1, g_roomVramLoaded.decode(t.tpage, t.clut, true));
             return;
         }
         mesh.fxSlices.push_back(m.slice);
@@ -532,8 +537,10 @@ void PlayerView::clutAnimationSync(const RoomMesh& mesh, od::Renderer& r) {
     for (size_t i = 0; i < 0x2000; ++i)
         if (cur[i] != clutShown[i]) (i < 0x1000 ? changedLow : changedHigh) = true;
     clutShown.assign(cur.begin(), cur.end());
-    if (changedLow && lowRows) g_roomVram.loadImage(0, 240, 256, 8, std::span<const uint8_t>(clutShown.data(), 0x1000));
-    if (changedHigh) g_roomVram.loadImage(0, 496, 256, 8, std::span<const uint8_t>(clutShown.data() + 0x1000, 0x1000));
+    for (od::Vram* v : {&g_roomVram, &g_roomVramLoaded}) {
+        if (changedLow && lowRows) v->loadImage(0, 240, 256, 8, std::span<const uint8_t>(clutShown.data(), 0x1000));
+        if (changedHigh) v->loadImage(0, 496, 256, 8, std::span<const uint8_t>(clutShown.data() + 0x1000, 0x1000));
+    }
     for (size_t s = 0; s < mesh.sliceTex.size(); ++s) {
         if (!(mesh.sliceTex[s] >> 32)) continue;
         const uint16_t clut = uint16_t(mesh.sliceTex[s] & 0xFFFF);

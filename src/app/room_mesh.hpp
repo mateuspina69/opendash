@@ -196,6 +196,12 @@ extern bool g_inStageSwitch;
 // the live VRAM of play: never cleared, every play load writes its files over it (loadRoom), like the exe's. The
 // HUD's sprites read the live VRAM in the exe (the ST18 repair gauge's plates and digits are in ST18T.DAT's pages)
 extern od::Vram g_roomVram;
+// g_roomVram without what earlier stages left: the boot's files, this room load's and what play moved since. It only names
+// a page for the texture pack (engine/texture_pack): a room looks the same by every route to it
+extern od::Vram g_roomVramLoaded;
+// --vram-before: the files earlier stages would have left in VRAM, applied under the first room (tools/dump_pages.py: a
+// stage whose texture file counts on them, as ST0E02T.DAT and ST5301T.DAT do)
+extern std::vector<std::string> g_vramBefore;
 // the image moves (game/vram_moves) applied to it in this stage, each after the script DATs loaded before it: a rebuild
 // of the room writes the stage's files over the VRAM again, so it makes the moves again between them, in the order the
 // exe made them (ST02's shutters slid after ST0203.DAT)

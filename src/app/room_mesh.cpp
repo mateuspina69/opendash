@@ -44,6 +44,8 @@ int g_stageFilesStage = -1;
 std::string g_stageFilesGeo, g_stageFilesTex;
 bool g_inStageSwitch = false;
 od::Vram g_roomVram;
+od::Vram g_roomVramLoaded;
+std::vector<std::string> g_vramBefore;
 std::vector<KeptVramMove> g_keptVramMoves;
 uint32_t g_roomVramGen = 0;
 int g_stageDatsStage = -1;
@@ -378,28 +380,71 @@ static void buildTrackStrip(RoomMesh& mesh, int roomShift, bool warps) {
     mesh.uvAnim.remapStatic(firstOf); // UV animation patches the middle tile's faces
 }
 
-// With a page dump: how the room's floor lays its tiles, one line a cell, for the upscaler (the tiles of a page are not
-// its neighbours on the floor): floors/<geometry file>_<sub>.txt, "gx gz page" and for the four corners "right far u v"
-static void dumpFloorLayout(const std::string& geometryFile, int sub, const std::vector<od::RoomQuad>& floor, int shift,
-                            const od::Vram& vram) {
+// A room's floor as pages of its own, for a texture pack. A tile repeats beside different tiles and the PS1's tiles meet
+// only as the floor lays them, so an enlarged image per tile cannot meet its neighbours; an image of the floor can
+// (tools/upscale_pages.py). Each cell takes a slot of kFloorSlot texels, right along u and far along v, in the floor's order:
+// its UVs span 31 from the slot's corner and a UV is a texel's centre, so they read half a texel in from each side and never
+// leave the slot. Floor pages are named and made like any page, and a room uses them when the pack has them all. An animated
+// floor is not generated: a floor page is never decoded again.
+static constexpr int kFloorSlot = 32, kFloorSlots = 8, kFloorSpan = 31;
+static constexpr uint32_t kFloorPageTex = 0xffff0000; // RoomQuad::tex of a floor page + its index: no real tpage
+
+static std::vector<std::vector<uint8_t>> floorPages(std::vector<od::RoomQuad>& quads, int shift, const od::Vram& vram,
+                                                    std::vector<std::array<uint8_t, 2>>& slotCorners) {
+    std::vector<std::vector<uint8_t>> pages;
+    std::map<uint32_t, std::vector<uint8_t>> decoded;
+    size_t cell = 0;
+    for (const od::RoomQuad& q : quads) {
+        if (q.segment >= 0) continue;
+        const size_t perPage = size_t(kFloorSlots) * kFloorSlots;
+        if (cell / perPage == pages.size()) pages.emplace_back(size_t(256) * 256 * 4, uint8_t(0));
+        auto [it, added] = decoded.try_emplace(q.tex);
+        if (added) it->second = vram.decode(uint16_t(q.tex >> 16), uint16_t(q.tex & 0xFFFF), true);
+        const int gx = (q.lodPoint[0] + 0x7f00) >> 9, gz = (q.lodPoint[2] + 0x7f00) >> 9;
+        const int16_t x0 = int16_t((gx - 0x40) * 0x200 << shift), z0 = int16_t((gz - 0x40) * 0x200 << shift);
+        float uv[2][2][2] = {};
+        for (size_t c = 0; c < 4; ++c) {
+            const bool right = q.verts[c][0] != x0, far = q.verts[c][2] != z0;
+            uv[right][far][0] = q.uvs[c][0];
+            uv[right][far][1] = q.uvs[c][1];
+            slotCorners.push_back({uint8_t(right ? kFloorSpan : 0), uint8_t(far ? kFloorSpan : 0)});
+        }
+        const int slot = int(cell % perPage), sx = slot % kFloorSlots * kFloorSlot, sy = slot / kFloorSlots * kFloorSlot;
+        std::vector<uint8_t>& page = pages[cell / perPage];
+        for (int j = 0; j < kFloorSlot; ++j)
+            for (int i = 0; i < kFloorSlot; ++i) {
+                const float a = float(i) / kFloorSpan, b = float(j) / kFloorSpan;
+                int at[2];
+                for (int k = 0; k < 2; ++k) {
+                    const float near = uv[0][0][k] * (1 - a) + uv[1][0][k] * a, away = uv[0][1][k] * (1 - a) + uv[1][1][k] * a;
+                    at[k] = std::clamp(int(near * (1 - b) + away * b + 0.5f), 0, 255);
+                }
+                std::memcpy(&page[(size_t(sy + j) * 256 + size_t(sx + i)) * 4], &it->second[(size_t(at[1]) * 256 + size_t(at[0])) * 4], 4);
+            }
+        ++cell;
+    }
+    return pages;
+}
+
+// The dump's floors/<geometry file>_<sub>.txt, one line a cell: "gx gz page slot"; the pages go to the dump with it
+static void dumpFloorPages(const std::string& geometryFile, int sub, const std::vector<od::RoomQuad>& quads,
+                           const std::vector<std::vector<uint8_t>>& pages) {
     std::error_code ec;
     const std::filesystem::path dir = od::pageDumpDir() / "floors";
     std::filesystem::create_directories(dir, ec);
     const std::filesystem::path path = dir / (std::filesystem::path(geometryFile).stem().string() + "_" + std::to_string(sub) + ".txt");
     std::FILE* out = std::fopen(path.string().c_str(), "w");
     if (!out) return;
-    std::map<uint32_t, uint64_t> pages;
-    for (const od::RoomQuad& q : floor) {
-        auto [it, added] = pages.try_emplace(q.tex, 0);
-        if (added) it->second = od::pageName(vram.decode(uint16_t(q.tex >> 16), uint16_t(q.tex & 0xFFFF), true));
-        const int gx = (q.lodPoint[0] + 0x7f00) >> 9, gz = (q.lodPoint[2] + 0x7f00) >> 9;
-        const int16_t x0 = int16_t((gx - 0x40) * 0x200 << shift), z0 = int16_t((gz - 0x40) * 0x200 << shift);
-        std::fprintf(out, "%d %d %016llx", gx, gz, static_cast<unsigned long long>(it->second));
-        for (size_t c = 0; c < 4; ++c)
-            std::fprintf(out, " %d %d %u %u", q.verts[c][0] != x0, q.verts[c][2] != z0, q.uvs[c][0], q.uvs[c][1]);
-        std::fputc('\n', out);
+    size_t cell = 0;
+    const size_t perPage = size_t(kFloorSlots) * kFloorSlots;
+    for (const od::RoomQuad& q : quads) {
+        if (q.segment >= 0) continue;
+        std::fprintf(out, "%d %d %016llx %zu\n", (q.lodPoint[0] + 0x7f00) >> 9, (q.lodPoint[2] + 0x7f00) >> 9,
+                     static_cast<unsigned long long>(od::pageName(pages[cell / perPage])), cell % perPage);
+        ++cell;
     }
     std::fclose(out);
+    for (const std::vector<uint8_t>& page : pages) od::dumpPage(page);
 }
 
 RoomMesh loadRoom(int stage, int sub) {
@@ -444,9 +489,15 @@ RoomMesh loadRoom(int stage, int sub) {
     // count on it: ST0E02T.DAT (the train fight after the cutscene) and ST5301T.DAT (that cutscene) upload no room /
     // cast pages at all -- ST0E01T.DAT's and ST53T.DAT's, loaded stages earlier, are still there. INIT / GAME once,
     // at the bottom (boot).
+    static od::Vram bootVram;
     od::Vram vram;
     if (g_roomVramGen != 0) vram = g_roomVram;
-    else for (const char* f : {"INIT.DAT", "GAME.DAT"}) vram.apply(od::dataSource().gameFile(f));
+    else {
+        for (const char* f : {"INIT.DAT", "GAME.DAT"}) bootVram.apply(od::dataSource().gameFile(f));
+        vram = bootVram;
+        for (const std::string& f : g_vramBefore) vram.apply(od::dataSource().gameFile(f));
+    }
+    od::Vram loaded = bootVram;
     if (g_stageDatsStage != stage) {
         g_stageDats.clear();
         for (std::string& d : g_altBankDat) d.clear();
@@ -455,13 +506,17 @@ RoomMesh loadRoom(int stage, int sub) {
     }
     // the stage load's own files: the player files (Maybe_RequestPlayerFiles 0x5d5c40, reloaded by every stage
     // load) and the stage's texture file overwrite what they cover
-    vram.apply(datCache().file("PL00T.DAT"));
+    auto apply = [&](const od::GameFile& file) {
+        vram.apply(file);
+        loaded.apply(file);
+    };
+    apply(datCache().file("PL00T.DAT"));
     // the special weapon's PL00R## (Maybe_RequestPlayerFiles 0x5d5c40) carries a type-3 CLUT at VRAM (192, 240)
     // = clut 0x3c0c of the player texture table entry 3 (seg0 +0x6c), which the weapon arm's forearm (block 3
     // part 1) is drawn with; no other file writes that rect (all 15 PL00R02..10 do), so without it the forearm
     // decodes fully transparent
-    if (!g_playerWeaponDat.empty()) vram.apply(datCache().file(g_playerWeaponDat));
-    vram.apply(od::dataSource().gameFile(textureFile));
+    if (!g_playerWeaponDat.empty()) apply(datCache().file(g_playerWeaponDat));
+    apply(od::dataSource().gameFile(textureFile));
     std::vector<uint8_t> moved;
     auto replayMoves = [&](size_t afterDats) { // the image moves made with that many script DATs applied, again
         for (const KeptVramMove& k : g_keptVramMoves) {
@@ -470,16 +525,43 @@ RoomMesh loadRoom(int stage, int sub) {
             moved.resize(size_t(v.w) * size_t(v.h) * 2);
             vram.readImage(v.sx, v.sy, v.w, v.h, moved.data());
             vram.loadImage(v.dx, v.dy, v.w, v.h, moved);
+            loaded.readImage(v.sx, v.sy, v.w, v.h, moved.data());
+            loaded.loadImage(v.dx, v.dy, v.w, v.h, moved);
         }
     };
     replayMoves(0);
     for (size_t i = 0; i < g_stageDats.size(); ++i) {
-        vram.apply(od::dataSource().gameFile(g_stageDats[i]));
+        apply(od::dataSource().gameFile(g_stageDats[i]));
         replayMoves(i + 1);
     }
     g_roomVram = vram;
+    g_roomVramLoaded = std::move(loaded);
     ++g_roomVramGen;
-    if (!od::pageDumpDir().empty()) dumpFloorLayout(geometryFile, sub < 0 ? 0 : sub, floor, roomShift, vram);
+    std::vector<std::vector<uint8_t>> floorPage;
+    if (od::texturePack() || !od::pageDumpDir().empty()) {
+        std::vector<std::array<uint8_t, 2>> corners;
+        floorPage = floorPages(quads, roomShift, vram, corners);
+        const bool have = od::texturePack() && !floorPage.empty() && std::all_of(floorPage.begin(), floorPage.end(), [](const auto& page) {
+            return od::texturePack()->has(od::pageName(page));
+        });
+        if (!have) {
+            if (!od::pageDumpDir().empty()) dumpFloorPages(geometryFile, sub < 0 ? 0 : sub, quads, floorPage);
+            floorPage.clear();
+        } else {
+            size_t cell = 0;
+            const size_t perPage = size_t(kFloorSlots) * kFloorSlots;
+            for (od::RoomQuad& q : quads) {
+                if (q.segment >= 0) continue;
+                const int slot = int(cell % perPage);
+                for (size_t c = 0; c < 4; ++c) {
+                    const auto& corner = corners[cell * 4 + c];
+                    q.uvs[c] = {uint8_t(slot % kFloorSlots * kFloorSlot + corner[0]), uint8_t(slot / kFloorSlots * kFloorSlot + corner[1])};
+                }
+                q.tex = kFloorPageTex + uint32_t(cell / perPage);
+                ++cell;
+            }
+        }
+    }
 
     RoomMesh mesh;
     {
@@ -500,7 +582,7 @@ RoomMesh loadRoom(int stage, int sub) {
     auto slice = [&](uint32_t tex) { // tex = (tpage << 16) | clut
         auto [it, added] = sliceOf.try_emplace(tex, mesh.sliceCount);
         if (added) {
-            const auto rgba = vram.decode(uint16_t(tex >> 16), uint16_t(tex & 0xFFFF), true);
+            const auto rgba = tex >= kFloorPageTex ? floorPage[tex - kFloorPageTex] : vram.decode(uint16_t(tex >> 16), uint16_t(tex & 0xFFFF), true);
             if (std::getenv("OD_SLICEPROBE")) { // dev: pages / CLUTs that decode fully transparent (missing VRAM)
                 size_t opaque = 0;
                 for (size_t i = 3; i < rgba.size(); i += 4) opaque += rgba[i] != 0;
@@ -509,7 +591,7 @@ RoomMesh loadRoom(int stage, int sub) {
             }
             mesh.slices.insert(mesh.slices.end(), rgba.begin(), rgba.end());
             mesh.sliceTex.resize(size_t(mesh.sliceCount) + 1, 0);
-            mesh.sliceTex[size_t(mesh.sliceCount)] = (1ull << 32) | tex;
+            if (tex < kFloorPageTex) mesh.sliceTex[size_t(mesh.sliceCount)] = (1ull << 32) | tex;
             ++mesh.sliceCount;
         }
         return it->second;
@@ -583,7 +665,7 @@ RoomMesh loadRoom(int stage, int sub) {
         for (const od::fx::Texture& t : g_fxTextures.entries()) {
             const auto rgba = vram.decode(t.tpage, t.clut, true);
             if (t.tint != 0x808080) { // not a page of the pool: its colours are this texture's own
-                std::vector<uint8_t> tinted = od::pageSliceOf(rgba, od::texturePack());
+                std::vector<uint8_t> tinted = od::pageSliceOf(rgba, od::texturePack(), nullptr, g_roomVramLoaded.decode(t.tpage, t.clut, true));
                 tintSlice(tinted, t.tint);
                 mesh.pictureSlices[mesh.sliceCount] = std::move(tinted);
             }
@@ -680,7 +762,16 @@ bool uploadRoom(od::Renderer& r, const RoomMesh& mesh) {
             ++pooled;
         } else {
             making[page].push_back(s);
-            od::pageLoader().request(page, std::move(ps1));
+            // a plain VRAM slice or an effect's (fxSlices[i] is entry i's); the rest of the slices are pictureSlices
+            std::vector<uint8_t> loaded;
+            if (size_t(s) < mesh.sliceTex.size() && mesh.sliceTex[size_t(s)] >> 32) {
+                const uint64_t tex = mesh.sliceTex[size_t(s)];
+                loaded = g_roomVramLoaded.decode(uint16_t(tex >> 16), uint16_t(tex & 0xFFFF), true);
+            } else if (const auto fx = std::find(mesh.fxSlices.begin(), mesh.fxSlices.end(), s); fx != mesh.fxSlices.end()) {
+                const od::fx::Texture& t = g_fxTextures.entries()[size_t(fx - mesh.fxSlices.begin())];
+                loaded = g_roomVramLoaded.decode(t.tpage, t.clut, true);
+            }
+            od::pageLoader().request(page, std::move(ps1), std::move(loaded));
         }
     }
     const size_t made = making.size();
