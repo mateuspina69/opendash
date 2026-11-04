@@ -136,6 +136,34 @@ static void interpolate_effect_list_replaced() {
     CHECK(near(r[0].tris[6].pos[0], 2001.0f));
 }
 
+static void interpolate_effect_ring_moving_as_one() {
+    // the buster shot (a glow ring of 16 quads) moves further in a tick than its quads lie apart: no quad's nearest quad a
+    // tick ago is its own, but the whole list moved by one step and each quad stays in its place in the ring
+    const auto ring = [](float x, float z) {
+        DynamicObject o{objectId(kKindEffect, 1), {}};
+        for (int q = 0; q < 16; ++q) {
+            const float a = float(q) * 0.3926991f, r = 40.0f;
+            for (int v = 0; v < 6; ++v)
+                o.tris.push_back(vtx(x + r * std::cos(a) + float(v), 0.0f, z + r * std::sin(a)));
+        }
+        return o;
+    };
+    const float step[][2] = {{15.0f, 0.0f}, {30.0f, 10.0f}, {60.0f, -20.0f}, {0.0f, 120.0f}};
+    for (const auto& s : step) {
+        const DynamicObject prev = ring(0.0f, 0.0f), cur = ring(s[0], s[1]), half = ring(s[0] * 0.5f, s[1] * 0.5f);
+        const auto r = interpolateObjects({prev}, {cur}, 0.5f);
+        for (size_t v = 0; v < half.tris.size(); ++v) {
+            CHECK(near(r[0].tris[v].pos[0], half.tris[v].pos[0]));
+            CHECK(near(r[0].tris[v].pos[2], half.tris[v].pos[2]));
+        }
+        MotionHistory h;
+        std::vector<float> from;
+        h.apply({prev}, from);
+        h.apply({cur}, from);
+        for (size_t v = 0; v < prev.tris.size(); ++v) CHECK(near(from[v * 3], prev.tris[v].pos[0]));
+    }
+}
+
 static void history_new_id_zero_motion() {
     MotionHistory h;
     std::vector<float> prev;
@@ -219,6 +247,7 @@ int main() {
     interpolate_effect_quad_culled_mid_list();
     interpolate_effect_quad_entering_mid_list();
     interpolate_effect_list_replaced();
+    interpolate_effect_ring_moving_as_one();
     history_new_id_zero_motion();
     motion_static_camera_zero();
     motion_pan_pixels();

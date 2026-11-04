@@ -1,6 +1,7 @@
 #include "render_logic.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdlib>
 #include <utility>
@@ -92,6 +93,39 @@ int effectShift(const float* p, size_t np, const float* c, size_t nc, size_t uni
     return best;
 }
 
+// The step most of a list's prims took together at shift k, from prim centres (xyz triples); 0 when they took none. An
+// effect that travels (the buster shot's glow ring) moves further in a tick than its prims lie apart, so a prim's nearest
+// prim a tick ago is another one until that step is taken out. Sampled as effectShift; ties: the smaller step
+struct CommonStep {
+    std::array<float, 3> step{0.0f, 0.0f, 0.0f};
+    bool whole = false; // every sampled prim took it
+};
+CommonStep commonStep(const float* pc, long pn, const float* cc, long cn, long k) {
+    const long i0 = std::max(0L, -k), i1 = std::min(cn, pn - k);
+    if (i1 <= i0) return {};
+    const long n = std::min(24L, i1 - i0);
+    std::vector<std::array<float, 3>> moves(static_cast<size_t>(n));
+    for (long s = 0; s < n; ++s) {
+        const long i = i0 + (i1 - i0 - 1) * s / std::max(1L, n - 1);
+        for (size_t a = 0; a < 3; ++a) moves[size_t(s)][a] = cc[size_t(i) * 3 + a] - pc[size_t(i + k) * 3 + a];
+    }
+    const auto length2 = [](const std::array<float, 3>& d) { return d[0] * d[0] + d[1] * d[1] + d[2] * d[2]; };
+    std::array<float, 3> best{0.0f, 0.0f, 0.0f};
+    long bestVotes = 0;
+    for (const std::array<float, 3>& m : moves) {
+        const float tolerance2 = std::max(1.0f, length2(m) * 0.01f); // a tenth of the step (the camera turning a billboard)
+        long votes = 0;
+        for (const std::array<float, 3>& o : moves)
+            votes += length2({o[0] - m[0], o[1] - m[1], o[2] - m[2]}) <= tolerance2;
+        if (votes > bestVotes || (votes == bestVotes && length2(m) < length2(best))) {
+            bestVotes = votes;
+            best = m;
+        }
+    }
+    if (bestVotes * 2 < n) return {}; // each its own way (a ring growing around its centre)
+    return {best, bestVotes == n};
+}
+
 } // namespace
 
 // The list's shift also changes inside the list: an effect's quads are culled one by one (the ending's spinning wall, a
@@ -107,17 +141,32 @@ std::vector<long> effectPairs(const float* p, size_t prevVerts, const float* c, 
         return out;
     };
     const std::vector<float> pc = centres(p, pn), cc = centres(c, cn);
-    auto distance2 = [&](long i, long j) {
+    long k = effectShift(p, prevVerts, c, curVerts, unit);
+    if (k != 0 && cn == pn) {
+        // a long step can land the list nearer its own far side at some shift; the list that moved whole at shift 0 is that
+        // one, unless the shift fits far better than its step (a regular trail recycling its oldest puff)
+        const CommonStep whole = commonStep(pc.data(), pn, cc.data(), cn, 0);
+        const long i0 = std::max(0L, -k), i1 = std::min(cn, pn - k);
+        float shifted = 0.0f;
+        for (long i = i0; i < i1; ++i)
+            for (size_t a = 0; a < 3; ++a) {
+                const float d = cc[size_t(i) * 3 + a] - pc[size_t(i + k) * 3 + a];
+                shifted += d * d / float(std::max(1L, i1 - i0));
+            }
+        const float stepLength2 = whole.step[0] * whole.step[0] + whole.step[1] * whole.step[1] + whole.step[2] * whole.step[2];
+        if (whole.whole && shifted > stepLength2 * 0.01f) k = 0;
+    }
+    const std::array<float, 3> step = commonStep(pc.data(), pn, cc.data(), cn, k).step;
+    auto distance2 = [&](long i, long j) { // apart from the step the whole list took
         float d2 = 0.0f;
         for (size_t a = 0; a < 3; ++a) {
-            const float d = cc[size_t(i) * 3 + a] - pc[size_t(j) * 3 + a];
+            const float d = cc[size_t(i) * 3 + a] - step[a] - pc[size_t(j) * 3 + a];
             d2 += d * d;
         }
         return d2;
     };
     std::vector<long> prevOf(static_cast<size_t>(cn), -1), owner(static_cast<size_t>(pn), -1);
     std::vector<float> ownerD2(static_cast<size_t>(pn));
-    long k = effectShift(p, prevVerts, c, curVerts, unit);
     for (long i = 0; i < cn; ++i) {
         long best = -1;
         float bestCost = 3.4e38f;
