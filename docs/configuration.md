@@ -38,6 +38,7 @@ every screen is known to work with the patch.
 | `fog` | `remaster`, `classic`, `off` | `remaster` |
 | `fog_distance` | the remaster fog's distance scale, 0.25 to 4 | `1` |
 | `water` | `remaster`, `classic` (the original screen wave in the flooded rooms) | `remaster` |
+| `particle_lights` | `1`: shots, explosions and the other additive effects light the opaque surfaces near them; `0`: only the light painted in the textures | `0` |
 
 ## Controls
 

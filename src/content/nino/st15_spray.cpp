@@ -97,6 +97,7 @@ void sprayPuffs(ProjectileActor& actor, SprayFields& spray) {
         puff.frame = uint8_t(f + 0x20);
         const uint32_t c = puff.brightness;
         const uint32_t g = f + 0x1f;
+        dc::givesNoLight(actor.at);
         dc::emit({0, ((c | 0x2e00u) << 8 | c) << 8 | c,
                   uint32_t(uint16_t(puff.pos.x)) | uint32_t(int32_t(puff.pos.y)) << 16, f | 0x7c924000u,
                   uint32_t(uint16_t(puff.pos.z)), g | 0x2f4000u, puff.age, f | 0x5f00u, 0, g | 0x5f00u},

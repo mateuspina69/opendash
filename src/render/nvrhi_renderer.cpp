@@ -66,6 +66,8 @@ struct GpuVertex {
 };
 static_assert(sizeof(RenderVertex) == 52 && sizeof(GpuVertex) == 120);
 constexpr uint32_t kSurfaceModel = 1, kSurfaceNearFade = 2, kSurfaceEffect = 4;
+// the instances' ray masks: the sun's rays meet both; a particle light's only the room (scene.hlsl)
+constexpr uint8_t kRayMaskRoom = 1, kRayMaskActors = 2;
 
 // scene.hlsl cbuffer Frame
 struct FrameConstants {
@@ -113,6 +115,9 @@ struct FrameConstants {
     float precipLayer[4];   // the flake field drawn (drawScene): its cells' scale, flakes a cell, 1 = the far field
     float skyPoleUp[4];     // the dome's poles (SkyPoles): the colour, a = where the fade starts (a sine)
     float skyPoleDown[4];   // ... a = where it is whole (a sine); 0: a draw that is not the dome, or no fade
+    float lightPos[kMaxParticleLights][4];   // the particle lights: position, radius
+    float lightColor[kMaxParticleLights][4]; // ... colour
+    float lightInfo[4];                      // ... how many this draw receives, the gain
 };
 // scene.hlsl vs_flake's two fields of kFlakeCells (24 x 12 x 24) cells, 6 vertices a flake: the near one (up to
 // kFlakesNear a cell) and the far one beyond it (cells kFlakeFarScale times larger, up to kFlakesFar a cell)
@@ -452,6 +457,7 @@ public:
     }
 
     void setSun(const SunLight& sun) override { sun_ = sun; }
+    void setParticleLighting(const ParticleLighting& l) override { particleLighting_ = l; }
     void setPrecipitation(const Precipitation& p) override { precip_ = p; }
     void setSeeThrough(const std::vector<SeeThroughBody>& bodies, const std::vector<SeeThroughPiece>& pieces,
                        bool debug) override {
@@ -693,6 +699,9 @@ public:
             }
             dyn_.insert(dyn_.end(), o.tris.begin(), o.tris.end());
         }
+        particleLights_.clear();
+        if (particleLighting_.enabled)
+            particleLights_ = gatherParticleLights(sorted, particleLighting_.radius, kMaxParticleLights);
         history_.apply(sorted, dynPrev_);
         toGpu(dyn_, dynPrev_.data(), dynGpu_, &models, &surfaces, &surfaceBits);
         costs_.dynamicMs = msSince(began);
@@ -1627,9 +1636,9 @@ private:
         size_t n = 0;
         const auto flags = nvrhi::rt::InstanceFlags::TriangleCullDisable; // shadows from both sides of every face
         if (staticBlas_)
-            inst[n++] = nvrhi::rt::InstanceDesc().setBLAS(staticBlas_).setInstanceID(0).setInstanceMask(1).setFlags(flags);
+            inst[n++] = nvrhi::rt::InstanceDesc().setBLAS(staticBlas_).setInstanceID(0).setInstanceMask(kRayMaskRoom).setFlags(flags);
         const uint32_t casters = dynOpaque / 3 * 3;
-        if (sun_.enabled && casters && dynBuf_) {
+        if (sun_.enabled && !sun_.sheltered && casters && dynBuf_) {
             std::vector<float> attr;
             toAttr(dynGpu_, casters, attr);
             if (dynAttr_->getDesc().byteSize < attr.size() * sizeof(float)) {
@@ -1649,7 +1658,7 @@ private:
             }
             const nvrhi::rt::GeometryDesc g = triangleGeometry(dynBuf_, sequentialIndices(cl_, casters), casters);
             cl_->buildBottomLevelAccelStruct(dynBlas_, &g, 1, nvrhi::rt::AccelStructBuildFlags::PreferFastBuild);
-            inst[n++] = nvrhi::rt::InstanceDesc().setBLAS(dynBlas_).setInstanceID(1).setInstanceMask(1).setFlags(flags);
+            inst[n++] = nvrhi::rt::InstanceDesc().setBLAS(dynBlas_).setInstanceID(1).setInstanceMask(kRayMaskActors).setFlags(flags);
         }
         cl_->buildTopLevelAccelStruct(tlas_, inst, n, nvrhi::rt::AccelStructBuildFlags::AllowEmptyInstances);
     }
@@ -1713,8 +1722,20 @@ private:
         const float len = std::sqrt(sun_.dir[0] * sun_.dir[0] + sun_.dir[1] * sun_.dir[1] + sun_.dir[2] * sun_.dir[2]);
         for (int c = 0; c < 3; ++c) f.sunDir[c] = len > 0.0f ? sun_.dir[c] / len : 0.0f;
         f.sunStrength = sun_.strength;
-        f.shadowMode = shadow && rt_ && sun_.enabled && len > 0.0f ? 1.0f : 0.0f;
-        f.sunScatter = sun_.enabled && len > 0.0f ? 0.35f : 0.0f;
+        f.shadowMode = shadow && rt_ && sun_.enabled && len > 0.0f ? (sun_.sheltered ? 2.0f : 1.0f) : 0.0f;
+        f.sunScatter = sun_.enabled && !sun_.sheltered && len > 0.0f ? 0.35f : 0.0f;
+        if (shadow && !particleLights_.empty()) { // the draws of the opaque surfaces, as the sun's shadow
+            for (size_t k = 0; k < particleLights_.size(); ++k) {
+                const ParticleLight& l = particleLights_[k];
+                for (int c = 0; c < 3; ++c) {
+                    f.lightPos[k][c] = l.pos[c];
+                    f.lightColor[k][c] = l.color[c];
+                }
+                f.lightPos[k][3] = l.radius;
+            }
+            f.lightInfo[0] = float(particleLights_.size());
+            f.lightInfo[1] = particleLighting_.strength;
+        }
         if (waveRemaster_ && wave_[0] > 0.0f) { // the sky (no fog) is replaced by the water seen far away
             f.water[0] = 1.0f;
             f.water[1] = waveSeconds_;
@@ -2085,6 +2106,8 @@ private:
     // sun shadows (ray queries)
     bool rt_ = false;
     SunLight sun_;
+    ParticleLighting particleLighting_;
+    std::vector<ParticleLight> particleLights_; // this frame's (uploadDynamic)
     FrameCosts costs_;
     std::vector<SeeThroughBody> seeBodies_; // setSeeThrough
     std::vector<SeeThroughPiece> seePieces_;

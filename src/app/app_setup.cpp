@@ -15,6 +15,7 @@
 
 #include "app/game_files.hpp"
 #include "app/menu_vram.hpp"
+#include "app/room_openness.hpp"
 #include "engine/dat.hpp"
 #include "engine/exe_coverage.hpp"
 #include "game/vectors.hpp"
@@ -150,6 +151,12 @@ void App::parseArgs(int argc, char** argv) {
             sunOn = true;
         }
         else if (a == "--sun-strength") sunStrength = std::stof(argv[++i]);
+        else if (a == "--sun-strength-closed") sunStrengthClosed = std::stof(argv[++i]);
+        else if (a == "--roof-study") roofStudyPath = argv[++i]; // dev: every room's openness to the sky, a CSV, and exits
+        else if (a == "--particle-lights") {
+            particleLightsArg = std::stoi(argv[++i]);
+            particleLights = particleLightsArg != 0;
+        }
         else if (a == "--shot-orbit") shotOrbit = std::stof(argv[++i]); // dev: side views of effects (evidence)
         else if (a == "--shot-zoom") shotZoom = std::max(1.0f, std::stof(argv[++i])); // dev: --shot field of view / k
         else if (a == "--yaw") teleportYawArg = std::stoi(argv[++i]);
@@ -367,6 +374,7 @@ int App::init() {
             weatherRemaster = (weatherArg.empty() ? cfg.weather : weatherArg) != "classic";
             dissolve = cfg.dissolve;
             clearance = cfg.clearance;
+            if (particleLightsArg < 0) particleLights = cfg.particleLights;
         }
         if (const auto c = voiceTestArg.find(':'); c != std::string::npos && playerView.mixer) {
             auto& mx = *playerView.mixer;
@@ -476,6 +484,7 @@ int App::init() {
     }
     renderer->setDebugView(od::DebugView(debugView));
     applySun();
+    if (!roofStudyPath.empty()) writeRoofStudy();
     {
         const std::string b = aaArg.empty() ? cfg.aa : aaArg, q = aaQualityArg.empty() ? cfg.aaQuality : aaQualityArg;
         if (!od::parseAaBackend(b, aaBackend)) SDL_Log("aa: unknown backend '%s', using auto", b.c_str());
@@ -761,6 +770,29 @@ void App::setVideo(const Video& v) {
     }
 }
 
+void App::writeRoofStudy() {
+    std::ofstream csv(roofStudyPath);
+    csv << "stage,sub,shift,samples,covered,sun_reach,walled,gap,sky_layers,sky_bands,bg_cleared,d3d_fog,depth_cue,clear_r,clear_g,clear_b,no_sky,luminance,clipped,vertex_shade\n";
+    for (const StageInfo& si : stages)
+        for (int s = 0; s < si.subs; ++s) {
+            try {
+                const RoomMesh mesh = loadRoom(si.stage, s);
+                const RoomOpenness o = measureRoomOpenness(mesh);
+                int layers = 0;
+                for (const SkyLayer& l : mesh.sky) layers += (l.flags & 2) ? 1 : 0;
+                char id[8];
+                std::snprintf(id, sizeof id, "%02X", unsigned(si.stage));
+                csv << id << ',' << s << ',' << mesh.shift << ',' << o.samples << ',' << o.covered << ',' << o.sunReach << ','
+                    << o.walled << ',' << o.gap << ',' << layers << ',' << mesh.skyGrad.size() << ',' << mesh.bgCleared << ','
+                    << mesh.d3dFog << ',' << mesh.depthCue << ',' << mesh.clear[0] << ',' << mesh.clear[1] << ',' << mesh.clear[2] << ','
+                    << roomHasNoSky(mesh) << ',' << o.luminance << ',' << o.clipped << ',' << o.vertexShade << '\n';
+            } catch (const std::exception& e) {
+                SDL_Log("roof study: ST%02X sub %d: %s", si.stage, s, e.what());
+            }
+        }
+    running = false;
+}
+
 void App::applySun() {
     od::SunLight sun;
     sun.enabled = sunOn;
@@ -768,7 +800,8 @@ void App::applySun() {
     sun.dir[0] = std::cos(el) * std::sin(az);
     sun.dir[1] = std::sin(el);
     sun.dir[2] = std::cos(el) * std::cos(az);
-    sun.strength = sunStrength;
+    sun.sheltered = roomHasNoSky(current);
+    sun.strength = sun.sheltered ? sunStrengthClosed : sunStrength;
     renderer->setSun(sun);
 }
 

@@ -601,6 +601,14 @@ void App::updateScene() {
             }
             renderer->setSeeThrough(bodies, pieces, dissolve && seeThroughDebug);
         }
+        {
+            od::ParticleLighting lighting; // the room is drawn << shift, so a light reaches as far in the game's units
+            lighting.enabled = particleLights;
+            lighting.strength = particleLightStrength;
+            lighting.radius = particleLightRadius * float(1 << current.shift);
+            renderer->setParticleLighting(lighting);
+            applySun(); // whether this room lies under the sun (roomHasNoSky)
+        }
         renderer->uploadDynamic(dynFrame);
     }
     const uint64_t pagesSyncAt = SDL_GetTicksNS();

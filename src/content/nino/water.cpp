@@ -113,6 +113,7 @@ void splashTick(StaticActor& actor, WaterSplashFields& splash) {
         }
         const uint32_t q = (uint32_t(l) & 3) << 5;
         // the particle's sprite: a 0x2c draw command (word 0 not written), 32 x 32 cells of the effect page
+        dc::givesNoLight(actor.at);
         dc::emit({0, col | 0x2e000000u, p.point.xyWord(), q | 0x3cb8c000u, uint32_t(uint16_t(p.point.z)),
                   (q + 0x1f) | 0x2ec000u, uint32_t(int32_t(p.size)), q | 0xdf00u, 0u, (q + 0x1f) | 0xdf00u},
                  actor.at, false);

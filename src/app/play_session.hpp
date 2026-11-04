@@ -16,6 +16,7 @@
 #include <set>
 #include <span>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -449,6 +450,11 @@ struct PlayerView {
     // DynamicObject per actor and blend mode (blended objects use the renderer's PS1 semi pipelines).
     od::fx::State fx;
     std::vector<od::fx::Prim> fxPrims;
+    // the colour of the light an additive prim gives (DynamicObject::glow): its sprite's opaque texels (their mean, kept
+    // per sprite for the room) or its gradient row, times its vertices
+    void effectLightColour(const od::fx::Prim& p, const std::vector<std::array<uint32_t, 2>>& gradientRows, float out[3]) const;
+    mutable std::map<std::tuple<uint16_t, uint16_t, uint32_t, int>, std::array<float, 3>> fxMean;
+    mutable int fxMeanStage = -1, fxMeanSub = -1;
     std::vector<od::fx::Prim> dcPrims; // the decoded draw commands of the last tick (game/draw_commands)
     od::dc::Stats dcStats, dcLast;
     od::storm::Frame storm; // the storm's 2D sprites / flash triangles of the last tick (content/intro/crash_landing_draw)

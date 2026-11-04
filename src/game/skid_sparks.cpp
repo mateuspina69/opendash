@@ -68,6 +68,7 @@ void fly(EffectActor& spark, SkidSparkFields& fields) {
     moveAlongYaw16(spark.pos, fields.yaw, fields.speedX, fields.speedY, -int(fields.speedZ)); // exe 0x5e3750
     // the two sprites: billboards, the uv cell kCellTexels wide, rotated k << 6; the second one's tpage 0x4e
     // (subtractive). A black colour skips its record.
+    dc::givesNoLight(spark.at); // the skates' dust, whatever the exe's name for it
     dc::Billboard b;
     b.xy = dc::packXY(spark.pos.x, spark.pos.y);
     b.z = dc::signedZWord(spark.pos.z);

@@ -391,6 +391,8 @@ std::vector<od::DynamicObject> PlayerView::liveEffects(const RoomMesh& mesh, con
     // unscaled, every effect of a shift-1 room (the town interiors) sat at half its position and size
     const float world = float(1 << mesh.shift);
     std::map<uint32_t, size_t> index;
+    std::vector<float> glowArea; // per object: the area its glow is the mean of
+    const std::vector<std::array<uint32_t, 2>> gradientRows = od::fx::gradients();
     for (const od::fx::Prim& p : fxPrims) {
         if (p.front) continue; // the lock-on reticle: per rendered frame (app/reticle_overlay)
         const uint32_t id = od::objectId(od::kKindEffect, p.object | p.blend);
@@ -398,6 +400,7 @@ std::vector<od::DynamicObject> PlayerView::liveEffects(const RoomMesh& mesh, con
         if (added) {
             out.push_back(od::DynamicObject{id, {}, p.blend});
             out.back().nearFade = true;
+            glowArea.push_back(0.0f);
         }
         od::DynamicObject& obj = out[it->second];
         obj.ordered = p.ordered;
@@ -461,8 +464,76 @@ std::vector<od::DynamicObject> PlayerView::liveEffects(const RoomMesh& mesh, con
             for (int k = 0; k < 3; ++k) obj.tris.push_back(v[k]);
         else
             for (int idx : od::kQuadTris) obj.tris.push_back(v[idx]);
+        if (p.light && (p.blend == 2 || p.blend == 4)) { // the light it adds (B+F, B+F/4): the object's mean colour by area
+            float colour[3];
+            effectLightColour(p, gradientRows, colour);
+            const float e0[3] = {v[1].pos[0] - v[0].pos[0], v[1].pos[1] - v[0].pos[1], v[1].pos[2] - v[0].pos[2]};
+            const float e1[3] = {v[n - 1].pos[0] - v[0].pos[0], v[n - 1].pos[1] - v[0].pos[1], v[n - 1].pos[2] - v[0].pos[2]};
+            const float cr[3] = {e0[1] * e1[2] - e0[2] * e1[1], e0[2] * e1[0] - e0[0] * e1[2], e0[0] * e1[1] - e0[1] * e1[0]};
+            const float area = std::max(std::sqrt(cr[0] * cr[0] + cr[1] * cr[1] + cr[2] * cr[2]), 1e-3f);
+            float& total = glowArea[it->second];
+            const float mix = area / (total + area);
+            for (int q = 0; q < 3; ++q)
+                obj.glow[q] += (colour[q] * (p.blend == 4 ? 0.25f : 1.0f) - obj.glow[q]) * mix;
+            total += area;
+        }
     }
     return out;
+}
+
+void PlayerView::effectLightColour(const od::fx::Prim& p, const std::vector<std::array<uint32_t, 2>>& gradientRows,
+                                   float out[3]) const {
+    float vertex[3] = {0.0f, 0.0f, 0.0f}; // the vertices' mean, as the draw multiplies them
+    for (int k = 0; k < p.n; ++k)
+        for (int q = 0; q < 3; ++q) vertex[q] += p.v[k].shade * (p.line ? 1.0f : p.v[k].color[q]) / float(p.n);
+    float texels[3] = {1.0f, 1.0f, 1.0f};
+    if (p.texture == -1) { // the gradient page: its row between the vertices' u
+        const auto row = size_t(std::max(p.v[0].v, 0.0f));
+        float at = 0.0f;
+        for (int k = 0; k < p.n; ++k) at += p.v[k].u / 256.0f / float(p.n);
+        if (row < gradientRows.size())
+            for (int q = 0; q < 3; ++q) {
+                const float a = float((gradientRows[row][0] >> (q * 8)) & 0xFF), b = float((gradientRows[row][1] >> (q * 8)) & 0xFF);
+                texels[q] = (a + (b - a) * at) / 255.0f;
+            }
+    } else if (p.texture >= 0 && size_t(p.texture) < g_fxTextures.entries().size()) { // the sprite's opaque texels
+        const od::fx::Texture& t = g_fxTextures.entries()[size_t(p.texture)];
+        float lo[2] = {255.0f, 255.0f}, hi[2] = {0.0f, 0.0f};
+        for (int k = 0; k < p.n; ++k) {
+            lo[0] = std::min(lo[0], p.v[k].u);
+            lo[1] = std::min(lo[1], p.v[k].v);
+            hi[0] = std::max(hi[0], p.v[k].u);
+            hi[1] = std::max(hi[1], p.v[k].v);
+        }
+        const int x0 = std::clamp(int(lo[0]), 0, 255), y0 = std::clamp(int(lo[1]), 0, 255);
+        const int x1 = std::clamp(int(hi[0]), x0, 255), y1 = std::clamp(int(hi[1]), y0, 255);
+        // what a VRAM area holds can change with the room, so the means last as long as the room
+        if (fxMeanStage != roomStage || fxMeanSub != roomSub) {
+            fxMean.clear();
+            fxMeanStage = roomStage;
+            fxMeanSub = roomSub;
+        }
+        const auto key = std::make_tuple(t.tpage, t.clut, t.tint, x0 | y0 << 8 | x1 << 16 | y1 << 24);
+        auto found = fxMean.find(key);
+        if (found == fxMean.end()) {
+            const std::vector<uint8_t> page = g_roomVram.decode(t.tpage, t.clut, true);
+            uint64_t sum[3] = {0, 0, 0}, opaque = 0;
+            for (int y = y0; y <= y1; ++y)
+                for (int x = x0; x <= x1; ++x) {
+                    const uint8_t* texel = page.data() + (size_t(y) * 256 + size_t(x)) * 4;
+                    if (texel[3] < 64) continue; // as scene.hlsl clips it
+                    for (int q = 0; q < 3; ++q) sum[q] += texel[q];
+                    ++opaque;
+                }
+            std::array<float, 3> mean{};
+            if (opaque)
+                for (int q = 0; q < 3; ++q)
+                    mean[size_t(q)] = float(sum[q]) / float(opaque) / 255.0f * (float((t.tint >> (q * 8)) & 0xFF) / 128.0f);
+            found = fxMean.emplace(key, mean).first;
+        }
+        for (int q = 0; q < 3; ++q) texels[q] = found->second[size_t(q)];
+    }
+    for (int q = 0; q < 3; ++q) out[q] = texels[q] * vertex[q];
 }
 
 std::vector<od::DynamicObject> PlayerView::screenOverlays(const RoomMesh& mesh, const od::Camera& cam,

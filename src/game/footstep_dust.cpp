@@ -141,6 +141,7 @@ void dustRun(const PlayerEnv& env, StaticActor& actor, FootstepDustFields& dust)
             auto&& point = j == 0 ? puff.first : puff.second;
             const uint32_t size =
                 uint32_t((isPlayer ? (grow * 5 + 0x50) << 4 : (grow + 0x10) << 7) >> 6) & 0xffff;
+            dc::givesNoLight(actor.at);
             dc::Billboard b;
             b.colour = dc::billboardColour(kDustColour);
             b.xy = dc::packXY(point.x, point.y);

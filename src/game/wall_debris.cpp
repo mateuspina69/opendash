@@ -168,6 +168,7 @@ void debrisFly(StaticActor& actor, WallDebrisFields& f) {
         q.uv[1] = uint16_t(uv01 >> 16);
         q.uv[2] = uint16_t(uv23);
         q.uv[3] = uint16_t(uv23 >> 16);
+        dc::givesNoLight(actor.at);
         dc::otQuadFT4(actor.at, q, v);
         piece.drop += uint32_t(uint16_t(piece.dropSpeed));
         piece.radius += uint32_t(uint16_t(piece.radiusSpeed));

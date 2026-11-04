@@ -281,7 +281,33 @@ static void scene_pieces() {
     CHECK(segmentHitsTriangle(o, miss, a, b, c) < 0.0f);
 }
 
+static DynamicObject glowing(float x, float size, float r, float g, float b) {
+    DynamicObject o{1, {vtx(x - size, 0, 0), vtx(x + size, 0, 0)}, 2};
+    o.glow[0] = r;
+    o.glow[1] = g;
+    o.glow[2] = b;
+    return o;
+}
+
+static void particle_lights() {
+    DynamicObject dark = glowing(0, 1, 0, 0, 0);
+    CHECK(gatherParticleLights({dark}, 400, 32).empty()); // no glow, no light
+    // far apart: two lights; a small effect reaches the base radius, a large one further, at most 4 times
+    auto l = gatherParticleLights({glowing(0, 1, 1, 0, 0), glowing(5000, 300, 0, 1, 0), glowing(9000, 5000, 0, 0, 1)}, 400, 32);
+    CHECK(l.size() == 3);
+    CHECK(near(l[0].radius, 400) && near(l[1].radius, 600) && near(l[2].radius, 1600));
+    // close together: one light, the colours added, its centre toward the brighter one
+    l = gatherParticleLights({glowing(0, 1, 3, 0, 0), glowing(100, 1, 0, 1, 0)}, 400, 32);
+    CHECK(l.size() == 1);
+    CHECK(near(l[0].pos[0], 25) && near(l[0].color[0], 3) && near(l[0].color[1], 1));
+    // past the limit a light joins the nearest: nothing is dropped
+    l = gatherParticleLights({glowing(0, 1, 1, 0, 0), glowing(5000, 1, 1, 0, 0), glowing(4000, 1, 1, 0, 0)}, 400, 2);
+    CHECK(l.size() == 2);
+    CHECK(near(l[0].color[0], 1) && near(l[1].color[0], 2) && near(l[1].pos[0], 4500));
+}
+
 int main() {
+    particle_lights();
     face_normal();
     jitter_sequence();
     render_sizes();

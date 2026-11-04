@@ -84,6 +84,9 @@ constexpr uint16_t kHitSparkSize = 0x80; // the size exe 0x5e5400 gives its spar
 constexpr uint8_t kSparkVariantHit = 0;
 constexpr uint8_t kSparkVariantDust = 5;       // a landing's dust (game/step_dust)
 constexpr uint8_t kSparkVariantGroundDust = 6; // the dust of a step on some grounds (game/step_dust)
+// OpenDash: the variants that are dust, smoke or water, not sparks: they light nothing (fx::Prim::light). 3 a rock's dust,
+// 5 / 6 above, 7 a vehicle's tread dust, 8 smoke, 9 the Aqua Blaster's water where it stops (the emitters' names for them)
+constexpr bool sparkVariantIsMatter(uint8_t v) { return v == 3 || v == 5 || v == 6 || v == 7 || v == 8 || v == 9; }
 struct HitSparkFields : ActorClassState {
     explicit HitSparkFields(EffectActor& actor) : size(actor.params, 0), frameTicks(actor.params[2]), tick(actor.params[3]) {}
     BytesField<uint16_t, 4> size; // the sprite's size (the spawner's)

@@ -77,6 +77,7 @@ void flameDraw(fx::DrawContext& c, const fx::State&, uint32_t actor, uint32_t sl
     const SpriteStyle style = tongueStyles[v];
     const uint16_t tpage = style.tpage;
     const int tex = c.tex.index(tpage, style.clut);
+    const size_t first = c.out.size();
     for (uint32_t k = 0; k < kTongues; ++k) {
         const FlameTongue t = flame.tongues[k];
         const uint8_t fr = t.frame;
@@ -89,6 +90,8 @@ void flameDraw(fx::DrawContext& c, const fx::State&, uint32_t actor, uint32_t sl
         fx::billboard(c, kFlameObjects | slot << 5 | k, ctr, float(t.height), uint32_t(t.spin) << 4, tex,
                       semi ? fx::blendOfAbr(tpage >> 5) : 0, frame.u0, frame.v0, frame.u1, frame.v1, greyOf(word));
     }
+    if (v == kFlickerVariant) // what the water raises off a fire: the fire's own billboard keeps the light
+        for (size_t k = first; k < c.out.size(); ++k) c.out[k].light = false;
 }
 
 // exe 0x437d50 -> 0x437de0 (the mission's effects, ST1E effect type 0x12): the kinds with a keyframed sprite (the smoke
@@ -108,9 +111,14 @@ void fireEffectDraw(fx::DrawContext& c, const fx::State&, uint32_t actor, uint32
     const uint32_t word = key.colour;
     const bool semi = ((word >> kSemiBit) & 1) || (style.semi & 1);
     const float ctr[3] = {float(fx.pos.x), float(fx.pos.y), float(fx.pos.z)};
+    const size_t first = c.out.size();
     fx::billboard(c, kFireEffectObjects | slot << 4, ctr, float(uint16_t(fx.size)), uint32_t(fx.spin) << 4,
                   c.tex.index(tpage, style.clut), semi ? fx::blendOfAbr(tpage >> 5) : 0, key.u0, key.v0, key.u1, key.v1,
                   greyOf(word));
+    // smoke and thrown pieces light nothing, whatever their blend; the embers glow
+    const FireEffectKind kind = FireEffectKind(e.subtype);
+    if (kind == FireEffectKind::SmokePuff || kind == FireEffectKind::Debris)
+        for (size_t k = first; k < c.out.size(); ++k) c.out[k].light = false;
 }
 
 void fireMissionTextures(std::vector<fx::Texture>& out) {

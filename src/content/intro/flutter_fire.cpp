@@ -70,7 +70,7 @@ enum class PutOutStep : uint8_t { Start = 0, Smoke = 1, Column = 2 };
 const DataTable<ShortPoint> emberTarget{TableId::FlutterFireEmberTarget}; // exe data 0x831998
 
 constexpr uint8_t kFlameType = 0x3e;
-constexpr uint8_t kFlameShortVariant = 3, kFlameTallVariant = 1, kFlickerVariant = 0;
+constexpr uint8_t kFlameShortVariant = 3, kFlameTallVariant = 1;
 constexpr int32_t kOutStrength = 0x200; // put out at this strength or below
 constexpr int32_t kRegrowth = 0x10;     // the strength back a tick while untouched
 constexpr uint16_t kFlickerTicks = 8;

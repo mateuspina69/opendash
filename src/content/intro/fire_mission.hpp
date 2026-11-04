@@ -72,6 +72,7 @@ enum class FireEffectKind : uint8_t {
     DataFlame = 6,  // the flame on the burning Data's head
 };
 constexpr uint8_t kFireEffectType = 0x12;
+constexpr uint8_t kFlickerVariant = 0; // the flame (static type 0x3e) a fire raises while the water sprays it
 struct FireEffectFields : ActorClassState {
     explicit FireEffectFields(EffectActor& actor)
         : pos(actor.pos), riseSpeed(actor.posSpare), keyTicks(actor.trail[4]), size(actor.trail[5]),

@@ -29,6 +29,7 @@ void drawPuff(const EffectActor& puff, uint32_t tick) {
     const DustPuffFields& fields = classState<DustPuffFields>(puff);
     const int32_t n = fields.ticks;
     if (n == 0) return;
+    dc::givesNoLight(puff.at);
     const uint32_t c = ((tick << 0x1d) - tick + uint32_t(n)) << 3; // = 8 * (n - tick)
     const uint32_t colour = dc::bandColour(c | ((c << 8 | c) << 8));
     const uint32_t r = uint32_t(int32_t(uint32_t(fields.size) * tick) / n);

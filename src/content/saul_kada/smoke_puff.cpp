@@ -77,6 +77,7 @@ bool rise(ProjectileActor& actor, PuffFields& puff) {
     const uint32_t z = uint32_t(int32_t(actor.pos.z.whole));
     const uint32_t sizeWord = ((uint32_t(life) << 22) & 0xfff0000u) | uint32_t(size);
     const uint32_t uv1 = (v + 0x2f) << 8 | u, uv3 = (v + 0x2f) << 8 | (u + 0x2f);
+    dc::givesNoLight(actor.at);
     dc::emit({0, colour1 | 0x2e000000u, xy, (v | 0x7d1100u) << 8 | u, z, (v | 0x2e00u) << 8 | (u + 0x2f), sizeWord, uv1,
               0, uv3},
              actor.at, false);

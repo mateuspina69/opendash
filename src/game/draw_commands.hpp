@@ -144,6 +144,9 @@ void emit(const Ring& r, uint32_t owner);
 void emit(const Band& b, uint32_t owner);
 // a disc: the full ring from the colour at the centre to a faded rim
 void emitDisc(uint32_t owner, uint32_t colour, uint32_t xy, uint32_t z, uint32_t radii);
+// OpenDash (presentation only): this frame's records of `owner` are matter that only looks additive (dust, smoke, spray):
+// they light nothing around them (fx::Prim::light, renderer ParticleLighting)
+void givesNoLight(uint32_t owner);
 
 // ---- the GPU packets of the ordering table -------------------------------------------------------------------------
 // The packets the ported classes link into the ordering table (OT [0x6d0048], packet cursor 0x6d004c): the exe
@@ -241,6 +244,7 @@ struct SideChannel {
     std::vector<OtQuadGT4Packet> gt4;
     std::vector<OtLineG2Packet> lines;
     std::vector<uint32_t> tints; // exe 0x5f3150's arguments of the frame
+    std::vector<uint32_t> noLight; // the owners of givesNoLight
 };
 const SideChannel& sideChannel();
 

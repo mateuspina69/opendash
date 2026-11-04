@@ -138,8 +138,11 @@ void spark(DrawContext& c, const port::EffectActor& a, uint32_t object) {
     float ctr[3];
     centreS16(a.pos, ctr);
     const float size = float(uint32_t(f.size) + fr.sizeAdd);
+    const size_t before = c.out.size();
     billboard(c, object, ctr, size, uint32_t(fr.rotation) << 4, c.tex.index(tpage, clut, fr.colour & 0xffffff),
               semi ? blendOfAbr(tpage >> 5) : 0, fr.u0, fr.v0, fr.u1, fr.v1);
+    if (port::sparkVariantIsMatter(uint8_t(v)))
+        for (size_t k = before; k < c.out.size(); ++k) c.out[k].light = false;
 }
 
 // ---- pool 0xa0 type 1: the burst, exe 0x55d4e0 (variant 0: 2 glow discs + 16 spokes) / exe 0x55d950 (variant 1: rings)
@@ -458,6 +461,7 @@ void stream(DrawContext& c, const State& st, const port::ShotActor& a, uint32_t 
     const port::ExtinguisherFields& f = port::classState<port::ExtinguisherFields>(a);
     const uint32_t n = std::min<uint32_t>(f.pointCount, port::kStreamPoints);
     const int tex = c.tex.index(kGlowTpage, kStreamClut, kNeutralTint);
+    const size_t first = c.out.size();
     for (uint32_t i = f.tail; i < n; ++i) {
         const auto pt = f.points[i];
         const float ctr[3] = {float(pt[0]), float(pt[1]), float(pt[2])};
@@ -467,6 +471,7 @@ void stream(DrawContext& c, const State& st, const port::ShotActor& a, uint32_t 
                   float(0x40 - int(i) * 4) / 128.0f);
         ring(c, object | i, ctr, 0.0f, float((i * 3 + 6) * 2), kRowStream, float(0xc0 - int(i) * 0xc) / 192.0f);
     }
+    for (size_t k = first; k < c.out.size(); ++k) c.out[k].light = false; // water, drawn additive: it lights nothing
 }
 
 // ---- the Shining Laser: pool 0xa0 global type 8 (exe 0x55fa10), its OT primitives -----------------------------------
@@ -603,6 +608,7 @@ void laserBeam(DrawContext& c, const State& st, const port::EffectActor& e, uint
             p.screen = false;
             p.object = object | kLaserRingPart | ring << 3;
             p.ordered = true;
+            p.light = false; // the tube's light is the beam's: one per ring would light the room along it
             p.texture = t2;
             p.blend = blendOfAbr(kLaserTpage >> 5);
             ringPt(n0, R, zn, p.v[0]);

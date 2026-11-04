@@ -62,6 +62,7 @@ struct DynamicObject {
     // an effect redrawn each tick around a point (the laser's muzzle spikes): between ticks it only follows that point
     bool anchored = false;
     float anchor[3]{0.0f, 0.0f, 0.0f};
+    float glow[3]{0.0f, 0.0f, 0.0f}; // an additive effect's light (ParticleLighting): its colour as it adds it; 0 = none
 };
 enum ObjectKind : uint32_t { kKindRoomAnim = 1, kKindLoop = 2, kKindWalker = 3, kKindPlayer = 4, kKindLive = 5,
                              kKindActor = 6 /* live actor of the actor system, index = pool slot */,
@@ -90,6 +91,7 @@ struct SunLight {
     bool enabled = false;
     float dir[3]{0.0f, 1.0f, 0.0f};
     float strength = 0.45f;
+    bool sheltered = false; // a room with no sky (app/room_openness): the sun reaches nothing in it, no ray needed
 };
 
 // The see-through (OpenDash, Baldur's Gate style; app/see_through): a scenery piece that stands between the camera and
@@ -124,16 +126,16 @@ struct Fog {
 // Flakes of a field fixed in the world fall and drift at `wind` and land on the first surface below them (a height map
 // of the room seen from above, made at upload(): nothing falls under a roof); with `blizzard`, the snow the wind blows
 // is also a medium along the view (sheets drifting with the wind, none where the height map shelters). 0 / 0 = none
-// OpenDash remaster: the light of the particles. Every additive effect (a kKindEffect DynamicObject of blend 2 or 4: the
-// shots, the explosions, the sparks, the fire) is a point light at its centre, of its own colour (its texels' mean
-// times its vertex colour); the opaque surfaces near it gain that light times their texture colour. Nothing darkens:
-// the original's light stays painted in the textures
+// OpenDash remaster: the light of the particles. Every additive effect (a DynamicObject with a glow: the shots, the
+// explosions, the sparks, the fire) is a point light at its centre, of its own colour (its texels' mean times its vertex
+// colour); the opaque surfaces near it gain that light times their texture colour, also where the sun's shadow darkened
+// them. Nothing darkens: the original's light stays painted in the textures. With ray queries the room's walls stop it
 struct ParticleLighting {
     bool enabled = false;
-    float strength = 1.0f; // the light's gain
+    float strength = 1.5f; // the light's gain
     float radius = 400.0f; // world units a light reaches at least (a larger effect reaches further)
 };
-constexpr size_t kMaxParticleLights = 32; // the brightest / largest ones a frame
+constexpr size_t kMaxParticleLights = 32; // a frame; effects close together share one (render_logic gatherParticleLights)
 
 // The slices a room's upload keeps free after its own: an effect's texture met during play takes one without touching
 // the room or the other slices

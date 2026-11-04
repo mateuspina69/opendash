@@ -32,6 +32,17 @@ std::vector<DynamicObject> interpolateObjects(const std::vector<DynamicObject>& 
 // prim (6 vertices when both counts allow, else 3), -1 for a new prim
 std::vector<long> effectPairs(const float* prevXyz, size_t prevVerts, const float* curXyz, size_t curVerts);
 
+// A point light of the additive effects (ParticleLighting)
+struct ParticleLight {
+    float pos[3];
+    float radius;
+    float color[3];
+};
+// the objects with a glow as lights: each at its bounds' centre, reaching `radius` world units, further for a larger
+// effect (up to 4 times). A light nearer than half a radius to an earlier one joins it, as does any light past maxLights
+// (to the nearest): a burst of sparks is one bright light and no effect's light is dropped
+std::vector<ParticleLight> gatherParticleLights(const std::vector<DynamicObject>& objects, float radius, size_t maxLights);
+
 class MotionHistory {
 public:
     void reset();

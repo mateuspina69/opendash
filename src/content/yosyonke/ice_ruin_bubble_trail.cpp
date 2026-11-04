@@ -67,6 +67,7 @@ void runTrail(StaticActor& actor, TrailFields& trail) {
         trail.bubbleX[i] = p[0];
         trail.bubbleY[i] = p[1];
         trail.bubbleZ[i] = p[2];
+        dc::givesNoLight(actor.at);
         dc::emit({0, 0x2ea0a0a0u, (uint32_t(int32_t(p[1])) << 16) | uint16_t(p[0]), ((vv | 0x7c9100u) << 8) | u,
                   uint32_t(int32_t(p[2])), ((vv | 0x2e00u) << 8) | (u + 0x2f), 0x32, ((vv + 0x2f) << 8) | u, 0,
                   ((vv + 0x2f) << 8) | (u + 0x2f)},

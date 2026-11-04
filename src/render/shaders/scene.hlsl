@@ -16,7 +16,8 @@ cbuffer Frame : register(b0) {
     float blendMode;  // the draw's PS1 blend (DynamicObject::blend): 0 opaque, 1 avg, 2 add, 3 B*(1-F), 4 B+F/4
     float3 sunDir;     // toward the sun, world (normalised)
     float sunStrength; // darkening of a pixel the sun cannot reach
-    float shadowMode;  // 1: this draw receives sun shadows (opaque world / actors); 0: sky, blended effects, sun off
+    float shadowMode;  // 1: this draw receives sun shadows (opaque world / actors); 2: ... all of it in shadow (a room with
+                       // no sky); 0: sky, blended effects, sun off
     float semiPass;    // a semi-transparent range: 1 its opaque texels (no STP bit), 2 its blended ones; 0 any draw else
     float modelNear;  // the game's near plane: a model's face is clipped there (surface kSurfaceModel)
     float seeLens;  // 1: the see-through's lens pass (its open pieces drawn as a lens); 0 any draw else
@@ -48,6 +49,9 @@ cbuffer Frame : register(b0) {
     float4 precipLayer;   // the flake field drawn: its cells' scale, flakes a cell, 1 = the far field
     float4 skyPoleUp;     // the dome's poles (SkyPoles): the colour, a = where the fade starts (a sine)
     float4 skyPoleDown;   // ... a = where it is whole (a sine); 0: a draw that is not the dome, or no fade
+    float4 lightPos[32];   // the particle lights (renderer.hpp kMaxParticleLights): position, radius
+    float4 lightColor[32]; // ... colour
+    float4 lightInfo;      // ... how many this draw receives (x), the gain (y)
 };
 Texture2DArray pages : register(t0);
 SamplerState pointClamp : register(s0);
@@ -89,7 +93,46 @@ float sunVisibility(float3 wp, float3 n, float lift) {
             q.CommitNonOpaqueTriangleHit();
     return q.CommittedStatus() == COMMITTED_TRIANGLE_HIT ? 0.0 : 1.0;
 }
+
+// 1 = no wall of the room stands between `from` and a particle light `dist` away along `dir`; the light's last stretch
+// does not count (an effect is often born on the surface it hit). Actors don't stop these (the instance mask)
+float lightVisibility(float3 from, float3 dir, float dist) {
+    RayDesc r;
+    r.Origin = from;
+    r.Direction = dir;
+    r.TMin = 0.5;
+    r.TMax = max(dist * 0.9, 0.6);
+    RayQuery<RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> q;
+    q.TraceRayInline(sceneAS, RAY_FLAG_NONE, 1, r);
+    while (q.Proceed())
+        if (q.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE &&
+            blocksLight(q.CandidateInstanceID(), q.CandidatePrimitiveIndex(), q.CandidateTriangleBarycentrics()))
+            q.CommitNonOpaqueTriangleHit();
+    return q.CommittedStatus() == COMMITTED_TRIANGLE_HIT ? 0.0 : 1.0;
+}
 #endif
+
+// what the particle lights give a surface at wp (facing n): a soft window falloff to the light's radius, soft at the
+// terminator (a low shot still lights the floor it flies over), saturating as lights overlap. 0..1 per channel
+float3 particleLight(float3 wp, float3 n) {
+    float3 sum = float3(0, 0, 0);
+    for (int k = 0; k < int(lightInfo.x + 0.5); ++k) {
+        const float3 to = lightPos[k].xyz - wp;
+        const float d2 = dot(to, to), r2 = lightPos[k].w * lightPos[k].w;
+        if (d2 >= r2) continue;
+        const float dist = sqrt(d2);
+        const float3 dir = dist > 1e-3 ? to / dist : n;
+        const float window = 1.0 - d2 / r2;
+        const float gain = window * window * saturate((dot(n, dir) + 0.25) / 1.25);
+        const float3 add = lightColor[k].rgb * gain;
+        if (dot(add, float3(1, 1, 1)) < 0.01) continue; // too little to pay a ray for
+#ifdef OD_RT
+        if (lightVisibility(wp + n * 2.0, dir, dist) < 0.5) continue;
+#endif
+        sum += add;
+    }
+    return 1.0 - exp(-sum);
+}
 
 // Soft effects (OpenDash): an effect's polygon (a billboard, a particle, a ring) cut by the scenery it passes into shows
 // the cut as a hard line; instead it fades out as it nears the opaque surface behind it (0 at the surface, 1 a softness
@@ -438,14 +481,16 @@ PSOut ps_main(VSOut i, bool front : SV_IsFrontFace) {
         const float up = normalize(i.world - eye).y;
         rgb = lerp(rgb, up > 0.0 ? skyPoleUp.rgb : skyPoleDown.rgb, smoothstep(skyPoleUp.a, skyPoleDown.a, abs(up)));
     }
+    const float3 unlit = rgb; // the texture's colour: what the particle lights multiply, shadowed or not
+    // geometric normal of the visible side (double-sided faces have no reliable winding)
+    float3 n = normalize(cross(ddy(i.world), ddx(i.world)));
+    if (dot(n, eye - i.world) < 0) n = -n;
+    // shading normal: smooth on actors (per-vertex, see toGpu), the face normal on the room; same side as n
+    float3 ns = normalize(i.normal);
+    if (dot(ns, n) < 0) ns = -ns;
 #ifdef OD_RT
-    if (shadowMode > 0.5) {
-        // geometric normal of the visible side (double-sided faces have no reliable winding)
-        float3 n = normalize(cross(ddy(i.world), ddx(i.world)));
-        if (dot(n, eye - i.world) < 0) n = -n;
-        // shading normal: smooth on actors (per-vertex, see toGpu), the face normal on the room; same side as n
-        float3 ns = normalize(i.normal);
-        if (dot(ns, n) < 0) ns = -ns;
+    if (shadowMode > 1.5) rgb *= 1.0 - sunStrength;
+    else if (shadowMode > 0.5) {
         const float facing = saturate(dot(ns, sunDir) * 3.0); // soft terminator: surfaces turned away get no sun
         // a face turned away from the sun while its smooth normal still faces it would shadow itself on its low-poly
         // neighbours (the "shadow terminator" stair-steps) from the surface: its ray starts further out along the
@@ -455,6 +500,9 @@ PSOut ps_main(VSOut i, bool front : SV_IsFrontFace) {
         rgb *= 1.0 - sunStrength * (1.0 - lit);
     }
 #endif
+    // the particle lights on the opaque surfaces (an effect's own texels give light, they don't take it): on top of the
+    // sun's shadow, so a shot lights up a shadowed corner
+    if (lightInfo.x > 0.5 && !(surface & 4u)) rgb = saturate(rgb + unlit * lightInfo.y * particleLight(i.world, ns));
     // fog: an opaque / averaged surface turns into the fog colour; light a draw adds (B+F, B+F/4) or takes away
     // (B*(1-F)) fades out instead -- pulled toward the fog colour it would add a fog-coloured veil of its own
     const bool fadeOut = blendMode > 1.5;

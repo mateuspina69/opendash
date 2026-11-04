@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <cstdlib>
+#include <limits>
 #include <utility>
 
 namespace od {
@@ -249,6 +250,51 @@ std::vector<DynamicObject> interpolateObjects(const std::vector<DynamicObject>& 
             for (int c = 0; c < 3; ++c) o.tris[i].pos[c] = p[i].pos[c] + (o.tris[i].pos[c] - p[i].pos[c]) * alpha;
     }
     return out;
+}
+
+std::vector<ParticleLight> gatherParticleLights(const std::vector<DynamicObject>& objects, float radius, size_t maxLights) {
+    std::vector<ParticleLight> lights;
+    std::vector<float> weights; // each light's total brightness: where a joined light's centre moves
+    const auto brightness = [](const float* c) { return c[0] + c[1] + c[2]; };
+    const auto dist2 = [](const float* a, const float* b) {
+        const float d[3] = {a[0] - b[0], a[1] - b[1], a[2] - b[2]};
+        return d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+    };
+    for (const DynamicObject& o : objects) {
+        const float weight = brightness(o.glow);
+        if (weight <= 0.0f || o.tris.empty()) continue;
+        float lo[3] = {o.tris[0].pos[0], o.tris[0].pos[1], o.tris[0].pos[2]}, hi[3] = {lo[0], lo[1], lo[2]};
+        for (const RenderVertex& v : o.tris)
+            for (int c = 0; c < 3; ++c) {
+                lo[c] = std::min(lo[c], v.pos[c]);
+                hi[c] = std::max(hi[c], v.pos[c]);
+            }
+        const float centre[3] = {(lo[0] + hi[0]) * 0.5f, (lo[1] + hi[1]) * 0.5f, (lo[2] + hi[2]) * 0.5f};
+        const float reach = std::clamp(std::sqrt(dist2(lo, hi)), radius, radius * 4.0f);
+        size_t into = lights.size();
+        float nearest = radius * radius * 0.25f;
+        if (lights.size() >= maxLights) nearest = std::numeric_limits<float>::max();
+        for (size_t k = 0; k < lights.size(); ++k)
+            if (const float d = dist2(lights[k].pos, centre); d < nearest) {
+                nearest = d;
+                into = k;
+            }
+        if (into == lights.size()) {
+            if (lights.size() >= maxLights) continue; // maxLights 0
+            lights.push_back({{centre[0], centre[1], centre[2]}, reach, {o.glow[0], o.glow[1], o.glow[2]}});
+            weights.push_back(weight);
+            continue;
+        }
+        ParticleLight& l = lights[into];
+        const float mix = weight / (weights[into] + weight);
+        for (int c = 0; c < 3; ++c) {
+            l.pos[c] += (centre[c] - l.pos[c]) * mix;
+            l.color[c] += o.glow[c];
+        }
+        l.radius = std::max(l.radius, reach);
+        weights[into] += weight;
+    }
+    return lights;
 }
 
 void MotionHistory::reset() { last_.clear(); }

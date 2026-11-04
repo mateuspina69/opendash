@@ -206,11 +206,19 @@ void App::drawDebugMenu() {
                 bool changed = ImGui::Checkbox("sombras do sol", &sunOn);
                 changed |= ImGui::SliderFloat("direcao", &sunAzimuth, 0.0f, 360.0f, "%.0f graus");
                 changed |= ImGui::SliderFloat("altura", &sunElevation, 5.0f, 90.0f, "%.0f graus");
-                changed |= ImGui::SliderFloat("forca", &sunStrength, 0.0f, 1.0f, "%.2f");
+                changed |= ImGui::SliderFloat("forca (aberto)", &sunStrength, 0.0f, 1.0f, "%.2f");
+                changed |= ImGui::SliderFloat("forca (sala fechada)", &sunStrengthClosed, 0.0f, 1.0f, "%.2f");
                 if (changed) applySun();
             }
             else
                 ImGui::TextDisabled("Sol: GPU sem ray tracing");
+            ImGui::SeparatorText("Luz das particulas");
+            if (ImGui::Checkbox("tiros e explosoes iluminam o cenario", &particleLights))
+                od::saveConfigValue("particle_lights", particleLights ? "1" : "0");
+            if (particleLights) {
+                ImGui::SliderFloat("forca da luz", &particleLightStrength, 0.0f, 4.0f, "%.2f");
+                ImGui::SliderFloat("alcance", &particleLightRadius, 100.0f, 1500.0f, "%.0f");
+            }
             if (!current.sky.empty()) ImGui::Checkbox("ceu 3D (desmarcado = 2D original)", &skyDome);
             if (ImGui::Checkbox("dissolver o cenario na frente do foco", &dissolve))
                 od::saveConfigValue("dissolve", dissolve ? "1" : "0");

@@ -73,8 +73,14 @@ struct App {
     std::string fogArg; // --fog: over opendash.ini fog=
     std::string weatherArg; // --weather: over opendash.ini weather=
     // experimental ray-traced sun shadows: --sun <azimuth deg> <elevation deg> (0 0 = off), F1 "Sol"
-    float sunAzimuth = 45.0f, sunElevation = 50.0f, sunStrength = 0.45f;
+    float sunAzimuth = 45.0f, sunElevation = 50.0f;
+    // what a pixel out of the sun loses: under an open sky, and in a room with no sky (roomHasNoSky)
+    float sunStrength = 0.2f, sunStrengthClosed = 0.4f;
     bool sunOn = false;
+    // the light of the particles (renderer ParticleLighting; F1 Video, particle_lights=): radius in game units
+    bool particleLights = false;
+    int particleLightsArg = -1; // --particle-lights: wins over the file
+    float particleLightStrength = 1.5f, particleLightRadius = 400.0f;
     float shotZoom = 1.0f;
     float shotOrbit = 0.0f; // --shot-orbit A: dev, the --shot-every shots' camera turned A radians around the player
     bool startPlay = false;
@@ -280,6 +286,8 @@ struct App {
     void leaveTitle();
     // azimuth 0 = +Z, 90 = +X; elevation above the horizon
     void applySun();
+    std::string roofStudyPath; // --roof-study
+    void writeRoofStudy();
     // the options page's video row / Alt+Enter: the display mode and resolution (app/video_mode) when they changed,
     // the anti-aliasing when it changed; persisted unless the run is scripted
     void setVideo(const Video& v);

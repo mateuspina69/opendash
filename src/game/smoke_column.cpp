@@ -117,6 +117,7 @@ void drawColumn(const StaticActor& actor) {
                                 {0.0f, 0.0f},
                                 {float(wrap16(cr.lx - cr.cx)) * kc, 0.0f},
                                 {0.0f, 0.0f}};
+        dc::givesNoLight(actor.at);
         dc::otQuadG4(actor.at, cl, abr, v, ol);
         const uint32_t crr[4] = {cur, kShade, next, kShade}; // (C, R, C', R')
         const float orr[4][2] = {{0.0f, 0.0f},

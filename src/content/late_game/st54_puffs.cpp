@@ -143,6 +143,7 @@ void runEmitter(StaticActor& actor, PuffEmitterFields& emitter) {
         }
         const uint32_t size = uint32_t((int32_t(uint32_t(row.sizeFactor) * uint32_t(n + 0x10)) << 2) >> 6) & 0xffff;
         const uint32_t rot = (rngStep() & 0xfff) << 16;
+        dc::givesNoLight(actor.at);
         dc::emit({0, dc::billboardColour(col), uint32_t(uint16_t(puff.x)) | uint32_t(int32_t(puff.y)) << 16,
                   0x7d800000u, uint32_t(int32_t(puff.z)), 0x3c003fu, rot | size, 0x3f00u, 0, 0x3f3fu},
                  actor.at, false);

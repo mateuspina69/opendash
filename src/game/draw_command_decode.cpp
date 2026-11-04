@@ -45,6 +45,11 @@ int32_t particleOf(uint32_t rec) {
     return -1;
 }
 
+// the owner's records light nothing (givesNoLight)
+bool noLight(uint32_t owner) {
+    const std::vector<uint32_t>& list = sideChannel().noLight;
+    return std::find(list.begin(), list.end(), owner) != list.end();
+}
 // a word's low half as an s16
 int16_t s16of(uint32_t v) { return int16_t(uint16_t(v)); }
 // the stage's coordinate shift (world units -> camera-input units)
@@ -329,7 +334,10 @@ Stats decode(fx::TextureCache& tex, std::vector<fx::Prim>& out) {
             const uint32_t h = ((owner - kObjectSlotBase) >> 2) * 2654435761u ^ (uint32_t(part) * 40503u + 0x9e37u);
             object = kParticleObjectBase | ((h >> 8) & 0xfffffu) << 2;
         }
+        const size_t before = out.size();
         const size_t n = one(&w[i], w.size() - i, tex, out, object, st);
+        if (noLight(owner))
+            for (size_t k = before; k < out.size(); ++k) out[k].light = false;
         if (n == 0) break;
         i += n;
     }
@@ -343,6 +351,7 @@ Stats decode(fx::TextureCache& tex, std::vector<fx::Prim>& out) {
         centreOf(p, q.v[0], sh);
         p.screen = false;
         p.object = packetObject(q.owner, kOtFt4Record);
+        p.light = !noLight(q.owner);
         const uint16_t clut = uint16_t(q.w[3] >> 16), tpage = uint16_t(q.w[5] >> 16);
         const uint32_t code = q.w[1] >> 24;
         p.texture = tex.index(tpage, clut);
@@ -367,6 +376,7 @@ Stats decode(fx::TextureCache& tex, std::vector<fx::Prim>& out) {
         centreOf(p, q.v[0], sh);
         p.screen = false;
         p.object = packetObject(q.owner, kOtG4Record);
+        p.light = !noLight(q.owner);
         p.texture = fx::kUntextured;
         p.blend = ((q.c[0] >> 24) & 2) ? fx::blendOfAbr(q.abr) : 0;
         for (int k = 0; k < 4; ++k) {
@@ -413,6 +423,7 @@ Stats decode(fx::TextureCache& tex, std::vector<fx::Prim>& out) {
             centreOf(p, q.v[0], sh);
             p.screen = false;
             p.object = packetObject(q.owner, kOtG4Record);
+            p.light = !noLight(q.owner);
             p.texture = fx::kUntextured;
             p.blend = ((q.c[0] >> 24) & 2) ? fx::blendOfAbr(q.abr) : 0;
             // corners 0 / 1 = end 0 -/+, 2 / 3 = end 1 -/+ (triangles 0 1 2 / 1 3 2)
@@ -433,6 +444,7 @@ Stats decode(fx::TextureCache& tex, std::vector<fx::Prim>& out) {
         centreOf(p, q.v[0], sh);
         p.screen = false;
         p.object = packetObject(q.owner, kOtGt4Record);
+        p.light = !noLight(q.owner);
         const uint16_t clut = uint16_t(q.w[3] >> 16), tpage = uint16_t(q.w[6] >> 16);
         const uint32_t code = q.w[1] >> 24;
         p.texture = tex.index(tpage, clut);

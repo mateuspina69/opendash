@@ -47,6 +47,12 @@ void resetCursor() {
     s.gt4.clear();
     s.lines.clear();
     s.tints.clear();
+    s.noLight.clear();
+}
+
+void givesNoLight(uint32_t owner) {
+    std::vector<uint32_t>& list = side().noLight;
+    if (std::find(list.begin(), list.end(), owner) == list.end()) list.push_back(owner);
 }
 
 void screenTint(uint32_t arg) {
