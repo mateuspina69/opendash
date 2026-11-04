@@ -20,6 +20,12 @@ namespace od {
 // SPU ADPCM frames (16 bytes: shift / filter, flags, 28 nibbles) -> PCM16
 std::vector<int16_t> decodeSpuAdpcm(std::span<const uint8_t> frames);
 
+// A music the disc streams (COMMON/STAFF.BIN's type-0x15 blocks: 0x4000 bytes of SPU ADPCM per channel, interleaved with
+// the file's other blocks), whole: b"ODPC", then stereo PCM16 at 44100 Hz (the SPU's rate). The mixer plays it as a stream
+std::vector<uint8_t> ps1StreamedMusic(std::span<const uint8_t> left, std::span<const uint8_t> right);
+bool isPs1StreamedMusic(std::span<const uint8_t> bytes);
+inline constexpr size_t kPs1StreamedMusicHeader = 4;
+
 // the block's PC TOC key: extra << 16 | arg
 uint32_t ps1SfxBankKey(std::span<const uint8_t> block);
 

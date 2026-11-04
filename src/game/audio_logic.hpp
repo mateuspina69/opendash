@@ -483,6 +483,8 @@ void stopSfxVoice(uint32_t voice);                                        // exe
 void loadSfxBank(std::span<const uint8_t> seg, uint32_t slot, uint32_t bankId);
 void unloadSfxBank(uint32_t slot);                                        // exe 0x5d4f40
 // exe 0x5d50c0: a type-9 segment into MP3 slot `slot` (its stream created by the backend)
+// exe 0x40dc90(ch, slot, 0): a slot's stream on a music channel, faded in
+void musicChannelStart(uint32_t ch, uint32_t slot);
 void loadMp3Slot(std::span<const uint8_t> seg, uint32_t slot, uint32_t loop);
 void unloadMp3Slot(uint32_t slot);                                        // exe 0x5d4fd0
 

@@ -84,8 +84,25 @@ GameFile ps1GameFile(std::string name, std::span<const uint8_t> bin) {
     using K = FilePart::Kind;
     const auto blocks = ps1Blocks(bin);
     std::vector<bool> musicBanks(blocks.size(), false);
+    // the streamed music (type 0x15, a block per channel by its +0xc: 0 left, 0x100 right; the empty ones end a round):
+    // the file's first part, as the PC's music segment
+    std::vector<uint8_t> streamed[2];
+    constexpr uint32_t kStreamBlock = 0x15, kStreamRight = 0x100;
+    for (const Ps1Block& b : blocks) {
+        if (b.type != kStreamBlock || b.size == 0) continue;
+        const auto frames = bin.subspan(size_t(b.offset) + kPs1Sector, b.size);
+        std::vector<uint8_t>& channel = streamed[b.header[3] == kStreamRight ? 1 : 0];
+        channel.insert(channel.end(), frames.begin(), frames.end());
+    }
+    if (!streamed[0].empty()) {
+        FilePart music;
+        music.kind = K::Ps1Music;
+        music.bytes = ps1StreamedMusic(streamed[0], streamed[1]);
+        f.parts.push_back(std::move(music));
+    }
     for (size_t bi = 0; bi < blocks.size(); ++bi) {
         const Ps1Block& b = blocks[bi];
+        if (b.type == kStreamBlock) continue;
         if (b.type == 8 || b.type == 9 || b.type == 15 || b.type == 16) {
             // The sequence precedes its bank on the disc; other blocks may sit between them.
             const uint32_t bankType = b.type < 10 ? 5u : 14u;

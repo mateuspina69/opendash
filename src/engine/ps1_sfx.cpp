@@ -232,4 +232,20 @@ std::vector<uint8_t> ps1SfxBank(std::span<const uint8_t> blk, std::span<const ui
     return out;
 }
 
+std::vector<uint8_t> ps1StreamedMusic(std::span<const uint8_t> left, std::span<const uint8_t> right) {
+    const std::vector<int16_t> l = decodeSpuAdpcm(left), r = decodeSpuAdpcm(right);
+    const size_t frames = std::min(l.size(), r.size());
+    std::vector<uint8_t> out(kPs1StreamedMusicHeader + frames * 4);
+    std::memcpy(out.data(), "ODPC", kPs1StreamedMusicHeader);
+    for (size_t k = 0; k < frames; ++k) {
+        const int16_t v[2] = {l[k], r[k]};
+        std::memcpy(out.data() + kPs1StreamedMusicHeader + k * 4, v, 4);
+    }
+    return out;
+}
+
+bool isPs1StreamedMusic(std::span<const uint8_t> bytes) {
+    return bytes.size() >= kPs1StreamedMusicHeader && std::memcmp(bytes.data(), "ODPC", kPs1StreamedMusicHeader) == 0;
+}
+
 } // namespace od

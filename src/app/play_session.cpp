@@ -923,7 +923,15 @@ void PlayerView::setupHooks() {
         return 1u;
     };
     staffHost.staffSegment = [this](uint32_t, uint32_t seg) {
-        if (!staffFile || seg == 0) return;
+        if (!staffFile) return;
+        if (seg == 0) { // its music into the slot
+            for (const od::FilePart& part : staffFile->parts)
+                if (part.kind == od::FilePart::Kind::Mp3Music || part.kind == od::FilePart::Kind::Ps1Music) {
+                    od::port::loadMp3Slot(part.bytes, 0, part.arg);
+                    return;
+                }
+            return;
+        }
         uint32_t n = 0;
         for (const od::FilePart& part : staffFile->parts) {
             if (part.kind != od::FilePart::Kind::Vram || ++n != seg) continue;
@@ -935,6 +943,7 @@ void PlayerView::setupHooks() {
         }
     };
     staffHost.staffFree = [this](uint32_t) { staffFile.reset(); };
+    staffHost.musicStart = [](uint32_t channel, uint32_t slot) { od::port::musicChannelStart(channel, slot); };
     od::port::staffRollSetHost(std::move(staffHost));
     // Maybe_TickRoomScripts' per-stage handler (story spawns)
     hooks.roomHandler = [this] {

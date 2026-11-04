@@ -16,6 +16,7 @@
 #include "engine/lang.hpp"
 #include "engine/file_data.hpp"
 #include "engine/ps1_music.hpp"
+#include "engine/ps1_sfx.hpp"
 
 namespace od::audio {
 
@@ -31,6 +32,7 @@ struct Mixer::Stream {
     // [loopStart, loopEnd) forever instead of restarting the MP3 from 0
     std::vector<int16_t> pcm; // interleaved stereo
     uint32_t loopStart = 0, loopEnd = 0, pcmPos = 0;
+    bool streamedPcm = false; // the PCM is the whole source (a disc-streamed music), no MP3 behind it
     bool ok = false;
     bool loop = false, playing = false, paused = false, ended = false;
     uint32_t channels = 2, rate = kRate;
@@ -42,9 +44,20 @@ struct Mixer::Stream {
     size_t pendingAt = 0;
 
     ~Stream() {
-        if (ok && !xa && !ps1) drmp3_uninit(&dec);
+        if (ok && !xa && !ps1 && !streamedPcm) drmp3_uninit(&dec);
     }
     bool init() {
+        if (od::isPs1StreamedMusic(data)) { // decoded already: played as the loop entries' PCM is
+            const size_t frames = (data.size() - od::kPs1StreamedMusicHeader) / 4;
+            pcm.resize(frames * 2);
+            std::memcpy(pcm.data(), data.data() + od::kPs1StreamedMusicHeader, frames * 4);
+            loopStart = 0;
+            loopEnd = uint32_t(frames);
+            streamedPcm = true;
+            rate = Mixer::kRate;
+            channels = 2;
+            return ok = true;
+        }
         if (od::isPs1Music(data)) {
             try {
                 ps1 = std::make_unique<od::Ps1MusicPlayer>(data, loop);
@@ -70,7 +83,7 @@ struct Mixer::Stream {
     }
     void rewind() {
         if (ps1) ps1->rewind();
-        else if (ok && !xa) drmp3_seek_to_pcm_frame(&dec, 0);
+        else if (ok && !xa && !streamedPcm) drmp3_seek_to_pcm_frame(&dec, 0);
         xaSector = 0;
         xaDec = {};
         pcmPos = 0;
@@ -381,7 +394,7 @@ uint32_t Mixer::createStream(std::span<const uint8_t> mp3, uint32_t loop) {
     s->data.assign(mp3.begin(), mp3.end());
     s->loop = loop != 0;
     if (!s->init()) SDL_Log("audio: stream of %zu bytes not decodable", mp3.size());
-    else if (s->loop && !s->xa && !s->ps1) {
+    else if (s->loop && !s->xa && !s->ps1 && !s->streamedPcm) {
         if (const MusicLoop* ml = findMusicLoop(mp3)) {
             drmp3_config cfg{};
             drmp3_uint64 frames = 0;

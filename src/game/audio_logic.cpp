@@ -722,6 +722,8 @@ void voiceClipUpdate() {
 
 } // namespace
 
+void musicChannelStart(uint32_t ch, uint32_t slot) { startMusicChannel(ch, slot); }
+
 // ---- backend plumbing ------------------------------------------------------------------------------------------
 
 void setSoundBackend(SoundBackend* b) { B = b; }
