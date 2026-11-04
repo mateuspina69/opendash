@@ -56,7 +56,7 @@ address), which hold 99% of the exe ranges located so far.
 
 ## Running the disc data source (2026-10-25)
 
-This remains an experimental data source for the desktop engine. It does not build a PS1 console executable.
+This is a data source for the desktop engine. It does not build a PS1 console executable.
 The supported image is the USA release (`SLUS_011.40`), as a `.cue` and its raw 2352-byte `.bin` tracks.
 Set these keys in `opendash.ini` next to OpenDash (or use the environment variables below):
 

@@ -10,8 +10,10 @@ the `.DAT` files and the per-stage tables of your own installed PC copy at run t
 ## Status
 
 - **PC version:** the game can be played from start to finish on OpenDash with the data of the PC version.
-- **PS1 disc:** support for running from the USA PS1 disc (`.cue`/`.bin`) is in progress. It already starts
-  without the PC installation, but parts of the game are still missing; see [PS1 disc](#ps1-disc).
+- **PS1 disc:** the game can be played from start to finish from the USA PS1 disc (`.cue`/`.bin`), without the PC
+  installation; see [PS1 disc](#ps1-disc).
+- **Texture packs (experimental):** OpenDash can draw the PS1's texture pages from larger images. No pack ships with
+  it, and a pack does not cover the whole game; see [docs/texture_pack.md](docs/texture_pack.md).
 
 ## Download
 
@@ -58,10 +60,9 @@ it. Every setting of `opendash.ini` is described in [docs/configuration.md](docs
 
 ## PS1 disc
 
-Running from the USA PS1 disc (`SLUS_011.40`, a `.cue` with its raw `.bin` tracks) is a work in progress. Set
-`data=disc`, `disc=<path to .cue>` and `lang=en` in `opendash.ini`. It starts without the PC installation, but
-it cannot yet play through the whole game; see
-[PS1 setup and current limitations](docs/ps1_disc.md#running-the-disc-data-source-2026-10-25).
+To run from the USA PS1 disc (`SLUS_011.40`, a `.cue` with its raw `.bin` tracks), set `data=disc`,
+`disc=<path to .cue>` and `lang=en` in `opendash.ini`. It starts without the PC installation; see
+[PS1 setup](docs/ps1_disc.md#running-the-disc-data-source-2026-10-25).
 
 ## Tests
 
