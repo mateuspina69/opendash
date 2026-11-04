@@ -401,13 +401,17 @@ void App::updateScene() {
     {
         const float aspect = float(width) / float(std::max(height, 1));
         std::vector<od::RenderVertex> skyV;
+        // the ending's shots (ST54) are composed on the PS1's flat sky: its moon sits above the clouds, past the frame on
+        // the sphere
+        constexpr int kFlatSkySceneStage = 0x54;
+        const bool domeSky = skyDome && !(current.stage == kFlatSkySceneStage && playerView.play && !playerView.freeView(current));
         if (current.travelMapSlice[0] >= 0) { // ST01: the travel map's 2D layer (no sky in that stage)
             if (playerView.play) buildTravelMap(current, simTicks, aspect, skyV);
         } else if (!current.sky.empty() || !current.skyGrad.empty())
-            skyV = skyDome ? buildSkyDome(current, cam, simTicks) : buildSky(current, cam, simTicks, aspect);
+            skyV = domeSky ? buildSkyDome(current, cam, simTicks) : buildSky(current, cam, simTicks, aspect);
         if (playerView.play && playerView.roomStage == current.stage && playerView.roomSub == current.sub)
-            appendStormSky(current, playerView.storm, cam, aspect, skyDome, skyV);
-        const bool skyScreen = skyV.empty() || !skyDome || current.travelMapSlice[0] >= 0;
+            appendStormSky(current, playerView.storm, cam, aspect, domeSky, skyV);
+        const bool skyScreen = skyV.empty() || !domeSky || current.travelMapSlice[0] >= 0;
         if (!skyScreen) travelOffset(travel, skyV); // the dome around the camera
         renderer->uploadSky(skyV, skyScreen, current.travelMapSlice[0] < 0);
     }

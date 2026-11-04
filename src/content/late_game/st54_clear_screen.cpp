@@ -151,10 +151,10 @@ void backdropDraw(int switching) {
     const int more = (extra + 15) / 16;
     for (int row = 0; row < 0x10; ++row)
         for (int col = -more; col < 0x15 + more; ++col)
-            c.p.push_back(sprite(start + col * 0x10, start + row * 0x10,
+            c.p.push_back(sprite(start + col * 0x10, start + row * 0x10, 0x10, 0x10,
                                  0x7f920000u | uint32_t(((ph + row) & 3) * 0x10 + 0x20) << 8 |
                                      uint32_t(((ph + col) & 3) * 0x10 + 0x30),
-                                 0x10, 0x10, kGrey, 0x7c, 0x0d));
+                                 kGrey, 0x7c, 0x0d));
     gChains.push_back(std::move(c));
 }
 void flushChains() {

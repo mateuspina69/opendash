@@ -208,6 +208,11 @@ std::vector<od::DynamicObject> PlayerView::liveActors(const RoomMesh& mesh) cons
     std::vector<od::DynamicObject> out;
     if (!play || roomStage != mesh.stage || roomSub != mesh.sub || !bankAt) return out;
     const float shiftScale = liveShiftScale(mesh);
+    // ST54's last shot: the Servbot (type 0xb) whose record stands it below the flat floor
+    constexpr int kSt54Stage = 0x54;
+    constexpr uint8_t kSt54PacerType = 0x0b;
+    constexpr float kSt54FloorY = 0.5f;
+    const CamPose eye = readCamera();
     for (uint32_t i = 0; i < 24; ++i) {
         const uint32_t a = od::port::kAnimatedPool + i * 0x16c;
         const od::port::AnimatedActor& act = od::port::animatedActorAt(a);
@@ -254,6 +259,7 @@ std::vector<od::DynamicObject> PlayerView::liveActors(const RoomMesh& mesh) cons
             return out.back();
         };
         const uint32_t mask = act.boneBlocks;
+        const bool overFloor = mesh.stage == kSt54Stage && act.type == kSt54PacerType && eye.eye[1] > kSt54FloorY;
         // FUN_005f4160's draw flags (the centre +0x12 / +0x16 / +0x1a through the camera matrix 0x6d0014 and the
         // translation 0x6d003c, 0x40c410; its OTZ) and part colour (+0xe6, or
         // per part the bone block's +0x86): game/model_colour. The semi parts of the Master's dissolve (ST52 sub 2,
@@ -355,6 +361,13 @@ std::vector<od::DynamicObject> PlayerView::liveActors(const RoomMesh& mesh) cons
                 v.pos[0] = w[0] * shiftScale;
                 v.pos[1] = -w[1] * shiftScale;
                 v.pos[2] = w[2] * shiftScale;
+                // the PS1 draws a model over the floor by the OT, whatever its height: this actor's legs, below the
+                // floor by its record, still show. Here the depth test would cut them at the grass: each vertex below
+                // moves along its line of sight up to the floor, the same pixel in front of it
+                if (overFloor && v.pos[1] < kSt54FloorY) {
+                    const float k = (eye.eye[1] - kSt54FloorY) / (eye.eye[1] - v.pos[1]);
+                    for (int c = 0; c < 3; ++c) v.pos[c] = eye.eye[c] + (v.pos[c] - eye.eye[c]) * k;
+                }
                 obj.tris.push_back(v);
             }
         }
