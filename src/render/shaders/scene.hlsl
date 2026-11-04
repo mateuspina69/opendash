@@ -46,6 +46,8 @@ cbuffer Frame : register(b0) {
     float4 precipLook0;   // the flakes' look (F1, 1 = the defaults): density, size, brightness, the eddies' swirl
     float4 precipLook1;   // ... each flake's flutter, how far they reach, the blown snow's streaks, the motion's chaos
     float4 precipLayer;   // the flake field drawn: its cells' scale, flakes a cell, 1 = the far field
+    float4 skyPoleUp;     // the dome's poles (SkyPoles): the colour, a = where the fade starts (a sine)
+    float4 skyPoleDown;   // ... a = where it is whole (a sine); 0: a draw that is not the dome, or no fade
 };
 Texture2DArray pages : register(t0);
 SamplerState pointClamp : register(s0);
@@ -432,6 +434,10 @@ PSOut ps_main(VSOut i, bool front : SV_IsFrontFace) {
     const bool blends = i.uvs.z < 0 || c.a < 0.75;
     if (semiPass > 0.5 && (semiPass < 1.5) == blends) discard;
     float3 rgb = saturate(c.rgb * i.shade * i.color) * seeTint;
+    if (skyPoleDown.a > 0.0) { // the dome: toward a pole, the sky's own colour there instead of the squeezed tiles
+        const float up = normalize(i.world - eye).y;
+        rgb = lerp(rgb, up > 0.0 ? skyPoleUp.rgb : skyPoleDown.rgb, smoothstep(skyPoleUp.a, skyPoleDown.a, abs(up)));
+    }
 #ifdef OD_RT
     if (shadowMode > 0.5) {
         // geometric normal of the visible side (double-sided faces have no reliable winding)

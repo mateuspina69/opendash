@@ -41,6 +41,10 @@ struct SkyLayer {
     uint8_t ot = 0;
     std::vector<uint32_t> tiles;            // low16 = u | v << 8 (0 = empty), high16 = CLUT offset
     std::map<uint16_t, int> sliceOfClut;    // effective CLUT -> texture slice
+    // what the layer shows at the dome's fade toward each pole (0 up, 1 down; measureSkyPoles): its opaque texels'
+    // mean colour and the part of the ring they cover
+    float poleColor[2][3]{};
+    float poleCover[2]{};
 };
 
 // A quad of a switchable room segment (corridor / doorway variants, door strip lists), drawn per tick when

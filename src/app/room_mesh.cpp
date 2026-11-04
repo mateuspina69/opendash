@@ -740,6 +740,7 @@ RoomMesh loadRoom(int stage, int sub) {
     buildTrackStrip(mesh, roomShift, warps); // the room's exits (the data source's)
     mesh.fxNextSlice = mesh.sliceCount;
     SDL_Log("%s: %zu triangles, %d texture slices", name, mesh.tris.size() / 3, mesh.sliceCount);
+    measureSkyPoles(mesh);
     return mesh;
 }
 

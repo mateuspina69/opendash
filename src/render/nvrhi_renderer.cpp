@@ -111,6 +111,8 @@ struct FrameConstants {
                             // the effects' near fade (setEffectNearFade): gone at z, whole from w
     float precipLook[8];    // Precipitation's look: density, size, brightness, swirl / flutter, reach, streak, chaos
     float precipLayer[4];   // the flake field drawn (drawScene): its cells' scale, flakes a cell, 1 = the far field
+    float skyPoleUp[4];     // the dome's poles (SkyPoles): the colour, a = where the fade starts (a sine)
+    float skyPoleDown[4];   // ... a = where it is whole (a sine); 0: a draw that is not the dome, or no fade
 };
 // scene.hlsl vs_flake's two fields of kFlakeCells (24 x 12 x 24) cells, 6 vertices a flake: the near one (up to
 // kFlakesNear a cell) and the far one beyond it (cells kFlakeFarScale times larger, up to kFlakesFar a cell)
@@ -653,9 +655,10 @@ public:
         for (int k = 0; k < 3; ++k) waveTint_[k] = tint[k];
     }
 
-    void uploadSky(const std::vector<RenderVertex>& tris, bool screenSpace, bool isSky) override {
+    void uploadSky(const std::vector<RenderVertex>& tris, bool screenSpace, bool isSky, const SkyPoles& poles) override {
         skyScreen_ = screenSpace;
         skyIsSky_ = isSky;
+        skyPoles_ = poles;
         sky_ = tris; // GPU copy made in draw(): the dome's previous positions need the camera
     }
 
@@ -1689,6 +1692,14 @@ private:
             f.fogSky = frameSky_;
             XMStoreFloat4x4(&f.skyRay, skyRay_);
         }
+        if (frameSky_ == 1.0f) {
+            for (int c = 0; c < 3; ++c) {
+                f.skyPoleUp[c] = skyPoles_.up[c];
+                f.skyPoleDown[c] = skyPoles_.down[c];
+            }
+            f.skyPoleUp[3] = skyPoles_.fadeFrom;
+            f.skyPoleDown[3] = skyPoles_.fadeTo;
+        }
         f.fogDensity = fog_.density;
         f.fogHeightFalloff = fog_.heightFalloff;
         f.fogMaxOpacity = fog_.maxOpacity;
@@ -2053,6 +2064,7 @@ private:
     std::vector<float> dynPrev_;
     MotionHistory history_;
     bool skyScreen_ = true;
+    SkyPoles skyPoles_;      // the dome's poles (uploadSky)
     float effectNearFade_[2]{0.0f, 1.0f}; // setEffectNearFade: gone at [0], whole from [1]
     bool skyIsSky_ = true;   // the sky draw is the sky (not ST01's travel map): the remaster fog covers it
     float frameSky_ = 0.0f;  // FrameConstants::fogSky of the draws writeFrame is preparing

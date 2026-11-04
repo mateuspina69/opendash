@@ -44,7 +44,17 @@ void buildTravelMap(const RoomMesh& mesh, uint64_t frame, float aspect,
 // Mapping taken from the game: one tilemap width per turn (a = 2pi / (W*32) rad per pixel, used for
 // elevation too), the panorama row at the screen centre of a level camera (hofs + 120) is the
 // horizon, and screen centre x = X + 160 with X = (base + yaw) * W/128 px gives the azimuth origin.
-std::vector<od::RenderVertex> buildSkyDome(const RoomMesh& mesh, const od::Camera& cam, uint64_t frame);
+// The game never looks that far up or down; a free camera does, so the sphere must close at both poles:
+// - a panorama ends where its art ends (elevation 90 at most); a layer of manual scroll (mode bit 0: a field the 2D
+//   draw wraps both ways, ST1F sub 1's stars) repeats its rows up to the poles;
+// - the gradient's first / last colours go on to the poles;
+// - a panorama squeezes each tile into nothing at a pole, past what the pages' mips can filter: from 62 to 80 degrees
+//   the pixels blend into the pole's colour (`poles`, scene.hlsl), so no texture reaches the pole.
+std::vector<od::RenderVertex> buildSkyDome(const RoomMesh& mesh, const od::Camera& cam, uint64_t frame, od::SkyPoles& poles);
+
+// Each layer's mean colour and coverage on the rings the poles' colours come from (RoomMesh::slices must hold the
+// room's decoded pages)
+void measureSkyPoles(RoomMesh& mesh);
 
 // The storm's 2D sprites (content/intro/crash_landing_draw: the script-6 backdrop, the panorama of static 0x12) behind the 3D scene, in
 // the game's OT order after the gradient / layers. The game draws them in the 320 x 240 frame; the frame is centred

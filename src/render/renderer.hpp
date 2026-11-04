@@ -37,6 +37,13 @@ struct RenderVertex {
     float piece = 0.0f; // the see-through: the scenery piece it belongs to (app/see_through, SeeThroughPiece); 0 none
 };
 
+// The sky sphere's two poles (app/sky): past `fadeFrom` of elevation (a sine) every sky pixel blends into the pole's
+// colour, whole at `fadeTo`: a panorama on a sphere squeezes each tile into nothing there. fadeTo 0: no blending
+struct SkyPoles {
+    float up[3]{0.0f, 0.0f, 0.0f}, down[3]{0.0f, 0.0f, 0.0f};
+    float fadeFrom = 0.0f, fadeTo = 0.0f;
+};
+
 // Geometry of one actor rebuilt every tick. The id is stable for the actor's life in the room, so the tick
 // interpolation and the motion history can follow it even when other actors spawn or despawn.
 // blend: 0 opaque; 1 + PS1 semi-transparency mode (tpage ABR) with the PC exe's D3D blend states (0x402100 /
@@ -242,7 +249,7 @@ public:
     virtual FrameCosts frameCosts() const { return {}; }
     // sky: a dome around the eye or screen-space layers; isSky false = a 2D layer that is not the sky (ST01's travel
     // map), which the remaster fog leaves alone
-    virtual void uploadSky(const std::vector<RenderVertex>& tris, bool screenSpace, bool isSky) = 0;
+    virtual void uploadSky(const std::vector<RenderVertex>& tris, bool screenSpace, bool isSky, const SkyPoles& poles) = 0;
     // geometry rebuilt every frame (animated actors, one object per actor), drawn after the static geometry
     virtual void uploadDynamic(const std::vector<DynamicObject>& objects) = 0;
     // discontinuity (room change, teleport, stage switch): forget the motion history of every object
