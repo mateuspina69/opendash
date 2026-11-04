@@ -50,6 +50,7 @@ struct DynamicObject {
     // topology signature (e.g. which model parts were drawn): frames are blended / given motion vectors only
     // between two ticks of the same id, vertex count and layout. 0 = no signature (the vertex count decides)
     uint32_t layout = 0;
+    bool nearFade = false; // a world effect: it fades toward the camera (Renderer::setEffectNearFade); not a screen overlay
 };
 enum ObjectKind : uint32_t { kKindRoomAnim = 1, kKindLoop = 2, kKindWalker = 3, kKindPlayer = 4, kKindLive = 5,
                              kKindActor = 6 /* live actor of the actor system, index = pool slot */,
@@ -278,6 +279,8 @@ public:
         return 0;
     }
     virtual void setDebugView(DebugView view) = 0;
+    // the DynamicObject::nearFade draws, by view depth in world units: whole from `to`, gone at `from`
+    virtual void setEffectNearFade(float from, float to) = 0;
     // sun shadows; ignored when the GPU has no ray queries (DXR 1.1)
     virtual void setSun(const SunLight& sun) = 0;
     // the see-through this frame: the characters in focus (at most kMaxSeeThroughBodies) and the open pieces (at most

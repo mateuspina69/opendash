@@ -59,12 +59,13 @@ struct GpuVertex {
     float faceN[3];
     float pairN[3];
     float surface; // bits 0..2: kSurfaceModel a model's face (actors, the player, bank models), clipped at the game's
-                   // near plane; kSurfaceEffect an effect (particles, billboards, rings): its blended texels fade at
-                   // the scenery. Above them (* 8): RenderVertex::piece, the see-through's scenery piece
+                   // near plane; kSurfaceNearFade a world effect, fading toward the camera (setEffectNearFade);
+                   // kSurfaceEffect an effect (particles, billboards, rings): its blended texels fade at the scenery.
+                   // Above them (* 8): RenderVertex::piece, the see-through's scenery piece
     float uvRect[4]; // the triangle's UVs' bounds (min u, v, max u, v): what the page filter may read of its page
 };
 static_assert(sizeof(RenderVertex) == 52 && sizeof(GpuVertex) == 120);
-constexpr uint32_t kSurfaceModel = 1, kSurfaceEffect = 4;
+constexpr uint32_t kSurfaceModel = 1, kSurfaceNearFade = 2, kSurfaceEffect = 4;
 
 // scene.hlsl cbuffer Frame
 struct FrameConstants {
@@ -106,7 +107,8 @@ struct FrameConstants {
     float precipWind[4];   // ... wind (world units a second), unit
     float precipView[4];   // ... tan(fovY / 2), the flakes' light
     XMFLOAT4X4 invViewProj; // the blown snow's pass: NDC -> world (jittered)
-    float softDepth[4];     // the depth copy's near / far planes (its raw depth -> view depth: the soft effects)
+    float softDepth[4];     // the depth copy's near / far planes (its raw depth -> view depth: the soft effects);
+                            // the effects' near fade (setEffectNearFade): gone at z, whole from w
     float precipLook[8];    // Precipitation's look: density, size, brightness, swirl / flutter, reach, streak, chaos
     float precipLayer[4];   // the flake field drawn (drawScene): its cells' scale, flakes a cell, 1 = the far field
 };
@@ -637,6 +639,10 @@ public:
     }
 
     void setFog(const Fog& fog) override { fog_ = fog; }
+    void setEffectNearFade(float from, float to) override {
+        effectNearFade_[0] = from;
+        effectNearFade_[1] = to;
+    }
     void setScreenRipples(const std::vector<ScreenRipple>& ripples) override { ripples_ = ripples; }
     void setScreenWave(float amplitude, float phase, const float tint[3], bool remaster, float seconds, bool heat) override {
         waveHeat_ = heat;
@@ -677,6 +683,7 @@ public:
             if (kind == kKindActor || kind == kKindPlayer || kind == kKindPoolModel || kind == kKindWalker)
                 bits |= kSurfaceModel;
             if (kind == kKindEffect) bits |= kSurfaceEffect;
+            if (o.nearFade) bits |= kSurfaceNearFade;
             if (bits) {
                 surfaces.push_back({dyn_.size(), dyn_.size() + o.tris.size()});
                 surfaceBits.push_back(bits);
@@ -1721,6 +1728,8 @@ private:
         XMStoreFloat4x4(&f.invViewProj, invVp_);
         f.softDepth[0] = nearZ_;
         f.softDepth[1] = kFar;
+        f.softDepth[2] = effectNearFade_[0];
+        f.softDepth[3] = effectNearFade_[1];
         const float look[8] = {precip_.density, precip_.size, precip_.brightness, precip_.swirl,
                                precip_.flutter, precip_.reach, precip_.streak, precip_.chaos};
         std::copy(std::begin(look), std::end(look), f.precipLook);
@@ -2044,6 +2053,7 @@ private:
     std::vector<float> dynPrev_;
     MotionHistory history_;
     bool skyScreen_ = true;
+    float effectNearFade_[2]{0.0f, 1.0f}; // setEffectNearFade: gone at [0], whole from [1]
     bool skyIsSky_ = true;   // the sky draw is the sky (not ST01's travel map): the remaster fog covers it
     float frameSky_ = 0.0f;  // FrameConstants::fogSky of the draws writeFrame is preparing
     bool historyValid_ = false;

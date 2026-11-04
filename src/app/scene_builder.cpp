@@ -382,7 +382,10 @@ std::vector<od::DynamicObject> PlayerView::liveEffects(const RoomMesh& mesh, con
         if (p.front) continue; // the lock-on reticle: per rendered frame (app/reticle_overlay)
         const uint32_t id = od::objectId(od::kKindEffect, p.object | p.blend);
         auto [it, added] = index.try_emplace(id, out.size());
-        if (added) out.push_back(od::DynamicObject{id, {}, p.blend});
+        if (added) {
+            out.push_back(od::DynamicObject{id, {}, p.blend});
+            out.back().nearFade = true;
+        }
         od::DynamicObject& obj = out[it->second];
         float c[3] = {p.centre[0] * world, -p.centre[1] * world, p.centre[2] * world};
         if (p.texture >= 0 && size_t(p.texture) >= mesh.fxSlices.size()) continue; // slice not built yet

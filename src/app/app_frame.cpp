@@ -573,30 +573,10 @@ void App::updateScene() {
     // per actor: blend the last two ticks when the actor kept its vertex count (render_logic.hpp)
     { // per actor: blend the last two ticks; the screen overlays follow this frame's camera
         auto dynFrame = od::interpolateObjects(dynPrev, dynCur, alpha);
-        // near-camera fade of the effects (smoke puffs, sparks, rings): a particle closer to the eye than kFar shrinks
-        // toward its own centre, gone at kNear -- the train fight's big smoke puffs crossed the camera and filled /
-        // popped the whole screen (the PS1 camera never got that close to them)
-        if (playerView.play) {
-            constexpr float kNear = 150.0f, kFar = 500.0f;
-            const float sc = float(1 << current.shift);
-            for (od::DynamicObject& o : dynFrame) {
-                if ((o.id >> 24) != od::kKindEffect) continue;
-                const size_t unit = o.tris.size() % 6 == 0 ? 6 : 3;
-                for (size_t q = 0; q + unit <= o.tris.size(); q += unit) {
-                    float c[3] = {0.0f, 0.0f, 0.0f};
-                    for (size_t v = 0; v < unit; ++v)
-                        for (int a = 0; a < 3; ++a) c[a] += o.tris[q + v].pos[a] / float(unit);
-                    float d2 = 0.0f;
-                    for (int a = 0; a < 3; ++a) d2 += (c[a] - drawCam.eye[a]) * (c[a] - drawCam.eye[a]);
-                    const float d = std::sqrt(d2) / sc;
-                    if (d >= kFar) continue;
-                    const float f = std::clamp((d - kNear) / (kFar - kNear), 0.0f, 1.0f);
-                    const float k = f * f * (3.0f - 2.0f * f);
-                    for (size_t v = 0; v < unit; ++v)
-                        for (int a = 0; a < 3; ++a) o.tris[q + v].pos[a] = c[a] + (o.tris[q + v].pos[a] - c[a]) * k;
-                }
-            }
-        }
+        // near-camera fade of the effects (smoke puffs, sparks, rings), in game units: the train fight's big smoke puffs
+        // crossed the camera and filled / popped the whole screen (the PS1 camera never got that close to them). Per
+        // pixel in the renderer, so the quads of one effect (a ring's wall, a beam) stay joined
+        renderer->setEffectNearFade(150.0f * float(1 << current.shift), 500.0f * float(1 << current.shift));
         for (od::DynamicObject& o : playerView.screenOverlays(current, cam, weatherRemaster)) {
             travelOffset(travel, o.tris);
             dynFrame.push_back(std::move(o));

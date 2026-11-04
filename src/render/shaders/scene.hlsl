@@ -41,7 +41,8 @@ cbuffer Frame : register(b0) {
     float4 precipWind;    // ... the field's velocity (world units a second), world units a game unit
     float4 precipView;    // ... tan(fovY / 2), the flakes' light
     float4x4 invViewProj; // the blown snow's pass: NDC (x, y, depth) -> world (jittered, as the depth was drawn)
-    float4 softDepth;     // the depth copy's near / far planes (its raw depth -> view depth)
+    float4 softDepth;     // the depth copy's near / far planes (its raw depth -> view depth); the effects' near fade:
+                          // gone at z, whole from w
     float4 precipLook0;   // the flakes' look (F1, 1 = the defaults): density, size, brightness, the eddies' swirl
     float4 precipLook1;   // ... each flake's flutter, how far they reach, the blown snow's streaks, the motion's chaos
     float4 precipLayer;   // the flake field drawn: its cells' scale, flakes a cell, 1 = the far field
@@ -363,6 +364,8 @@ PSOut ps_main(VSOut i, bool front : SV_IsFrontFace) {
     // renderer keeps depth clip off)
     const uint surface = uint(round(i.surface)), piece = surface >> 3;
     if ((surface & 1u) && i.depth < modelNear) discard;
+    // a world effect is gone this close to the camera (opaque texels have no level to fade through; below, the blended)
+    if ((surface & 2u) && i.depth < softDepth.z) discard;
     // the see-through (OpenDash, Baldur's Gate style; app/see_through decides which pieces stand between the camera and
     // a character): an open piece turns into a lens, either whole (a piece smaller than the hole) or in a soft round
     // hole around each character it hides, there only on its fragments nearer than that character; the hole's rim
@@ -465,9 +468,10 @@ PSOut ps_main(VSOut i, bool front : SV_IsFrontFace) {
     PSOut o;
     // the PC exe's vertex alpha of a semi-transparent polygon (0x402100): 0x80 average, 0x40 B + F/4, else 0xff
     float alpha = blendMode > 0.5 && blendMode < 1.5 ? 0.5 : blendMode > 3.5 ? 0.25 : 1.0;
-    // an effect's blended texels fade at the scenery (softEdge): the light it adds / takes away, or its alpha
+    // an effect's blended texels fade at the scenery (softEdge) and, a world effect, toward the camera: the light it
+    // adds / takes away, or its alpha
     if ((surface & 4u) && semiPass > 1.5) {
-        const float soft = softEdge(i.pos.xy, i.depth);
+        const float soft = softEdge(i.pos.xy, i.depth) * ((surface & 2u) ? smoothstep(softDepth.z, softDepth.w, i.depth) : 1.0);
         if (blendMode > 1.5 && blendMode < 3.5) rgb *= soft;
         else alpha *= soft;
     }
