@@ -37,7 +37,7 @@ namespace tumbler {
 struct Fields : ActorClassState {
     explicit Fields(AnimatedActor& actor) : bouncesLeft(actor.params[0]), contact(actor.shownParts), shell(actor.hopperBytes[0]), alert(actor.hopperBytes[1]), mode(actor.hopperBytes[2]), stun(actor.hopperBytes[3]) {}
     uint8_t& bouncesLeft; // the throw's bounces (spawn parameter 0)
-    uint8_t& contact; // ... its bits (kContact*) set a byte at a time
+    uint8_t& contact; // kContact*: this tick's collision result
     uint8_t& shell; // kShell*
     uint8_t& alert; // kAlert*
     uint8_t& mode; // kMode*
@@ -45,14 +45,13 @@ struct Fields : ActorClassState {
     HitBox hitBox;
     uint16_t timer = 0;
     int16_t targetYaw = 0; // the turn's target / the knock's direction
-    uint16_t contactWord = 0; // cleared as a word by the collision ...
     int32_t ground = 0;
 
     void clearBlock() override {
         hitBox = {};
         timer = 0;
         targetYaw = 0;
-        contactWord = 0;
+        contact = 0;
         ground = 0;
     }
 };

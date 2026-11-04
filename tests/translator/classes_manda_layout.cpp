@@ -70,7 +70,6 @@ void layoutValue(LayoutVisitor& v, uint32_t a, od::port::exam_enemies_a_state::t
     layoutValue(v, a + 0x14c, s.hitBox);
     layoutValue(v, a + 0x15c, s.timer);
     layoutValue(v, a + 0x15e, s.targetYaw);
-    layoutValue(v, a + 0x160, s.contactWord);
     layoutValue(v, a + 0x160, s.contact);
     layoutValue(v, a + 0x162, s.shell);
     layoutValue(v, a + 0x163, s.alert);

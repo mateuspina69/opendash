@@ -909,7 +909,7 @@ uint32_t foldDiff(int32_t d) {
 // exe 0x47bd50: the walls / the territory / the ground (kept); true: the ground lost. Tumbling in the air, the shell's
 // lowest point by its pitch stands on the ground
 bool collide(const PlayerEnv& env, AnimatedActor& a, Fields& f) {
-    f.contactWord = 0;
+    f.contact = 0; // the exe clears the word +0x160; nothing reads its high byte
     uint32_t r;
     if (int32_t(actorTestMove(env, a)) < 0) { // exe 0x40f570
         r = actorPushOut(env, a);             // exe 0x410960
