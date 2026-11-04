@@ -25,6 +25,24 @@ namespace od::port {
 constexpr uint32_t kPlayer = 0xa71d20;
 inline constexpr const char* kPlayerArea = "player"; // the area of the player's port-gap errors
 
+// ---- the table of players ------------------------------------------------------------
+// OpenDash's co-op: player 0 is this machine's own (the exe's one player, at the exe's address); the others are the
+// session's, each with a stable id. Their addresses lie outside everything the exe's or the disc's data can name, and
+// their slot ids are their ids: all of 0..7 are the exe's player class (exe 0x5e0f70).
+constexpr size_t kPlayerSlots = 8;
+constexpr uint32_t kOtherPlayers = 0xfe000000, kOtherPlayerStride = 0x510;
+constexpr uint32_t playerAddress(size_t id) {
+    return id == 0 ? kPlayer : kOtherPlayers + uint32_t(id - 1) * kOtherPlayerStride;
+}
+// the id of the player at this address, -1 when it is none
+constexpr int playerIdAtAddress(uint32_t address) {
+    if (address == kPlayer) return 0;
+    if (address < kOtherPlayers) return -1;
+    const uint32_t offset = address - kOtherPlayers;
+    if (offset % kOtherPlayerStride != 0 || offset / kOtherPlayerStride + 1 >= kPlayerSlots) return -1;
+    return int(offset / kOtherPlayerStride) + 1;
+}
+
 // ---- the state machine ---------------------------------------------------------------------------------------------
 // +8 (the state table 0x8c4f5c)
 enum class PlayerState : uint8_t {
@@ -731,9 +749,16 @@ private:
     int8_t prevMoveDir_ = 0;
 };
 
-// the player (one object for the life of the program; the exe's address kPlayer is its identity in the states still
-// in the exe's layout)
+// this machine's own player, id 0 (one object for the life of the program; the exe's address kPlayer is its identity
+// in the states still in the exe's layout)
 Player& player();
+// The table: every id's player exists for the life of the program, as a pool's slots do. An id past the table throws.
+Player& playerById(size_t id);
+size_t playerId(const Player& p);
+// In the session: player 0 always; another from joinPlayer (constructed anew) to leavePlayer
+bool playerPresent(size_t id);
+void joinPlayer(size_t id);
+void leavePlayer(size_t id);
 // The 0x10 bytes after the player's struct (exe 0xa72220..0xa7222f): the player's reset clears them with the struct
 // (exe 0x5e00e0(1)); their reader is not traced
 struct PlayerTail {
@@ -744,7 +769,8 @@ PlayerTail& playerTail();
 // position: its +0 / +4 / +8 words (the head, the type word, the state word)
 Fixed16Vec3 playerStructAsPoint();
 // exe 0x5e00e0(1)'s player part: the player's bytes cleared (the player constructed anew, every member zero) and the
-// 0x10 bytes after them in the game state
+// 0x10 bytes after them in the game state. The table's other players are constructed anew with it (their ids and
+// whether they are in the session stay).
 void resetPlayer();
 
 } // namespace od::port

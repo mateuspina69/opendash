@@ -16,6 +16,9 @@
 
 namespace od::app {
 
+// a session's player ids are the ids of the game's table of players
+static_assert(od::port::kPlayerSlots == size_t(od::net::kMaxPlayers));
+
 namespace {
 
 std::string userName() {

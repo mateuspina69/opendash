@@ -440,6 +440,11 @@ target_link_libraries(test_net_protocol PRIVATE odnet)
 target_include_directories(test_net_protocol PRIVATE tests)
 add_test(NAME test_net_protocol COMMAND test_net_protocol)
 
+add_executable(test_player_table tests/test_player_table.cpp)
+target_link_libraries(test_player_table PRIVATE odgame)
+target_include_directories(test_player_table PRIVATE tests)
+add_test(NAME test_player_table COMMAND test_player_table)
+
 add_executable(test_render_logic tests/test_render_logic.cpp)
 target_link_libraries(test_render_logic PRIVATE odrender)
 target_include_directories(test_render_logic PRIVATE tests)

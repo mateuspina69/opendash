@@ -87,9 +87,9 @@ void Actor::copyRootWordsFrom(const BoneBlock& block, size_t k) {
 
 // ---- resolvers ------------------------------------------------------------------------------------------------------
 namespace {
-// the model-bearing slot (or the player) at an address, nullptr when it is none of them
+// the model-bearing slot (or a player) at an address, nullptr when it is none of them
 Actor* modelActorAt(uint32_t address) {
-    if (address == kPlayer) return &player();
+    if (const int id = playerIdAtAddress(address); id >= 0) return &playerById(size_t(id));
     if (ShotPool::contains(address)) return &shotPool().at(address);
     if (AnimatedPool::contains(address)) return &animatedPool().at(address);
     if (ProjectilePool::contains(address)) return &projectilePool().at(address);
@@ -155,12 +155,14 @@ ProjectileActor& asProjectile(ActorHeader& actor) { return projectilePool().of(a
 EffectActor& asEffect(ActorHeader& actor) { return effectPool().of(actor); }
 ControllerActor& asController(ActorHeader& actor) { return controllerPool().of(actor); }
 Player& asPlayer(ActorHeader& actor) {
-    if (actor.at != kPlayer) notAnActorSlot(actor.at, kPlayer);
-    return player();
+    const int id = playerIdAtAddress(actor.at);
+    if (id < 0) notAnActorSlot(actor.at, kPlayer);
+    return playerById(size_t(id));
 }
 const Player& asPlayer(const ActorHeader& actor) {
-    if (actor.at != kPlayer) notAnActorSlot(actor.at, kPlayer);
-    return player();
+    const int id = playerIdAtAddress(actor.at);
+    if (id < 0) notAnActorSlot(actor.at, kPlayer);
+    return playerById(size_t(id));
 }
 Actor& actorLayoutAt(uint32_t address) {
     if (Actor* a = modelActorAt(address)) return *a;
@@ -192,7 +194,9 @@ uint32_t actorBySlot(uint32_t slot) {
     case kStaticClass: return kStaticPool + (slot - kStaticClass) * StaticPool::stride();
     case kEffectClass: return kEffectPool + (slot - kEffectClass) * EffectPool::stride();
     case kControllerClass: return kControllerPool + (slot - kControllerClass) * ControllerPool::stride();
-    default: return kPlayer; // class 0
+    default:
+        // class 0: the exe answers its one player for every id of the class, as a player not in the session does here
+        return slot < kPlayerSlots && playerPresent(slot) ? playerAddress(slot) : kPlayer;
     }
 }
 
