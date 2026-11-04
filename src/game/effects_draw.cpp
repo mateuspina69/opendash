@@ -40,6 +40,9 @@ constexpr RoutineId kPickupClass = RoutineId::PickupUpdate, kExplosionClass = Ro
 // the prims' object ids: a base by class and the slot's index
 constexpr uint32_t kShotObjects = 0x10000u, kStreamObjects = 0x18000u, kEffectObjects = 0x20000u,
                    kBladeTrailObjects = 0x24000u, kLaserObjects = 0x26000u, kStaticObjects = 0x30000u;
+// the Shining Laser's parts, objects of their own as they move apart (blend in the low 3 bits): the tube; the muzzle's
+// spikes and sparks, new each tick; each ring running along the beam, by its id
+constexpr uint32_t kLaserMuzzlePart = 0x08u, kLaserRingPart = 0x80u;
 
 // the textures: the buster shot's (tpage 0x2f additive / 0x0f average, CLUT 0x7c92, uv (0, 0x20)-(0x1f, 0x3f)), the
 // explosion sheet (tpage 0x2e, CLUT 0x7c10: 48 x 48 frames), the pickups' glow (tpage 0x2f, CLUT 0x7c12, tint 0x008080)
@@ -506,7 +509,8 @@ void laserBeam(DrawContext& c, const State& st, const port::EffectActor& e, uint
                         const uint32_t col[4]) {
             Prim p;
             std::copy(mz, mz + 3, p.centre);
-            p.object = object;
+            p.object = object | kLaserMuzzlePart;
+            p.anchored = true; // follows the muzzle, as the tube does
             p.texture = kUntextured;
             p.blend = 2; // tpage 0x220: additive
             const uint32_t a[4] = {a0, a1, a2, a3};
@@ -560,12 +564,14 @@ void laserBeam(DrawContext& c, const State& st, const port::EffectActor& e, uint
         uint32_t v5 = ((i << 5) - (f & 0xf) * 8) & 0x7f;
         if (v5 > 0x5f) v5 -= 0x60;
         const float zn = -float(i) * 256.0f, zf = -float(i + 1) * 256.0f, rn = i == 0 ? 0.0f : R;
-        for (uint32_t j = 0; j < 8; ++j) {
+        for (uint32_t slot = 0; slot < 8; ++slot) {
+            const uint32_t j = (slot + (f >> 3)) & 7; // the quad a slot holds a tick on is the same one turned one step
             const uint32_t i0 = (f7 + 8 * j + 0x38) & 0x3f, i1 = (f7 + 8 * j) & 0x3f;
             Prim p;
             std::copy(mz, mz + 3, p.centre);
             p.screen = false;
             p.object = object;
+            p.ordered = true; // the tube's end swings further in a tick than its quads lie apart
             p.texture = t1;
             p.blend = blendOfAbr(kLaserTpage >> 5);
             ringPt(i0, rn, zn, p.v[0]);
@@ -587,13 +593,16 @@ void laserBeam(DrawContext& c, const State& st, const port::EffectActor& e, uint
     }
     for (uint32_t s = f & 3; s < steps; s += 4) {
         const float zn = -float(s + 1) * 256.0f, zf = -0x180 - float(s) * 256.0f;
-        for (uint32_t j = 0; j < 8; ++j) {
+        const uint32_t ring = ((f >> 2) - (s >> 2)) & 0xf; // the same ring a tick on, one step further along
+        for (uint32_t slot = 0; slot < 8; ++slot) {
+            const uint32_t j = (slot + (f >> 3)) & 7;
             const uint32_t n0 = (f7 + 8 * j + 0x38) & 0x3f, n1 = (f7 + 8 * j) & 0x3f;
             const uint32_t f0 = (f7 + 8 * j - 4) & 0x3f, f1 = (f7 + 8 * j + 4) & 0x3f;
             Prim p;
             std::copy(mz, mz + 3, p.centre);
             p.screen = false;
-            p.object = object;
+            p.object = object | kLaserRingPart | ring << 3;
+            p.ordered = true;
             p.texture = t2;
             p.blend = blendOfAbr(kLaserTpage >> 5);
             ringPt(n0, R, zn, p.v[0]);
@@ -757,7 +766,7 @@ void collect(State& st, TextureCache& tex, std::vector<Prim>& out) {
         if (h == kHitSparkClass) spark(c, a, kEffectObjects | i << 4);
         else if (h == kBurstClass) burst(c, a, kEffectObjects | i << 4);
         else if (h == kBladeTrailClass) bladeTrail(c, st, a, kBladeTrailObjects | i << 4);
-        else if (h == kLaserBeamClass) laserBeam(c, st, a, kLaserObjects | i << 4);
+        else if (h == kLaserBeamClass) laserBeam(c, st, a, kLaserObjects | i << 8);
         else if (const ClassDraw draw = contentDraw(h)) draw(c, st, a.at, i);
     }
     // pool 0x40 (projectiles): their draw commands are written by the logic port (game/draw_commands); the ST1D

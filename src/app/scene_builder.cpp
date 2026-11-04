@@ -400,7 +400,12 @@ std::vector<od::DynamicObject> PlayerView::liveEffects(const RoomMesh& mesh, con
             out.back().nearFade = true;
         }
         od::DynamicObject& obj = out[it->second];
+        obj.ordered = p.ordered;
         float c[3] = {p.centre[0] * world, -p.centre[1] * world, p.centre[2] * world};
+        if (p.anchored) {
+            obj.anchored = true;
+            std::copy(c, c + 3, obj.anchor);
+        }
         if (p.texture >= 0 && size_t(p.texture) >= mesh.fxSlices.size()) continue; // slice not built yet
         const float slice = p.texture == od::fx::kUntextured ? -1.0f // plain gouraud (Vertex::color)
                             : float(p.texture < 0 ? mesh.fxGradSlice : mesh.fxSlices[size_t(p.texture)]);

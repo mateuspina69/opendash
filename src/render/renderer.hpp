@@ -58,6 +58,10 @@ struct DynamicObject {
     // between two ticks of the same id, vertex count and layout. 0 = no signature (the vertex count decides)
     uint32_t layout = 0;
     bool nearFade = false; // a world effect: it fades toward the camera (Renderer::setEffectNearFade); not a screen overlay
+    bool ordered = false;  // an effect whose quads keep their places in the list from tick to tick: paired by place (render_logic)
+    // an effect redrawn each tick around a point (the laser's muzzle spikes): between ticks it only follows that point
+    bool anchored = false;
+    float anchor[3]{0.0f, 0.0f, 0.0f};
 };
 enum ObjectKind : uint32_t { kKindRoomAnim = 1, kKindLoop = 2, kKindWalker = 3, kKindPlayer = 4, kKindLive = 5,
                              kKindActor = 6 /* live actor of the actor system, index = pool slot */,

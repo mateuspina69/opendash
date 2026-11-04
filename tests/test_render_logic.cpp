@@ -164,6 +164,51 @@ static void interpolate_effect_ring_moving_as_one() {
     }
 }
 
+static void interpolate_effect_ordered_list_swinging() {
+    // the Shining Laser's tube swings around the muzzle: its far quads move further than they lie apart, and each is still
+    // itself; a longer list's new quads are shown as they are
+    const auto tube = [](float angle, int quads) {
+        DynamicObject o{objectId(kKindEffect, 1), {}};
+        o.ordered = true;
+        for (int q = 0; q < quads; ++q)
+            for (int v = 0; v < 6; ++v)
+                o.tris.push_back(vtx(std::sin(angle) * float(q + 1) * 256.0f, 0.0f, std::cos(angle) * float(q + 1) * 256.0f));
+        return o;
+    };
+    const DynamicObject prev = tube(0.0f, 8), cur = tube(0.5f, 9);
+    const auto r = interpolateObjects({prev}, {cur}, 0.5f);
+    for (size_t v = 0; v < cur.tris.size(); ++v) {
+        const float want = v < prev.tris.size() ? (prev.tris[v].pos[0] + cur.tris[v].pos[0]) * 0.5f : cur.tris[v].pos[0];
+        CHECK(near(r[0].tris[v].pos[0], want));
+    }
+    MotionHistory h;
+    std::vector<float> from;
+    h.apply({prev}, from);
+    h.apply({cur}, from);
+    for (size_t v = 0; v < cur.tris.size(); ++v)
+        CHECK(near(from[v * 3], v < prev.tris.size() ? prev.tris[v].pos[0] : cur.tris[v].pos[0]));
+}
+
+static void interpolate_effect_anchored_follows_its_point() {
+    // the laser's muzzle spikes: another shape each tick, between ticks this tick's shape where the muzzle is
+    const auto spikes = [](float at, float size) {
+        DynamicObject o{objectId(kKindEffect, 1), {}};
+        o.anchored = true;
+        o.anchor[0] = at;
+        for (int v = 0; v < 6; ++v) o.tris.push_back(vtx(at + float(v) * size, 0.0f, 0.0f));
+        return o;
+    };
+    const DynamicObject prev = spikes(0.0f, 50.0f), cur = spikes(100.0f, 20.0f);
+    const auto r = interpolateObjects({prev}, {cur}, 0.25f);
+    for (int v = 0; v < 6; ++v) CHECK(near(r[0].tris[size_t(v)].pos[0], 25.0f + float(v) * 20.0f));
+    CHECK(near(r[0].anchor[0], 25.0f));
+    MotionHistory h;
+    std::vector<float> from;
+    h.apply({prev}, from);
+    h.apply({cur}, from);
+    for (int v = 0; v < 6; ++v) CHECK(near(from[size_t(v) * 3], float(v) * 20.0f));
+}
+
 static void history_new_id_zero_motion() {
     MotionHistory h;
     std::vector<float> prev;
@@ -248,6 +293,8 @@ int main() {
     interpolate_effect_quad_entering_mid_list();
     interpolate_effect_list_replaced();
     interpolate_effect_ring_moving_as_one();
+    interpolate_effect_ordered_list_swinging();
+    interpolate_effect_anchored_follows_its_point();
     history_new_id_zero_motion();
     motion_static_camera_zero();
     motion_pan_pixels();

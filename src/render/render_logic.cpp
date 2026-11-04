@@ -200,6 +200,15 @@ std::vector<long> effectPairs(const float* p, size_t prevVerts, const float* c, 
     return out;
 }
 
+// An effect's previous vertex of each vertex (-1: new): by place in its list when the draw keeps them in place, else
+// effectPairs
+static std::vector<long> effectPrevious(bool ordered, const float* p, size_t prevVerts, const float* c, size_t curVerts) {
+    if (!ordered) return effectPairs(p, prevVerts, c, curVerts);
+    std::vector<long> out(curVerts, -1);
+    for (size_t v = 0; v < std::min(prevVerts, curVerts); ++v) out[v] = long(v);
+    return out;
+}
+
 std::vector<DynamicObject> interpolateObjects(const std::vector<DynamicObject>& prev,
                                               const std::vector<DynamicObject>& cur, float alpha) {
     std::unordered_map<uint32_t, const DynamicObject*> byId;
@@ -209,13 +218,24 @@ std::vector<DynamicObject> interpolateObjects(const std::vector<DynamicObject>& 
         const auto it = byId.find(o.id);
         if (it == byId.end() || it->second->layout != o.layout) continue;
         const auto& p = it->second->tris;
+        if (o.anchored && it->second->anchored) { // this tick's shape, where its point is at this time
+            float back[3];
+            for (int c = 0; c < 3; ++c) {
+                const float at = it->second->anchor[c] + (o.anchor[c] - it->second->anchor[c]) * alpha;
+                back[c] = at - o.anchor[c];
+                o.anchor[c] = at;
+            }
+            for (RenderVertex& v : o.tris)
+                for (int c = 0; c < 3; ++c) v.pos[c] += back[c];
+            continue;
+        }
         if ((o.id >> 24) == kKindEffect) { // each puff with the same puff a tick ago (effectPairs)
             std::vector<float> pp(p.size() * 3), cp(o.tris.size() * 3);
             for (size_t i = 0; i < p.size(); ++i)
                 for (int c = 0; c < 3; ++c) pp[i * 3 + size_t(c)] = p[i].pos[c];
             for (size_t i = 0; i < o.tris.size(); ++i)
                 for (int c = 0; c < 3; ++c) cp[i * 3 + size_t(c)] = o.tris[i].pos[c];
-            const std::vector<long> prevOf = effectPairs(pp.data(), p.size(), cp.data(), o.tris.size());
+            const std::vector<long> prevOf = effectPrevious(o.ordered, pp.data(), p.size(), cp.data(), o.tris.size());
             for (long i = 0; i < long(o.tris.size()); ++i) {
                 const long j = prevOf[size_t(i)];
                 if (j < 0) continue; // a new puff: as is
@@ -243,21 +263,33 @@ void MotionHistory::apply(const std::vector<DynamicObject>& objs, std::vector<fl
         const auto it = last_.find(o.id);
         const bool have = it != last_.end() && it->second.pos.size() == curPos.size() && it->second.layout == o.layout;
         const auto& src = have ? it->second.pos : curPos;
+        Entry entry{o.layout, {}, o.anchored, {o.anchor[0], o.anchor[1], o.anchor[2]}};
+        if (o.anchored && it != last_.end() && it->second.anchored) { // the shape is new: only its point moved
+            for (size_t i = 0; i < curPos.size(); ++i) {
+                const size_t c = i % 3;
+                prevPos.push_back(curPos[i] + it->second.anchor[c] - o.anchor[c]);
+            }
+            entry.pos = std::move(curPos);
+            next[o.id] = std::move(entry);
+            continue;
+        }
         if (it != last_.end() && it->second.layout == o.layout && (o.id >> 24) == kKindEffect) {
             // an effect: each puff's motion from the same puff last frame (effectPairs), a new one none
             const auto& lp = it->second.pos;
             const size_t nv = curPos.size() / 3;
-            const std::vector<long> prevOf = effectPairs(lp.data(), lp.size() / 3, curPos.data(), nv);
+            const std::vector<long> prevOf = effectPrevious(o.ordered, lp.data(), lp.size() / 3, curPos.data(), nv);
             for (long i = 0; i < long(nv); ++i) {
                 const long j = prevOf[size_t(i)];
                 const float* src = j >= 0 ? &lp[size_t(j) * 3] : &curPos[size_t(i) * 3];
                 prevPos.insert(prevPos.end(), src, src + 3);
             }
-            next[o.id] = Entry{o.layout, std::move(curPos)};
+            entry.pos = std::move(curPos);
+            next[o.id] = std::move(entry);
             continue;
         }
         prevPos.insert(prevPos.end(), src.begin(), src.end());
-        next[o.id] = Entry{o.layout, std::move(curPos)};
+        entry.pos = std::move(curPos);
+        next[o.id] = std::move(entry);
     }
     last_ = std::move(next); // objects not drawn this frame are forgotten
 }

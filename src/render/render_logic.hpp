@@ -43,6 +43,8 @@ private:
     struct Entry {
         uint32_t layout = 0;
         std::vector<float> pos; // xyz per vertex
+        bool anchored = false;  // DynamicObject::anchored, anchor
+        float anchor[3]{0.0f, 0.0f, 0.0f};
     };
     std::unordered_map<uint32_t, Entry> last_; // id -> the object at the last apply
 };

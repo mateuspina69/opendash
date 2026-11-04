@@ -43,6 +43,10 @@ struct Prim {
                                  // kUntextured = a plain gouraud polygon (Vertex::color, PS1 colour / 255)
     uint8_t blend = 0;           // 0 opaque, 1 + PS1 semi mode (1 avg, 2 add, 3 B * (1 - F), 4 B + F/4): od::DynamicObject::blend
     uint32_t object = 0;         // groups the prims of one actor (stable across ticks)
+    bool ordered = false;        // OpenDash: the object's prims keep their places in its list from tick to tick, whatever
+                                 // they do in the world (od::DynamicObject::ordered)
+    bool anchored = false;       // OpenDash: the object's prims are new each tick and move with `centre` between ticks
+                                 // (od::DynamicObject::anchored)
     bool front = false;          // OpenDash: pushed toward the eye in the shader so the target's model never
                                  // covers it (the lock-on reticle, app/reticle_overlay)
 };
