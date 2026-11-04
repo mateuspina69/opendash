@@ -5,6 +5,6 @@
 namespace od::app {
 
 // installs the log output (the console's as before, and the file); call once, before anything logs
-void startLogFile();
+void startLogFile(const char* fileName = "opendash.log");
 
 } // namespace od::app

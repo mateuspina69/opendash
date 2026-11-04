@@ -447,6 +447,22 @@ static void dumpFloorPages(const std::string& geometryFile, int sub, const std::
     for (const std::vector<uint8_t>& page : pages) od::dumpPage(page);
 }
 
+std::vector<std::pair<int, int>> stageSubRooms() {
+    std::vector<std::pair<int, int>> out;
+    for (int n = 0; n < od::kStageCount; ++n) {
+        char name[16];
+        std::snprintf(name, sizeof name, "ST%02X.DAT", n);
+        if (!od::dataSource().hasFile(name)) continue;
+        try {
+            const od::GameFile st = od::dataSource().gameFile(name);
+            const int subs = stageRoomCount(n, od::roomGrids(od::roomBlock(st)).size());
+            if (subs > 0) out.emplace_back(n, subs);
+        } catch (const std::exception&) {
+        }
+    }
+    return out;
+}
+
 RoomMesh loadRoom(int stage, int sub) {
     char name[8];
     std::snprintf(name, sizeof name, "ST%02X", stage);

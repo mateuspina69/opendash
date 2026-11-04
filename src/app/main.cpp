@@ -18,10 +18,14 @@
 //     buffer as a network peer
 //   --ghost-look <costume> <variant> <weapon>: with --ghost-mirror, that ghost's look (Megaman body PL00P costume /
 //     variant, special weapon > 2 = its PL00R arm) instead of the local player's
+//   --world <stage> <sub>: a world process: the room's simulation with no window (app/world_process)
+//   OD_WORLD_DIGEST=N (environment, dev): every N logic ticks, a digest of the world's state in the log, to compare two
+//     runs of a room (game/world_digest)
 //   OD_TRACE_THROW=1 (environment, dev): the call stack of every C++ throw on stderr (named with a build that has
 //     symbols, RelWithDebInfo)
 #include "app/app.hpp"
 #include "app/log_file.hpp"
+#include "app/world_process.hpp"
 #include "app/ui/prompts.hpp"
 
 #include <SDL3/SDL_main.h>
@@ -270,6 +274,7 @@ int main(int argc, char** argv) {
         AddVectoredExceptionHandler(1, traceThrow);
     }
 #endif
+    if (od::app::worldProcessRequested(argc, argv)) return od::app::runWorldProcess(argc, argv);
     od::app::startLogFile(); // opendash.log next to the executable, however the game was started
     od::content::registerAll(); // the game code dispatches into the content through its registry
     od::app::App app;

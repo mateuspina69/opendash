@@ -59,6 +59,7 @@
 #include "game/room_scripts.hpp"
 #include "game/spawn.hpp"
 #include "game/stage_setup.hpp"
+#include "game/world_digest.hpp"
 #include "game/sky_layers.hpp"
 #include "game/stage_music.hpp"
 #include "game/vram_moves.hpp"
@@ -1796,6 +1797,17 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
                     int(pl.pos.x.whole), int(pl.pos.y.whole), int(pl.pos.z.whole), int(pl.rotation.y),
                     int(pl.subState), t, int(target.pos.x.whole), int(target.pos.y.whole), int(target.pos.z.whole),
                     int(std::lround(std::hypot(dx, dz))), ps1Buttons);
+        }
+        static const int digestEvery = [] {
+            const std::string v = od::envValue("OD_WORLD_DIGEST");
+            return v.empty() ? 0 : std::stoi(v);
+        }();
+        if (digestEvery > 0 && logicTicks % uint64_t(digestEvery) == 0) {
+            static const bool detail = !od::envValue("OD_WORLD_DIGEST_DETAIL").empty();
+            const od::port::WorldDigest d =
+                od::port::worldDigest(detail ? +[](const char* line) { SDL_Log("wd %s", line); } : nullptr);
+            SDL_Log("worlddigest: tick %llu hash %016llx live %u", (unsigned long long)logicTicks,
+                    (unsigned long long)d.hash, d.liveActors);
         }
     } catch (const std::exception& e) {
         playError = e.what();

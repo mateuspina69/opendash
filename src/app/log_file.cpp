@@ -25,10 +25,10 @@ void writeLine(void* data, int category, SDL_LogPriority priority, const char* m
 
 } // namespace
 
-void startLogFile() {
+void startLogFile(const char* fileName) {
     if (g_file) return;
     const char* base = SDL_GetBasePath();
-    const std::string path = std::string(base ? base : "") + "opendash.log";
+    const std::string path = std::string(base ? base : "") + fileName;
     g_file = std::fopen(path.c_str(), "w");
     SDL_GetLogOutputFunction(&g_console, &g_consoleData);
     SDL_SetLogOutputFunction(writeLine, nullptr);

@@ -54,20 +54,9 @@ int aaIndex(od::AaBackend b) {
     return it == std::end(kAaBackends) ? 0 : int(it - std::begin(kAaBackends));
 }
 
-// Every ST##.DAT the exe knows (stage table size) with a room block, and its sub-room count.
 std::vector<StageInfo> scanStages() {
     std::vector<StageInfo> out;
-    for (int n = 0; n < od::kStageCount; ++n) {
-        char name[16];
-        std::snprintf(name, sizeof name, "ST%02X.DAT", n);
-        if (!od::dataSource().hasFile(name)) continue;
-        try {
-            const od::GameFile st = od::dataSource().gameFile(name);
-            const int subs = stageRoomCount(n, od::roomGrids(od::roomBlock(st)).size());
-            if (subs > 0) out.push_back({n, subs});
-        } catch (const std::exception&) {
-        }
-    }
+    for (const auto& [stage, subs] : stageSubRooms()) out.push_back({stage, subs});
     return out;
 }
 

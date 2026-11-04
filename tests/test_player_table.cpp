@@ -7,6 +7,8 @@
 #include "check.hpp"
 #include "game/actor_pools.hpp"
 #include "game/player/player_state.hpp"
+#include "game/random.hpp"
+#include "game/world_digest.hpp"
 
 using namespace od::port;
 
@@ -71,6 +73,33 @@ void testJoinAndLeave() {
     CHECK(actorBySlot(3) == kPlayer);
 }
 
+// the digest two runs of a room are compared by: the same state the same hash, a change in what it covers another
+void testWorldDigest() {
+    resetPlayer();
+    const uint64_t base = worldDigest().hash;
+    CHECK(worldDigest().hash == base);
+
+    player().hitPoints = 5;
+    CHECK(worldDigest().hash != base);
+    player().hitPoints = 0;
+    CHECK(worldDigest().hash == base);
+
+    randomState().rng ^= 1;
+    CHECK(worldDigest().hash != base);
+    randomState().rng ^= 1;
+
+    joinPlayer(2);
+    CHECK(worldDigest().hash != base);
+    leavePlayer(2);
+    CHECK(worldDigest().hash == base);
+
+    shotPool()[0].flags |= kActorLive;
+    CHECK(worldDigest().liveActors == 1);
+    CHECK(worldDigest().hash != base);
+    shotPool()[0].flags &= uint8_t(~kActorLive);
+    CHECK(worldDigest().hash == base);
+}
+
 void testRefusals() {
     bool threw = false;
     try {
@@ -95,6 +124,7 @@ int main() {
     testSlotsAlone();
     testJoinAndLeave();
     testSlotsAlone();
+    testWorldDigest();
     testRefusals();
     return testResult("test_player_table");
 }
