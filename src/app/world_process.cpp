@@ -7,9 +7,11 @@
 #include <cstdio>
 #include <exception>
 #include <memory>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "app/game_files.hpp"
 #include "app/log_file.hpp"
@@ -39,7 +41,22 @@ struct WorldArgs {
     uint64_t ticks = 0; // 0: until the process is stopped
     bool unpaced = false;
     std::string storySave;
+    std::vector<uint16_t> pad; // the PS1 pad bits of each tick (past the end: none)
 };
+
+// "<ticks> <hex PS1 pad bits>; ..."
+std::vector<uint16_t> parsePad(const std::string& text) {
+    std::vector<uint16_t> pad;
+    std::stringstream all(text);
+    for (std::string step; std::getline(all, step, ';');) {
+        std::istringstream ss(step);
+        int ticks = 0;
+        unsigned bits = 0;
+        if (!(ss >> std::dec >> ticks >> std::hex >> bits)) throw std::invalid_argument("--world-pad: " + step);
+        pad.insert(pad.end(), size_t(std::max(ticks, 0)), uint16_t(bits));
+    }
+    return pad;
+}
 
 WorldArgs parseArgs(int argc, char** argv) {
     WorldArgs w;
@@ -53,6 +70,8 @@ WorldArgs parseArgs(int argc, char** argv) {
             w.ticks = std::stoull(argv[++i]);
         } else if (a == "--world-unpaced") {
             w.unpaced = true;
+        } else if (a == "--world-pad" && more) {
+            w.pad = parsePad(argv[++i]);
         } else if (a == "--story-save" && more) {
             w.storySave = argv[++i];
         }
@@ -121,7 +140,11 @@ int run(const WorldArgs& w) {
     uint64_t next = SDL_GetTicksNS(), statsNs = 0, statsMaxNs = 0, tick = 0;
     while (view->play && (w.ticks == 0 || tick < w.ticks)) {
         const uint64_t at = SDL_GetTicksNS();
-        view->playTick(0, 128, 128, 0.0f, 0.0f);
+        const uint16_t pad = tick < w.pad.size() ? w.pad[size_t(tick)] : uint16_t(0);
+        // the directions as the stick the logic reads when no stick is held, as the windowed game hands them
+        const float lx = float(((pad & 0x20) != 0) - ((pad & 0x80) != 0));
+        const float ly = float(((pad & 0x40) != 0) - ((pad & 0x10) != 0));
+        view->playTick(pad, 128, 128, lx, ly);
         if (view->assetsDirty) {
             view->assetsDirty = false;
             g_inStageSwitch = true;
