@@ -406,8 +406,12 @@ void OwnWorldClient::otherPlayerRules(uint8_t id, Other& o, const od::port::Play
     od::port::Player& p = od::port::playerById(table);
     const od::port::NetPlayerFields& f = o.from.fields();
     p.status = uint16_t((p.status & od::port::kStatusMarkerMask) | f.status);
-    p.specialFiring = int8_t(f.specialFiring);
     od::port::applyNetArm(p, f);
+    if (actors_->shotRunsFor(table)) { // the world's copy says when it ends, the owner's fields come later
+        p.specialFiring = 1;
+        p.held |= p.button(od::port::PlayerButton::Special);
+        p.armFlags |= od::port::kArmSpecial;
+    }
     const od::port::ScopedActingPlayer acting(table);
     od::port::showStatusMarkers(p);
     od::port::showChargeMarker(p, f.charge);

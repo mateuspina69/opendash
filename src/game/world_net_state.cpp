@@ -89,7 +89,7 @@ constexpr int kLockTolerance = 4; // units a lock-on point may drift before the 
 constexpr size_t kMaxLockPoints = 8;
 constexpr uint8_t kEventAppear = 1, kEventGo = 2, kEventAppearStill = 3, kEventEffect = 4, kEventShift = 5, kEventRoomPatch = 6; // Still: no animation in play
 constexpr size_t kBatchHeaderBytes = 8;
-constexpr size_t kAppearBytes = 26, kGoBytes = 2, kEffectBytes = 35 + 4 + 16;
+constexpr size_t kAppearBytes = 26, kGoBytes = 2, kEffectBytes = 35 + 4 + 16 + 1;
 constexpr int kPathPosTolerance = 32; // 1/16 units an actor may leave its path by before the world sends a new one
 constexpr int kPathRotTolerance = 16; // of a turn of 4096
 constexpr size_t kMaxInFlight = 64;
@@ -691,7 +691,8 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
         const bool live = a.live && !withheld;
         const bool same = k.told && live && a.generation == k.generation;
         if (same) continue;
-        if (k.told && k.effect) { // an effect ends by itself on the client
+        // an effect ends by itself on the client; a shot run from its event ends with the world's
+        if (k.told && k.effect && !(slot >= kShotClass && slot < kShotClass + ShotPool::size())) {
             k.told = false;
         } else if (k.told) {
             room(kGoBytes);
@@ -709,6 +710,7 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
             const NetEffect& e = a.effectStart;
             room(kEffectBytes);
             w.u8(kEventEffect);
+            w.u8(slot);
             w.u8(e.pool);
             w.u8(e.type);
             w.u8(e.subtype);
@@ -1028,6 +1030,7 @@ bool NetStateClient::applyEvents(std::span<const uint8_t> bytes) {
         const uint8_t kind = r.u8();
         if (kind == kEventEffect) {
             NetEffect e;
+            e.slot = r.u8();
             e.pool = r.u8();
             e.type = r.u8();
             e.subtype = r.u8();
@@ -1441,6 +1444,7 @@ void PoolNetActors::effect(const NetEffect& e) {
     }
     if (e.pool == kShotClass) {
         head.loopFlags = e.loopFlags;
+        if (shotsInOwnSlots_) ownSlot_[e.slot] = address; // the world's go ends it
         ++effectsStarted_;
         return;
     }
@@ -1586,6 +1590,15 @@ void PoolNetActors::tick(uint8_t slot, const NetActorState& state, const std::op
 }
 
 void PoolNetActors::endTick() { applyActorFrees(); }
+
+bool PoolNetActors::shotRunsFor(uint8_t tablePlayer) const {
+    for (size_t i = kShotClass; i < kShotClass + ShotPool::size(); ++i) {
+        if (ownSlot_[i] == 0) continue;
+        const ActorHeader& h = actorHeaderAt(ownSlot_[i]);
+        if ((h.flags & kActorLive) && (h.runFlags & kActorRun) && h.ownerPlayer == tablePlayer) return true;
+    }
+    return false;
+}
 
 void PoolNetActors::submitSolids() {
     for (size_t i = 0; i < kNetSlots; ++i) {

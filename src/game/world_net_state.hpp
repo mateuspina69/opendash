@@ -73,6 +73,7 @@ struct NetEffect {
     uint8_t parent = kNetNoParent; // the slot of the actor it hangs from (a walker's foot dust, a glow, a splash)
     uint8_t bone = 0;              // the point of the player it follows (a splash at a player's bone)
     uint8_t owner = 0;             // the player it belongs to (a blade's swing)
+    uint8_t slot = 0;              // the world's slot it ran in (a shot's: its go ends it here)
     uint8_t second = kNetNoParent; // a second actor it holds (a cable's cargo, a ribbon's other bomb)
     uint8_t subState = 0, step = 0, stepCounter = 0; // what its spawner set on the slot itself
     std::array<int16_t, 8> trail{};
@@ -406,6 +407,8 @@ public:
     void submitLockPoints();
     // the actor this machine holds for a world's slot (none: not here)
     ActorHeader* mirrorOf(uint8_t slot) const { return slotOf(slot); }
+    // a shot of this player of the table runs here from its event (a swing, a beam): it lasts until the world's ends
+    bool shotRunsFor(uint8_t tablePlayer) const;
     // the solids of the actors held here, for the actor collision pass
     void submitSolids();
     uint64_t effectsStarted() const { return effectsStarted_; }

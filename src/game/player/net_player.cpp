@@ -78,6 +78,7 @@ uint16_t maskOf(const NetPlayerFields& n, const NetPlayerFields& o) {
 } // namespace
 
 void applyNetArm(Player& p, const NetPlayerFields& f) {
+    p.specialFiring = int8_t(f.specialFiring); // a swing and a beam last while their owner fires
     const uint16_t special = p.button(PlayerButton::Special);
     if (f.specialHeld) {
         p.held |= special;
