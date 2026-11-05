@@ -32,6 +32,7 @@
 #include "game/player/player_snapshot.hpp"
 #include "game/player/remote_player.hpp"
 #include "game/title.hpp"
+#include "game/world_view.hpp"
 #include "game/world_digest.hpp"
 
 namespace od::app {
@@ -185,6 +186,7 @@ int run(const WorldArgs& w) {
     std::unique_ptr<WorldLink> link;
     if (w.linkPort != 0) {
         link = std::make_unique<WorldLink>(uint16_t(w.linkPort));
+        od::port::setWorldHasNoView(true);
         od::port::leavePlayer(0);
         link->sendReliable({WorldMessageType::Hello});
     }

@@ -12,6 +12,7 @@
 #include "content/saul_kada/st3c_minion.hpp"
 #include "content/saul_kada/st3c_minion_state.hpp"
 
+#include "game/world_view.hpp"
 #include "game/actor_pools.hpp"
 #include "game/actor_state.hpp"
 #include "game/angles.hpp"
@@ -105,7 +106,7 @@ void run(const PlayerEnv& env, ControllerActor& actor, SpawnerFields& spawner) {
             angle = int((rngLastValue() >> 0xa) & 0xfff) - 0x800;
         }
         int16_t dx, dz;
-        angleVector(angle + cameraState().viewAngles.y, -distance, dx, dz); // exe 0x5e40c0 into the projection point
+        angleVector(angle + viewYawNear(actingPlayer()), -distance, dx, dz); // exe 0x5e40c0 into the projection point
         LaneVec4& point = projectionScratch().point;
         point.x = dx;
         point.y = 0;

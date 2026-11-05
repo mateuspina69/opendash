@@ -1,4 +1,6 @@
 // What the camera sees (see visibility.hpp).
+#include <algorithm>
+#include "game/world_view.hpp"
 #include "game/player/players.hpp"
 #include "game/vectors.hpp"
 #include "game/visibility.hpp"
@@ -30,6 +32,10 @@ bool onScreenInRange(const CameraPoint& cp) {
 } // namespace
 
 int32_t pointVisibleOrNear(const int16_t v[3], uint32_t dist) {
+    if (worldHasNoView()) {
+        dist = std::max(dist, kWorldViewRange);
+        return anyPlayer([&](const Player& p) { return uint32_t(distance3(p.pos, v)) < dist; }) ? 0 : -1;
+    }
     ProjectionState& proj = projection();
     proj.camera = cameraTransform().view;
     proj.point.x = v[0];
@@ -49,6 +55,8 @@ int32_t pointVisibleOrNear(const Fixed16Vec3& pos, uint32_t dist) {
 
 int32_t pointOnScreenUnrecorded(const Fixed16Vec3& pos) {
     const int16_t v[3] = {pos.x.whole, pos.y.whole, pos.z.whole};
+    if (worldHasNoView())
+        return anyPlayer([&](const Player& p) { return uint32_t(distance3(p.pos, v)) < kWorldViewRange; }) ? 0 : -1;
     return onScreenInRange(cameraPoint(v)) ? 0 : -1;
 }
 

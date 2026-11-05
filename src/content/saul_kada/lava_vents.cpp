@@ -5,6 +5,7 @@
 #include "content/saul_kada/lava_vents_state.hpp"
 
 #include "engine/data_source.hpp"
+#include "game/world_view.hpp"
 #include "game/actor_movement.hpp"
 #include "game/actor_pools.hpp"
 #include "game/actor_state.hpp"
@@ -86,7 +87,7 @@ void plumeNear(const PlayerEnv& env, ControllerActor& actor, const Player& p) {
     rngStep();
     const uint32_t i = rngStep() & 3;
     int16_t dx, dz;
-    angleVector(int((plumeAngles[i] + uint16_t(cameraState().viewAngles.y)) & 0xfff), plumeDistances[i], dx,
+    angleVector(int((plumeAngles[i] + uint16_t(viewYawNear(p))) & 0xfff), plumeDistances[i], dx,
                 dz); // exe 0x5e40c0
     // the point near the player (integer parts), its height from the ground probe under the plume's box
     int16_t point[3] = {int16_t(dx + p.pos.x.whole), p.pos.y.whole, int16_t(dz + p.pos.z.whole)};

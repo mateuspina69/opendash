@@ -6,9 +6,13 @@
 
 #include "check.hpp"
 #include "game/actor_pools.hpp"
+#include "game/loaded_data.hpp"
 #include "game/player/player_state.hpp"
 #include "game/player/players.hpp"
+#include "game/player/remote_player.hpp"
 #include "game/random.hpp"
+#include "game/visibility.hpp"
+#include "game/world_view.hpp"
 #include "game/world_digest.hpp"
 
 using namespace od::port;
@@ -182,6 +186,46 @@ void testPlayerZeroAway() {
     resetPlayer();
 }
 
+// a player who leaves: what they owned goes to one still in the world
+void testOwnerLeaves() {
+    od::LoadedFileData files; // a remote player's animation frames are mapped there
+    const od::ScopedLoadedFiles bound(files);
+    resetActorPools();
+    actorSystem().shotsLive = 0;
+    PlayerSnapshot s;
+    remotePlayerJoin(2, s);
+    remotePlayerJoin(5, s);
+    uint32_t theirs = 0;
+    {
+        const ScopedActingPlayer acting(5);
+        theirs = allocActor10();
+    }
+    CHECK(shotActorAt(theirs).ownerPlayer == 5);
+    remotePlayerLeave(5);
+    CHECK(!playerIsRemote(5) && !playerPresent(5));
+    CHECK(shotActorAt(theirs).ownerPlayer == 0); // player 0 is in this world
+    remotePlayerLeave(2);
+    resetActorPools();
+    actorSystem().shotsLive = 0;
+}
+
+// a world without a screen: seen is near any player, and the view's direction is the player's
+void testNoView() {
+    resetPlayer();
+    player().pos.x = 0;
+    player().pos.z = 0;
+    player().rotation.y = 0x123;
+    const int16_t near[3] = {0, 0, 0x100};
+    const int16_t far[3] = {0, 0, int16_t(kWorldViewRange + 0x100)};
+    setWorldHasNoView(true);
+    CHECK(worldHasNoView());
+    CHECK(pointVisibleOrNear(near, 0x10) == 0); // within the view's range, whatever the caller's reach
+    CHECK(pointVisibleOrNear(far, 0x10) == -1);
+    CHECK(viewYawNear(player()) == 0x123);
+    setWorldHasNoView(false);
+    resetPlayer();
+}
+
 void testRefusals() {
     bool threw = false;
     try {
@@ -203,6 +247,8 @@ int main() {
     testActingPlayer();
     testWorldDigest();
     testPlayerZeroAway();
+    testOwnerLeaves();
+    testNoView();
     testRefusals();
     return testResult("test_player_table");
 }

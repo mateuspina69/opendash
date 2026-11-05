@@ -3,6 +3,7 @@
 
 #include <array>
 
+#include "game/actor_pools.hpp"
 #include "game/geometry_scratch.hpp"
 #include "game/player/player_pose.hpp"
 #include "game/player/player_state.hpp"
@@ -36,9 +37,26 @@ void remotePlayerState(size_t id, const PlayerSnapshot& s) {
     applyPlayerSnapshot(p, frameBytesOf(id), s);
 }
 
+namespace {
+// what the leaving player owned or was held by goes to another player: a grab reads its victim's state, and lets go
+template <class Pool> void reassignOwner(Pool& pool, size_t from, size_t to) {
+    for (size_t i = 0; i < Pool::size(); ++i)
+        if (pool[i].ownerPlayer == from) pool[i].ownerPlayer = uint8_t(to);
+}
+} // namespace
+
 void remotePlayerLeave(size_t id) {
     g_remote[id] = false;
     leavePlayer(id);
+    size_t heir = 0;
+    while (heir < kPlayerSlots && !playerPresent(heir)) ++heir;
+    if (heir == kPlayerSlots) heir = 0;
+    reassignOwner(shotPool(), id, heir);
+    reassignOwner(animatedPool(), id, heir);
+    reassignOwner(projectilePool(), id, heir);
+    reassignOwner(staticPool(), id, heir);
+    reassignOwner(effectPool(), id, heir);
+    reassignOwner(controllerPool(), id, heir);
 }
 
 bool playerIsRemote(size_t id) { return g_remote[id]; }

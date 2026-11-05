@@ -2,6 +2,7 @@
 // disassembly where the decompile was ambiguous. Not replicated (render scratch only, overwritten by every projection):
 // the float screen-coordinate / depth history of the exe's projection (0xa59a58..0xa59a6c, 0xa59d28..0xa59d34,
 // 0xa599e4).
+#include "game/world_view.hpp"
 #include "game/loaded_data.hpp"
 #include "game/actor_state.hpp"
 #include "game/encounter.hpp"
@@ -576,7 +577,7 @@ int fieldKeepTest(ActorHeader& a, TrackedActor& entry, uint32_t radius2, uint16_
         entry.id = uint16_t(entry.id - 1u);
         return entry.id != 0 ? 0 : -1;
     };
-    if (uint16_t(s.screenX) < kScreenWidth && uint16_t(s.screenY) < kScreenHeight) {
+    if (worldHasNoView() || (uint16_t(s.screenX) < kScreenWidth && uint16_t(s.screenY) < kScreenHeight)) {
         if (!(runFlags & kActorKeptAlways) && d2 > kSeenFarDistance2) return countDown();
     } else {
         a.runFlags = uint8_t(runFlags | kActorOffScreen);
