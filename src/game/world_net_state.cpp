@@ -10,6 +10,7 @@
 #include "game/actor_animation.hpp"
 #include "game/actor_model.hpp"
 #include "game/actor_pools.hpp"
+#include "game/animation_data.hpp"
 #include "game/loaded_data.hpp"
 #include "game/model_data.hpp"
 #include "game/stage_state.hpp"
@@ -56,12 +57,12 @@ struct Reader {
 };
 
 constexpr uint8_t kMaskX = 0x01, kMaskY = 0x02, kMaskZ = 0x04, kMaskYaw = 0x08, kMaskRotXZ = 0x10, kMaskAnim = 0x20,
-                  kMaskShown = 0x40, kMaskAnimAge = 0x80;
-constexpr uint8_t kEventAppear = 1, kEventGo = 2;
-constexpr size_t kUpdateHeaderBytes = 10;
+                  kMaskShown = 0x40, kMaskMore = 0x80;
+constexpr uint8_t kMoreAge = 0x01, kMoreKey = 0x02, kMoreHeld = 0x04, kMoreScale = 0x08, kMoreTint = 0x10, kMoreParts = 0x20,
+                  kMoreAim = 0x40;
+constexpr uint8_t kEventAppear = 1, kEventGo = 2, kEventAppearStill = 3; // Still: no animation in play
 constexpr size_t kBatchHeaderBytes = 8;
-constexpr size_t kAppearBytes = 22, kGoBytes = 2;
-constexpr size_t kMaxEntryBytes = 2 + 6 + 2 + 4 + 2;
+constexpr size_t kAppearBytes = 26, kGoBytes = 2;
 constexpr size_t kMaxInFlight = 64;
 constexpr size_t kMaxSamples = 32;
 
@@ -89,7 +90,7 @@ void NetWorldTable::seen(uint8_t slot, const Seen& s) {
     NetWorldActor& a = actors[slot];
     const bool occupantChanged = !a.live || a.identity.type != s.type || a.model != s.model || a.animTable != s.animTable;
     if (occupantChanged) {
-        a = NetWorldActor{true, a.generation + 1, {}, {}, s.model, s.animTable, 0};
+        a = NetWorldActor{true, a.generation + 1, {}, {}, s.bound, s.model, s.animTable, 0, 0, 0};
         a.state.animTick = kNetNoAnimTick;
         ++occupants;
     }
@@ -100,18 +101,39 @@ void NetWorldTable::seen(uint8_t slot, const Seen& s) {
     a.state.rot = s.rot;
     a.state.anim = s.anim;
     a.state.shown = s.shown;
-    if (s.animScript == 0) a.state.animTick = kNetNoAnimTick;
-    else if (previousTick == kNetNoAnimTick || previousAnim != s.anim || a.animScript != s.animScript)
+    a.state.visual = s.visual;
+    a.state.aim = s.aim;
+    // the animation does what stepping does, on the client too, until it does not: then the tick, and where it is
+    const auto mark = [&](bool held) {
         a.state.animTick = tick;
+        a.state.animKey = s.key;
+        a.state.animTicks = s.ticksLeft;
+        a.state.animKeyed = !s.atStart;
+        a.state.held = held;
+    };
+    if (s.animScript == 0) {
+        a.state.animTick = kNetNoAnimTick;
+        a.state.held = false;
+    } else if (previousTick == kNetNoAnimTick || previousAnim != s.anim || a.animScript != s.animScript) {
+        mark(false);
+    } else if (s.stepped) {
+        if (a.state.held) mark(false);
+    } else if (s.stayed) {
+        if (!a.state.held) mark(true);
+    } else {
+        mark(false);
+    }
     a.animScript = s.animScript;
+    a.lastKeyAt = s.keyAt;
+    a.lastTicks = s.ticksLeft;
 }
 
 void NetWorldTable::gone(uint8_t slot) { actors[slot].live = false; }
 
 namespace {
 
-// the entry of the stage's model bank the actor's model was bound from
-uint8_t modelEntryOf(uint32_t cls, uint32_t model, uint32_t animTable) {
+// the entry of the stage's model bank the actor's model was bound from, and what that bind gives
+uint8_t modelEntryOf(uint32_t cls, uint32_t model, uint32_t animTable, NetActorVisual& bound) {
     const uint32_t bank = stage().modelBank;
     if (bank == 0 || model == 0) return kNetNoModel;
     const FileDataReader records = loadedFile(bank, 4);
@@ -120,9 +142,42 @@ uint8_t modelEntryOf(uint32_t cls, uint32_t model, uint32_t animTable) {
         const auto entry = FileDataRef<ModelBankEntryData>(records.sub(4 + size_t(i) * 16)).get();
         if (cls != (entry.key & 0xf0u) || entry.model + bank != model) continue;
         if (cls == kAnimatedClass && entry.animTable + bank != animTable) continue;
+        const auto header = FileDataRef<ModelHeaderData>(loadedFile(entry.model + bank, 56)).get();
+        bound.scale = {header.scale.x, header.scale.y, header.scale.z};
+        bound.tint = kTintNeutral;
+        bound.hiddenParts = 0;
+        if (cls == kAnimatedClass) {
+            const uint32_t slots = std::min<uint32_t>(header.counts & 0xff, 24);
+            for (uint32_t k = 0; k < slots; ++k)
+                if (modelPart(header.parts + bank, k).flags & kPartHidden) bound.hiddenParts |= 1u << k;
+        }
         return uint8_t(i);
     }
     return kNetNoModel;
+}
+
+// what classes added to the frames at their last pose, by animated slot
+std::array<std::vector<NetAimOffset>, kAnimatedFieldSlots>& poseEdits() {
+    static std::array<std::vector<NetAimOffset>, kAnimatedFieldSlots> edits;
+    return edits;
+}
+
+void notePoseEdits(const AnimatedActor& a) {
+    const uint32_t i = AnimatedPool::index(a);
+    if (i >= kAnimatedFieldSlots) return;
+    std::vector<NetAimOffset>& edits = poseEdits()[i];
+    edits.clear();
+    FrameAngles frame;
+    if (!animFrameAsDecoded(a, frame)) return;
+    DecodedFrame& decoded = decodedFrame();
+    // entry 0 is the root's offset, which a pose changes in place: no class edits it
+    for (uint32_t e = 1; e < frame.count; ++e) {
+        const LaneVec4 now = decoded.entries[e];
+        const std::array<int16_t, 3> lanes = {int16_t(uint16_t(now.x) - uint16_t(frame.entries[e][0])),
+                                              int16_t(uint16_t(now.y) - uint16_t(frame.entries[e][1])),
+                                              int16_t(uint16_t(now.z) - uint16_t(frame.entries[e][2]))};
+        if (lanes[0] != 0 || lanes[1] != 0 || lanes[2] != 0) edits.push_back({uint8_t(e), lanes});
+    }
 }
 
 NetWorldTable::Seen seenOf(const Actor& a, uint32_t model, uint32_t animTable) {
@@ -151,12 +206,18 @@ template <class Pool> void captureMeshPool(NetWorldTable& table, Pool& pool, siz
         const NetWorldActor& held = table.actors[slot];
         s.modelEntry = held.live && held.model == a.model && held.identity.type == a.type
                            ? held.identity.modelEntry
-                           : modelEntryOf(actorSlotClass(slot), a.model, 0);
+                           : modelEntryOf(actorSlotClass(slot), a.model, 0, s.bound);
+        if (s.modelEntry != kNetNoModel) {
+            s.visual.scale = {a.scale.x, a.scale.y, a.scale.z};
+            s.visual.tint = a.tint;
+        }
         table.seen(slot, s);
     }
 }
 
 } // namespace
+
+void watchNetPoses() { setAnimPoseObserver(notePoseEdits); }
 
 void captureNetWorld(NetWorldTable& table, uint32_t tick) {
     table.tick = tick;
@@ -176,7 +237,24 @@ void captureNetWorld(NetWorldTable& table, uint32_t tick) {
         const NetWorldActor& held = table.actors[slot];
         s.modelEntry = held.live && held.model == s.model && held.animTable == s.animTable && held.identity.type == a.type
                            ? held.identity.modelEntry
-                           : modelEntryOf(kAnimatedClass, s.model, s.animTable);
+                           : modelEntryOf(kAnimatedClass, s.model, s.animTable, s.bound);
+        if (s.modelEntry != kNetNoModel) {
+            s.visual.scale = {a.scale.x, a.scale.y, a.scale.z};
+            s.visual.tint = a.tint;
+            const uint32_t slots = std::min<uint32_t>(a.boneSlotCount, 24);
+            for (uint32_t k = 0; k < slots; ++k)
+                if (a.parts[k].flags & kPartHidden) s.visual.hiddenParts |= 1u << k;
+            s.aim = poseEdits()[i];
+        }
+        if (s.animScript != 0) {
+            s.keyAt = a.animKeyAt.value();
+            s.key = uint16_t((s.keyAt - s.animScript) / 4);
+            s.ticksLeft = a.animKey.ticks;
+            s.atStart = s.key == 0 && a.animKey.ticks == animationKey(s.keyAt).ticks;
+            const AnimKeyPlace now{s.keyAt, s.ticksLeft}, last{held.lastKeyAt, held.lastTicks};
+            s.stayed = held.lastKeyAt != 0 && now == last;
+            s.stepped = held.lastKeyAt != 0 && held.animScript == s.animScript && animStepWouldGive(a, last) == now;
+        }
         table.seen(slot, s);
     }
     captureMeshPool(table, staticPool(), StaticPool::size());
@@ -229,7 +307,8 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
         }
         if (!a.live) continue;
         room(kAppearBytes);
-        w.u8(kEventAppear);
+        const bool playing = a.state.animTick != kNetNoAnimTick;
+        w.u8(playing ? kEventAppear : kEventAppearStill);
         w.u8(slot);
         w.u8(a.identity.type);
         w.u8(a.identity.subtype);
@@ -238,15 +317,20 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
         w.u8(a.state.shown ? 1 : 0);
         for (const int16_t v : a.state.pos) w.i16(v);
         for (const int16_t v : a.state.rot) w.i16(v);
-        w.u8(a.state.anim);
-        w.u16(a.state.animTick == kNetNoAnimTick
-                  ? kNetAnimNotPlaying
-                  : uint16_t(std::min<uint32_t>(table.tick - a.state.animTick, kNetAnimNotPlaying - 1)));
+        if (playing) {
+            w.u8(a.state.anim);
+            w.u16(uint16_t(std::min<uint32_t>(table.tick - a.state.animTick, kNetAnimNotPlaying - 1)));
+            w.u16(a.state.animKeyed ? a.state.animKey : uint16_t(0));
+            w.u8(a.state.animKeyed ? a.state.animTicks : uint8_t(0));
+            w.u8(uint8_t((a.state.held ? 2 : 0) | (a.state.animKeyed ? 1 : 0)));
+        }
         ++eventsSent_;
         k.told = true;
         k.generation = a.generation;
         k.acked = a.state;
-        k.sent = a.state;
+        k.acked.visual = a.bound; // a client's bind gives it; a class's change goes in an update
+        k.acked.aim.clear();
+        k.sent = k.acked;
     }
     if (w.bytes.size() > kBatchHeaderBytes) batches.push_back(std::move(w.bytes));
     return batches;
@@ -268,11 +352,6 @@ std::vector<uint8_t> NetStateSender::update(const NetWorldTable& table) {
         const NetWorldActor& a = table.actors[i];
         if (!k.told || !a.live || a.generation != k.generation) continue;
         if (a.state == k.acked && a.state == k.sent) continue;
-        if (w.bytes.size() + kMaxEntryBytes > kNetMaxPayload) {
-            if (!cut) cursor_ = i; // the next update starts with what did not fit
-            cut = true;
-            break;
-        }
         uint8_t mask = a.state.shown ? kMaskShown : 0;
         // a field goes while it differs from what the client is known to hold or from what it may hold by now
         const auto differs = [&](const auto member) { return a.state.*member != k.acked.*member || a.state.*member != k.sent.*member; };
@@ -287,24 +366,61 @@ std::vector<uint8_t> NetStateSender::update(const NetWorldTable& table) {
         const bool playing = a.state.animTick != kNetNoAnimTick;
         const bool animChanged = playing && (differs(&NetActorState::anim) || differs(&NetActorState::animTick));
         const uint8_t age = playing ? animAgeByte(table.tick, a.state.animTick) : 0;
+        uint8_t more = 0;
         if (animChanged) {
             mask |= kMaskAnim;
-            if (age != 0) mask |= kMaskAnimAge;
+            if (age != 0) more |= kMoreAge;
+            if (a.state.animKeyed) more |= kMoreKey;
+            if (a.state.held) more |= kMoreHeld;
         }
-        w.u8(uint8_t(i));
-        w.u8(mask);
-        if (mask & kMaskX) w.i16(a.state.pos[0]);
-        if (mask & kMaskY) w.i16(a.state.pos[1]);
-        if (mask & kMaskZ) w.i16(a.state.pos[2]);
-        if (mask & kMaskYaw) w.i16(a.state.rot[1]);
+        const NetActorVisual &v = a.state.visual, &va = k.acked.visual, &vs = k.sent.visual;
+        if (v.scale != va.scale || v.scale != vs.scale) more |= kMoreScale;
+        if (v.tint != va.tint || v.tint != vs.tint) more |= kMoreTint;
+        if (v.hiddenParts != va.hiddenParts || v.hiddenParts != vs.hiddenParts) more |= kMoreParts;
+        if (a.state.aim != k.acked.aim || a.state.aim != k.sent.aim) more |= kMoreAim;
+        if (more) mask |= kMaskMore;
+        Writer e;
+        e.u8(uint8_t(i));
+        e.u8(mask);
+        if (more) e.u8(more);
+        if (mask & kMaskX) e.i16(a.state.pos[0]);
+        if (mask & kMaskY) e.i16(a.state.pos[1]);
+        if (mask & kMaskZ) e.i16(a.state.pos[2]);
+        if (mask & kMaskYaw) e.i16(a.state.rot[1]);
         if (mask & kMaskRotXZ) {
-            w.i16(a.state.rot[0]);
-            w.i16(a.state.rot[2]);
+            e.i16(a.state.rot[0]);
+            e.i16(a.state.rot[2]);
         }
-        if (mask & kMaskAnim) {
-            w.u8(a.state.anim);
-            if (mask & kMaskAnimAge) w.u8(age);
+        if (mask & kMaskAnim) e.u8(a.state.anim);
+        if (more & kMoreAge) e.u8(age);
+        if (more & kMoreKey) {
+            e.u16(a.state.animKey);
+            e.u8(a.state.animTicks);
         }
+        if (more & kMoreScale)
+            for (const int16_t c : v.scale) e.i16(c);
+        if (more & kMoreTint) e.u16(v.tint);
+        if (more & kMoreParts) {
+            e.u16(uint16_t(v.hiddenParts));
+            e.u8(uint8_t(v.hiddenParts >> 16));
+        }
+        if (more & kMoreAim) {
+            e.u8(uint8_t(a.state.aim.size()));
+            for (const NetAimOffset& o : a.state.aim) {
+                uint8_t lanes = 0;
+                for (size_t l = 0; l < 3; ++l)
+                    if (o.lanes[l] != 0) lanes |= uint8_t(1u << l);
+                e.u8(uint8_t(o.entry | lanes << 5));
+                for (size_t l = 0; l < 3; ++l)
+                    if (o.lanes[l] != 0) e.i16(o.lanes[l]);
+            }
+        }
+        if (w.bytes.size() + e.bytes.size() > kNetMaxPayload) {
+            cursor_ = i; // the next update starts with what did not fit
+            cut = true;
+            break;
+        }
+        w.bytes.insert(w.bytes.end(), e.bytes.begin(), e.bytes.end());
         sent.entries.push_back({uint8_t(i), a.generation, a.state});
         k.sent = a.state;
     }
@@ -357,8 +473,14 @@ double NetRenderClock::at(uint64_t nowNs) {
 
 void NetStateClient::noteStart(Occupant& o, const NetActorState& s) {
     if (s.animTick == kNetNoAnimTick) return;
-    if (!o.starts.empty() && o.starts.back().tick == s.animTick && o.starts.back().anim == s.anim) return; // a resend
-    o.starts.push_back({s.animTick, s.anim});
+    if (!o.starts.empty() && o.starts.back().tick == s.animTick && o.starts.back().start.anim == s.anim) return; // a resend
+    NetClientActors::AnimStart start;
+    start.anim = s.anim;
+    start.key = s.animKey;
+    start.ticks = s.animTicks;
+    start.keyed = s.animKeyed;
+    start.held = s.held;
+    o.starts.push_back({s.animTick, start});
 }
 
 bool NetStateClient::applyEvents(std::span<const uint8_t> bytes) {
@@ -374,7 +496,7 @@ bool NetStateClient::applyEvents(std::span<const uint8_t> bytes) {
                 due_.push_back({tick, false, o});
                 o = nullptr;
             }
-        } else if (kind == kEventAppear) {
+        } else if (kind == kEventAppear || kind == kEventAppearStill) {
             auto o = std::make_shared<Occupant>();
             o->slot = slot;
             o->identity.type = r.u8();
@@ -384,9 +506,15 @@ bool NetStateClient::applyEvents(std::span<const uint8_t> bytes) {
             o->last.shown = r.u8() != 0;
             for (int16_t& v : o->last.pos) v = r.i16();
             for (int16_t& v : o->last.rot) v = r.i16();
-            o->last.anim = r.u8();
-            const uint16_t age = r.u16();
-            o->last.animTick = age == kNetAnimNotPlaying ? kNetNoAnimTick : tick - age;
+            if (kind == kEventAppear) {
+                o->last.anim = r.u8();
+                o->last.animTick = tick - r.u16();
+                o->last.animKey = r.u16();
+                o->last.animTicks = r.u8();
+                const uint8_t bits = r.u8();
+                o->last.animKeyed = (bits & 1) != 0;
+                o->last.held = (bits & 2) != 0;
+            }
             o->appearedAtEvent = eventsArrived_ + 1;
             o->samples.push_back({tick, o->last});
             noteStart(*o, o->last);
@@ -411,6 +539,7 @@ std::optional<uint16_t> NetStateClient::applyParsed(std::span<const uint8_t> byt
     while (r.ok && r.at < bytes.size()) {
         const uint8_t slot = r.u8();
         const uint8_t mask = r.u8();
+        const uint8_t more = (mask & kMaskMore) ? r.u8() : uint8_t(0);
         Occupant* o = heardOf_[slot].get();
         NetActorState s = o ? o->last : NetActorState{};
         if (mask & kMaskX) s.pos[0] = r.i16();
@@ -422,9 +551,38 @@ std::optional<uint16_t> NetStateClient::applyParsed(std::span<const uint8_t> byt
             s.rot[2] = r.i16();
         }
         s.shown = (mask & kMaskShown) != 0;
+        if (mask & kMaskAnim) s.anim = r.u8();
+        const uint32_t age = (more & kMoreAge) ? r.u8() : 0u;
+        s.animKeyed = false;
+        if (more & kMoreKey) {
+            s.animKey = r.u16();
+            s.animTicks = r.u8();
+            s.animKeyed = true;
+        }
         if (mask & kMaskAnim) {
-            s.anim = r.u8();
-            s.animTick = tick - ((mask & kMaskAnimAge) ? r.u8() : 0u);
+            s.animTick = tick - age;
+            s.held = (more & kMoreHeld) != 0;
+        }
+        if (more & kMoreScale) {
+            for (int16_t& c : s.visual.scale) c = r.i16();
+            s.told |= kNetToldScale;
+        }
+        if (more & kMoreTint) {
+            s.visual.tint = r.u16();
+            s.told |= kNetToldTint;
+        }
+        if (more & kMoreParts) {
+            s.visual.hiddenParts = r.u16();
+            s.visual.hiddenParts |= uint32_t(r.u8()) << 16;
+            s.told |= kNetToldParts;
+        }
+        if (more & kMoreAim) {
+            s.aim.resize(r.u8());
+            for (NetAimOffset& a : s.aim) {
+                const uint8_t head = r.u8();
+                a.entry = head & 0x1f;
+                for (size_t l = 0; l < 3; ++l) a.lanes[l] = (head >> (5 + l) & 1) ? r.i16() : int16_t(0);
+            }
         }
         changed[slot] = s;
     }
@@ -519,11 +677,17 @@ void NetStateClient::advance(uint32_t tick) {
                     s.pos[i] = int16_t(int(a.state.pos[i]) + int(std::floor(double(int(b.state.pos[i]) - int(a.state.pos[i])) * f + 0.5)));
                     s.rot[i] = lerpAngle(a.state.rot[i], b.state.rot[i], f);
                 }
+            // an aim turns as the rotation does; a list that changed goes as it is at the state before
+            if (a.state.aim.size() == b.state.aim.size())
+                for (size_t n = 0; n < s.aim.size(); ++n)
+                    if (a.state.aim[n].entry == b.state.aim[n].entry)
+                        for (size_t l = 0; l < 3; ++l) s.aim[n].lanes[l] = lerpAngle(a.state.aim[n].lanes[l], b.state.aim[n].lanes[l], f);
         }
         // the newest animation due: a shorter one between two updates was over before anyone saw it
         std::optional<NetClientActors::AnimStart> start;
         while (!o.starts.empty() && int32_t(o.starts.front().tick - tick) <= 0) {
-            start = NetClientActors::AnimStart{o.starts.front().anim, tick - o.starts.front().tick};
+            start = o.starts.front().start;
+            start->steps = tick - o.starts.front().tick;
             o.starts.pop_front();
         }
         actors_.tick(o.slot, s, start);
@@ -569,17 +733,57 @@ void PoolNetActors::tick(uint8_t slot, const NetActorState& state, const std::op
     a.rotation.y = state.rot[1];
     a.rotation.z = state.rot[2];
     a.setDrawn(state.shown);
+    if (actorSlotClass(slot) != kAnimatedClass) {
+        MeshActor& mesh = meshActorAt(a.at);
+        if (state.told & kNetToldScale) {
+            mesh.scale.x = state.visual.scale[0];
+            mesh.scale.y = state.visual.scale[1];
+            mesh.scale.z = state.visual.scale[2];
+        }
+        if (state.told & kNetToldTint) mesh.tint = state.visual.tint;
+        return;
+    }
     if (!animates_[slot]) return;
     AnimatedActor& animated = asAnimated(a);
+    if (state.told & kNetToldScale) {
+        animated.scale.x = state.visual.scale[0];
+        animated.scale.y = state.visual.scale[1];
+        animated.scale.z = state.visual.scale[2];
+    }
+    if (state.told & kNetToldTint) animated.tint = state.visual.tint;
+    if (state.told & kNetToldParts) {
+        const uint32_t slots = std::min<uint32_t>(animated.boneSlotCount, 24);
+        for (uint32_t k = 0; k < slots; ++k) {
+            uint8_t& flags = animated.parts[k].flags;
+            flags = (state.visual.hiddenParts >> k & 1) ? uint8_t(flags | kPartHidden) : uint8_t(flags & ~kPartHidden);
+        }
+    }
     // an animation byte that names nothing in the client's files stops that actor's animation, not the client
     try {
         if (start) {
-            animSet(animated, start->anim, 0);
-            for (uint32_t i = 0; i < start->steps; ++i) animStep(animated);
-            animPose(animated);
-        } else if (animated.animScript.value() != 0) {
-            animStepPose(animated);
+            animSet(animated, start->anim, start->keyed ? int(start->key) : 0);
+            if (start->keyed) {
+                animated.animKey.ticks = start->ticks;
+                animDecodeCurrent(animated);
+            }
+            held_[slot] = start->held;
+            if (!start->held)
+                for (uint32_t i = 0; i < start->steps; ++i) animStep(animated);
+        } else if (animated.animScript.value() == 0) {
+            return;
+        } else if (held_[slot]) {
+            animDecodeCurrent(animated);
+        } else {
+            animStep(animated);
         }
+        DecodedFrame& decoded = decodedFrame();
+        for (const NetAimOffset& o : state.aim) {
+            if (o.entry >= DecodedFrame::kEntries) continue;
+            const LaneVec4 at = decoded.entries[o.entry];
+            decoded.entries[o.entry].assign(int16_t(uint16_t(at.x) + uint16_t(o.lanes[0])), int16_t(uint16_t(at.y) + uint16_t(o.lanes[1])),
+                                            int16_t(uint16_t(at.z) + uint16_t(o.lanes[2])));
+        }
+        animPose(animated);
     } catch (const std::exception&) {
         animates_[slot] = false;
     }
@@ -599,9 +803,15 @@ void poseRecord(std::FILE* file, uint32_t tick, const Actor& a, const AnimatedAc
     uint16_t parts = 0;
     if (animated && animated->boneBlocks != 0 && animated->animScript.value() != 0) parts = animated->partCount;
     w.u8(animated ? animated->anim : 0);
-    w.u8(animated ? animated->keyIndex : 0);
+    w.u16(animated && parts != 0 ? uint16_t((animated->animKeyAt.value() - animated->animScript.value()) / 4) : uint16_t(0));
     w.u8(animated ? uint8_t(animated->animKey.frame) : 0);
     w.u8(animated ? animated->animKey.ticks : 0);
+    uint32_t hidden = 0;
+    if (animated)
+        for (uint32_t k = 0; k < std::min<uint32_t>(animated->boneSlotCount, 24); ++k)
+            if (animated->parts[k].flags & kPartHidden) hidden |= 1u << k;
+    w.u16(animated && parts != 0 ? animated->tint : uint16_t(0));
+    w.u32(hidden);
     w.i16(a.pos.x.whole);
     w.i16(a.pos.y.whole);
     w.i16(a.pos.z.whole);
@@ -668,9 +878,11 @@ std::vector<NetPoseRecord> readNetPoses(const std::filesystem::path& file) {
         p.slot = r.u8();
         p.type = r.u8();
         p.anim = r.u8();
-        p.keyIndex = r.u8();
+        p.key = r.u16();
         p.frame = int8_t(r.u8());
         p.ticksLeft = r.u8();
+        p.tint = r.u16();
+        p.hiddenParts = r.u32();
         for (int16_t& v : p.pos) v = r.i16();
         for (int16_t& v : p.rot) v = r.i16();
         const uint16_t parts = r.u16();

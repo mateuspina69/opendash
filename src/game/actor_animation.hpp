@@ -23,6 +23,23 @@ void animDecodeCurrent(AnimatedActor& actor);
 // exe 0x5e2d90 (+ the hierarchy 0x5e2de0): the pose of the decoded frame -- the root matrix (Ry Rx Rz of the
 // rotation, times the previous root with kActorPoseOnRoot), scaled, then every part's matrix and point
 void animPose(AnimatedActor& actor);
+// Called at the start of every animPose when set, for a reader that changes nothing (game/world_net_state)
+using AnimPoseObserver = void (*)(const AnimatedActor& actor);
+void setAnimPoseObserver(AnimPoseObserver observer);
+// entry `i` (x, y, z) of the actor's current key's frame as animDecodeCurrent decodes it, read from the files: the decode
+// buffer is not touched. false past the frame's entries, or with no animation.
+struct FrameAngles {
+    std::array<std::array<int16_t, 3>, 25> entries{};
+    uint32_t count = 0;
+};
+bool animFrameAsDecoded(const AnimatedActor& actor, FrameAngles& out);
+// the key and the ticks left the actor's next animStep would give from (keyAt, ticks), read from the files
+struct AnimKeyPlace {
+    uint32_t keyAt = 0;
+    uint8_t ticks = 0;
+    friend bool operator==(const AnimKeyPlace&, const AnimKeyPlace&) = default;
+};
+AnimKeyPlace animStepWouldGive(const AnimatedActor& actor, AnimKeyPlace from);
 // exe 0x5e1c30: animSet + animPose
 void animSetPose(AnimatedActor& actor, uint32_t anim, int key);
 // exe 0x5e1e80: animStep + animPose

@@ -177,7 +177,7 @@ void testEventsFirstAndReuse() {
     other.modelEntry = 4;
     t.seen(kSlotA, other);
     const auto batches = sender.events(t);
-    CHECK(batches.size() == 1 && batches[0].size() == 8 + 2 + 22);
+    CHECK(batches.size() == 1 && batches[0].size() == 8 + 2 + 26);
     for (const auto& batch : batches) CHECK(client.applyEvents(batch));
     CHECK(client.applyUpdate(before).has_value());
     client.advance(5);
@@ -225,6 +225,70 @@ void testFitsOneDatagram() {
     }
     CHECK(sender.updatesCut() >= 1);
     CHECK(told.size() == 88);
+}
+
+// what a class changes of its model, and a pose held: small fields, only when they change
+void testVisualFields() {
+    NetWorldTable t;
+    NetStateSender sender;
+    Recorded rec;
+    NetStateClient client(rec);
+    NetWorldTable::Seen s = seenAt(100);
+    s.bound.scale = {0x200, 0x200, 0x200};
+    s.bound.tint = 0x4210;
+    s.visual = s.bound;
+    t.seen(kSlotA, s);
+    for (const auto& batch : sender.events(t)) CHECK(client.applyEvents(batch));
+    sender.acknowledge(*client.applyUpdate(sender.update(t))); // what the bind gives is not told
+    t.tick = 2;
+    s.visual.scale = {0x220, 0x1e0, 0x220};
+    s.visual.tint = 0x7fff;
+    s.visual.hiddenParts = 0x10004;
+    s.aim = {{2, {0, 40, 0}}, {5, {7, 0, -3}}};
+    t.seen(kSlotA, s);
+    const auto u = sender.update(t);
+    // slot, mask, second mask, scale, tint, parts, count, an entry of one lane, an entry of two
+    CHECK(u.size() == kHeader + 3 + 6 + 2 + 3 + 1 + 3 + 5);
+    const auto seq = client.applyUpdate(u);
+    CHECK(seq.has_value());
+    client.advance(2);
+    const NetActorState& shown = rec.last[kSlotA];
+    CHECK(shown.visual.scale[1] == 0x1e0 && shown.visual.tint == 0x7fff && shown.visual.hiddenParts == 0x10004);
+    CHECK(shown.told == (kNetToldScale | kNetToldTint | kNetToldParts));
+    CHECK(shown.aim == s.aim);
+    sender.acknowledge(*seq);
+    t.tick = 4;
+    t.seen(kSlotA, s);
+    CHECK(sender.update(t).size() == kHeader);
+    // the animation stays where it is: one flag, with the key
+    t.tick = 6;
+    s.stepped = false;
+    s.stayed = true;
+    s.key = 9;
+    s.ticksLeft = 2;
+    s.atStart = false;
+    t.seen(kSlotA, s);
+    const auto h = sender.update(t);
+    CHECK(h.size() == kHeader + 3 + 1 + 3);
+    rec.starts.clear();
+    const auto seqHeld = client.applyUpdate(h);
+    CHECK(seqHeld.has_value());
+    client.advance(6);
+    CHECK(rec.starts.size() == 1 && rec.starts[0].second.held && rec.starts[0].second.keyed &&
+          rec.starts[0].second.key == 9 && rec.starts[0].second.ticks == 2);
+    sender.acknowledge(*seqHeld);
+    // it stays: nothing goes; it steps again: told once
+    t.tick = 8;
+    t.seen(kSlotA, s);
+    CHECK(sender.update(t).size() == kHeader);
+    t.tick = 10;
+    s.stepped = true;
+    s.stayed = false;
+    t.seen(kSlotA, s);
+    rec.starts.clear();
+    CHECK(client.applyUpdate(sender.update(t)).has_value());
+    client.advance(10);
+    CHECK(rec.starts.size() == 1 && !rec.starts[0].second.held);
 }
 
 void testLinkMessages() {
@@ -277,7 +341,7 @@ struct Tally {
     uint64_t posExact = 0, posWithin2 = 0, posWithin8 = 0, posWithin32 = 0;
     int posWorst = 0;
     uint64_t rotExact = 0, rotWithin16 = 0;
-    uint64_t animated = 0, animSame = 0, keySame = 0;
+    uint64_t animated = 0, animSame = 0, keySame = 0, tintSame = 0, partsSame = 0;
     uint64_t stateTicks = 0, stateKeySame = 0, statePoseSame = 0, stateKeySamePoseSame = 0;
 };
 
@@ -405,7 +469,9 @@ std::string runRoom(const char* exe, const char* save, const std::filesystem::pa
         TypeTally& type = types[r.type];
         ++type.records;
         const bool animSame = r.anim == v.anim;
-        const bool keySame = animSame && r.keyIndex == v.keyIndex && r.frame == v.frame && r.ticksLeft == v.ticksLeft;
+        const bool keySame = animSame && r.key == v.key && r.frame == v.frame && r.ticksLeft == v.ticksLeft;
+        t.tintSame += r.tint == v.tint;
+        t.partsSame += r.hiddenParts == v.hiddenParts;
         const bool poseSame = keySame && r.bones == v.bones;
         t.animSame += animSame;
         type.animSame += animSame;
@@ -431,8 +497,10 @@ std::string runRoom(const char* exe, const char* save, const std::filesystem::pa
                 "%.1f%%, within 16/4096 %.1f%%\n",
                 pct(t.posExact, t.both), pct(t.posWithin2, t.both), pct(t.posWithin8, t.both), pct(t.posWithin32, t.both),
                 t.posWorst, pct(t.rotExact, t.both), pct(t.rotWithin16, t.both));
-    std::printf("  animated records %llu: same animation %.1f%%, same key (animation, key, frame, ticks left) %.1f%%\n",
-                (unsigned long long)t.animated, pct(t.animSame, t.animated), pct(t.keySame, t.animated));
+    std::printf("  animated records %llu: same animation %.1f%%, same key (animation, key, frame, ticks left) %.1f%%, same tint "
+                "%.1f%%, same hidden parts %.1f%%\n",
+                (unsigned long long)t.animated, pct(t.animSame, t.animated), pct(t.keySame, t.animated),
+                pct(t.tintSame, t.animated), pct(t.partsSame, t.animated));
     std::printf("  at a state's tick (%llu): same key %.1f%%, pose bit-identical %.1f%%\n", (unsigned long long)t.stateTicks,
                 pct(t.stateKeySame, t.stateTicks), pct(t.statePoseSame, t.stateTicks));
     for (const auto& [type, n] : types)
@@ -455,6 +523,7 @@ int main(int argc, char** argv) {
     testLostUpdate();
     testEventsFirstAndReuse();
     testFitsOneDatagram();
+    testVisualFields();
     testLinkMessages();
     if (argc >= 4) {
         SDL_Init(0);

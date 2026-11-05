@@ -13,9 +13,13 @@
 //   client's own files and runs animSetPose / animStepPose; no class update runs.
 //
 // Update payload (little-endian): u16 sequence, u32 tick, u32 events sent so far, then per actor: u8 slot, u8 mask,
-//   the fields of the mask's bits: i16 x, i16 y, i16 z, i16 yaw, i16 rotation x + i16 rotation z, u8 animation, u8 its age.
+//   the fields of the mask's bits: i16 x, i16 y, i16 z, i16 yaw, i16 rotation x + i16 rotation z, u8 animation; with the
+//   mask's top bit a second mask: u8 the animation's age, u16 key + u8 ticks left, i16 scale x, y, z, u16 tint, u24 hidden
+//   parts, u8 count + the aim offsets (u8 entry | lanes << 5, i16 per lane).
 // Event batch: u32 tick, u32 index of the batch's first event, then per event: u8 kind, Appear: u8 slot, type, subtype,
-//   variant, the model bank's entry, shown; i16 x, y, z, rotation x, y, z; u8 animation, u16 its age. Go: u8 slot.
+//   variant, the model bank's entry, shown; i16 x, y, z, rotation x, y, z; with an animation in play u8 animation, u16 its
+//   age, u16 key, u8 ticks left, u8 held. Go: u8 slot. What a class changes of the model (scale, tint, hidden parts, aim)
+//   goes in the updates, against what the model binds: a client's bind gives the same.
 #pragma once
 
 #include <array>
@@ -54,15 +58,39 @@ struct NetActorIdentity {
     friend bool operator==(const NetActorIdentity&, const NetActorIdentity&) = default;
 };
 
+// What a class adds to a decoded frame's angles before the pose (a head's aim, a turret's yaw, a spin): the difference from
+// the frame in the files, by entry
+struct NetAimOffset {
+    uint8_t entry = 0;
+    std::array<int16_t, 3> lanes{};
+    friend bool operator==(const NetAimOffset&, const NetAimOffset&) = default;
+};
+
+// What a class changes of its model
+struct NetActorVisual {
+    std::array<int16_t, 3> scale{};
+    uint16_t tint = 0;
+    uint32_t hiddenParts = 0; // bit k: part k carries kPartHidden
+    friend bool operator==(const NetActorVisual&, const NetActorVisual&) = default;
+};
+
 // What moves
 struct NetActorState {
     std::array<int16_t, 3> pos{}; // the whole part of the 16.16 position: what the game's pose reads
     std::array<int16_t, 3> rot{}; // x / y / z as the game holds them
     uint8_t anim = 0;             // the class's choice
-    uint32_t animTick = kNetNoAnimTick; // the tick it was chosen
+    uint32_t animTick = kNetNoAnimTick; // the tick the animation last did what stepping would not: started, jumped, held
+    uint16_t animKey = 0;         // on that tick: the key (of the animation's script) and its ticks left
+    uint8_t animTicks = 0;
+    bool animKeyed = false;       // ... which are not the animation's start
+    bool held = false;            // the class decodes the key without stepping it
     bool shown = false;
+    NetActorVisual visual;
+    std::vector<NetAimOffset> aim;
+    uint8_t told = 0;             // a client's: which of the visual's fields the world has said (kNetTold...)
     friend bool operator==(const NetActorState&, const NetActorState&) = default;
 };
+constexpr uint8_t kNetToldScale = 1, kNetToldTint = 2, kNetToldParts = 4;
 
 // An actor as the world's table holds it
 struct NetWorldActor {
@@ -70,7 +98,10 @@ struct NetWorldActor {
     uint32_t generation = 0; // counts this slot's occupants
     NetActorIdentity identity;
     NetActorState state;
+    NetActorVisual bound;    // what the model binds: what a client has without being told
     uint32_t model = 0, animTable = 0, animScript = 0; // what tells that the occupant changed or an animation started
+    uint32_t lastKeyAt = 0;  // the animation's place on the last tick
+    uint8_t lastTicks = 0;
 };
 
 class NetWorldTable {
@@ -87,6 +118,14 @@ public:
         std::array<int16_t, 3> pos{}, rot{};
         uint8_t anim = 0;
         bool shown = false;
+        uint16_t key = 0;     // the animation's place
+        uint8_t ticksLeft = 0;
+        uint32_t keyAt = 0;
+        bool atStart = true;  // ... is its first key with all its ticks
+        bool stepped = true;  // ... is what one step from the last tick gives
+        bool stayed = false;  // ... is the last tick's
+        NetActorVisual visual, bound;
+        std::vector<NetAimOffset> aim;
     };
     void seen(uint8_t slot, const Seen& s);
     void gone(uint8_t slot);
@@ -95,6 +134,8 @@ public:
 // the tick's values of every actor of the pools (the model bank's entry looked up when an occupant's model changes). An
 // actor is read, never changed.
 void captureNetWorld(NetWorldTable& table, uint32_t tick);
+// from here on what a class adds to a frame is noted at each pose: to call before the world's first tick
+void watchNetPoses();
 
 // One client's view of the world: what it was told, what it acknowledged
 class NetStateSender {
@@ -145,6 +186,10 @@ public:
     struct AnimStart {
         uint8_t anim = 0;
         uint32_t steps = 0; // the ticks it has been in play (0: it starts on this tick)
+        uint16_t key = 0;   // keyed: the key it is at, with these ticks left
+        uint8_t ticks = 0;
+        bool keyed = false;
+        bool held = false;  // no step from here on
     };
     // the actor's position and rotation on this tick, and its animation: this one started, or the current one stepped
     virtual void tick(uint8_t slot, const NetActorState& state, const std::optional<AnimStart>& start) = 0;
@@ -200,7 +245,7 @@ private:
         std::deque<Sample> samples;
         struct Start {
             uint32_t tick = 0;
-            uint8_t anim = 0;
+            NetClientActors::AnimStart start;
         };
         std::deque<Start> starts;
     };
@@ -235,16 +280,19 @@ public:
     void endTick();
 
 private:
-    std::array<bool, kNetSlots> animates_{};
+    std::array<bool, kNetSlots> animates_{}, held_{};
 };
 
 // ---- a test instrument: each actor's pose on a tick, in a local file of each process, compared afterwards (a pose never
 // crosses the network) ----------------------------------------------------------------------------------------------------
 struct NetPoseRecord {
     uint32_t tick = 0;
-    uint8_t slot = 0, type = 0, anim = 0, keyIndex = 0;
+    uint8_t slot = 0, type = 0, anim = 0;
+    uint16_t key = 0; // of the animation's script
     int8_t frame = 0;
     uint8_t ticksLeft = 0;
+    uint16_t tint = 0;
+    uint32_t hiddenParts = 0;
     std::array<int16_t, 3> pos{}, rot{};
     std::vector<int16_t> bones; // per part: the point relative to the root's, then the matrix (12 values)
 };

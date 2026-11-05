@@ -364,7 +364,52 @@ void animSet(AnimatedActor& actor, uint32_t anim, int key) {
     decodeFrame(actor);
 }
 
+namespace {
+AnimPoseObserver gPoseObserver = nullptr;
+} // namespace
+
+void setAnimPoseObserver(AnimPoseObserver observer) { gPoseObserver = observer; }
+
+bool animFrameAsDecoded(const AnimatedActor& actor, FrameAngles& out) {
+    const uint32_t n = uint32_t(actor.partCount) + 1;
+    if (n > DecodedFrame::kEntries || actor.animKeyAt.value() == 0) return false;
+    const AnimationKeyData key = animationKey(actor.animKeyAt.value());
+    const FileDataReader src = packedFrame(actor, key.frame, n);
+    const bool blend = (key.flags & kKeyBlendMask) == kKeyBlend;
+    int frame2 = key.frame;
+    if (blend) {
+        uint32_t p = key.at;
+        do p += kKeySize;
+        while (keyAt(p).frame == key.frame);
+        frame2 = keyAt(p).frame;
+    }
+    const FileDataReader src2 = packedFrame(actor, frame2, n);
+    const int t = key.flags & 0xf;
+    for (uint32_t i = 0; i < n; ++i) {
+        const uint32_t w = src.read<uint32_t>(i * 4), w2 = src2.read<uint32_t>(i * 4);
+        for (int k = 0; k < 3; ++k) {
+            const int16_t c = unpackLane(w, k);
+            out.entries[i][size_t(k)] = blend ? wrap16(((int(unpackLane(w2, k)) - int(c)) * t >> 4) + c) : c;
+        }
+    }
+    out.count = n;
+    return true;
+}
+
+AnimKeyPlace animStepWouldGive(const AnimatedActor& actor, AnimKeyPlace from) {
+    if (from.ticks != 1) return {from.keyAt, uint8_t(from.ticks - 1)};
+    const AnimationKeyData key = animationKey(from.keyAt);
+    if (key.flags & kKeyJump) {
+        if (key.flags == kKeyHold) return {from.keyAt, key.ticks};
+        const AnimationKeyData target = keyAt(actor.animScript.value() + uint32_t(key.flags & 0x7f) * kKeySize);
+        return {target.at, target.ticks};
+    }
+    const AnimationKeyData next = keyAt(key.at + kKeySize);
+    return {next.at, next.ticks};
+}
+
 void animPose(AnimatedActor& actor) {
+    if (gPoseObserver) gPoseObserver(actor);
     Matrix3 r = rotationYXZ(actor.rotation.x, actor.rotation.y, actor.rotation.z);
     const int16_t ang[3] = {actor.rotation.x, actor.rotation.y, actor.rotation.z};
     precise::F3 fr = precise::frotYXZ(ang);

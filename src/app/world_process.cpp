@@ -384,6 +384,7 @@ int run(const WorldArgs& w) {
     std::unique_ptr<NetStats> netStats;
     if (link || !w.netStats.empty()) netTable = std::make_unique<od::port::NetWorldTable>();
     if (!w.netStats.empty()) netStats = std::make_unique<NetStats>(w.netStats, w.netTicks);
+    if (netTable) od::port::watchNetPoses();
     const auto netTurn = [&](uint32_t netTick) {
         if (poses.f) od::port::writeNetPoses(poses.f, netTick, od::port::netSlotVisible);
         if (!netTable) return;
