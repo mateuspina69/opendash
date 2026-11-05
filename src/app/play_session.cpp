@@ -1,3 +1,4 @@
+#include "app/own_world.hpp"
 #include "app/play_session.hpp"
 #include "app/lang_sfx.hpp"
 
@@ -558,6 +559,7 @@ void PlayerView::clutAnimationSync(const RoomMesh& mesh, od::Renderer& r) {
 void PlayerView::bindRoomData(const RoomMesh& mesh, int param) {
     bindRoomFiles(mesh);
     spawnNative(mesh, param); // a branch the port does not cover throws: play stops with the error
+    if (ownWorld) ownWorld->roomBound(mesh.stage, mesh.sub);
     weaponPolicy();
     od::port::actorCollisionReset();
     audioBindRoom(mesh);
@@ -862,6 +864,19 @@ void PlayerView::setupHooks() {
     od::port::setSaveWriteHook([this](uint8_t slot, std::span<const uint8_t> img) { return writeSaveSlot(slot, img); });
     hooks.frame = [this] { // FUN_00542280 after the script runner
         using od::port::ActorPool;
+        if (ownWorld) { // a client: its Mega Man and the effects; the rest is the world's
+            od::port::playerInputAndDispatch(env);
+            ownWorld->localActors(env, actors, false);
+            od::port::actorCollision();
+            od::port::playerUpdate(env);
+            od::port::updatePool(env, actors, ActorPool::Shots);
+            od::port::cameraUpdate();
+            ownWorld->localActors(env, actors, true);
+            od::port::fieldHudFrame();
+            od::port::actorSystem().hitCount = 0; // the world decides what hits
+            od::port::skyLayersTick();
+            return;
+        }
         od::port::encounterTick(env); // FUN_0050f350: the enemy encounter groups (game/encounter)
         od::port::breakableWallsTick(); // exe 0x58cc10: the breakable-wall hits of the last frame
                                         // (game/breakable_walls)
@@ -1698,6 +1713,7 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
         od::dc::resetCursor(); // 0x54a489: the draw-command cursor back to this frame's buffer
         od::port::padVibrationTick(); // 0x54a4cd: the pad vibration's tick (FUN_0055cc40)
         ++game.frame; // 0x54a4dc: the frame counter (u16), before the mode's frame
+        if (ownWorld) ownWorld->turn(SDL_GetTicksNS());
         gameFrame();
         if (afterFrame) afterFrame(); // FUN_005410b0 (the soft reset, game/title)
         od::port::messageTick(); // FUN_005578a0 (WinMain, after the game task): window logic + layout

@@ -250,6 +250,8 @@ struct PlayerView {
     // A client of a world (ADR 0006, "Client mode"): the room's files bound from the state of the story save, no actor
     // spawned and no world update; the actors come from the world (game/world_net_state)
     bool enterRoomAsClient(const RoomMesh& mesh);
+    // --own-world: this game is a client of a world process of its own (app/own_world); null otherwise
+    std::shared_ptr<class OwnWorldClient> ownWorld;
     void leavePlay(); // F2 out of play: sessionSave from the live state, then play off
     // FUN_00548910 / FUN_00548bc0 sub-state 0 on OpenDash's saves: 0xa5a248 = the slots present, 0xa7b040 their
     // summary (stage / area / location / play time) for the save menu's slot list

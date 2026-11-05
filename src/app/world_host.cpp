@@ -1,4 +1,5 @@
 // The coordinator's worlds (see world_host.hpp).
+#include <utility>
 #include "app/world_host.hpp"
 
 #include <SDL3/SDL.h>
@@ -100,6 +101,11 @@ void WorldHost::removeFromWorld(uint8_t playerId) {
 void WorldHost::enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& playerState) {
     if (playerRoom_.at(playerId) == room) return;
     World& world = worldOf(room); // before the old world goes: a move inside a stage does not empty it
+    if (const auto from = playerRoom_.at(playerId)) {
+        WorldMessage leaving{WorldMessageType::NetLeave};
+        leaving.playerId = playerId;
+        worlds_.at(*from)->link.sendReliable(leaving);
+    }
     removeFromWorld(playerId);
     WorldMessage m{WorldMessageType::Join};
     m.playerId = playerId;
@@ -120,11 +126,34 @@ void WorldHost::state(uint8_t playerId, const std::vector<uint8_t>& playerState)
 
 void WorldHost::leave(uint8_t playerId) { removeFromWorld(playerId); }
 
+void WorldHost::netJoin(uint8_t client) {
+    const std::optional<WorldRoom> room = playerRoom_.at(client);
+    if (!room) return;
+    netInbox_.at(client).clear();
+    WorldMessage m{WorldMessageType::NetJoin};
+    m.playerId = client;
+    worlds_.at(*room)->link.sendReliable(m);
+}
+
+std::vector<WorldMessage> WorldHost::takeNet(uint8_t client) { return std::exchange(netInbox_.at(client), {}); }
+
+void WorldHost::netAck(uint8_t client, uint16_t sequence) {
+    const std::optional<WorldRoom> room = playerRoom_.at(client);
+    if (!room) return;
+    WorldMessage m{WorldMessageType::NetAck};
+    m.playerId = client;
+    m.netSequence = sequence;
+    worlds_.at(*room)->link.sendLatest(m);
+}
+
 void WorldHost::poll(uint64_t nowNs) {
     for (auto it = worlds_.begin(); it != worlds_.end();) {
         World& world = *it->second;
         for (const WorldMessage& m : world.link.poll(nowNs)) {
             if (m.type == WorldMessageType::Report) world.report = WorldReport{m.tick, m.liveActors, m.players, m.digest};
+            if ((m.type == WorldMessageType::NetEvents || m.type == WorldMessageType::NetUpdate) && m.playerId < kPlayers &&
+                playerRoom_[m.playerId] == it->first)
+                netInbox_[m.playerId].push_back(m);
             if (m.type != WorldMessageType::StageState) continue;
             const auto changed = od::port::decodeStageRecord(m.stageRecord);
             if (!changed) continue;

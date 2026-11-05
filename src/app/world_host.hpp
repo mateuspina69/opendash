@@ -45,6 +45,11 @@ public:
     void state(uint8_t playerId, const std::vector<uint8_t>& playerState);
     // the player is out of the session: the world they were in stops if they were its last
     void leave(uint8_t playerId);
+    // the network state of the world the client's player is in (game/world_net_state): the client wants it, what came for it
+    // since the last call, what it holds
+    void netJoin(uint8_t client);
+    std::vector<WorldMessage> takeNet(uint8_t client);
+    void netAck(uint8_t client, uint16_t sequence);
     // the turn between frames: the links, the worlds' reports, the keep-alives; a world that ended on its own is forgotten
     void poll(uint64_t nowNs);
 
@@ -73,6 +78,7 @@ private:
     std::vector<std::unique_ptr<World>> stopping_; // told to stop, waiting for the process to end
     std::array<std::optional<WorldRoom>, kPlayers> playerRoom_{};
     std::map<int, od::port::StageRecord> stageRecords_;
+    std::array<std::vector<WorldMessage>, kPlayers> netInbox_{};
 };
 
 } // namespace od::app

@@ -945,6 +945,7 @@ void PoolNetActors::appear(uint8_t slot, const NetActorIdentity& identity, const
     ActorHeader& head = ownSlot_[slot] != 0 ? actorHeaderAt(ownSlot_[slot]) : claimActorSlot(slot);
     head.flags = kActorLiveDrawn;
     head.runFlags &= uint8_t(~kActorRun); // the pool loops pass it by: its class runs in the world
+    head.state = 1;                       // past a class's first state: the draw pass passes over a static still in it
     head.type = identity.type;
     head.subtype = identity.subtype;
     head.variant = identity.variant;
@@ -1014,6 +1015,7 @@ void PoolNetActors::tick(uint8_t slot, const NetActorState& state, const std::op
     ActorHeader* head = slotOf(slot);
     if (!head) return;
     Actor& a = actorLayoutOf(*head);
+    a.savePreviousPose(); // what the renderer interpolates from
     a.pos.x.whole = state.pos[0];
     a.pos.y.whole = state.pos[1];
     a.pos.z.whole = state.pos[2];
