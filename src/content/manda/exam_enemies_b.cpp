@@ -335,18 +335,20 @@ bool ambushWake(AmbushFields& f) {
 void ambushWatch(ControllerActor& c, AmbushFields& f) {
     const AmbushBoxes& boxes = ambushBoxes[c.variant];
     const int32_t g = int32_t(f.group);
-    const Fixed16Vec3& pos = player().pos;
+    const auto playerIn = [](const auto& box) {
+        return anyPlayer([&](const Player& p) { return pointInCellBox(p.pos.x.whole, p.pos.z.whole, box); });
+    };
     switch (AmbushSub(c.subState)) {
     case AmbushSub::Sleeping: // exe 0x426f91
         if (enemyGroupMarks(g, EnemyGroupMarks::Either) != 0) {
             ++c.subState;
             return;
         }
-        if (!pointInCellBox(pos.x.whole, pos.z.whole, boxes.wake)) return;
+        if (!playerIn(boxes.wake)) return;
         if (ambushWake(f)) ++c.subState;
         return;
     case AmbushSub::Awake: // exe 0x426ebc
-        if (f.holdNear == 0 && (pointInCellBox(pos.x.whole, pos.z.whole, boxes.nearA) || pointInCellBox(pos.x.whole, pos.z.whole, boxes.nearB))) {
+        if (f.holdNear == 0 && (playerIn(boxes.nearA) || playerIn(boxes.nearB))) {
             if (enemyGroupMarks(g, EnemyGroupMarks::Either) == 0) return;
             flyerWake(f.spawned[f.woken]) = 2;
             c.subState = uint8_t(AmbushSub::Alerted);
@@ -589,8 +591,8 @@ constexpr uint32_t kMineLayers = 2;
 constexpr uint8_t kMineGlowSize = 6;
 
 // the player's bone point 0 (the homing point)
-void homingPoint(int16_t out[3]) {
-    const ShortVec3& p = player().bonePoints[0];
+void homingPoint(const Actor& a, int16_t out[3]) {
+    const ShortVec3& p = nearestPlayer(a.pos).bonePoints[0];
     out[0] = p.x;
     out[1] = p.y;
     out[2] = p.z;
@@ -740,7 +742,7 @@ void mineIdle(StaticActor& a, MineFields& f) {
 // sways (0xb4 ticks -> back)
 void mineHome(StaticActor& a, MineFields& f) {
     int16_t t[3];
-    homingPoint(t);
+    homingPoint(a, t);
     const int d = distance3(a.pos, t); // exe 0x5e3a60
     if (f.skipNeighbour != 0) {
         f.skipNeighbour = 0;
@@ -1689,8 +1691,8 @@ AnimatedActorStats flyerStats(const AnimatedActor& a) {
 }
 int angleOfFlyerToPlayer(const AnimatedActor& a) { return angleToPlayer(a); }
 // the player's position with its integer y + dy (the exe's stack copy)
-void playerAbove(int dy, int32_t out[3]) {
-    const Player& p = player();
+void playerAbove(const Actor& a, int dy, int32_t out[3]) {
+    const Player& p = nearestPlayer(a.pos);
     out[0] = p.pos.x;
     out[1] = int32_t((uint32_t(p.pos.y) & 0xffffu) | uint32_t(uint16_t(uint16_t(p.pos.y.whole) + uint16_t(dy))) << 16);
     out[2] = p.pos.z;
@@ -1837,7 +1839,7 @@ void flyerPerch(const PlayerEnv& env, AnimatedActor& a, FlyerFields& f) {
         }
         turnYawTo(a.rotation.y, uint32_t(int32_t(int16_t(angleOfFlyerToPlayer(a)))), 0x20);
         int32_t above[3], at[3];
-        playerAbove(-0x140, above);
+        playerAbove(a, -0x140, above);
         positionValues(a, at);
         const int p = pitchOf(above, at);
         const uint16_t c = uint16_t(0x800 - p - int(uint16_t(f.pitch)));
@@ -1908,7 +1910,7 @@ void flyerDive(const PlayerEnv& env, AnimatedActor& a, FlyerFields& f) {
     case 2: {
         turnYawTo(a.rotation.y, uint32_t(int32_t(int16_t(angleOfFlyerToPlayer(a)))), 0x20);
         int32_t above[3], at[3];
-        playerAbove(-0xc0, above);
+        playerAbove(a, -0xc0, above);
         positionValues(a, at);
         const int p = pitchOf(above, at);
         const uint16_t c = uint16_t(0x800 - p - int(uint16_t(f.pitch)));
@@ -2162,7 +2164,7 @@ void markerDraw(const EffectActor& e, const MarkerFields& f) {
     const Matrix3 m = rotationZYX(f.pitch, f.yaw, 0); // exe 0x40c070
     int16_t p[3];
     for (int i = 0; i < 3; ++i) p[i] = int16_t((int32_t(m.e[i * 3 + 2]) * 0x80) >> 12); // exe 0x40bb30 on (0, 0, 0x80)
-    const ShortVec3& target = player().bonePoints[0];
+    const ShortVec3& target = actingPlayer().bonePoints[0];
     p[0] = int16_t(p[0] + target.x);
     p[1] = int16_t(p[1] + target.y);
     p[2] = int16_t(p[2] + target.z);

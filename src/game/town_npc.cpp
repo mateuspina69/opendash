@@ -597,8 +597,9 @@ void npcLookPoint(uint32_t slot, int16_t out[3]) {
     const int sh = stage().coordinateShift & 0x1f;
     const Actor* act;
     if (cls == kPlayerClass) {
-        act = &player();
-        out[1] = int16_t(player().bonePoints[1].y >> sh);
+        const Player& p = slot < kPlayerSlots && playerPresent(slot) ? playerById(slot) : player();
+        act = &p;
+        out[1] = int16_t(p.bonePoints[1].y >> sh);
     } else if (cls == kAnimatedClass) {
         const AnimatedActor& a = animatedPool()[slot - kAnimatedClass];
         act = &a;
@@ -692,7 +693,7 @@ void npcLook(const AnimatedActor& actor, NpcHead& head) {
         head.yawTarget = 0;
         return;
     case NpcLook::Player:
-        npcLookPoint(kPlayerClass, v); // slot 0: the player
+        npcLookPoint(uint32_t(playerId(nearestPlayer(actor.pos))), v); // the player's slot id
         npcLookYaw(actor, head.yawTarget, v);
         npcLookPitch(actor, head, v);
         return;

@@ -230,7 +230,7 @@ void rotZ(float ax, float ay, float d, float out[3]) {
 //    (steps 1/2, 1, 1/2 of the 2 * range blade), colour lerp([(-8 - frame - k) & 15], [(-7 - frame - k) & 15], t / 4)
 //    times min(255, s * (k * 16 - j * 4 [- 4 on the far edge]) * 7 >> 4) / 1024 at the s-th point; the tip black.
 void bladeTrail(DrawContext& c, const State& st, const port::EffectActor& e, uint32_t object) {
-    const port::Player& player = port::player();
+    const port::Player& player = port::playerById(e.ownerPlayer); // the shooter's
     if (port::BladeTrailState(e.state) != port::BladeTrailState::Follow ||
         !(player.armFlags & port::kArmSpecial) || player.specialFiring == 0)
         return;

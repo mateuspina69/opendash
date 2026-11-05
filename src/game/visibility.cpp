@@ -1,4 +1,5 @@
 // What the camera sees (see visibility.hpp).
+#include "game/player/players.hpp"
 #include "game/vectors.hpp"
 #include "game/visibility.hpp"
 
@@ -38,7 +39,7 @@ int32_t pointVisibleOrNear(const int16_t v[3], uint32_t dist) {
     for (size_t i = 0; i < 3; ++i) proj.viewPoint[i] = cp.view[i];
     proj.clipFlags = cp.clipped ? kProjectionClipped : 0u;
     if (onScreenInRange(cp)) return 0;
-    return uint32_t(distance3(player().pos, v)) < dist ? 0 : -1;
+    return anyPlayer([&](const Player& p) { return uint32_t(distance3(p.pos, v)) < dist; }) ? 0 : -1;
 }
 
 int32_t pointVisibleOrNear(const Fixed16Vec3& pos, uint32_t dist) {

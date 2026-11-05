@@ -165,15 +165,15 @@ int facingVsPlayer(const AnimatedActor& actor) {
     return d;
 }
 // the player in the air in one of its jumps
-bool playerJumping() {
-    const Player& p = player();
+bool playerJumping(const Actor& actor) {
+    const Player& p = nearestPlayer(actor.pos);
     if (p.airborne == 0) return false;
     const PlayerSub s = PlayerSub(p.subState);
     return s == PlayerSub::Jump || s == PlayerSub::RunningJump || s == PlayerSub::SkateFall;
 }
 // the player jumping within dist (x / z) of the drone
 bool playerJumpingNear(const AnimatedActor& actor, int dist) {
-    return playerJumping() && planarDistance(nearestPlayer(actor.pos).pos, actor.pos) < dist;
+    return playerJumping(actor) && planarDistance(nearestPlayer(actor.pos).pos, actor.pos) < dist;
 }
 
 // the idle behaviour of the variant (the shared tail of the reset and of the fall's landing)
@@ -499,7 +499,7 @@ void sidestep(AnimatedActor& actor, DroneFields& drone) { // exe 0x4a0150: drift
     }
     const int d = facingVsPlayer(actor);
     if (uint32_t(d + kQuarterTurn) < uint32_t(kHalfTurn)) {
-        if (!playerJumping()) {
+        if (!playerJumping(actor)) {
             if (d <= kSidestepWindow) {
                 if (d < -kSidestepWindow && -int(drone.driftLimit) < drone.drift) {
                     drone.drift = wrap16(drone.drift - kDriftStep);

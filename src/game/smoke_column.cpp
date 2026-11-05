@@ -49,7 +49,7 @@ uint32_t trailTint(int16_t length) { return kTrailTint - uint32_t(int32_t(length
 // through dc::otQuadG4 as camera-input points (the ring points) + the screen offset of L / R (+-d pixels, brought back
 // to the point's depth). The packet cursor / OT links / depth are presentation only.
 void drawColumn(const StaticActor& actor) {
-    Player& p = player();
+    Player& p = actingPlayer();
     if (!(p.flags & kActorDrawn)) return;
     p.idleFaces[0] = kTrailFace;
     p.idleFaces[1] = kTrailFace;
@@ -136,8 +136,8 @@ void drawColumn(const StaticActor& actor) {
 
 // the player's look ended with the last column (variants 0 / 1 too: the idle faces back to 0)
 void clearFaces() {
-    player().idleFaces[0] = 0;
-    player().idleFaces[1] = 0;
+    actingPlayer().idleFaces[0] = 0;
+    actingPlayer().idleFaces[1] = 0;
 }
 
 } // namespace
@@ -145,7 +145,7 @@ void clearFaces() {
 void smokeColumnUpdate(const PlayerEnv&, uint32_t address) {
     StaticActor& actor = staticActorAt(address);
     auto&& smoke = classState<SmokeColumnFields>(actor);
-    Player& p = player();
+    Player& p = actingPlayer();
     const uint8_t variant = actor.variant;
     switch (SmokeState(actor.state)) {
     case SmokeState::Start:

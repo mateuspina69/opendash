@@ -5,6 +5,7 @@
 #include "game/actor_pools.hpp"
 #include "game/carry.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/sky_layers.hpp"
 
 namespace od::port {
@@ -49,8 +50,10 @@ void actorsSweep(uint32_t classes, uint8_t op) {
     const bool free = (op & kSweepFree) != 0;
     ActorSystemState& s = actorSystem();
     if (classes & kSweepPlayer) {
-        if (!free) changeRunFlags(player(), op);
-        else player().flags = 0;
+        forEachPlayer([&](Player& p) {
+            if (!free) changeRunFlags(p, op);
+            else p.flags = 0;
+        });
     }
     if (classes & (kSweepAnimatedGroup0 | kSweepAnimatedGroup2)) {
         const uint32_t mask = s.animatedLive;

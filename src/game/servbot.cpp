@@ -406,7 +406,7 @@ void subTalk(AnimatedActor& actor, ServbotFields& bot) {
         return;
     }
     int16_t v[3];
-    npcLookPoint(kPlayerClass, v); // slot 0: the player
+    npcLookPoint(uint32_t(playerId(nearestPlayer(actor.pos))), v); // the player's slot id
     npcLookYaw(actor, bot.headYawTarget, v);
     if (event.active == 0) actor.enterStep(uint8_t(TalkStep::Settling));
 }

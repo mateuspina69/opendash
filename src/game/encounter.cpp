@@ -1196,7 +1196,7 @@ void encounterPlaceAroundPlayer(Actor& actor, int distance, int pitch, int yaw) 
     static constexpr int32_t kNoTranslation[3] = {0, 0, 0};
     const EncounterState& e = encounterState();
     const int8_t field = e.slotOfKind[uint32_t(EncounterKind::Field)];
-    const Player& p = field >= 0 ? slotPlayer(e.slots[uint8_t(field)]) : player();
+    const Player& p = field >= 0 ? slotPlayer(e.slots[uint8_t(field)]) : actingPlayer();
     const int16_t look = p.rotation.x;
     const int16_t turnX = int16_t(look < 0 ? int(look) + pitch : pitch);
     const int16_t turnY = int16_t(uint16_t(p.rotation.y) + uint32_t(yaw));

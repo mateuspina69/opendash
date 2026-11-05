@@ -118,7 +118,7 @@ void npcTalk(AnimatedActor& actor, TownNpcFields& npc) {
             actor.anim = kAnimTalk;
         }
         int16_t v[3];
-        npcLookPoint(kPlayerClass, v);   // exe 0x4431d0(0, v): slot 0, the player
+        npcLookPoint(uint32_t(playerId(nearestPlayer(actor.pos))), v); // exe 0x4431d0(0, v): the player's slot id
         npcLookYaw(actor, npc.headYawTarget, v); // exe 0x445170
         if (event.active == 0) {
             actor.anim = kAnimSettle;
@@ -196,7 +196,7 @@ void npcMain(AnimatedActor& actor, TownNpcFields& npc) {
         break;
     case NpcLook::Player: {
         int16_t v[3];
-        npcLookPoint(0, v);         // exe 0x4431d0
+        npcLookPoint(uint32_t(playerId(nearestPlayer(actor.pos))), v); // exe 0x4431d0
         npcLookYaw(actor, head.yawTarget, v);   // exe 0x445170
         npcLookPitch(actor, head, v); // exe 0x4451f0
         break;

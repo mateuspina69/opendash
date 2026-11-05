@@ -47,9 +47,9 @@ constexpr int16_t kTurnSpeed = 0x40;
 constexpr uint16_t kTurnSound = 0x80;
 
 // the quadrant of the player's yaw (+ add)
-uint32_t yawQuadrant(uint32_t add) { return ((uint32_t(uint16_t(player().rotation.y)) + add) >> 10) & 3; }
+uint32_t yawQuadrant(uint32_t add) { return ((uint32_t(uint16_t(actingPlayer().rotation.y)) + add) >> 10) & 3; }
 // the model facing the player: the player's yaw turned half a turn
-int16_t facingPlayer() { return int16_t((uint32_t(uint16_t(player().rotation.y)) - uint32_t(kHalfTurn)) & kAngleMask); }
+int16_t facingPlayer() { return int16_t((uint32_t(uint16_t(actingPlayer().rotation.y)) - uint32_t(kHalfTurn)) & kAngleMask); }
 
 // exe 0x5631a0: the model bound (else stays in Place); moved kPlaceDistance along the quadrant (variant bit 0:
 // backwards), facing the player, still, the previous pose copied

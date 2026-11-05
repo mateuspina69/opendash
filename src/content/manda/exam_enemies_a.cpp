@@ -1806,13 +1806,13 @@ Hurt hurt(AnimatedActor& a, Fields& f) {
     }
     return k;
 }
-bool playerArmUp() { return (uint8_t(player().armFlags) & kArmUp) != 0; }
+bool playerArmUp(const Actor& a) { return (uint8_t(carrierOrNearest(a).armFlags) & kArmUp) != 0; }
 // exe 0x44fb20: the player behind its shield side and attacking -> the guard
 bool dodge(AnimatedActor& a, Fields& f) {
     if (f.mode & kShieldLost) return false;
     const Player& p = carrierOrNearest(a);
     const int d = angleDiff(uint32_t(int32_t(a.rotation.y)), uint32_t(int(p.rotation.y) - int(p.directionOffset.y)));
-    if (uint32_t(d + 0x400) >= 0x800 && playerArmUp()) {
+    if (uint32_t(d + 0x400) >= 0x800 && playerArmUp(a)) {
         enter(a, Sub::Guard);
         return true;
     }
@@ -2235,12 +2235,12 @@ void holdGuard(AnimatedActor& a, Fields& f) {
         f.mayFall = 1;
     }
     if (s <= 1) {
-        if (!playerArmUp()) {
+        if (!playerArmUp(a)) {
             a.enterStep(2);
             f.counter = 0xa;
         }
     } else if (s == 2) {
-        if (playerArmUp()) a.enterStep(1);
+        if (playerArmUp(a)) a.enterStep(1);
         const uint8_t c = uint8_t(f.counter - 1u);
         f.counter = c;
         if (c == 0) enter(a, Sub::LowerGuard);

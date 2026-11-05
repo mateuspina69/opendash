@@ -91,8 +91,8 @@ void toSub(AnimatedActor& a, SoldierSub s) {
     a.enterStep(0);
 }
 // the player is down (its knock-down) or dead: the group's call starts the alarm
-bool playerDown() {
-    const Player& p = player();
+bool playerDown(const AnimatedActor& a) {
+    const Player& p = nearestPlayer(a.pos);
     return (p.state == uint8_t(PlayerState::Playing) && p.subState == uint8_t(PlayerSub::KnockDown)) ||
            p.state == uint8_t(PlayerState::Dead);
 }
@@ -106,13 +106,14 @@ struct StaleLocal {
 };
 
 // exe 0x494380(actor, &local): the target -- the player while the chase runs, else the remembered point
-void target(const SoldierFields& f, int32_t& tx, int32_t& tz) {
+void target(const AnimatedActor& a, const SoldierFields& f, int32_t& tx, int32_t& tz) {
     if (f.chase == 0) {
         tx = int32_t(uint32_t(f.targetX) << 16);
         tz = int32_t(uint32_t(f.targetZ) << 16);
     } else {
-        tx = int32_t(uint32_t(uint16_t(player().pos.x.whole)) << 16);
-        tz = int32_t(uint32_t(uint16_t(player().pos.z.whole)) << 16);
+        const Player& p = nearestPlayer(a.pos);
+        tx = int32_t(uint32_t(uint16_t(p.pos.x.whole)) << 16);
+        tz = int32_t(uint32_t(uint16_t(p.pos.z.whole)) << 16);
     }
 }
 int targetDistance(const AnimatedActor& a, int32_t tx, int32_t tz) { // exe 0x5e3b00(+0x10, &local)
@@ -159,7 +160,7 @@ void groupCall(AnimatedActor& a, SoldierFields& f, const StaleLocal& p3, const S
             }
             if ((f.range & kSoldierRangeMask) != 0 && f.chase == 0) f.range &= 0xf0u;
             int32_t tx, tz;
-            target(f, tx, tz);
+            target(a, f, tx, tz);
             StaleLocal d2, r2;
             const int r = range(a, f, tx, tz, d2, r2);
             if (r != 0) {
@@ -170,7 +171,7 @@ void groupCall(AnimatedActor& a, SoldierFields& f, const StaleLocal& p3, const S
         }
         return;
     }
-    if (uint32_t(p3.v + 0x200) < 0x401 && p4.v < 0x3e9 && playerDown()) toSub(a, SoldierSub::Alarm);
+    if (uint32_t(p3.v + 0x200) < 0x401 && p4.v < 0x3e9 && playerDown(a)) toSub(a, SoldierSub::Alarm);
 }
 int lastAnim(AnimatedActor& a) { // exe 0x4948c0: the walk (2) -> its end (3) once, then 1 when it ends
     if (a.stepCounter == 0) {
@@ -235,7 +236,7 @@ void wake(AnimatedActor& a, SoldierFields& f) { // exe 0x4941f0: (anim 1) -> wal
 void wallTurn(AnimatedActor& a, SoldierFields& f);
 void walk(AnimatedActor& a, SoldierFields& f) { // exe 0x494240: to the target; the ranges, neighbours, the group, walls
     int32_t tx, tz;
-    target(f, tx, tz);
+    target(a, f, tx, tz);
     if (a.step == 0) {
         a.anim = 2;
         f.timer = 0;
@@ -262,7 +263,7 @@ void walk(AnimatedActor& a, SoldierFields& f) { // exe 0x494240: to the target; 
 }
 void giveWay(AnimatedActor& a, SoldierFields& f) { // exe 0x4943c0: the neighbour first (0x5a ticks at most)
     int32_t tx, tz;
-    target(f, tx, tz);
+    target(a, f, tx, tz);
     const Actor& o = neighbourActor(uint16_t(f.neighbour)); // exe 0x5e5cb0
     if (a.step == 0) {
         f.bits = 0;
@@ -312,7 +313,7 @@ void wallTurn(AnimatedActor& a, SoldierFields& f) { // exe 0x494540: away from t
 // exe 0x494610: face the target, then the shot (game/walker_shot) from bone 2 with a recoil
 void shoot(AnimatedActor& a, SoldierFields& f) {
     int32_t tx, tz;
-    target(f, tx, tz);
+    target(a, f, tx, tz);
     switch (a.step) {
     case 0:
         f.bits = 0;
@@ -394,7 +395,7 @@ void shoot(AnimatedActor& a, SoldierFields& f) {
 }
 void butt(AnimatedActor& a, SoldierFields& f) { // exe 0x494900: the butt (anims 7 / 8 / 9, the attack entry, a sound)
     int32_t tx, tz;
-    target(f, tx, tz);
+    target(a, f, tx, tz);
     switch (a.step) {
     case 0:
         f.bits = 0;
@@ -473,7 +474,7 @@ void alarm(AnimatedActor& a, SoldierFields& f) { // exe 0x494ab0: the alarm (a s
         if (a.animEnded()) {
             if ((f.range & kSoldierRangeMask) != 0 && f.chase == 0) f.range &= 0xf0u;
             int32_t tx, tz;
-            target(f, tx, tz);
+            target(a, f, tx, tz);
             StaleLocal l10, p1;
             const int r = range(a, f, tx, tz, l10, p1);
             if (r == 0) {

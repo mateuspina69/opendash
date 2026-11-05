@@ -76,7 +76,7 @@ struct SpawnPoint : DataRecord {
 // (r & 0x1ff) + the player's yaw - 0x100 from the player (exe 0x5e38d0), clamped to the box (16.16 x / z)
 void aroundPlayer(const DataTable<ScalarTable<int16_t, 0x10>>& distances, int32_t xMin, int32_t xMax, int32_t zMin, int32_t zMax,
                   int32_t& x, int32_t& z) {
-    const Player& p = player();
+    const Player& p = actingPlayer(); // who set the drop off (the controller's owner)
     int32_t px = p.pos.x, pz = p.pos.z;
     rngStep();
     const uint32_t r = rngStep();
@@ -220,7 +220,7 @@ void st12Emitters(ControllerActor& c) {
     if (scriptState().flags != 0) return;
     const uint8_t sub = c.subState;
     if (sub == uint8_t(EmitterSub::Start)) {
-        f.side = player().pos.x.whole > kEmitterSideX ? 0 : 1;
+        f.side = anyPlayer([](const Player& p) { return p.pos.x.whole > kEmitterSideX; }) ? 0 : 1;
         f.timers[0] = kEmitterTicks;
         f.timers[1] = kEmitterTicks;
         f.timers[2] = kEmitterTicks;
@@ -271,7 +271,8 @@ void st12Drop(ControllerActor& c) {
         }
         return;
     case DropSub::WaitZ:
-        if (player().pos.z.whole < kSt12DropTriggerZ) {
+        if (const Player* who = findPlayer([](const Player& p) { return p.pos.z.whole < kSt12DropTriggerZ; })) {
+            c.ownerPlayer = uint8_t(playerId(*who)); // the drops fall around who came
             c.subState = uint8_t(DropSub::Drop);
             c.restartStep();
         }
@@ -280,7 +281,7 @@ void st12Drop(ControllerActor& c) {
         const uint8_t s = c.step;
         if (s == uint8_t(DropStep::Start)) {
             f.count = kSt12DropCount;
-            f.anchorX = player().pos.x.whole;
+            f.anchorX = actingPlayer().pos.x.whole;
             f.anchorZ = 0;
             c.enterStep(uint8_t(DropStep::Spawn));
             setStoryFlag(kFlagSt12DropDone);
@@ -589,8 +590,10 @@ void st13ZoneDrop(ControllerActor& c) {
     switch (ZoneDropSub(c.subState)) {
     case ZoneDropSub::WaitZone: {
         if (scriptState().flags != 0 || eventState().active != 0) return;
-        const Fixed16Vec3& pos = player().pos;
-        if (encounterInZone(pos, stateAddress(TableId::RuinSpawnersSt13DropZoneA), 0) || encounterInZone(pos, stateAddress(TableId::RuinSpawnersSt13DropZoneB), 0)) {
+        if (anyPlayer([](const Player& p) {
+                return encounterInZone(p.pos, stateAddress(TableId::RuinSpawnersSt13DropZoneA), 0) ||
+                       encounterInZone(p.pos, stateAddress(TableId::RuinSpawnersSt13DropZoneB), 0);
+            })) {
             c.subState = uint8_t(ZoneDropSub::Group);
             c.restartStep();
         }
@@ -612,7 +615,8 @@ void st13ZoneDrop(ControllerActor& c) {
         }
         return;
     case ZoneDropSub::WaitX:
-        if (player().pos.x.whole > kSt13DropTriggerX) {
+        if (const Player* who = findPlayer([](const Player& p) { return p.pos.x.whole > kSt13DropTriggerX; })) {
+            c.ownerPlayer = uint8_t(playerId(*who)); // the drops fall around who came
             c.subState = uint8_t(ZoneDropSub::Drop);
             c.restartStep();
         }

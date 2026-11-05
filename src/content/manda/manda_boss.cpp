@@ -1913,8 +1913,8 @@ void debrisSprite(const ProjectileActor& a, const DebrisFields& f) {
     dc::emit(bb, a.at);
 }
 // the player's chest (a 16.16 point 0x80 above its position)
-void playerChest(int32_t out[3]) {
-    const Player& p = player();
+void playerChest(const Actor& a, int32_t out[3]) {
+    const Player& p = nearestPlayer(a.pos);
     out[0] = p.pos.x;
     out[1] = int32_t(uint32_t(p.pos.y) - 0x800000u);
     out[2] = p.pos.z;
@@ -1925,7 +1925,7 @@ void debrisUpdate(const PlayerEnv& env, ProjectileActor& a) {
     switch (DebrisState(a.state)) {
     case DebrisState::Launch: { // exe 0x5c7060
         int32_t chest[3];
-        playerChest(chest);
+        playerChest(a, chest);
         f.playerDistance = planarDistance(a.pos, chest);
         f.hitBox.result = 0;
         f.timer = 400;
@@ -1939,7 +1939,7 @@ void debrisUpdate(const PlayerEnv& env, ProjectileActor& a) {
     }
     case DebrisState::Fly: { // exe 0x5c70f0
         int32_t chest[3];
-        playerChest(chest);
+        playerChest(a, chest);
         a.savePreviousPose();
         f.playerDistance = planarDistance(a.pos, chest);
         f.playerYaw = int16_t(angleOf(chest[0], chest[2], a.pos.x, a.pos.z));

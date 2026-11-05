@@ -18,6 +18,21 @@ Player& nearestPlayer(const Fixed16Vec3& point) {
     return *nearest;
 }
 
+Player& nearestPlayer(const int32_t point[3]) {
+    Fixed16Vec3 v;
+    v.x = point[0];
+    v.y = point[1];
+    v.z = point[2];
+    return nearestPlayer(v);
+}
+
+Player& nearestPlayer(int16_t x, int16_t z) {
+    Fixed16Vec3 v;
+    v.x.whole = x;
+    v.z.whole = z;
+    return nearestPlayer(v);
+}
+
 Player& carrierOrNearest(const Actor& actor) {
     Player& owner = playerById(actor.ownerPlayer);
     return owner.interactionTarget.is(actor, kInteractLiftMode) ? owner : nearestPlayer(actor.pos);

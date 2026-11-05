@@ -83,8 +83,8 @@ void bonePosition(const AnimatedActor& a, uint32_t k, int16_t out[3]) {
     out[2] = p.z;
 }
 // the player's chest (0x96 above its position), the guardians' shots' aim
-void playerChest(int16_t out[3]) {
-    const Player& p = player();
+void playerChest(const Actor& a, int16_t out[3]) {
+    const Player& p = nearestPlayer(a.pos);
     out[0] = p.pos.x.whole;
     out[1] = wrap16(int(p.pos.y.whole) - 0x96);
     out[2] = p.pos.z.whole;
@@ -307,9 +307,9 @@ bool fadeIn(AnimatedActor& a, GuardianFields& f, const FadeThresholds& table = f
 // exe 0x486670(actor, player, 0x80)
 void facePlayer(AnimatedActor& a) { turnYawTo(a.rotation.y, uint32_t(angleOf(nearestPlayer(a.pos).pos, a.pos)), 0x80); }
 // the pitch from the point to the player's chest, clamped to +-limit (the shots')
-int16_t pitchToChest(const int16_t from[3], uint32_t limit) {
+int16_t pitchToChest(const Actor& a, const int16_t from[3], uint32_t limit) {
     int16_t chest[3];
-    playerChest(chest);
+    playerChest(a, chest);
     const uint32_t u = (uint32_t(pitchOf(from, chest)) - 0x800u) & 0xfff;
     uint32_t v = u;
     if (u < 0x800) {
@@ -334,7 +334,7 @@ void shoot(const AnimatedActor& a, int16_t dyaw, uint8_t variant) {
     e.pos.y.whole = hand[1];
     e.pos.z.whole = hand[2];
     e.rotation.y = int16_t(uint16_t(a.rotation.y) + uint16_t(dyaw));
-    e.rotation.x = pitchToChest(hand, 0x200);
+    e.rotation.x = pitchToChest(a, hand, 0x200);
 }
 // exe 0x486be0(actor, yaw offset, offset, variant): a shot at the offset (<< 4, turned by the yaw) from bone 5, its
 // pitch toward the player's chest clamped to +-0x100
@@ -354,7 +354,7 @@ void shootFrom(const AnimatedActor& a, int16_t dyaw, const ShortPoint& offset, u
     e.pos.x.whole = int16_t(uint32_t(o[0] >> 16) + uint16_t(hand[0]));
     e.pos.y.whole = int16_t(uint32_t(o[1] >> 16) + uint16_t(hand[1]));
     e.pos.z.whole = int16_t(uint32_t(o[2] >> 16) + uint16_t(hand[2]));
-    e.rotation.x = pitchToChest(hand, 0x100);
+    e.rotation.x = pitchToChest(a, hand, 0x100);
 }
 // the shots' flash shown (the hand part hidden) / hidden
 void showFlash(AnimatedActor& a, bool on) {
@@ -1755,8 +1755,8 @@ AnimatedActor& guardianOf(const HopperFields& f) {
     return animatedPool()[size_t(i)];
 }
 // the player in the air: airborne in a jump (standing, running) or a skate fall
-bool playerInTheAir() {
-    const Player& p = player();
+bool playerInTheAir(const Actor& a) {
+    const Player& p = nearestPlayer(a.pos);
     const PlayerSub s = p.sub();
     return p.airborne != 0 && (s == PlayerSub::Jump || s == PlayerSub::RunningJump || s == PlayerSub::SkateFall);
 }
@@ -1935,7 +1935,7 @@ void hopChase(AnimatedActor& a, HopperFields& f) {
         break;
     default: break;
     }
-    if (playerInTheAir() && planarDistance(nearestPlayer(a.pos).pos, a.pos) < 0x400 && a.airborne == 0)
+    if (playerInTheAir(a) && planarDistance(nearestPlayer(a.pos).pos, a.pos) < 0x400 && a.airborne == 0)
         toSub(a, HopperSub::HighJump);
     if (((f.mode & kHopperToCorner) || (f.marks & kMarkSpin)) && a.airborne == 0) toSub(a, HopperSub::ToCorner);
 }
@@ -1996,7 +1996,7 @@ void hopOrbit(AnimatedActor& a, HopperFields& f) {
     }
     if ((gameState().frame & 7) == 0) soundPlayAtPos(kSoundRoll, a.pos);
     uint32_t ang, step;
-    if (!playerInTheAir()) {
+    if (!playerInTheAir(a)) {
         ang = uint32_t(angleOf(nearestPlayer(a.pos).pos, a.pos));
         step = (uint32_t(f.turnRate) >> 3) + 0x20;
     } else {
