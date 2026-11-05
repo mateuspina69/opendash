@@ -17,6 +17,7 @@
 #include "app/log_file.hpp"
 #include "app/play_session.hpp"
 #include "app/room_mesh.hpp"
+#include "app/world_link.hpp"
 #include "content/registry.hpp"
 #include "engine/config.hpp"
 #include "engine/dat.hpp"
@@ -52,6 +53,7 @@ struct WorldArgs {
     // is out of the world and they stand where they were placed
     std::vector<Guest> guests;
     bool hostAway = false;
+    int linkPort = 0; // the coordinator's port (app/world_link): its players, until it stops this world
 };
 
 // "<ticks> <hex PS1 pad bits>; ..."
@@ -89,6 +91,8 @@ WorldArgs parseArgs(int argc, char** argv) {
             g.dz = std::stoi(argv[++i]);
             if (g.id == 0 || g.id >= od::port::kPlayerSlots) throw std::invalid_argument("--world-guest: id 1..7");
             w.guests.push_back(g);
+        } else if (a == "--world-link" && more) {
+            w.linkPort = std::stoi(argv[++i]);
         } else if (a == "--world-host-away") {
             w.hostAway = true;
         } else if (a == "--story-save" && more) {
@@ -164,8 +168,51 @@ int run(const WorldArgs& w) {
     if (w.hostAway) od::port::leavePlayer(0);
     SDL_Log("world: ST%02X sub %d running, %u live actors", w.stage, w.sub, od::port::worldDigest().liveActors);
 
+    // on a link: no player of its own; the coordinator's come and go, and its silence ends the world
+    std::unique_ptr<WorldLink> link;
+    if (w.linkPort != 0) {
+        link = std::make_unique<WorldLink>(uint16_t(w.linkPort));
+        od::port::leavePlayer(0);
+        link->sendReliable({WorldMessageType::Hello});
+    }
+    bool stopped = false;
+    const auto linkTurn = [&](uint64_t tick) {
+        const uint64_t now = SDL_GetTicksNS();
+        for (const WorldMessage& m : link->poll(now)) {
+            const auto state = m.playerState.empty() ? std::nullopt : od::port::decodePlayerState(m.playerState);
+            switch (m.type) {
+            case WorldMessageType::Join:
+                if (state && m.playerId < od::port::kPlayerSlots) od::port::remotePlayerJoin(m.playerId, state->snapshot);
+                break;
+            case WorldMessageType::State:
+                if (state && m.playerId < od::port::kPlayerSlots && od::port::playerIsRemote(m.playerId))
+                    od::port::remotePlayerState(m.playerId, state->snapshot);
+                break;
+            case WorldMessageType::Leave:
+                if (m.playerId < od::port::kPlayerSlots && od::port::playerIsRemote(m.playerId))
+                    od::port::remotePlayerLeave(m.playerId);
+                break;
+            case WorldMessageType::Stop: stopped = true; break;
+            default: break;
+            }
+        }
+        if (link->silent(now)) {
+            SDL_Log("world: the coordinator went silent");
+            stopped = true;
+        }
+        WorldMessage report{WorldMessageType::Report};
+        const od::port::WorldDigest digest = od::port::worldDigest();
+        report.tick = tick;
+        report.liveActors = digest.liveActors;
+        report.digest = digest.hash;
+        for (size_t id = 0; id < od::port::kPlayerSlots; ++id)
+            if (od::port::playerPresent(id)) ++report.players;
+        link->sendLatest(report);
+    };
+
     uint64_t next = SDL_GetTicksNS(), statsNs = 0, statsMaxNs = 0, tick = 0;
-    while (view->play && (w.ticks == 0 || tick < w.ticks)) {
+    while (view->play && !stopped && (w.ticks == 0 || tick < w.ticks)) {
+        if (link) linkTurn(tick);
         const uint64_t at = SDL_GetTicksNS();
         const uint16_t pad = tick < w.pad.size() ? w.pad[size_t(tick)] : uint16_t(0);
         // the directions as the stick the logic reads when no stick is held, as the windowed game hands them

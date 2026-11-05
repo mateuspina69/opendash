@@ -440,6 +440,15 @@ target_link_libraries(test_net_protocol PRIVATE odnet)
 target_include_directories(test_net_protocol PRIVATE tests)
 add_test(NAME test_net_protocol COMMAND test_net_protocol)
 
+# the coordinator's worlds, with real world processes
+add_executable(test_world_host tests/test_world_host.cpp src/app/world_host.cpp src/app/world_link.cpp)
+target_include_directories(test_world_host PRIVATE tests src)
+target_link_libraries(test_world_host PRIVATE odgame odnet SDL3::SDL3)
+if(WIN32)
+    target_compile_definitions(test_world_host PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+endif()
+add_test(NAME test_world_host COMMAND test_world_host $<TARGET_FILE:opendash>)
+
 add_executable(test_player_table tests/test_player_table.cpp)
 target_link_libraries(test_player_table PRIVATE odgame)
 target_include_directories(test_player_table PRIVATE tests)
