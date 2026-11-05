@@ -1,3 +1,4 @@
+#include "app/own_world.hpp"
 #include "app/app.hpp"
 #include "app/dat_cache.hpp"
 #include "app/screenshot.hpp"
@@ -259,6 +260,8 @@ void App::simStep(int gameFrames) {
         // the ghosts, after the tick loop and the room rebuild (never inside a tick): each posed in its own files, the
         // local ones only read; a new look's slices go straight to the renderer (no room rebuild)
         netplay.step(SDL_GetTicksNS(), ghosts); // send, receive, the slots from their buffers
+        if (playerView.ownWorld)
+            playerView.ownWorld->showPlayers(ghosts, od::port::loadedDataFingerprint(loadedDataIdentity()), SDL_GetTicksNS());
         netStepped = true;
         const SliceSink sink{[&](const std::vector<uint8_t>& rgba, int count) { return renderer->appendSlices(rgba, count); },
                              [&](int slice, const std::vector<uint8_t>& rgba) { renderer->updateSlice(slice, rgba); }};

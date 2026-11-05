@@ -20,6 +20,7 @@
 #include "app/play_session.hpp"
 #include "app/room_mesh.hpp"
 #include "app/world_link.hpp"
+#include "net/wire.hpp"
 #include "content/registry.hpp"
 #include "engine/config.hpp"
 #include "engine/dat.hpp"
@@ -32,6 +33,7 @@
 #include "game/encounter.hpp"
 #include "game/stage_record.hpp"
 #include "game/room_grid.hpp"
+#include "game/player/net_player.hpp"
 #include "game/player/player_snapshot.hpp"
 #include "game/player/remote_combat.hpp"
 #include "game/player/remote_player.hpp"
@@ -203,6 +205,14 @@ public:
             r.lastSequence = uint16_t(r.lastSequence + 1);
             if (r.lastSequence > kAckLagUpdates) r.sender.acknowledge(uint16_t(r.lastSequence - kAckLagUpdates));
         }
+        if (od::port::playerPresent(0)) {
+            const od::port::NetPlayerFields fields = playerWatch_.see(od::port::player(), tick);
+            if (int(tick) % every_ == 0) {
+                playerUpdates_.push_back(uint32_t(playerSender_.update(0, tick, fields).size()));
+                const uint16_t sent = uint16_t(playerUpdates_.size());
+                if (sent > kAckLagUpdates) playerSender_.acknowledge(uint16_t(sent - kAckLagUpdates));
+            }
+        }
         size_t live = 0;
         for (size_t i = 0; i < od::port::kNetSlots; ++i)
             if (table.actors[i].live && od::port::netSlotVisible(uint8_t(i))) ++live;
@@ -214,6 +224,9 @@ public:
         LocalFile out(path_);
         std::fprintf(out.f, "ticks %u every %d liveMax %zu occupants %llu playerState %zu\n", ticks, every_, maxLive_,
                      (unsigned long long)occupants_, playerStateBytes);
+        std::fprintf(out.f, "playerUpdates");
+        for (const uint32_t n : playerUpdates_) std::fprintf(out.f, " %u", n);
+        std::fprintf(out.f, "\n");
         for (const Run& r : runs_) {
             std::fprintf(out.f, "run %s joinEvents %llu laterEvents %llu cut %llu updates", r.name,
                          (unsigned long long)r.joinEventBytes, (unsigned long long)r.laterEventBytes,
@@ -237,6 +250,9 @@ private:
     };
     std::string path_;
     int every_;
+    od::port::NetPlayerWatch playerWatch_;
+    od::port::NetPlayerSender playerSender_;
+    std::vector<uint32_t> playerUpdates_;
     size_t maxLive_ = 0;
     uint64_t occupants_ = 0;
     std::array<Run, 1> runs_{Run{"all", od::port::netSlotNetworked, od::port::NetStateSender(od::port::netSlotNetworked)}};
@@ -418,6 +434,35 @@ int run(const WorldArgs& w) {
         uint16_t serial = 0;
     };
     std::array<FiredShot, od::port::ShotPool::size()> fired{}; // the world's shots that came from a client's fire
+    // the players' states: what each owner sends, played here from this world's files; what goes on to the others
+    struct RemoteMirror {
+        od::port::NetPlayerReceiver from;
+        std::array<od::port::NetPlayerTrack, 2> tracks{};
+        uint32_t ownerTick = 0;
+        bool heard = false;
+    };
+    std::array<RemoteMirror, od::port::kPlayerSlots> mirrors{};
+    std::map<std::pair<uint8_t, uint8_t>, od::port::NetPlayerSender> playerSenders; // by client, player
+    const auto playersFromOwners = [&] {
+        for (uint8_t id = 0; id < od::port::kPlayerSlots; ++id) {
+            RemoteMirror& m = mirrors[id];
+            if (!m.heard || !od::port::playerPresent(id) || !od::port::playerIsRemote(id)) continue;
+            ++m.ownerTick;
+            const od::port::NetPlayerFields& f = m.from.fields();
+            for (size_t c = 0; c < 2; ++c) m.tracks[c].step(f.channels[c], f.stageAnims, m.ownerTick);
+            od::port::remotePlayerState(id, od::port::netPlayerSnapshot(f, m.tracks));
+        }
+    };
+    const auto playersToOthers = [&](uint32_t netTick) {
+        for (auto& [client, sender] : netClients)
+            for (uint8_t id = 0; id < od::port::kPlayerSlots; ++id) {
+                if (id == client || !mirrors[id].heard || !od::port::playerPresent(id)) continue;
+                WorldMessage m{WorldMessageType::NetPlayer};
+                m.playerId = client;
+                m.netState = playerSenders[{client, id}].update(id, netTick, mirrors[id].from.fields());
+                link->sendLatest(m);
+            }
+    };
     const auto fightTurn = [&] {
         for (uint8_t id = 0; id < od::port::kPlayerSlots; ++id) {
             if (!od::port::playerPresent(id) || !od::port::playerIsRemote(id)) continue;
@@ -485,6 +530,7 @@ int run(const WorldArgs& w) {
             update.netState = sender.update(*netTable);
             link->sendLatest(update);
         }
+        if (link && int(netTick) % w.netTicks == 0) playersToOthers(netTick);
     };
     const auto linkTurn = [&](uint64_t tick) {
         const uint64_t now = SDL_GetTicksNS();
@@ -516,6 +562,30 @@ int run(const WorldArgs& w) {
                         fired[od::port::ShotPool::index(*shot)] = {true, m.playerId, fire->clientSlot, fire->serial};
                 }
                 break;
+            case WorldMessageType::NetPlayer:
+                if (m.playerId < od::port::kPlayerSlots) {
+                    RemoteMirror& mirror = mirrors[m.playerId];
+                    if (const auto heard = mirror.from.apply(m.netState)) {
+                        if (!mirror.heard || int32_t(heard->tick - mirror.ownerTick) > 0) mirror.ownerTick = heard->tick;
+                        mirror.heard = true;
+                        od::net::ByteWriter ack;
+                        ack.u8(heard->playerId);
+                        ack.u16(heard->sequence);
+                        WorldMessage back{WorldMessageType::NetPlayerAck};
+                        back.playerId = m.playerId;
+                        back.netState = ack.take();
+                        link->sendLatest(back);
+                    }
+                }
+                break;
+            case WorldMessageType::NetPlayerAck: {
+                od::net::ByteReader ack(m.netState);
+                const uint8_t about = ack.u8();
+                const uint16_t sequence = ack.u16();
+                if (ack.done())
+                    if (const auto s = playerSenders.find({m.playerId, about}); s != playerSenders.end()) s->second.acknowledge(sequence);
+                break;
+            }
             case WorldMessageType::NetReport:
                 if (const auto report = od::port::decodeReport(m.netState);
                     report && m.playerId < od::port::kPlayerSlots && od::port::playerIsRemote(m.playerId))
@@ -559,6 +629,7 @@ int run(const WorldArgs& w) {
         const float ly = float(((pad & 0x40) != 0) - ((pad & 0x10) != 0));
         if (!w.hostAway)
             for (const WorldArgs::Guest& g : w.guests) od::port::remotePlayerState(g.id, guestState(g));
+        if (link) playersFromOwners();
         view->playTick(pad, 128, 128, lx, ly);
         netTurn(uint32_t(tick));
         if (view->assetsDirty) {

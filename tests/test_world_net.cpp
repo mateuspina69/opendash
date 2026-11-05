@@ -18,6 +18,7 @@
 
 #include "app/world_link.hpp"
 #include "check.hpp"
+#include "game/player/net_player.hpp"
 #include "game/player/remote_combat.hpp"
 #include "game/world_net_state.hpp"
 
@@ -466,6 +467,34 @@ void testRoomPatches() {
     CHECK(sender.events(t).empty());
 }
 
+// a player's state: only what changed, and the animation's byte when it changes
+void testPlayerState() {
+    NetPlayerSender sender;
+    NetPlayerReceiver receiver;
+    NetPlayerFields f;
+    f.pos = {100, 0, 200};
+    f.look.costume = 2;
+    f.channels[0].anim = 5;
+    f.channels[0].tick = 1;
+    const auto first = sender.update(3, 1, f);
+    const auto h = receiver.apply(first);
+    CHECK(h && h->playerId == 3);
+    CHECK(receiver.fields() == f);
+    sender.acknowledge(h->sequence);
+    CHECK(sender.update(3, 2, f).size() == 9); // id, sequence, tick, mask: nothing else
+    f.pos[0] = 104;
+    const auto moved = sender.update(3, 3, f);
+    CHECK(moved.size() == 9 + 2);
+    f.channels[0].anim = 6;
+    f.channels[0].tick = 5;
+    const auto anim = sender.update(3, 5, f);
+    CHECK(anim.size() == 9 + 2 + 2);
+    CHECK(receiver.apply(moved).has_value());
+    CHECK(receiver.apply(anim).has_value());
+    CHECK(receiver.fields() == f);
+    CHECK(!receiver.apply(moved).has_value()); // stale
+}
+
 void testLinkMessages() {
     WorldMessage ack{WorldMessageType::NetAck};
     ack.playerId = 3;
@@ -707,6 +736,7 @@ int main(int argc, char** argv) {
     testEffects();
     testLockPoints();
     testRoomPatches();
+    testPlayerState();
     testOwnShotsWithheld();
     testFightMessages();
     testLinkMessages();

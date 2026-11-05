@@ -52,6 +52,8 @@ public:
     void netAck(uint8_t client, uint16_t sequence);
     // what must arrive, to the world the client's player is in (a fire, a report)
     void netSend(uint8_t client, WorldMessageType type, std::vector<uint8_t> bytes);
+    // ... what the next one replaces (a player's state, its acknowledgement)
+    void netSendLatest(uint8_t client, WorldMessageType type, std::vector<uint8_t> bytes);
     // the turn between frames: the links, the worlds' reports, the keep-alives; a world that ended on its own is forgotten
     void poll(uint64_t nowNs);
 

@@ -132,6 +132,10 @@ void App::parseArgs(int argc, char** argv) {
         else if (a == "--menu-snappy") od::port::setMenuSnappy(std::stoi(argv[++i]) != 0); // 0 = the PS1 cursor
         else if (a == "--own-world") // a client of a world process of its own, from this save (app/own_world)
             playerView.ownWorld = std::make_shared<OwnWorldClient>(std::filesystem::path(SDL_GetBasePath()) / "opendash.exe", argv[++i]);
+        else if (a == "--own-world-guest" && playerView.ownWorld && i + 2 < argc) { // test instrument: a second player at this offset
+            const int dx = std::stoi(argv[++i]), dz = std::stoi(argv[++i]);
+            playerView.ownWorld->addGuest(dx, dz);
+        }
         else if (a == "--classic") classicArg = std::stoi(argv[++i]) != 0; // the original tank controls (scripted runs)
         else if (a == "--precise-poses") od::precise::setEnabled(std::stoi(argv[++i]) != 0); // 0 = the PS1 rounded poses
         else if (a == "--flag") flagArgs.push_back(uint32_t(std::stoul(argv[++i], nullptr, 0)));

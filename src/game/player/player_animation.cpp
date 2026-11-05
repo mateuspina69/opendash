@@ -28,7 +28,7 @@ const DataTable<ScalarTable<uint32_t, 4>> idleTablesA{TableId::PlayerIdleTablesA
 const DataTable<ScalarTable<uint32_t, 4>> idleTablesB{TableId::PlayerIdleTablesB};
 
 // the script of animation `id`: its first key's address (and the frame-data byte before it)
-uint32_t animScript(const Player& p, uint32_t id) {
+uint32_t scriptAddress(uint32_t stageAnims, uint32_t id) {
     uint32_t base = kPlayerBank, table;
     if (id < kSpecialArmAnims) {
         table = kPlayerScripts;
@@ -39,12 +39,14 @@ uint32_t animScript(const Player& p, uint32_t id) {
         id -= kBusterArmAnims;
         table = kBusterArmScripts;
     } else {
-        base = p.stageAnims;
+        base = stageAnims;
         id -= kStageAnims;
         table = loadedScalar<uint32_t>(base + 4) + base;
     }
     return base + (loadedScalar<uint32_t>(table + id * 4) & ~3u) + kKeySize;
 }
+
+uint32_t animScript(const Player& p, uint32_t id) { return scriptAddress(p.stageAnims, id); }
 
 // the shared tail of a key with a blend event (flags & kKeyBlendMask == kKeyBlend): the blend toward the next different
 // frame of the script
@@ -102,6 +104,8 @@ constexpr int kWalkLoopFrames = 0x1c;
 constexpr int kWalkLastStep = 0x1f;
 
 } // namespace
+
+uint32_t playerAnimScriptAddress(uint32_t stageAnims, uint32_t id) { return scriptAddress(stageAnims, id); }
 
 void requestAnimId(Player& p, int8_t id, int16_t step, bool force) {
     const int8_t playing = int8_t(p.body.prevAnim);

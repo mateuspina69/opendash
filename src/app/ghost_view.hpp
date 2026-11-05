@@ -33,6 +33,8 @@ class GhostView {
 public:
     void setRemote(int slot, const od::port::RemotePlayerState& s); // the state a slot shows
     void clearRemote(int slot);
+    // the slot's own files (null before its first pose): where its animation is read
+    od::LoadedFileData* files(int slot) { return set_.files(slot); }
     // after the tick loop: poses every slot in the local room in its own files; a slot whose loaded-data fingerprint
     // differs from localFingerprint (game/loaded_data_fingerprint) is hidden. The looks of the posed slots are
     // made (app/ghost_looks: a new one built and its slices sent to `sink` now, no room rebuild), the others dropped.

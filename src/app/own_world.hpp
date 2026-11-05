@@ -11,6 +11,9 @@
 #include <vector>
 
 #include "app/world_host.hpp"
+#include "app/ghost_view.hpp"
+#include "game/ghost_buffer.hpp"
+#include "game/player/net_player.hpp"
 #include "game/player/remote_combat.hpp"
 #include "game/world_net_state.hpp"
 
@@ -28,6 +31,10 @@ public:
     void localActors(const od::port::PlayerEnv& env, od::port::ActorContext& context, bool late);
     // the end of the frame's body: the lock-on and the radar from the world's actors, this tick's shots to the world
     void endFrame();
+    // after the ticks of a frame: the room's other players, for the ghost slots
+    void showPlayers(GhostView& ghosts, uint64_t localFingerprint, uint64_t nowNs);
+    // test instrument: a second player in the world who follows this one at an offset (game units)
+    void addGuest(int dx, int dz);
 
 private:
     static constexpr uint8_t kPlayerId = 1; // in the world; id 0 is the world's own, which leaves on a link
@@ -51,6 +58,18 @@ private:
     bool shownAny_ = false;
     uint32_t shown_ = 0;
     uint64_t nextTickNs_ = 0;
+    uint32_t localTick_ = 0;
+    od::port::NetPlayerWatch watch_;
+    od::port::NetPlayerSender uplink_, guestUplink_;
+    std::optional<std::pair<int, int>> guest_;
+    static constexpr uint8_t kGuestId = 2;
+    struct Other {
+        od::port::NetPlayerReceiver from;
+        od::ghost::GhostBuffer buffer;
+        std::array<od::port::NetPlayerTrack, 2> tracks{};
+        int64_t stepped = -1;
+    };
+    std::array<Other, 8> others_{};
 };
 
 } // namespace od::app

@@ -41,6 +41,10 @@ void OwnWorldClient::roomBound(int stage, int sub) {
     room_ = WorldRoom{stage, sub};
     host_.enter(kPlayerId, *room_, playerState());
     host_.netJoin(kPlayerId);
+    if (guest_) host_.enter(kGuestId, *room_, playerState());
+    uplink_ = {};
+    guestUplink_ = {};
+    for (Other& o : others_) o = Other{};
     ownShots_ = {};
     reported_ = {};
 }
@@ -54,8 +58,19 @@ void OwnWorldClient::turn(uint64_t nowNs) {
         SDL_DelayNS(nextTickNs_ - nowNs);
         nowNs = nextTickNs_;
     }
-    host_.state(kPlayerId, playerState());
+    ++localTick_;
+    const od::port::NetPlayerFields fields = watch_.see(od::port::player(), localTick_);
+    if (localTick_ % od::port::kNetDefaultUpdateTicks == 0) {
+        host_.netSendLatest(kPlayerId, WorldMessageType::NetPlayer, uplink_.update(kPlayerId, localTick_, fields));
+        if (guest_) {
+            od::port::NetPlayerFields shifted = fields;
+            shifted.pos[0] = int16_t(shifted.pos[0] + guest_->first);
+            shifted.pos[2] = int16_t(shifted.pos[2] + guest_->second);
+            host_.netSendLatest(kGuestId, WorldMessageType::NetPlayer, guestUplink_.update(kGuestId, localTick_, shifted));
+        }
+    }
     host_.poll(nowNs);
+    if (guest_) (void)host_.takeNet(kGuestId);
     const auto acknowledge = [&](std::optional<uint16_t> sequence) {
         if (sequence) host_.netAck(kPlayerId, *sequence);
     };
@@ -66,6 +81,21 @@ void OwnWorldClient::turn(uint64_t nowNs) {
         } else if (m.type == WorldMessageType::NetUpdate) {
             acknowledge(state_->applyUpdate(m.netState));
             if (state_->heard()) clock_->heard(state_->newestTick());
+        } else if (m.type == WorldMessageType::NetPlayerAck) {
+            if (m.netState.size() == 3) uplink_.acknowledge(uint16_t(m.netState[1] | m.netState[2] << 8));
+        } else if (m.type == WorldMessageType::NetPlayer) {
+            const auto id = od::port::netPlayerIdOf(m.netState);
+            if (!id || *id >= others_.size()) continue;
+            Other& o = others_[*id];
+            const auto heard = o.from.apply(m.netState);
+            if (!heard) continue;
+            std::vector<uint8_t> ack = {*id, uint8_t(heard->sequence), uint8_t(heard->sequence >> 8)};
+            host_.netSendLatest(kPlayerId, WorldMessageType::NetPlayerAck, std::move(ack));
+            // the fields of this tick in the smoothing buffer: its frames are the client's, set when shown
+            od::port::RemotePlayerState s;
+            s.room = od::port::ghostRoomOf();
+            s.snapshot = od::port::netPlayerSnapshot(o.from.fields(), o.tracks);
+            o.buffer.push(nowNs, heard->tick, s);
         } else if (m.type == WorldMessageType::NetHit) {
             if (const auto hit = od::port::decodeHitResult(m.netState)) od::port::applyPlayerHit(od::port::player(), *hit);
         } else if (m.type == WorldMessageType::NetShotHit) {
@@ -92,6 +122,39 @@ void OwnWorldClient::turn(uint64_t nowNs) {
     for (; failuresLogged_ < failures_.classes.size(); ++failuresLogged_)
         SDL_Log("own world: failed: %s", failures_.classes[failuresLogged_].c_str());
 }
+
+void OwnWorldClient::showPlayers(GhostView& ghosts, uint64_t localFingerprint, uint64_t nowNs) {
+    for (size_t id = 0, slot = 0; id < others_.size() && slot < size_t(od::ghost::kMaxGhosts); ++id) {
+        Other& o = others_[id];
+        if (o.buffer.empty()) continue;
+        auto shown = o.buffer.sample(nowNs);
+        if (!shown) {
+            ghosts.clearRemote(int(slot++));
+            continue;
+        }
+        // the animation is played here, from the slot's own files, up to the shown tick
+        const int64_t tick = int64_t(o.buffer.renderTick());
+        if (od::LoadedFileData* files = ghosts.files(int(slot))) {
+            const od::ScopedLoadedFiles bound(*files);
+            const od::port::NetPlayerFields& f = o.from.fields();
+            for (int64_t t = o.stepped < 0 ? tick : o.stepped + 1; t <= tick; ++t)
+                for (size_t c = 0; c < 2; ++c) o.tracks[c].step(f.channels[c], f.stageAnims, uint32_t(t));
+            o.stepped = tick;
+        }
+        const od::port::PlayerSnapshot played = od::port::netPlayerSnapshot(o.from.fields(), o.tracks);
+        for (size_t c = 0; c < 2; ++c) {
+            shown->snapshot.animId[c] = played.animId[c];
+            shown->snapshot.animStep[c] = played.animStep[c];
+            shown->snapshot.animFrame[c] = played.animFrame[c];
+            shown->snapshot.blend[c * 2] = played.blend[c * 2];
+            shown->snapshot.blend[c * 2 + 1] = played.blend[c * 2 + 1];
+        }
+        shown->fingerprint = localFingerprint;
+        ghosts.setRemote(int(slot++), *shown);
+    }
+}
+
+void OwnWorldClient::addGuest(int dx, int dz) { guest_ = std::make_pair(dx, dz); }
 
 void OwnWorldClient::endFrame() {
     if (!room_) return;

@@ -16,6 +16,8 @@ enum class PlayerAnim : uint8_t;
 void requestAnim(Player& p, PlayerAnim id, int16_t step, bool force);
 // ... an id the code computes (a table's, the upper body's, a script's)
 void requestAnimId(Player& p, int8_t id, int16_t step, bool force);
+// the script of animation `id` in the files bound now: its first key's address (the frame-data byte before it)
+uint32_t playerAnimScriptAddress(uint32_t stageAnims, uint32_t id);
 // exe 0x5e1a90 on the player's body channel: animation id from its step, the blend, the pose
 // (without the blend)
 void startBodyAnimation(Player& p, PlayerAnim id, int step);

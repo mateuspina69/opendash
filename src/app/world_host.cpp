@@ -146,6 +146,15 @@ void WorldHost::netSend(uint8_t client, WorldMessageType type, std::vector<uint8
     worlds_.at(*room)->link.sendReliable(m);
 }
 
+void WorldHost::netSendLatest(uint8_t client, WorldMessageType type, std::vector<uint8_t> bytes) {
+    const std::optional<WorldRoom> room = playerRoom_.at(client);
+    if (!room) return;
+    WorldMessage m{type};
+    m.playerId = client;
+    m.netState = std::move(bytes);
+    worlds_.at(*room)->link.sendLatest(m);
+}
+
 void WorldHost::netAck(uint8_t client, uint16_t sequence) {
     const std::optional<WorldRoom> room = playerRoom_.at(client);
     if (!room) return;
@@ -161,7 +170,8 @@ void WorldHost::poll(uint64_t nowNs) {
         for (const WorldMessage& m : world.link.poll(nowNs)) {
             if (m.type == WorldMessageType::Report) world.report = WorldReport{m.tick, m.liveActors, m.players, m.digest};
             if ((m.type == WorldMessageType::NetEvents || m.type == WorldMessageType::NetUpdate ||
-                 m.type == WorldMessageType::NetHit || m.type == WorldMessageType::NetShotHit) &&
+                 m.type == WorldMessageType::NetHit || m.type == WorldMessageType::NetShotHit ||
+                 m.type == WorldMessageType::NetPlayer || m.type == WorldMessageType::NetPlayerAck) &&
                 m.playerId < kPlayers &&
                 playerRoom_[m.playerId] == it->first)
                 netInbox_[m.playerId].push_back(m);
