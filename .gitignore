@@ -6,6 +6,7 @@
 !/tools/ffx_sc_glsl.py
 !/tools/dump_pages.py
 !/tools/upscale_pages.py
+!/tools/world_compare.py
 /tests/data/
 /lang/
 /screenshots/
