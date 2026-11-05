@@ -223,21 +223,18 @@ constexpr uint8_t kRollType = 0x60, kCritterType = 0x7e;
 
 // exe 0x41b700
 void rollSpawnerST0DWatch(ControllerActor& e) {
-    const int16_t px = player().pos.x.whole;
     if (TracksStep(e.step) == TracksStep::Off) {
         patchedRecordFor<FieldEncounterTable>(encounterState().fieldTable).formationPick = stateAddress(TableId::RollSpawnersFormationPicks);
-        if (px > kRegionEast) setStoryFlag(kFlagEastOfTracks);
+        if (anyPlayer([](const Player& p) { return p.pos.x.whole > kRegionEast; })) setStoryFlag(kFlagEastOfTracks);
         else clearStoryFlag(kFlagEastOfTracks);
-        if (px < kTracksWest) {
-            clearStoryFlag(kFlagOnTracks);
-            e.step = uint8_t(TracksStep::On);
-        } else if (px > kTracksEast) {
-            encounterSuspend(kFieldKind, 1);
+        // nobody left on the tracks; the encounters stop if someone went east
+        if (allPlayers([](const Player& p) { return p.pos.x.whole < kTracksWest || p.pos.x.whole > kTracksEast; })) {
+            if (anyPlayer([](const Player& p) { return p.pos.x.whole > kTracksEast; })) encounterSuspend(kFieldKind, 1);
             clearStoryFlag(kFlagOnTracks);
             e.step = uint8_t(TracksStep::On);
         }
     } else if (TracksStep(e.step) == TracksStep::On) {
-        if (px < kTracksEast && px > kTracksWest) {
+        if (anyPlayer([](const Player& p) { return p.pos.x.whole < kTracksEast && p.pos.x.whole > kTracksWest; })) {
             encounterSuspend(kFieldKind, 0);
             setStoryFlag(kFlagOnTracks);
             e.step = uint8_t(TracksStep::Off);

@@ -9,6 +9,7 @@
 #include "game/game_state.hpp"
 #include "game/player/player_state.hpp"
 #include "game/player/player_status.hpp"
+#include "game/player/players.hpp"
 
 namespace od::port {
 
@@ -20,8 +21,7 @@ constexpr uint8_t kIceBlockType = 0x1f; // the stage's static type of the ice bl
 constexpr uint8_t kSlotPoolMask = 0xf0;
 
 // the player stands on an ice block (a static slot of the ice block's type)
-bool onIceBlock() {
-    const Player& p = player();
+bool onIceBlock(const Player& p) {
     if (p.onPlatform == 0) return false;
     const ActorHeader& on = *p.platform;
     return (on.slot & kSlotPoolMask) == kStaticClass && on.type == kIceBlockType;
@@ -30,10 +30,12 @@ bool onIceBlock() {
 void icePlayerMarker() { // exe 0x425b10
     const GameState& g = gameState();
     const uint8_t stage = g.stage, room = g.room;
-    if (stage == kSt2e || (stage == kSt2d && room != kSt2dDryRoom) || (stage == kSt2f && room != kSt2fDryRoom))
-        slipperyFloor(player());
-    else if ((stage == kSt2d || stage == kSt2f) && onIceBlock())
-        slipperyFloor(player());
+    forEachPlayer([&](Player& p) {
+        if (stage == kSt2e || (stage == kSt2d && room != kSt2dDryRoom) || (stage == kSt2f && room != kSt2fDryRoom))
+            slipperyFloor(p);
+        else if ((stage == kSt2d || stage == kSt2f) && onIceBlock(p))
+            slipperyFloor(p);
+    });
 }
 
 } // namespace

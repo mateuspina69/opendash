@@ -100,8 +100,8 @@ void stepToward(int16_t& angle, int d, int step) {
     else if (d <= -step) angle = int16_t(uint16_t(uint16_t(angle) - uint32_t(step)));
     else angle = int16_t(uint16_t(uint16_t(angle) + uint32_t(d)));
 }
-void playerValues(int32_t out[3], int dy) {
-    const Player& p = player();
+void playerValues(const Actor& actor, int32_t out[3], int dy) {
+    const Player& p = nearestPlayer(actor.pos);
     out[0] = p.pos.x;
     out[1] = int32_t((uint32_t(p.pos.y) & 0xffffu) | uint32_t(uint16_t(uint16_t(p.pos.y.whole) + uint16_t(dy))) << 16);
     out[2] = p.pos.z;
@@ -116,7 +116,7 @@ void positionValues(const AnimatedActor& actor, int32_t out[3]) {
 // angle, each by at most its step (0: not turned)
 void facePlayer(AnimatedActor& actor, int pitchStep, int yawStep) {
     int32_t target[3], at[3];
-    playerValues(target, 0);
+    playerValues(actor, target, 0);
     positionValues(actor, at);
     if (pitchStep != 0) {
         const int pitch = int16_t(uint16_t(0x800 - pitchOf(target, at)));
@@ -132,7 +132,7 @@ void facePlayer(AnimatedActor& actor, int pitchStep, int yawStep) {
 // its pitch by at most 0x10; its yaw by at most 0x18 (mode 2) or 0x40
 void aimBone(AnimatedActor& actor, int x, int y, int z, uint32_t bone, int mode) {
     int32_t target[3];
-    playerValues(target, -0x5a);
+    playerValues(actor, target, -0x5a);
     int16_t point[3];
     boneOffsetPoint(actor, bone, x, y, z, point);
     const int32_t from[3] = {int32_t(uint32_t(int32_t(point[0])) << 16), int32_t(uint32_t(int32_t(point[1])) << 16),

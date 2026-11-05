@@ -192,12 +192,12 @@ int verticalSettle(StaticActor& actor, int lim, int dy) {
     return 1;
 }
 // the low hold's height (exe 0x594f00 / 0x593ab0): 600 over the player or 400 over its ground, the higher one
-int lowHoldHeight(const ShipFields& ship) {
-    const int g = ship.ground - 400, p = player().pos.y.whole - 600;
+int lowHoldHeight(const Actor& actor, const ShipFields& ship) {
+    const int g = ship.ground - 400, p = nearestPlayer(actor.pos).pos.y.whole - 600;
     return p < g ? p : g;
 }
 int settleLow(StaticActor& actor, const ShipFields& ship, int lim) { // exe 0x594f00
-    return verticalSettle(actor, lim, actor.pos.y.whole - lowHoldHeight(ship));
+    return verticalSettle(actor, lim, actor.pos.y.whole - lowHoldHeight(actor, ship));
 }
 int settleHigh(StaticActor& actor, const ShipFields& ship, int lim) { // exe 0x594fe0
     return verticalSettle(actor, lim, actor.pos.y.whole - ship.ground + 800);
@@ -221,7 +221,7 @@ void holdLow(StaticActor& actor, ShipFields& ship) {
         return;
     }
     if (!(ship.flags & kShipRanging)) bob(actor);
-    const int d = actor.pos.y.whole - lowHoldHeight(ship);
+    const int d = actor.pos.y.whole - lowHoldHeight(actor, ship);
     if (d >= 0xc9) startHeightMove(actor, ship, -0x10);
     if (d >= -200) return;
     startHeightMove(actor, ship, 0x10);

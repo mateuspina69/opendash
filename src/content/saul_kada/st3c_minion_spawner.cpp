@@ -98,7 +98,7 @@ void run(const PlayerEnv& env, ControllerActor& actor, SpawnerFields& spawner) {
     case SpawnerPhase::Place: {
         const int distance = int((rngStep() & 0x3ff) + 0x600);
         int angle;
-        if (spawner.nearTries < kNearTries && !pointInCellBox(player().pos, CellBox(stateAddress(TableId::St3cMinionSpawnerNearBox)))) { // exe 0x5e5af0
+        if (spawner.nearTries < kNearTries && !pointInCellBox(actingPlayer().pos, CellBox(stateAddress(TableId::St3cMinionSpawnerNearBox)))) { // exe 0x5e5af0
             angle = int((rngLastValue() >> 0xa) & 0x3ff) - 0x200;
             spawner.nearTries += 1u;
         } else {
@@ -111,7 +111,7 @@ void run(const PlayerEnv& env, ControllerActor& actor, SpawnerFields& spawner) {
         point.y = 0;
         point.z = dz;
         projectionScratch().pointYaw = 0;
-        const Player& p = player();
+        const Player& p = actingPlayer();
         point.x = int16_t(uint16_t(uint16_t(p.pos.x.whole) + uint16_t(point.x)));
         point.y = int16_t(uint16_t(uint16_t(p.pos.y.whole) + uint16_t(point.y)));
         point.z = int16_t(uint16_t(uint16_t(p.pos.z.whole) + uint16_t(point.z)));

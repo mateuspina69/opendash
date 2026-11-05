@@ -76,8 +76,8 @@ void letBossThrowAgain(const BombFields& bomb) {
     const AnimatedActor& b = animatedActorAt(boss);
     if (b.type == kLavaBossType && b.flags != 0) LavaBossBombOut(animatedActorAt(boss)).bombOut = 0;
 }
-void chestTarget(int32_t out[3]) { // the player's position 0x80 up (a stack copy in the exe)
-    const Player& p = player();
+void chestTarget(const Actor& actor, int32_t out[3]) { // the player's position 0x80 up (a stack copy in the exe)
+    const Player& p = nearestPlayer(actor.pos);
     out[0] = p.pos.x;
     out[1] = int32_t(uint32_t(p.pos.y) - 0x800000u);
     out[2] = p.pos.z;
@@ -156,7 +156,7 @@ int32_t resolveFall(const PlayerEnv& env, ProjectileActor& actor, BombFields& bo
 // the homing of 0x5c88f0 / 0x5c8c90: spinning, a wall -> true, kept 0x40 over the ground; its time out -> true
 bool homeTick(const PlayerEnv& env, ProjectileActor& actor, BombFields& bomb) {
     int32_t target[3];
-    chestTarget(target);
+    chestTarget(actor, target);
     savePose(actor);
     home(actor, bomb, target);
     actor.rotation.z = int16_t((uint16_t(actor.rotation.z) + 0x100u) & 0xfffu);
@@ -310,7 +310,7 @@ void centreMove(const PlayerEnv& env, ProjectileActor& actor, BombFields& bomb) 
         bomb.humTimer = 9;
     }
     int32_t target[3];
-    chestTarget(target);
+    chestTarget(actor, target);
     savePose(actor);
     home(actor, bomb, target);
     actor.rotation.z = int16_t((uint16_t(actor.rotation.z) + 0x100u) & 0xfffu);

@@ -9,6 +9,7 @@
 #include "game/explosions.hpp"
 #include "game/global_class_types.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/random.hpp"
 #include "game/port_gap.hpp"
 #include "game/room_scripts.hpp"
@@ -69,7 +70,8 @@ void flashBone(AnimatedActor& actor, uint32_t bone) {
 }
 
 int angleFromPlayer(const BonePoint& p) {
-    return angleOf(player().pos.x, player().pos.z, int32_t(uint32_t(int32_t(p.v[0])) << 16),
+    const Player& nearest = nearestPlayer(int16_t(p.v[0]), int16_t(p.v[2]));
+    return angleOf(nearest.pos.x, nearest.pos.z, int32_t(uint32_t(int32_t(p.v[0])) << 16),
                    int32_t(uint32_t(int32_t(p.v[2])) << 16));
 }
 

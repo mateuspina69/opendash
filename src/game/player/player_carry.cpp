@@ -13,6 +13,7 @@
 #include "game/player/player_state.hpp"
 #include "game/player/player_substates.hpp"
 #include "game/player/player_weapons.hpp"
+#include "game/player/players.hpp"
 
 namespace od::port {
 
@@ -162,12 +163,15 @@ void heldMotion(Player& p) {
     p.step = uint8_t(p.step + 1u);
 }
 
-int playerGrab(const Actor& a, int range, int flag) {
-    Player& p = player();
-    if (p.airborne != 0) return 0;
-    if (std::abs(int(p.pos.x.whole) - int(a.pos.x.whole)) >= range || std::abs(int(p.pos.y.whole) - int(a.pos.y.whole)) >= range ||
-        std::abs(int(p.pos.z.whole) - int(a.pos.z.whole)) >= range)
-        return 0;
+int playerGrab(Actor& a, int range, int flag) {
+    Player* const held = findPlayer([&](const Player& q) {
+        return q.airborne == 0 && std::abs(int(q.pos.x.whole) - int(a.pos.x.whole)) < range &&
+               std::abs(int(q.pos.y.whole) - int(a.pos.y.whole)) < range &&
+               std::abs(int(q.pos.z.whole) - int(a.pos.z.whole)) < range;
+    });
+    if (!held) return 0;
+    a.ownerPlayer = uint8_t(playerId(*held)); // the one held until the actor lets go (playerGrabHold)
+    Player& p = *held;
     p.pos = a.pos;
     p.enterStep(flag ? uint8_t(HeldStep::Grabbed) : uint8_t(HeldStep::GrabbedStruggling));
     p.subState = uint8_t(PlayerSub::Held);
@@ -175,7 +179,7 @@ int playerGrab(const Actor& a, int range, int flag) {
 }
 
 int playerGrabHold(const Actor& actor, uint16_t& counter, int heavy) {
-    Player& p = player();
+    Player& p = playerById(actor.ownerPlayer);
     p.pos = actor.pos;
     const uint16_t moves = uint16_t(p.button(PlayerButton::Forward) | p.button(PlayerButton::Back) |
                                     p.button(PlayerButton::Left) | p.button(PlayerButton::Right) |

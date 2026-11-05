@@ -8,6 +8,7 @@
 #include "game/actor_state.hpp"
 #include "game/global_class_types.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/random.hpp"
 #include "game/skid_sparks.hpp"
 #include "game/stage_state.hpp"
@@ -26,8 +27,7 @@ constexpr int8_t kWadeDepth = 0x18, kWadeDrag = 0xc;
 constexpr uint8_t kSparkleVariant = 0x1f;
 constexpr uint8_t kPlayerIdleState = 0, kPlayerDownState = 0xd; // the player's sub-states without sparkles
 
-void sparkler(ControllerActor& actor) { // exe 0x427a70
-    Player& p = player();
+void sparklerOn(ControllerActor& actor, Player& p) { // exe 0x427a70
     if (SparklerFields(actor).height >= p.pos.y.whole) return;
     if (p.airborne != 0) return;
     const uint8_t state = p.subState;
@@ -48,6 +48,10 @@ void sparkler(ControllerActor& actor) { // exe 0x427a70
     spark.pos.y = int16_t(uint32_t(int32_t(p.pos.y.whole) >> shift));
     spark.pos.z = int16_t(uint32_t((int32_t(p.pos.z.whole) * 3 - int32_t(p.prevPos.z.whole) * 2) >> shift));
     classState<SkidSparkFields>(effectActorAt(slot)).yaw = uint16_t(rngStep() & 0xfff);
+}
+
+void sparkler(ControllerActor& actor) {
+    forEachPlayer([&](Player& p) { sparklerOn(actor, p); });
 }
 
 } // namespace

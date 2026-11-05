@@ -46,9 +46,14 @@ void setFormationPicks(uint32_t picks) { patchedRecordFor<FieldEncounterTable>(e
 void fieldEncountersOn() { encounterSuspend(kFieldKind, 1); }
 void fieldEncountersOff() { encounterSuspend(kFieldKind, 0); }
 
+// a gate's side: the encounters come on as a player enters the side, and go off once all have left it
+bool anyWestOf(int16_t x) { return anyPlayer([&](const Player& p) { return p.pos.x.whole < x; }); }
+bool anyEastOf(int16_t x) { return anyPlayer([&](const Player& p) { return p.pos.x.whole > x; }); }
+bool allWestOf(int16_t x) { return allPlayers([&](const Player& p) { return p.pos.x.whole < x; }); }
+bool allEastOf(int16_t x) { return allPlayers([&](const Player& p) { return p.pos.x.whole > x; }); }
+
 // exe 0x41b830
 void encounterSwitch(ControllerActor& actor) {
-    const int16_t px = player().pos.x.whole;
     switch (EncounterSwitchState(actor.state)) {
     case EncounterSwitchState::Init:
         classState<EncounterSwitchFields>(actor).scratch = {};
@@ -60,13 +65,13 @@ void encounterSwitch(ControllerActor& actor) {
             setFormationPicks(stateAddress(TableId::St0eSpawnerEastFormationPicks));
             [[fallthrough]];
         case GateSub::Off:
-            if (px < kEastGateX) {
+            if (anyWestOf(kEastGateX)) {
                 fieldEncountersOn();
                 actor.subState = uint8_t(GateSub::On);
             }
             return;
         case GateSub::On:
-            if (px > kEastGateX) {
+            if (allEastOf(kEastGateX)) {
                 fieldEncountersOff();
                 actor.subState = uint8_t(GateSub::Off);
             }
@@ -79,13 +84,13 @@ void encounterSwitch(ControllerActor& actor) {
             setFormationPicks(stateAddress(TableId::St0eSpawnerWestFormationPicks));
             [[fallthrough]];
         case GateSub::Off:
-            if (px > kWestGateX) {
+            if (anyEastOf(kWestGateX)) {
                 fieldEncountersOn();
                 actor.subState = uint8_t(GateSub::On);
             }
             return;
         case GateSub::On:
-            if (px < kWestGateX) {
+            if (allWestOf(kWestGateX)) {
                 fieldEncountersOff();
                 actor.subState = uint8_t(GateSub::Off);
             }
@@ -96,13 +101,13 @@ void encounterSwitch(ControllerActor& actor) {
         switch (ToggleSub(actor.subState)) {
         case ToggleSub::Off:
             setFormationPicks(stateAddress(TableId::St0eSpawnerEastFormationPicks));
-            if (px < kEastGateX) {
+            if (anyWestOf(kEastGateX)) {
                 fieldEncountersOn();
                 actor.subState = uint8_t(ToggleSub::On);
             }
             return;
         case ToggleSub::On:
-            if (px > kEastGateX) {
+            if (allEastOf(kEastGateX)) {
                 fieldEncountersOff();
                 actor.subState = uint8_t(ToggleSub::Off);
             }

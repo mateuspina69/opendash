@@ -422,14 +422,14 @@ void submitHits(const AnimatedActor& actor, BossBlock& b, HitMode mode) {
     }
 }
 // exe 0x4fa2e0: the player within 0x200, or not standing on anything
-bool playerNearOrAir(const PlayerEnv& env, const BossBlock& b) {
+bool playerNearOrAir(const PlayerEnv& env, const Actor& actor, const BossBlock& b) {
     if (b.distance < 0x200) return true;
-    return ground(env, player()) == -0x100;
+    return ground(env, nearestPlayer(actor.pos)) == -0x100;
 }
 // the provoke check closing most phase-one sub-states: provoked (or the player near / in the air) -> no longer; a
 // taunt pending -> the taunt
 void provokedCheck(const PlayerEnv& env, AnimatedActor& actor, BossBlock& b) {
-    if (!(b.flagsLow & kProvoked) && !playerNearOrAir(env, b)) return;
+    if (!(b.flagsLow & kProvoked) && !playerNearOrAir(env, actor, b)) return;
     clearFlags(b, kProvoked);
     if (b.flagsLow & kTauntPending) enterSub(actor, OneSub::Taunt);
 }
@@ -494,10 +494,11 @@ void moveTail(const PlayerEnv& env, AnimatedActor& actor, BossFields& boss, Boss
     moveEnd(actor, boss, b);
 }
 // exe 0x4f9b40: the first ring cell holding the player (kNoRing: none)
-uint8_t playerRing() {
+uint8_t playerRing(const Actor& actor) {
+    const Player& p = nearestPlayer(actor.pos);
     uint8_t k = 0;
     for (uint32_t box = stateAddress(TableId::St3cGoldBossRingCells); box < stateAddress(TableId::St3cGoldBossRingCells) + 0x10; box += 4, ++k)
-        if (pointInCellBox(player().pos, CellBox(box))) break;
+        if (pointInCellBox(p.pos, CellBox(box))) break;
     return k;
 }
 // exe 0x4f9a20: the low entries, walking, then: the player standing -> his ring (none: the recovery), else the ring
@@ -516,7 +517,7 @@ void pickRingMove(const PlayerEnv& env, AnimatedActor& actor, BossBlock& b) {
         enterSub(actor, TwoSub::Recover);
         return;
     }
-    b.ring = playerRing();
+    b.ring = playerRing(actor);
     if (b.ring >= kNoRing) {
         setAnim(actor, BossAnim::Walk);
         enterSub(actor, TwoSub::Recover);
@@ -825,7 +826,7 @@ void taunt(const PlayerEnv& env, AnimatedActor& actor, BossFields& boss, BossBlo
                 b.stepSoundTimer = randomTicks(0x3c, 0x1f);
             }
             b.timer = randomTicks(0x1e, 0x1f);
-        } else if (playerNearOrAir(env, b)) {
+        } else if (playerNearOrAir(env, actor, b)) {
             b.timer = randomTicks(0x1e, 0x1f);
         }
         b.timer -= 1u;

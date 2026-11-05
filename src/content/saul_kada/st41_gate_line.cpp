@@ -62,20 +62,23 @@ void gateLine(ControllerActor& actor) {
         return;
     }
     // exe 0x5e3c00(player, line) on the 16.16 points of their integer parts, 0x5e3d80(angle, yaw), 0x5e3b40
-    const Player& p = player();
-    const int d = angleDiff(uint32_t(angleOf(int32_t(uint32_t(int32_t(p.pos.x.whole)) << 16),
-                                             int32_t(uint32_t(int32_t(p.pos.z.whole)) << 16),
-                                             int32_t(uint32_t(int32_t(line.point.x)) << 16),
-                                             int32_t(uint32_t(int32_t(line.point.z)) << 16))),
-                            line.yaw);
-    if (distanceXZ(p.pos.x.whole, p.pos.z.whole, line.point.x, line.point.z) < kCrossingReach &&
-        ((line.side & kSideBit) ^ (uint32_t(d) & kSideBit)) != 0) {
-        clearStoryFlag(kFlagGateA);
-        clearStoryFlag(kFlagGateB);
-        setStoryFlag(kFlagGateCrossed);
-        soundPlayFlat(kCrossSound); // exe 0x5d51f0
-    }
-    line.side = uint16_t(d);
+    forEachPlayer([&](const Player& p) {
+        const size_t id = playerId(p);
+        uint16_t& side = id == 0 ? line.side : line.otherSides[id - 1];
+        const int d = angleDiff(uint32_t(angleOf(int32_t(uint32_t(int32_t(p.pos.x.whole)) << 16),
+                                                 int32_t(uint32_t(int32_t(p.pos.z.whole)) << 16),
+                                                 int32_t(uint32_t(int32_t(line.point.x)) << 16),
+                                                 int32_t(uint32_t(int32_t(line.point.z)) << 16))),
+                                line.yaw);
+        if (distanceXZ(p.pos.x.whole, p.pos.z.whole, line.point.x, line.point.z) < kCrossingReach &&
+            ((side & kSideBit) ^ (uint32_t(d) & kSideBit)) != 0) {
+            clearStoryFlag(kFlagGateA);
+            clearStoryFlag(kFlagGateB);
+            setStoryFlag(kFlagGateCrossed);
+            soundPlayFlat(kCrossSound); // exe 0x5d51f0
+        }
+        side = uint16_t(d);
+    });
 }
 
 } // namespace

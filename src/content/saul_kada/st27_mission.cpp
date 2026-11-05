@@ -207,8 +207,9 @@ void run(ControllerActor& actor, MissionFields& mission) {
         bonFields.flags |= kPartnerThrowAtPlayer;
     }
     // 0x425983: the hint timer
-    const Player& p = player();
-    if (((uint8_t(p.carryFlags & kCarryThrowing) | uint8_t(p.armFlags & kArmUp)) & 0xc0) != 0) {
+    if (anyPlayer([](const Player& p) {
+            return ((uint8_t(p.carryFlags & kCarryThrowing) | uint8_t(p.armFlags & kArmUp)) & 0xc0) != 0;
+        })) {
         mission.hintTicks = 0;
         mission.hintFlags &= uint8_t(~kFirstHintSaid);
         if (tron.hitPoints >= 0) tronFields.flags &= uint8_t(~kPartnerThrowAtPlayer);

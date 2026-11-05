@@ -182,7 +182,7 @@ void lobShot(const AnimatedActor& actor, uint32_t rise) {
 int dropPointDistance(const SentryFields& sentry) {
     const int32_t point[3] = {int32_t(uint32_t(uint16_t(sentry.dropX)) << 16), 0,
                               int32_t(uint32_t(uint16_t(sentry.dropZ)) << 16)};
-    return planarDistance(player().pos, point);
+    return planarDistance(nearestPlayer(point).pos, point);
 }
 
 // ---- the sub-states [0x890734] -------------------------------------------------------------------------------------

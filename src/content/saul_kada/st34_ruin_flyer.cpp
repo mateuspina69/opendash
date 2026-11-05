@@ -85,11 +85,11 @@ void homePoint(const FlyerFields& flyer, int32_t out[3]) {
 int playerFromHome(const FlyerFields& flyer) {
     int32_t home[3];
     homePoint(flyer, home);
-    return planarDistance(player().pos, home);
+    return planarDistance(nearestPlayer(home).pos, home);
 }
 // the player's position with its integer y + dy (the exe's stack copy)
-void playerAbove(int dy, int32_t out[3]) {
-    const Player& p = player();
+void playerAbove(const Actor& actor, int dy, int32_t out[3]) {
+    const Player& p = nearestPlayer(actor.pos);
     out[0] = p.pos.x;
     out[1] = int32_t((uint32_t(p.pos.y) & 0xffffu) | uint32_t(uint16_t(uint16_t(p.pos.y.whole) + uint16_t(dy))) << 16);
     out[2] = p.pos.z;
@@ -186,7 +186,7 @@ void patrol(const PlayerEnv& env, AnimatedActor& actor, FlyerFields& flyer) {
     case PatrolStep::CloseIn: {
         turnTo(actor, int16_t(angleToPlayer(actor)));
         int32_t above[3];
-        playerAbove(-0x140, above);
+        playerAbove(actor, -0x140, above);
         pitchToward(actor, flyer, above);
         if (planarDistance(nearestPlayer(actor.pos).pos, actor.pos) > 0x340) {
             speedUp(actor, -0x180, -0x180);
@@ -254,7 +254,7 @@ void dive(const PlayerEnv& env, AnimatedActor& actor, FlyerFields& flyer) {
     case DiveStep::Dive: {
         turnTo(actor, int16_t(angleToPlayer(actor)));
         int32_t above[3];
-        playerAbove(-0xc0, above);
+        playerAbove(actor, -0xc0, above);
         pitchToward(actor, flyer, above);
         speedUp(actor, 0x200, -0x200);
         flyForward(actor, flyer);

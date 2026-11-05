@@ -69,7 +69,7 @@ void homePoint(uint16_t x, uint16_t z, int32_t out[3]) {
 int playerFromHome(const GuardFields& guard) {
     int32_t home[3];
     homePoint(guard.homeX, guard.homeZ, home);
-    return planarDistance(player().pos, home);
+    return planarDistance(nearestPlayer(home).pos, home);
 }
 // exe 0x4b56a0: where the player is along its patrol heading seen from its home: beyond its range ahead, behind its
 // home by more than 0x200 (by the heading's side), or in its lane

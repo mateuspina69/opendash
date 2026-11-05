@@ -31,6 +31,7 @@
 #include "game/hit_list.hpp"
 #include "game/message.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/rewards.hpp"
@@ -129,13 +130,15 @@ void moveCreature(PitFields& pit) {
     ActorHeader& creature = actorHeaderAt(pit.creature);
     if (CreatureSub(creature.subState) != CreatureSub::Hidden) return;
     const uint8_t k = uint8_t(rngStep() & 7);
-    const Player& p = player();
-    const int16_t playerPoint[3] = {p.pos.x.whole, p.pos.y.whole, p.pos.z.whole};
     uint8_t spot = spotPicks[k];
     const uint8_t next = k == 7 ? spotPicks[0] : spotPicks[k + 1u];
     const ShortPoint candidate = creatureSpots[spot];
     const int16_t candidatePoint[3] = {candidate.x, 0, candidate.z};
-    if (planarDistance16(playerPoint, candidatePoint) < kTooNearPlayer) spot = next; // exe 0x5e3b40
+    if (anyPlayer([&](const Player& p) {
+            const int16_t playerPoint[3] = {p.pos.x.whole, p.pos.y.whole, p.pos.z.whole};
+            return planarDistance16(playerPoint, candidatePoint) < kTooNearPlayer; // exe 0x5e3b40
+        }))
+        spot = next;
     if (pit.lastSpot == spot) spot = next;
     pit.lastSpot = spot;
     const ShortPoint point = creatureSpots[spot];

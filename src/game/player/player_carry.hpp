@@ -22,7 +22,7 @@ void throwUpdate(Player& p);
 
 // exe 0x573e20(actor, range, flag): the player within range of the actor on all three axes (integer parts, not airborne)
 // is snapped onto it, sub-state Held (flag: the held pose, else the struggle); 1 = grabbed
-int playerGrab(const Actor& actor, int range, int flag);
+int playerGrab(Actor& actor, int range, int flag);
 // exe 0x573ed0(actor, counter, heavy): keeps the held player on the actor; each tick with a press of the moves / jump
 // counts the grabbing class's struggle counter down (unless the host's input is captured); at 0 the player is let go
 // and 1 returned. heavy: the struggle meter (the hidden bones word) set while held

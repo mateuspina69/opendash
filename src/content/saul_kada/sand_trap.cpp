@@ -92,9 +92,11 @@ void letGo(AnimatedActor& actor) {
     actor.animKey.frame = int8_t(uint8_t(kLetGoKeyBase - uint8_t(actor.animKey.frame)));
     enterSub(actor, TrapSub::LetGo);
 }
-// the player is knocked back / down
-bool playerKnocked() {
-    const PlayerSub sub = player().sub();
+// the player this trap grabbed (playerGrab keeps them as its owner)
+Player& grabbed(const Actor& actor) { return playerById(actor.ownerPlayer); }
+// the player held is knocked back / down
+bool playerKnocked(const Actor& actor) {
+    const PlayerSub sub = grabbed(actor).sub();
     return sub == PlayerSub::KnockBack || sub == PlayerSub::KnockDown;
 }
 
@@ -110,7 +112,7 @@ void hidden(AnimatedActor& actor) {
     }
     if (playerGrab(actor, kGrabRange, 1)) { // exe 0x573e20
         soundPlayAtPos(kGrabSound, actor.pos); // exe 0x5d5380
-        actor.rotation.y = nearestPlayer(actor.pos).rotation.y;
+        actor.rotation.y = grabbed(actor).rotation.y;
         enterSub(actor, TrapSub::Rise);
     }
 }
@@ -123,7 +125,7 @@ void rise(AnimatedActor& actor, TrapFields& trap) {
     }
     --trap.timer;
     if (trap.timer == 0) {
-        Player& p = player();
+        Player& p = grabbed(actor);
         if (p.sub() == PlayerSub::Held) {
             ++p.step;
             actor.anim = kAnimBite;
@@ -142,7 +144,7 @@ void rise(AnimatedActor& actor, TrapFields& trap) {
 // exe 0x4e7910
 void wait(AnimatedActor& actor) {
     if (actor.step == 0) {
-        const PlayerSub sub = nearestPlayer(actor.pos).sub();
+        const PlayerSub sub = grabbed(actor).sub();
         if (sub == PlayerSub::Held) return;
         if (sub != PlayerSub::KnockBack && sub != PlayerSub::KnockDown) {
             actor.step = 1;
@@ -155,7 +157,7 @@ void wait(AnimatedActor& actor) {
             enterSub(actor, TrapSub::Hold);
             return;
         }
-        if (nearestPlayer(actor.pos).airborne != 0) return;
+        if (grabbed(actor).airborne != 0) return;
     }
     enterSub(actor, TrapSub::Sink);
 }
@@ -183,7 +185,7 @@ void hold(AnimatedActor& actor, TrapFields& trap) {
         actor.scale.x = int16_t((fixedSin(angle) >> 8) + kFullScale);
         actor.scale.y = int16_t((fixedCos(angle) >> 8) + kFullScale);
         actor.scale.z = int16_t((fixedSin(angle) >> 8) + kFullScale);
-        Player& p = player();
+        Player& p = grabbed(actor);
         if (p.hitPoints > 0) {
             if (!(gameState().frame & 3)) hitPointsChange(p, -1); // exe 0x5e5320
         } else { // the player out of hit points: the trap's hit entry in front of him
@@ -200,7 +202,7 @@ void hold(AnimatedActor& actor, TrapFields& trap) {
     }
     default: break;
     }
-    if (playerKnocked() || playerGrabHold(actor, trap.escapePresses, actor.keyIndex > 5 ? 1 : 0)) { // exe 0x573ed0
+    if (playerKnocked(actor) || playerGrabHold(actor, trap.escapePresses, actor.keyIndex > 5 ? 1 : 0)) { // exe 0x573ed0
         letGo(actor);
         return;
     }

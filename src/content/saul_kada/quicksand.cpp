@@ -8,6 +8,7 @@
 #include "game/actor_state.hpp"
 #include "game/audio_logic.hpp"
 #include "game/distances.hpp"
+#include "game/player/players.hpp"
 #include "game/vectors.hpp"
 #include "game/game_state.hpp"
 #include "game/global_class_types.hpp"
@@ -26,9 +27,7 @@ constexpr int8_t kPitDrag = 0xc;
 constexpr uint8_t kSprayVariant = 0x1c;
 constexpr uint32_t kFootBones = 3, kFirstFootBone = 0xb; // the feet's bone points: 0xb + foot * 3
 
-void quicksand(ControllerActor& actor) {
-    const PitParams& pit = classState<PitParams>(actor);
-    Player& p = player();
+void quicksandOn(const PitParams& pit, Player& p) {
     const int16_t playerPoint[3] = {p.pos.x.whole, p.pos.y.whole, p.pos.z.whole};
     const int16_t pitPoint[3] = {pit.point.x, 0, pit.point.z};
     if (planarDistance16(playerPoint, pitPoint) >= int(pit.radius) || p.airborne != 0) return; // exe 0x5e3b40
@@ -69,6 +68,11 @@ void quicksand(ControllerActor& actor) {
     spray.pos.y = int16_t(footPoint.y >> shift);
     spray.pos.z = int16_t(footPoint.z >> shift);
     classState<SkidSparkFields>(effectActorAt(slot)).yaw = uint16_t(rngStep() & 0xfff);
+}
+
+void quicksand(ControllerActor& actor) {
+    const PitParams& pit = classState<PitParams>(actor);
+    forEachPlayer([&](Player& p) { quicksandOn(pit, p); });
 }
 
 } // namespace

@@ -113,8 +113,8 @@ void self16(const AnimatedActor& actor, int16_t p[3]) {
     p[1] = actor.pos.y.whole;
     p[2] = actor.pos.z.whole;
 }
-void player16(int16_t p[3]) {
-    const Player& pl = player();
+void player16(const Actor& actor, int16_t p[3]) {
+    const Player& pl = nearestPlayer(actor.pos);
     p[0] = pl.pos.x.whole;
     p[1] = pl.pos.y.whole;
     p[2] = pl.pos.z.whole;
@@ -202,7 +202,7 @@ void pace(AnimatedActor& actor, BurrowerFields& b) {
         if (planarDistance16(B, A) >= 0x12c) turnToward(actor, A, B, 0x30);
         b.timerB -= 1u;
         home(actor, b, A, atSecondHome(b));
-        player16(B);
+        player16(actor, B);
         const uint32_t d = uint32_t(planarDistance16(B, A));
         if (d > kHomeReach) { // the player left: burrow home
             actor.subState = uint8_t(BurrowerSub::Burrow);
@@ -370,7 +370,7 @@ void shoot(AnimatedActor& actor, BurrowerFields& b) {
     }
     int16_t A[3], B[3];
     home(actor, b, A, false);
-    player16(B);
+    player16(actor, B);
     const uint32_t d = uint32_t(planarDistance16(B, A));
     if (b.timerB != 0 && d <= kHomeReach) {
         turnTowardPlayer(actor);
@@ -602,7 +602,7 @@ void hidden(AnimatedActor& actor, BurrowerFields& b) {
     }
     int16_t A[3], B[3];
     home(actor, b, A, atSecondHome(b));
-    player16(B);
+    player16(actor, B);
     if (planarDistance16(B, A) < int(kHomeReach)) { // (the exe computes it twice)
         actor.subState = uint8_t(BurrowerSub::Emerge);
         actor.step = 0;

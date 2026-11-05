@@ -14,6 +14,7 @@
 #include "game/game_state.hpp"
 #include "game/player/player_state.hpp"
 #include "game/player/player_status.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/room_grid.hpp"
@@ -80,16 +81,8 @@ void placePlume(StaticActor& plume, int x, int y, int z) {
     plume.pos.z.whole = int16_t(z);
 }
 
-// exe 0x425220
-void runVents(const PlayerEnv& env, ControllerActor& actor, VentsFields& vents) {
-    Player& p = player();
-    if (burnFloor(env, p, burnHeights[actor.variant]) && (gameState().frame & 7) == 0)
-        footstepDustAtFoot(p); // exe 0x5ad170(player, 0, point): variant 0 reads no point
-    if (vents.plumeTicks != 0) {
-        --vents.plumeTicks;
-        return;
-    }
-    vents.plumeTicks = uint16_t((rngStep() & 0x3f) + 0x28);
+// a plume near a player, as the room's camera faces (below: each player's)
+void plumeNear(const PlayerEnv& env, ControllerActor& actor, const Player& p) {
     rngStep();
     const uint32_t i = rngStep() & 3;
     int16_t dx, dz;
@@ -127,6 +120,20 @@ void runVents(const PlayerEnv& env, ControllerActor& actor, VentsFields& vents) 
         break;
     default: placePlume(*plume, point[0], point[1], point[2]); break;
     }
+}
+
+// exe 0x425220
+void runVents(const PlayerEnv& env, ControllerActor& actor, VentsFields& vents) {
+    forEachPlayer([&](Player& p) {
+        if (burnFloor(env, p, burnHeights[actor.variant]) && (gameState().frame & 7) == 0)
+            footstepDustAtFoot(p); // exe 0x5ad170(player, 0, point): variant 0 reads no point
+    });
+    if (vents.plumeTicks != 0) {
+        --vents.plumeTicks;
+        return;
+    }
+    vents.plumeTicks = uint16_t((rngStep() & 0x3f) + 0x28);
+    forEachPlayer([&](const Player& p) { plumeNear(env, actor, p); });
 }
 
 // exe 0x4251e0 [0x88bdf4]

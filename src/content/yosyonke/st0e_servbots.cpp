@@ -251,8 +251,8 @@ void jitterTarget(int32_t t[3]) {
         t[k] = int32_t((uint32_t(uint16_t(uint32_t(t[k]) >> 16) + uint16_t((rngStep() & 0x7f) - 0x3f)) << 16) |
                        (uint32_t(t[k]) & 0xffff));
 }
-void playerTarget(int32_t t[3]) {
-    const Player& p = player();
+void playerTarget(const Actor& a, int32_t t[3]) {
+    const Player& p = nearestPlayer(a.pos);
     t[0] = p.pos.x;
     t[1] = p.pos.y;
     t[2] = p.pos.z;
@@ -436,7 +436,7 @@ void riderDebugThrow(AnimatedActor& a, RiderFields& f) { // exe 0x465140 (the se
             a.prevAnim = 0xff;
             if (ProjectileActor* e = pickUpBomb()) {
                 bombAtHands(a, *e, 0x22, 0x6a);
-                playerTarget(t);
+                playerTarget(a, t);
                 jitterTarget(t); // computed and unused (the RNG advances twice)
                 holdBomb(a, *e, bossRow);
                 f.bomb = e->at;
@@ -447,7 +447,7 @@ void riderDebugThrow(AnimatedActor& a, RiderFields& f) { // exe 0x465140 (the se
     if (a.keyIndex == kDebugThrowKey) {
         if (bomb == 0) return;
         if (bomb == kNoBomb) notPorted(kSt0ePort, "0x465140: the held bomb pointer is -1 (the exe writes through it)");
-        playerTarget(t);
+        playerTarget(a, t);
         jitterTarget(t);
         lobBomb(projectileActorAt(bomb), t);
         return;

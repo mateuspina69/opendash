@@ -83,7 +83,7 @@ int playerDistance(const AnimatedActor& actor) { return planarDistance(actor.pos
 bool playerNearHome(const GuardFields& guard) {
     const int32_t home[3] = {int32_t(uint32_t(uint16_t(guard.homeX)) << 16), 0,
                              int32_t(uint32_t(uint16_t(guard.homeZ)) << 16)};
-    return planarDistance(player().pos, home) < 0x708;
+    return planarDistance(nearestPlayer(home).pos, home) < 0x708;
 }
 // exe 0x4f2350: a hit; its damage counts only from the attacks kHurtBy (then flashed); dead -> its death
 void takeHit(AnimatedActor& actor, GuardFields& guard) {

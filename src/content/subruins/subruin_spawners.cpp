@@ -121,7 +121,7 @@ void st4eVariant(ControllerActor& c, uint32_t v) {
         if (st != 0) return;
         encounterSpawnGroupZoneSlot(2);
         if (storyFlag(kFlagLayoutA)) {
-            if (player().pos.z.whole < -0xb00) {
+            if (anyPlayer([](const Player& p) { return p.pos.z.whole < -0xb00; })) {
                 if (dropSpawner(1, 0xfc00, 0xfa00, 0, 8, true)) {
                     c.subState = 1;
                     return;
@@ -154,7 +154,7 @@ void st4eVariant(ControllerActor& c, uint32_t v) {
             const bool a0 = storyFlag(kFlagLayoutA);
             if (a0 || storyFlag(kFlagLayoutB)) {
                 const uint8_t n = a0 ? 8 : 4;
-                const bool near = player().pos.z.whole < -0xf00;
+                const bool near = anyPlayer([](const Player& p) { return p.pos.z.whole < -0xf00; });
                 if (dropSpawner(0, 0x200, near ? 0xf100 : 0xfc00, near ? 0 : 0x80, n, false)) {
                     c.subState = 1;
                     return;
@@ -217,22 +217,25 @@ void lineTriggerFire(ControllerActor& c) {
 void dropSpawnerWatch(ControllerActor& c) {
     const DropSpawnerParams params(c);
     DropSpawnerFields& f = classState<DropSpawnerFields>(c);
-    const Player& p = player();
     int yaw;
     if (c.variant == 0) {
-        f.drop.x = int16_t(int32_t(p.pos.x) >> 16);
-        f.drop.y = f.point.y;
-        f.drop.z = int16_t(int32_t(p.pos.z) >> 16);
-        const int ang = angleOf(f.drop, f.point);
         yaw = int(params.facing) << 4;
-        const uint32_t d = uint32_t(yaw - ang) & 0xfff;
-        if (d >= 0xc00 || d <= 0x400) return;
+        if (!anyPlayer([&](const Player& p) {
+                f.drop.x = int16_t(int32_t(p.pos.x) >> 16);
+                f.drop.y = f.point.y;
+                f.drop.z = int16_t(int32_t(p.pos.z) >> 16);
+                const int ang = angleOf(f.drop, f.point);
+                const uint32_t d = uint32_t(yaw - ang) & 0xfff;
+                return d < 0xc00 && d > 0x400;
+            }))
+            return;
     } else {
         const uint32_t ex = uint32_t(params.halfX) << 8, ez = uint32_t(params.halfZ) << 8;
-        const uint32_t dx = uint32_t(int32_t(p.pos.x.whole) - int32_t(f.point.x)) + ex;
-        if (dx >= ex * 2) return;
-        const uint32_t dz = uint32_t(int32_t(p.pos.z.whole) - int32_t(f.point.z)) + ez;
-        if (dz >= ez * 2) return;
+        if (!anyPlayer([&](const Player& p) {
+                return uint32_t(int32_t(p.pos.x.whole) - int32_t(f.point.x)) + ex < ex * 2 &&
+                       uint32_t(int32_t(p.pos.z.whole) - int32_t(f.point.z)) + ez < ez * 2;
+            }))
+            return;
         f.drop = f.point;
         yaw = angleOf(f.drop, f.point);
     }
@@ -292,15 +295,17 @@ void subruinLineTriggerUpdate(const PlayerEnv&, uint32_t actor) {
         f.ownBytes = {};
         c.state = 1;
     }
-    const Player& p = player();
-    const int16_t px = p.pos.x.whole, pz = p.pos.z.whole;
-    switch (LineAxis(c.variant)) {
-    case LineAxis::XAtLeast: if (px >= f.x) lineTriggerFire(c); return;
-    case LineAxis::XAtMost: if (px <= f.x) lineTriggerFire(c); return;
-    case LineAxis::ZAtLeast: if (pz >= f.z) lineTriggerFire(c); return;
-    case LineAxis::ZAtMost: if (pz <= f.z) lineTriggerFire(c); return;
-    default: return;
-    }
+    if (anyPlayer([&](const Player& p) {
+            const int16_t px = p.pos.x.whole, pz = p.pos.z.whole;
+            switch (LineAxis(c.variant)) {
+            case LineAxis::XAtLeast: return px >= f.x;
+            case LineAxis::XAtMost: return px <= f.x;
+            case LineAxis::ZAtLeast: return pz >= f.z;
+            case LineAxis::ZAtMost: return pz <= f.z;
+            default: return false;
+            }
+        }))
+        lineTriggerFire(c);
 }
 
 // exe 0x424e10: [0x88bddc + state * 4]: 0 = 0x424e30 (the step cleared, the next state), 1 = 0x424e50 (the watch), 2 =

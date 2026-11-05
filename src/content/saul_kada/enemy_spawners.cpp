@@ -103,16 +103,22 @@ void spawnGiant(const SpawnPoint& point) {
     giant.prevRotation.y = point.yaw;
     giant.rotation.y = point.yaw;
 }
+// the players' greatest x: a test "x > k" of it holds when it holds of any of them
+int16_t greatestPlayerX() {
+    int16_t x = INT16_MIN;
+    forEachPlayer([&](const Player& p) { x = p.pos.x.whole > x ? p.pos.x.whole : x; });
+    return x;
+}
 void st26(ControllerActor& actor) {
     SpawnerFields& spawner = classState<SpawnerFields>(actor);
-    const int16_t px = player().pos.x.whole;
+    const int16_t px = greatestPlayerX();
     switch (SpawnerState(actor.state)) {
     case SpawnerState::Init: initByFlag(actor, spawner, kFlagSt26); return; // exe 0x420ae0
     case SpawnerState::Run:                                                  // exe 0x420b40 ([0x88b2bc])
         switch (actor.variant) {
         case 0: // exe 0x420b60
             if (actor.subState != 0) return;
-            if (spawner.flagSet != 0) encounterSpawnGroupZoneSlot(player().pos.z.whole < 0xa00 ? 1 : 2);
+            if (spawner.flagSet != 0) encounterSpawnGroupZoneSlot(anyPlayer([](const Player& p) { return p.pos.z.whole < 0xa00; }) ? 1 : 2);
             actor.subState = 1;
             return;
         case 1: // exe 0x420ba0
@@ -141,7 +147,7 @@ void st26(ControllerActor& actor) {
             case GiantWatch::WaitPlayer: // exe 0x420cb0: the player in his side's box -> the giant, once
                 if (actor.step != 0) return;
                 // exe 0x420e30: the exe's second copy of the cell-box test (exe 0x5e5af0)
-                if (!pointInCellBox(player().pos, CellBox(stateAddress(TableId::EnemySpawnersGiantBoxes) + uint32_t(spawner.side) * 4))) return;
+                if (!anyPlayer([&](const Player& p) { return pointInCellBox(p.pos, CellBox(stateAddress(TableId::EnemySpawnersGiantBoxes) + uint32_t(spawner.side) * 4)); })) return;
                 spawnGiant(dataRecord<SpawnPoint>(stateAddress(TableId::EnemySpawnersGiantPoints) + uint32_t(spawner.side) * 8, SpawnPoint::kBytes));
                 ++actor.step;
                 return;
@@ -273,7 +279,7 @@ void st2b(ControllerActor& actor) {
 constexpr uint32_t kFlagSt34 = 0x45;
 void st34(ControllerActor& actor) {
     SpawnerFields& spawner = classState<SpawnerFields>(actor);
-    const int16_t px = player().pos.x.whole;
+    const int16_t px = greatestPlayerX();
     switch (SpawnerState(actor.state)) {
     case SpawnerState::Init: initByFlag(actor, spawner, kFlagSt34); return; // exe 0x421230
     case SpawnerState::Run:                                                  // exe 0x421290 ([0x88b3bc])
@@ -387,10 +393,11 @@ void spawnFlameWall(uint32_t point, uint16_t life) {
 // standing in its cell above it, or a body (group 2) / a strong push of the player's attacks (group 1) in its cell
 // reaching its height -> broken (that entry's box told it hit a solid), freed
 void floorBlock(ControllerActor& actor, SpawnerFields& spawner) {
-    const Player& p = player();
-    const int32_t px = int32_t(p.pos.x.whole) >> kCellShift, pz = int32_t(p.pos.z.whole) >> kCellShift;
     const int32_t bx = int32_t(spawner.x) >> kCellShift, bz = int32_t(spawner.z) >> kCellShift;
-    const bool near = uint32_t(px - bx + 1) <= 2 && uint32_t(pz - bz + 1) <= 2;
+    const bool near = anyPlayer([&](const Player& p) {
+        return uint32_t((int32_t(p.pos.x.whole) >> kCellShift) - bx + 1) <= 2 &&
+               uint32_t((int32_t(p.pos.z.whole) >> kCellShift) - bz + 1) <= 2;
+    });
     if (spawner.markerShown == 0) {
         if (near) {
             if (const uint32_t slot = allocActor60(kActorStageClass)) {
@@ -409,7 +416,10 @@ void floorBlock(ControllerActor& actor, SpawnerFields& spawner) {
     } else if (!near) {
         spawner.markerShown = 0;
     }
-    if (px == bx && pz == bz && p.airborne == 0 && int32_t(p.pos.y.whole) > int32_t(spawner.y) - 0x10) {
+    if (anyPlayer([&](const Player& p) {
+            return (int32_t(p.pos.x.whole) >> kCellShift) == bx && (int32_t(p.pos.z.whole) >> kCellShift) == bz &&
+                   p.airborne == 0 && int32_t(p.pos.y.whole) > int32_t(spawner.y) - 0x10;
+        })) {
         breakBlock(spawner);
         freeActor(actor);
         return;

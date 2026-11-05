@@ -54,8 +54,8 @@ constexpr uint16_t kRingFull = 0xa0;
 
 void moveForward(ProjectileActor& actor, int z) { moveAlongRotation(actor.pos, actor.rotation, 0, 0, z); } // exe 0x5e37b0
 // the player's position 0x80 higher (the exe's stack copy)
-void playerAim(int32_t out[3]) {
-    const Player& p = player();
+void playerAim(const Actor& actor, int32_t out[3]) {
+    const Player& p = nearestPlayer(actor.pos);
     out[0] = p.pos.x;
     out[1] = int32_t(uint32_t(p.pos.y) + 0xff800000u);
     out[2] = p.pos.z;
@@ -144,7 +144,7 @@ void homingFlight(ProjectileActor& actor, HomingFields& shot) {
     }
     case HomingStep::Home: {
         int32_t aim[3];
-        playerAim(aim);
+        playerAim(actor, aim);
         homeOn(actor, aim);
         moveForward(actor, actor.velocity.z);
         shot.timer += 1u;
@@ -219,7 +219,7 @@ void pieceHeld(ProjectileActor& actor, PieceFields& piece) {
     const BossShotParams params(actor);
     if (params.released != 0) { // released by the boss
         int32_t aim[3];
-        playerAim(aim);
+        playerAim(actor, aim);
         int angle;
         if (params.side != 0) {
             actor.rotation.x = int16_t(0xfe00);
@@ -276,7 +276,7 @@ void pieceHeld(ProjectileActor& actor, PieceFields& piece) {
 // exe 0x5cb8e0: homing 0x60 ticks, rolling with its turn, the ring shrinking from 0x80, the end after 0x90
 void pieceHoming(ProjectileActor& actor, PieceFields& piece) {
     int32_t aim[3];
-    playerAim(aim);
+    playerAim(actor, aim);
     switch (actor.step) {
     case 0:
         piece.timer = 0;
