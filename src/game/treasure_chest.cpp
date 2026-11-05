@@ -146,8 +146,11 @@ void chestClosed(AnimatedActor& actor, const ChestFields& chest) {
     case ChestSub::GiveContent: { // exe 0x4746c0 + the opened flag
         const uint32_t c = content.content;
         if ((c & kContentKindMask) == kContentWeapon) { // a special weapon: equipped, the buster's stats set
-            player().specialWeapon = uint8_t(c);
-            setupSpecialGauge(true);
+            // the table's one record of this kind (group 0, variant 10); the items are flags (below). Who opened it:
+            // the player nearest the chest
+            Player& opener = nearestPlayer(actor.pos);
+            opener.specialWeapon = uint8_t(c);
+            setupSpecialGauge(opener, true);
         } else if (((c & kContentKindMask) == kContentFlag || (c & kContentKindMask) == kContentFlagToo) &&
                    (c & kContentValueMask) != 0) {
             setStoryFlag(c & kContentValueMask);

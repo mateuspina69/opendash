@@ -789,8 +789,9 @@ void specialArmUpdate(Player& p) {
     for (size_t i = 0; i < shot.params.size(); ++i) shot.params[i] = 0;
 }
 
-void setupSpecialGauge(bool refill) {
-    Player& p = player();
+void setupSpecialGauge(bool refill) { setupSpecialGauge(player(), refill); }
+
+void setupSpecialGauge(Player& p, bool refill) {
     if (refill) {
         const int16_t energy = int16_t(weaponStat(p, p.specialWeapon, WeaponStat::Energy));
         p.energyPool = energy;

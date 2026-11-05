@@ -97,6 +97,7 @@ void specialArmUpdate(Player& p);
 // the energy reserve and pool = its energy stat at its level); its rate, shot cost and maximum from the gauge table, the
 // gauge full
 void setupSpecialGauge(bool refill);
+void setupSpecialGauge(Player& p, bool refill);
 // exe 0x573670: the special weapon's gauge: drained by the orbit status, refilled from the energy (or by itself)
 void rechargeSpecialGauge(Player& p);
 // the special weapon's charge (exe 0x575440's tail; held: the buttons held at the tick's start): the start marker while
