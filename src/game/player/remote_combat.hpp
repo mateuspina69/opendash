@@ -49,6 +49,10 @@ struct NetPlayerReport {
 NetPlayerReport netPlayerReportOf(const Player& p);
 void applyPlayerReport(Player& p, const NetPlayerReport& report);
 
+// What a player wears, chosen in their own status menu: their shots and damage in the world follow it
+std::vector<uint8_t> netEquipmentOf(const Player& p);
+void applyEquipment(Player& p, std::span<const uint8_t> bytes);
+
 // the shot's hit result, read and taken by the owner's shot
 struct NetShotHit {
     uint8_t clientSlot = 0;

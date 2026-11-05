@@ -454,14 +454,18 @@ int run(const WorldArgs& w) {
         }
     };
     const auto playersToOthers = [&](uint32_t netTick) {
-        for (auto& [client, sender] : netClients)
+        // all the others in one datagram: u8 length, an update
+        for (auto& [client, sender] : netClients) {
+            WorldMessage m{WorldMessageType::NetPlayer};
+            m.playerId = client;
             for (uint8_t id = 0; id < od::port::kPlayerSlots; ++id) {
                 if (id == client || !mirrors[id].heard || !od::port::playerPresent(id)) continue;
-                WorldMessage m{WorldMessageType::NetPlayer};
-                m.playerId = client;
-                m.netState = playerSenders[{client, id}].update(id, netTick, mirrors[id].from.fields());
-                link->sendLatest(m);
+                const std::vector<uint8_t> one = playerSenders[{client, id}].update(id, netTick, mirrors[id].from.fields());
+                m.netState.push_back(uint8_t(one.size()));
+                m.netState.insert(m.netState.end(), one.begin(), one.end());
             }
+            if (!m.netState.empty()) link->sendLatest(m);
+        }
     };
     const auto fightTurn = [&] {
         for (uint8_t id = 0; id < od::port::kPlayerSlots; ++id) {
@@ -563,9 +567,10 @@ int run(const WorldArgs& w) {
                 }
                 break;
             case WorldMessageType::NetPlayer:
-                if (m.playerId < od::port::kPlayerSlots) {
+                if (m.playerId < od::port::kPlayerSlots && !m.netState.empty()) {
                     RemoteMirror& mirror = mirrors[m.playerId];
-                    if (const auto heard = mirror.from.apply(m.netState)) {
+                    // an owner's update, after its length byte
+                    if (const auto heard = mirror.from.apply(std::span<const uint8_t>(m.netState).subspan(1))) {
                         if (!mirror.heard || int32_t(heard->tick - mirror.ownerTick) > 0) mirror.ownerTick = heard->tick;
                         mirror.heard = true;
                         od::net::ByteWriter ack;
@@ -580,12 +585,17 @@ int run(const WorldArgs& w) {
                 break;
             case WorldMessageType::NetPlayerAck: {
                 od::net::ByteReader ack(m.netState);
-                const uint8_t about = ack.u8();
-                const uint16_t sequence = ack.u16();
-                if (ack.done())
+                while (ack.remaining() >= 3) {
+                    const uint8_t about = ack.u8();
+                    const uint16_t sequence = ack.u16();
                     if (const auto s = playerSenders.find({m.playerId, about}); s != playerSenders.end()) s->second.acknowledge(sequence);
+                }
                 break;
             }
+            case WorldMessageType::NetEquip:
+                if (m.playerId < od::port::kPlayerSlots && od::port::playerIsRemote(m.playerId))
+                    od::port::applyEquipment(od::port::playerById(m.playerId), m.netState);
+                break;
             case WorldMessageType::NetReport:
                 if (const auto report = od::port::decodeReport(m.netState);
                     report && m.playerId < od::port::kPlayerSlots && od::port::playerIsRemote(m.playerId))

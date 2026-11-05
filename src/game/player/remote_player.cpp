@@ -21,12 +21,15 @@ uint32_t frameBytesOf(size_t id) { return kRemoteFrameBytes + uint32_t(id) * 2; 
 } // namespace
 
 void remotePlayerJoin(size_t id, const PlayerSnapshot& s) {
+    // what the world's first player holds (it is this one when the id is 0: read before its slot starts anew)
+    const CollisionBoxRef box = player().collisionBox;
+    const int16_t maxHitPoints = player().maxHitPoints;
     joinPlayer(id);
     g_remote[id] = true;
     Player& p = playerById(id);
     p.enterState(PlayerState::Playing);
-    p.collisionBox = player().collisionBox;
-    p.maxHitPoints = player().maxHitPoints;
+    p.collisionBox = box;
+    p.maxHitPoints = maxHitPoints;
     p.hitPoints = p.maxHitPoints;
     remotePlayerState(id, s);
 }

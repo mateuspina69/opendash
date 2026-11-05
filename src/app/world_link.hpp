@@ -26,7 +26,10 @@ enum class WorldMessageType : uint8_t {
     // the fight (game/player/remote_combat): NetFire, NetReport toward the world; NetHit, NetShotHit from it
     NetFire = 14, NetReport = 15, NetHit = 16, NetShotHit = 17,
     // a player's state (game/player/net_player): both ways, for what the next one replaces; its acknowledgement: id, sequence
-    NetPlayer = 18, NetPlayerAck = 19
+    NetPlayer = 18, NetPlayerAck = 19,
+    // between a client and the host's coordinator: this player enters a room (stage, sub, state), the host's save in chunks,
+    // what the player wears
+    NetEnter = 20, NetSave = 21, NetEquip = 22
 };
 
 struct WorldMessage {

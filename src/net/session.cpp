@@ -185,6 +185,22 @@ void Session::sendPlayerState(uint64_t nowNs, uint32_t tick, std::span<const uin
 }
 
 std::vector<ReceivedState> Session::takePlayerStates() { return std::exchange(states_, {}); }
+
+void Session::sendWorld(uint64_t nowNs, uint8_t toId, bool reliable, std::span<const uint8_t> payload) {
+    Link* link = nullptr;
+    if (config_.role == Role::Host) {
+        for (auto& [e, c] : clients_)
+            if (c.accepted && c.info.playerId == toId) link = &c.link;
+    } else if (connection_ == Connection::Connected) {
+        link = &hostLink_;
+    }
+    if (!link) return;
+    std::vector<uint8_t> bytes(payload.begin(), payload.end());
+    if (reliable) sendReliable(nowNs, *link, WorldEvent{std::move(bytes)});
+    else sendUnreliable(nowNs, *link, WorldState{++worldSequence_, 0, std::move(bytes)});
+}
+
+std::vector<ReceivedWorld> Session::takeWorld() { return std::exchange(world_, {}); }
 std::vector<PeerEvent> Session::takePeerEvents() { return std::exchange(events_, {}); }
 
 // ---- host ----------------------------------------------------------------------------------------------------------
@@ -234,11 +250,19 @@ void Session::hostReceive(uint64_t nowNs, const Endpoint& from, Decoded d) {
             if (other.accepted && e != from) transmit(nowNs, e, bytes);
         return;
     }
-    // WorldState is the host's own message (co-op milestones): a client sending one is ignored
+    if (const WorldState* s = std::get_if<WorldState>(&d.message)) {
+        if (c.accepted) world_.push_back({c.info.playerId, s->payload});
+        return;
+    }
+    // what else a client sends is its link's
     handleLinkMessage(nowNs, c.link, d.message);
 }
 
 void Session::hostDeliver(uint64_t nowNs, Client& c, const Message& m) {
+    if (const WorldEvent* e = std::get_if<WorldEvent>(&m)) {
+        if (c.accepted) world_.push_back({c.info.playerId, e->payload});
+        return;
+    }
     if (const Hello* h = std::get_if<Hello>(&m)) {
         if (!c.accepted) hostWelcomeOrRefuse(nowNs, c, *h);
     } else if (std::holds_alternative<Bye>(m)) {
@@ -346,11 +370,19 @@ void Session::clientReceive(uint64_t nowNs, const Endpoint& from, Decoded d) {
         if (connection_ == Connection::Connected && s->playerId != localId_) acceptState(nowNs, *s);
         return;
     }
-    // WorldState: the host's shared world of the co-op milestones; this milestone's host never sends it
+    if (const WorldState* s = std::get_if<WorldState>(&d.message)) {
+        if (connection_ == Connection::Connected) world_.push_back({kHostPlayerId, s->payload});
+        return;
+    }
+    // the link's
     handleLinkMessage(nowNs, hostLink_, d.message);
 }
 
 void Session::clientDeliver(uint64_t nowNs, const Message& m) {
+    if (const WorldEvent* e = std::get_if<WorldEvent>(&m)) {
+        if (connection_ == Connection::Connected) world_.push_back({kHostPlayerId, e->payload});
+        return;
+    }
     if (const Welcome* w = std::get_if<Welcome>(&m)) {
         if (connection_ != Connection::Connecting) return;
         connection_ = Connection::Connected;

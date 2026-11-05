@@ -1713,7 +1713,13 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
         od::dc::resetCursor(); // 0x54a489: the draw-command cursor back to this frame's buffer
         od::port::padVibrationTick(); // 0x54a4cd: the pad vibration's tick (FUN_0055cc40)
         ++game.frame; // 0x54a4dc: the frame counter (u16), before the mode's frame
-        if (ownWorld) ownWorld->turn(SDL_GetTicksNS());
+        if (ownWorld) {
+            if (auto hostSave = ownWorld->takeHostSave(storySave)) { // what exists is the host's
+                storySave = std::move(*hostSave);
+                if (room) enterPlay(*room);
+            }
+            ownWorld->turn(SDL_GetTicksNS());
+        }
         gameFrame();
         if (afterFrame) afterFrame(); // FUN_005410b0 (the soft reset, game/title)
         od::port::messageTick(); // FUN_005578a0 (WinMain, after the game task): window logic + layout

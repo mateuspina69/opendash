@@ -67,6 +67,9 @@ class Netplay {
 public:
     // starts the session (mode != Off) and the mirror; a session that cannot start (the port in use, an address that
     // does not resolve, unreadable game files) is logged and shown in the F1 panel (error()), and netplay stays off
+    // a session whose players are in worlds (app/own_world): no ghost states of the first milestone; the worlds' traffic
+    void setWorldMode(bool on) { worldMode_ = on; }
+    od::net::Session* session() { return session_.get(); }
     void start(const NetSettings& settings, const std::optional<MirrorSettings>& mirror,
                const std::filesystem::path& datDir, const std::filesystem::path& exe,
                const od::DiscImage* disc = nullptr);
@@ -88,6 +91,7 @@ public:
     std::string slotSource(int slot) const;
 
 private:
+    bool worldMode_ = false;
     struct Source {
         enum class Kind : uint8_t { None, Peer, Mirror } kind = Kind::None;
         uint8_t playerId = 0;

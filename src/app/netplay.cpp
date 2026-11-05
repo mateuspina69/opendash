@@ -153,15 +153,13 @@ void Netplay::afterTick() {
 
 void Netplay::step(uint64_t nowNs, GhostView& ghosts) {
     if (session_) {
-        if (latest_) {
-            session_->sendPlayerState(nowNs, localTick_, od::port::encodePlayerState(*latest_));
-            latest_.reset();
-        }
+        if (latest_ && !worldMode_) session_->sendPlayerState(nowNs, localTick_, od::port::encodePlayerState(*latest_));
+        latest_.reset();
         session_->poll(nowNs);
         for (const od::net::PeerEvent& e : session_->takePeerEvents()) {
             if (e.kind == od::net::PeerEvent::Kind::Joined) {
                 SDL_Log("netplay: %s (id %u) joined", e.peer.name.c_str(), unsigned(e.peer.playerId));
-                if (slotOf(e.peer.playerId) < 0 &&
+                if (!worldMode_ && slotOf(e.peer.playerId) < 0 &&
                     claimSlot(Source::Kind::Peer, e.peer.playerId, e.peer.name) < 0 &&
                     noSlotLogged_.insert(e.peer.playerId).second)
                     SDL_Log("netplay: no ghost slot free for %s (id %u): not shown", e.peer.name.c_str(),

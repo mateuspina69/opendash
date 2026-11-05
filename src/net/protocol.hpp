@@ -18,7 +18,7 @@
 namespace od::net {
 
 constexpr uint32_t kMagic = 0x504e444f; // "ODNP" little endian
-constexpr uint16_t kProtocolVersion = 1;
+constexpr uint16_t kProtocolVersion = 2;
 constexpr int kMaxPlayers = 8;          // the host (player 0) and up to 7 clients
 constexpr uint8_t kHostPlayerId = 0;
 
@@ -29,11 +29,12 @@ enum class MessageType : uint8_t {
     PeerJoined = 4,  // host -> clients: a player joined (reliable)
     PeerLeft = 5,    // host -> clients: a player left (reliable)
     PlayerState = 6, // a player's own character (unreliable, newest wins; the host forwards it unchanged)
-    WorldState = 7,  // reserved: the host's shared world (co-op milestones); defined, not sent by this milestone
+    WorldState = 7,  // what the next one replaces between a game and the coordinator: the shared world, opaque here
     Ping = 8,        // round-trip probe (unreliable)
     Pong = 9,        // its echo (unreliable)
     Bye = 10,        // leaving (reliable)
     Ack = 11,        // the reliable messages received in order so far (unreliable)
+    WorldEvent = 12, // what must arrive between a player's game and the coordinator (reliable)
 };
 // the types that travel on the reliable channel (they carry a sequence number after the header)
 bool isReliable(MessageType t);
@@ -109,10 +110,15 @@ struct Ack {
     bool operator==(const Ack&) const = default;
 };
 
-using Message = std::variant<Hello, Welcome, Refuse, PeerJoined, PeerLeft, PlayerState, WorldState, Ping, Pong, Bye, Ack>;
+struct WorldEvent {
+    std::vector<uint8_t> payload;
+    bool operator==(const WorldEvent&) const = default;
+};
+
+using Message = std::variant<Hello, Welcome, Refuse, PeerJoined, PeerLeft, PlayerState, WorldState, Ping, Pong, Bye, Ack, WorldEvent>;
 static_assert(std::is_same_v<std::variant_alternative_t<0, Message>, Hello> &&
               std::is_same_v<std::variant_alternative_t<size_t(MessageType::Ack) - 1, Message>, Ack> &&
-              std::variant_size_v<Message> == size_t(MessageType::Ack),
+              std::variant_size_v<Message> == size_t(MessageType::WorldEvent),
               "Message lists the types in MessageType order from Hello = 1 (typeOf)");
 MessageType typeOf(const Message& m);
 

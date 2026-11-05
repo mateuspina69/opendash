@@ -46,6 +46,12 @@ struct ReceivedState {
     std::vector<uint8_t> payload;
 };
 
+// what came for the coordinator or from it (a host: from this client; a client: from the host)
+struct ReceivedWorld {
+    uint8_t fromId = 0;
+    std::vector<uint8_t> payload;
+};
+
 struct PeerEvent {
     enum class Kind : uint8_t { Joined, Left } kind = Kind::Joined;
     PeerInfo peer;
@@ -90,6 +96,10 @@ public:
     void sendPlayerState(uint64_t nowNs, uint32_t tick, std::span<const uint8_t> payload);
     // the player states received since the last call (newer than every earlier one of the same player)
     std::vector<ReceivedState> takePlayerStates();
+    // the shared world's traffic, opaque here: a host sends to client `toId`, a client to the host. reliable: resent until
+    // acknowledged, in order; else the next one replaces it
+    void sendWorld(uint64_t nowNs, uint8_t toId, bool reliable, std::span<const uint8_t> payload);
+    std::vector<ReceivedWorld> takeWorld();
     // joins and leaves since the last call
     std::vector<PeerEvent> takePeerEvents();
     SessionStatus status(uint64_t nowNs) const;
@@ -160,6 +170,8 @@ private:
     std::map<uint8_t, PeerInfo> players_; // client: everyone else the host announced
     std::map<uint8_t, StateStats> stats_;
     std::vector<ReceivedState> states_;
+    std::vector<ReceivedWorld> world_;
+    uint32_t worldSequence_ = 0;
     std::vector<PeerEvent> events_;
     uint64_t lastNowNs_ = 0;
 };

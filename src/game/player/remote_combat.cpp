@@ -125,6 +125,30 @@ void applyPlayerReport(Player& p, const NetPlayerReport& report) {
     p.invulnerable = report.immune ? uint8_t(1) : uint8_t(0);
 }
 
+std::vector<uint8_t> netEquipmentOf(const Player& p) {
+    Out o;
+    o.u8(uint8_t(p.helmetPart));
+    o.u8(uint8_t(p.legPart));
+    o.u8(uint8_t(p.armourPart));
+    o.u8(uint8_t(p.busterWeapon));
+    o.u8(uint8_t(p.specialWeapon));
+    for (size_t i = 0; i < p.busterParts.size(); ++i) o.u8(uint8_t(p.busterParts[i]));
+    for (size_t i = 0; i < p.weaponLevels.size(); ++i) o.u8(uint8_t(p.weaponLevels[i]));
+    return std::move(o.b);
+}
+
+void applyEquipment(Player& p, std::span<const uint8_t> bytes) {
+    if (bytes.size() != netEquipmentOf(p).size()) return;
+    In r{bytes};
+    p.helmetPart = int8_t(r.u8());
+    p.legPart = int8_t(r.u8());
+    p.armourPart = int8_t(r.u8());
+    p.busterWeapon = int8_t(r.u8());
+    p.specialWeapon = int8_t(r.u8());
+    for (size_t i = 0; i < p.busterParts.size(); ++i) p.busterParts[i] = int8_t(r.u8());
+    for (size_t i = 0; i < p.weaponLevels.size(); ++i) p.weaponLevels[i] = int8_t(r.u8());
+}
+
 void applyShotHit(ShotActor& shot, const NetHitResult& hit) { intoBox(shot.hitBox, hit); }
 
 std::vector<uint8_t> encode(const NetHitResult& v) {

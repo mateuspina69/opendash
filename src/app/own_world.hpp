@@ -10,6 +10,7 @@
 #include <optional>
 #include <vector>
 
+#include "app/coop_host.hpp"
 #include "app/world_host.hpp"
 #include "app/ghost_view.hpp"
 #include "game/ghost_buffer.hpp"
@@ -22,6 +23,10 @@ namespace od::app {
 class OwnWorldClient {
 public:
     OwnWorldClient(std::filesystem::path exe, std::filesystem::path storySave);
+    // the session this game is in: a host's clients come through its coordinator; a client's world is the host's
+    void useSession(od::net::Session* session, bool host);
+    // the host's save, when it differs from this game's: the game restarts from it (what exists is the host's)
+    std::optional<std::vector<uint8_t>> takeHostSave(const std::vector<uint8_t>& current);
 
     // the room's files are bound and its spawn has run: the local actors go, this room's world takes over
     void roomBound(int stage, int sub);
@@ -37,11 +42,16 @@ public:
     void addGuest(int dx, int dz);
 
 private:
-    static constexpr uint8_t kPlayerId = 1; // in the world; id 0 is the world's own, which leaves on a link
-
     std::vector<uint8_t> playerState() const;
+    void joinRoom();
+    void handle(const WorldMessage& m, uint64_t nowNs);
 
-    WorldHost host_;
+    std::unique_ptr<WorldPipe> pipe_;
+    CoopHost* coordinator_ = nullptr; // pipe_, on the host
+    uint8_t playerId_ = 0;
+    bool joined_ = false;
+    std::vector<uint8_t> hostSave_, lastEquipment_;
+    bool hostSaveWhole_ = false;
     std::optional<WorldRoom> room_;
     std::unique_ptr<od::port::PoolNetActors> actors_;
     std::unique_ptr<od::port::NetStateClient> state_;
@@ -62,7 +72,7 @@ private:
     od::port::NetPlayerWatch watch_;
     od::port::NetPlayerSender uplink_, guestUplink_;
     std::optional<std::pair<int, int>> guest_;
-    static constexpr uint8_t kGuestId = 2;
+    static constexpr uint8_t kGuestId = 7;
     struct Other {
         od::port::NetPlayerReceiver from;
         od::ghost::GhostBuffer buffer;

@@ -12,8 +12,29 @@
 
 namespace od::app {
 
-OwnWorldClient::OwnWorldClient(std::filesystem::path exe, std::filesystem::path storySave)
-    : host_(std::move(exe), std::move(storySave)) {}
+OwnWorldClient::OwnWorldClient(std::filesystem::path exe, std::filesystem::path storySave) {
+    auto coordinator = std::make_unique<CoopHost>(std::move(exe), std::move(storySave));
+    coordinator_ = coordinator.get();
+    pipe_ = std::move(coordinator);
+}
+
+void OwnWorldClient::useSession(od::net::Session* session, bool host) {
+    if (!session) return;
+    if (host) {
+        coordinator_->useSession(session);
+        return;
+    }
+    coordinator_ = nullptr;
+    pipe_ = std::make_unique<SessionPipe>(*session);
+}
+
+std::optional<std::vector<uint8_t>> OwnWorldClient::takeHostSave(const std::vector<uint8_t>& current) {
+    if (!hostSaveWhole_) return std::nullopt;
+    hostSaveWhole_ = false;
+    if (hostSave_ == current) return std::nullopt;
+    SDL_Log("own world: the host's save differs: the game restarts from it");
+    return hostSave_;
+}
 
 std::vector<uint8_t> OwnWorldClient::playerState() const {
     const od::port::RemotePlayerState s{od::port::ghostRoomOf(), 0, od::port::capturePlayerSnapshot(od::port::player())};
@@ -39,14 +60,20 @@ void OwnWorldClient::roomBound(int stage, int sub) {
     clock_ = std::make_unique<od::port::NetRenderClock>();
     shownAny_ = false;
     room_ = WorldRoom{stage, sub};
-    host_.enter(kPlayerId, *room_, playerState());
-    host_.netJoin(kPlayerId);
-    if (guest_) host_.enter(kGuestId, *room_, playerState());
+    joined_ = false;
+    lastEquipment_.clear();
     uplink_ = {};
     guestUplink_ = {};
     for (Other& o : others_) o = Other{};
     ownShots_ = {};
     reported_ = {};
+}
+
+void OwnWorldClient::joinRoom() {
+    pipe_->enter(playerId_, *room_, playerState());
+    pipe_->sendReliable(playerId_, WorldMessageType::NetJoin, {});
+    if (guest_ && coordinator_) pipe_->enter(kGuestId, *room_, playerState());
+    joined_ = true;
 }
 
 void OwnWorldClient::turn(uint64_t nowNs) {
@@ -58,57 +85,40 @@ void OwnWorldClient::turn(uint64_t nowNs) {
         SDL_DelayNS(nextTickNs_ - nowNs);
         nowNs = nextTickNs_;
     }
+    pipe_->poll(nowNs);
+    if (!joined_) {
+        const std::optional<uint8_t> id = pipe_->playerId();
+        if (!id) return; // the session has not welcomed this game yet
+        playerId_ = *id;
+        joinRoom();
+    }
     ++localTick_;
     const od::port::NetPlayerFields fields = watch_.see(od::port::player(), localTick_);
     if (localTick_ % od::port::kNetDefaultUpdateTicks == 0) {
-        host_.netSendLatest(kPlayerId, WorldMessageType::NetPlayer, uplink_.update(kPlayerId, localTick_, fields));
-        if (guest_) {
+        // an update after its length byte, as the world's lists of them
+        const auto listed = [](std::vector<uint8_t> one) {
+            one.insert(one.begin(), uint8_t(one.size()));
+            return one;
+        };
+        pipe_->sendLatest(playerId_, WorldMessageType::NetPlayer, listed(uplink_.update(playerId_, localTick_, fields)));
+        if (guest_ && coordinator_) {
             od::port::NetPlayerFields shifted = fields;
             shifted.pos[0] = int16_t(shifted.pos[0] + guest_->first);
             shifted.pos[2] = int16_t(shifted.pos[2] + guest_->second);
-            host_.netSendLatest(kGuestId, WorldMessageType::NetPlayer, guestUplink_.update(kGuestId, localTick_, shifted));
+            pipe_->sendLatest(kGuestId, WorldMessageType::NetPlayer, listed(guestUplink_.update(kGuestId, localTick_, shifted)));
         }
     }
-    host_.poll(nowNs);
-    if (guest_) (void)host_.takeNet(kGuestId);
-    const auto acknowledge = [&](std::optional<uint16_t> sequence) {
-        if (sequence) host_.netAck(kPlayerId, *sequence);
-    };
-    for (const WorldMessage& m : host_.takeNet(kPlayerId)) {
-        if (m.type == WorldMessageType::NetEvents) {
-            if (!state_->applyEvents(m.netState)) SDL_Log("own world: a bad event batch");
-            acknowledge(state_->applyHeld());
-        } else if (m.type == WorldMessageType::NetUpdate) {
-            acknowledge(state_->applyUpdate(m.netState));
-            if (state_->heard()) clock_->heard(state_->newestTick());
-        } else if (m.type == WorldMessageType::NetPlayerAck) {
-            if (m.netState.size() == 3) uplink_.acknowledge(uint16_t(m.netState[1] | m.netState[2] << 8));
-        } else if (m.type == WorldMessageType::NetPlayer) {
-            const auto id = od::port::netPlayerIdOf(m.netState);
-            if (!id || *id >= others_.size()) continue;
-            Other& o = others_[*id];
-            const auto heard = o.from.apply(m.netState);
-            if (!heard) continue;
-            std::vector<uint8_t> ack = {*id, uint8_t(heard->sequence), uint8_t(heard->sequence >> 8)};
-            host_.netSendLatest(kPlayerId, WorldMessageType::NetPlayerAck, std::move(ack));
-            // the fields of this tick in the smoothing buffer: its frames are the client's, set when shown
-            od::port::RemotePlayerState s;
-            s.room = od::port::ghostRoomOf();
-            s.snapshot = od::port::netPlayerSnapshot(o.from.fields(), o.tracks);
-            o.buffer.push(nowNs, heard->tick, s);
-        } else if (m.type == WorldMessageType::NetHit) {
-            if (const auto hit = od::port::decodeHitResult(m.netState)) od::port::applyPlayerHit(od::port::player(), *hit);
-        } else if (m.type == WorldMessageType::NetShotHit) {
-            const auto hit = od::port::decodeShotHit(m.netState);
-            if (hit && hit->clientSlot < ownShots_.size() && ownShots_[hit->clientSlot].live &&
-                ownShots_[hit->clientSlot].serial == hit->serial)
-                od::port::applyShotHit(od::port::shotPool()[hit->clientSlot], hit->hit);
-        }
+    if (std::vector<uint8_t> equipment = od::port::netEquipmentOf(od::port::player()); equipment != lastEquipment_) {
+        lastEquipment_ = equipment;
+        pipe_->sendReliable(playerId_, WorldMessageType::NetEquip, std::move(equipment));
     }
+    pipe_->poll(nowNs);
+    if (guest_ && coordinator_) (void)pipe_->take(kGuestId);
+    for (const WorldMessage& m : pipe_->take(playerId_)) handle(m, nowNs);
     const od::port::NetPlayerReport report = od::port::netPlayerReportOf(od::port::player());
     if (report != reported_) {
         reported_ = report;
-        host_.netSend(kPlayerId, WorldMessageType::NetReport, od::port::encode(report));
+        pipe_->sendReliable(playerId_, WorldMessageType::NetReport, od::port::encode(report));
     }
     if (clock_->running()) {
         const int64_t at = int64_t(clock_->at(nowNs));
@@ -121,6 +131,63 @@ void OwnWorldClient::turn(uint64_t nowNs) {
     }
     for (; failuresLogged_ < failures_.classes.size(); ++failuresLogged_)
         SDL_Log("own world: failed: %s", failures_.classes[failuresLogged_].c_str());
+}
+
+void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
+    switch (m.type) {
+    case WorldMessageType::NetEvents:
+        if (!state_->applyEvents(m.netState)) SDL_Log("own world: a bad event batch");
+        if (const auto sequence = state_->applyHeld()) {
+            pipe_->sendLatest(playerId_, WorldMessageType::NetAck, {uint8_t(*sequence), uint8_t(*sequence >> 8)});
+        }
+        break;
+    case WorldMessageType::NetUpdate:
+        if (const auto sequence = state_->applyUpdate(m.netState))
+            pipe_->sendLatest(playerId_, WorldMessageType::NetAck, {uint8_t(*sequence), uint8_t(*sequence >> 8)});
+        if (state_->heard()) clock_->heard(state_->newestTick());
+        break;
+    case WorldMessageType::NetPlayerAck:
+        if (m.netState.size() == 3) uplink_.acknowledge(uint16_t(m.netState[1] | m.netState[2] << 8));
+        break;
+    case WorldMessageType::NetPlayer: {
+        std::vector<uint8_t> acks;
+        for (size_t at = 0; at < m.netState.size();) {
+            const size_t n = m.netState[at++];
+            if (at + n > m.netState.size()) break;
+            const std::span<const uint8_t> one(m.netState.data() + at, n);
+            at += n;
+            const auto id = od::port::netPlayerIdOf(one);
+            if (!id || *id >= others_.size()) continue;
+            Other& o = others_[*id];
+            const auto heard = o.from.apply(one);
+            if (!heard) continue;
+            acks.push_back(*id);
+            acks.push_back(uint8_t(heard->sequence));
+            acks.push_back(uint8_t(heard->sequence >> 8));
+            // the fields of this tick in the smoothing buffer: its frames are the client's, set when shown
+            od::port::RemotePlayerState s;
+            s.room = od::port::ghostRoomOf();
+            s.snapshot = od::port::netPlayerSnapshot(o.from.fields(), o.tracks);
+            o.buffer.push(nowNs, heard->tick, s);
+        }
+        if (!acks.empty()) pipe_->sendLatest(playerId_, WorldMessageType::NetPlayerAck, std::move(acks));
+        break;
+    }
+    case WorldMessageType::NetHit:
+        if (const auto hit = od::port::decodeHitResult(m.netState)) od::port::applyPlayerHit(od::port::player(), *hit);
+        break;
+    case WorldMessageType::NetShotHit: {
+        const auto hit = od::port::decodeShotHit(m.netState);
+        if (hit && hit->clientSlot < ownShots_.size() && ownShots_[hit->clientSlot].live && ownShots_[hit->clientSlot].serial == hit->serial)
+            od::port::applyShotHit(od::port::shotPool()[hit->clientSlot], hit->hit);
+        break;
+    }
+    case WorldMessageType::NetSave:
+        hostSave_.insert(hostSave_.end(), m.netState.begin(), m.netState.end());
+        if (m.netState.size() < 1000) hostSaveWhole_ = true; // the last chunk is the short one
+        break;
+    default: break;
+    }
 }
 
 void OwnWorldClient::showPlayers(GhostView& ghosts, uint64_t localFingerprint, uint64_t nowNs) {
@@ -165,7 +232,7 @@ void OwnWorldClient::endFrame() {
         const bool mine = (shot.flags & od::port::kActorLive) && (shot.runFlags & od::port::kActorRun);
         if (mine && !ownShots_[i].live) {
             ownShots_[i] = {true, nextSerial_++};
-            host_.netSend(kPlayerId, WorldMessageType::NetFire, od::port::encode(od::port::netFireOf(shot, uint8_t(i), ownShots_[i].serial)));
+            pipe_->sendReliable(playerId_, WorldMessageType::NetFire, od::port::encode(od::port::netFireOf(shot, uint8_t(i), ownShots_[i].serial)));
         } else if (!mine) {
             ownShots_[i].live = false;
         }
