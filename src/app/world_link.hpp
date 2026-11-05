@@ -18,19 +18,24 @@ namespace od::app {
 // Coordinator -> world: Join {id, player state}, State {id, player state}, Leave {id}, Stop, KeepAlive.
 // World -> coordinator: Hello, Report {tick, live actors, players in the world, digest}.
 // Both ways: StageState {the stage's record: game/stage_record}.
+// The network state (game/world_net_state), per client: NetJoin {client} and NetAck {client, sequence} toward the world,
+// NetEvents {client, batch} (what must arrive) and NetUpdate {client, update} (what the next one replaces) from it.
 enum class WorldMessageType : uint8_t {
-    Hello = 1, Join = 2, State = 3, Leave = 4, Stop = 5, KeepAlive = 6, Report = 7, StageState = 8
+    Hello = 1, Join = 2, State = 3, Leave = 4, Stop = 5, KeepAlive = 6, Report = 7, StageState = 8,
+    NetJoin = 9, NetLeave = 10, NetAck = 11, NetEvents = 12, NetUpdate = 13
 };
 
 struct WorldMessage {
     WorldMessageType type = WorldMessageType::KeepAlive;
-    uint8_t playerId = 0;
+    uint8_t playerId = 0;             // the player, or the client of a Net message
     std::vector<uint8_t> playerState; // Join, State: game/player/player_snapshot's encodePlayerState
     std::vector<uint8_t> stageRecord; // StageState: game/stage_record's encodeStageRecord
     uint64_t tick = 0;                // Report
     uint32_t liveActors = 0;
     uint8_t players = 0;
     uint64_t digest = 0;
+    uint16_t netSequence = 0;         // NetAck
+    std::vector<uint8_t> netState;    // NetEvents, NetUpdate
 };
 
 std::vector<uint8_t> encodeWorldMessage(const WorldMessage& m);

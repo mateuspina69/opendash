@@ -1,0 +1,472 @@
+// The network state of a world's actors (game/world_net_state). With no arguments: the rules of the data path, on tables
+// built by hand. With arguments: a real world process and a real receiver process, joined through this test as the
+// coordinator is (with and without a link's delay and loss), in rooms with enemies. Each process writes each actor's pose per
+// tick in a local file (a pose never crosses the network) and the files are compared afterwards.
+//   test_world_net [<opendash.exe> <save image> <folder for the files> [<ST:SUB> ...]]
+#include <SDL3/SDL.h>
+
+#include <algorithm>
+#include <cstdio>
+#include <cstdlib>
+#include <deque>
+#include <filesystem>
+#include <map>
+#include <optional>
+#include <random>
+#include <string>
+#include <vector>
+
+#include "app/world_link.hpp"
+#include "check.hpp"
+#include "game/world_net_state.hpp"
+
+using namespace od::port;
+using od::app::WorldLink;
+using od::app::WorldMessage;
+using od::app::WorldMessageType;
+
+namespace {
+
+// ---- the rules, on tables built by hand ---------------------------------------------------------------------------------
+
+constexpr uint8_t kSlotA = 0x20, kSlotB = 0x21, kStatic = 0x60;
+
+NetWorldTable::Seen seenAt(int x, uint8_t anim = 3, uint32_t script = 0x1000) {
+    NetWorldTable::Seen s;
+    s.type = 7;
+    s.modelEntry = 2;
+    s.model = 0x5000;
+    s.animTable = 0x6000;
+    s.animScript = script;
+    s.pos = {int16_t(x), 10, 20};
+    s.rot = {0, 100, 0};
+    s.anim = anim;
+    s.shown = true;
+    return s;
+}
+
+struct Recorded : NetClientActors {
+    std::map<uint8_t, NetActorIdentity> live;
+    std::map<uint8_t, NetActorState> last;
+    std::vector<std::pair<uint8_t, AnimStart>> starts;
+    void appear(uint8_t slot, const NetActorIdentity& identity, const NetActorState&) override { live[slot] = identity; }
+    void go(uint8_t slot) override {
+        live.erase(slot);
+        last.erase(slot);
+    }
+    void tick(uint8_t slot, const NetActorState& state, const std::optional<AnimStart>& start) override {
+        last[slot] = state;
+        if (start) starts.emplace_back(slot, *start);
+    }
+};
+
+constexpr size_t kHeader = 10;
+
+void testChangesOnly() {
+    NetWorldTable t;
+    NetStateSender sender;
+    Recorded rec;
+    NetStateClient client(rec);
+    t.tick = 0;
+    t.seen(kSlotA, seenAt(100));
+    t.seen(kStatic, seenAt(500));
+    for (const auto& batch : sender.events(t)) CHECK(client.applyEvents(batch));
+    // told by the appearance: nothing to say
+    auto u0 = sender.update(t);
+    CHECK(u0.size() == kHeader);
+    const auto seq0 = client.applyUpdate(u0);
+    CHECK(seq0.has_value());
+    client.advance(0);
+    CHECK(rec.live.size() == 2);
+    CHECK(rec.live[kSlotA].modelEntry == 2 && rec.live[kSlotA].type == 7);
+    CHECK(rec.starts.size() == 2); // both animated in this table; the animation started on tick 0
+    // one axis moved: slot, mask, one coordinate
+    t.tick = 2;
+    t.seen(kSlotA, seenAt(104));
+    t.seen(kStatic, seenAt(500));
+    auto u1 = sender.update(t);
+    CHECK(u1.size() == kHeader + 2 + 2);
+    const auto seq1 = client.applyUpdate(u1);
+    CHECK(seq1.has_value());
+    // not acknowledged: it goes again; acknowledged: it does not
+    t.tick = 4;
+    CHECK(sender.update(t).size() == kHeader + 2 + 2);
+    sender.acknowledge(*seq1);
+    t.tick = 6;
+    CHECK(sender.update(t).size() == kHeader);
+    // the position between two states
+    client.advance(1);
+    CHECK(rec.last[kSlotA].pos[0] == 102);
+    client.advance(2);
+    CHECK(rec.last[kSlotA].pos[0] == 104);
+}
+
+void testLostUpdate() {
+    NetWorldTable t;
+    NetStateSender sender;
+    Recorded rec;
+    NetStateClient client(rec);
+    t.seen(kSlotA, seenAt(100));
+    for (const auto& batch : sender.events(t)) client.applyEvents(batch);
+    sender.acknowledge(*client.applyUpdate(sender.update(t)));
+    t.tick = 2;
+    t.seen(kSlotA, seenAt(110));
+    const auto lost = sender.update(t); // never arrives
+    t.tick = 4;
+    t.seen(kSlotA, seenAt(120, 5, 0x2000)); // and an animation starts
+    t.tick = 5;
+    const auto late = sender.update(t);
+    t.tick = 6;
+    t.seen(kSlotA, seenAt(130, 5, 0x2000));
+    const auto newest = sender.update(t);
+    const auto seq = client.applyUpdate(newest);
+    CHECK(seq.has_value());
+    // a stale update is simply replaced
+    CHECK(!client.applyUpdate(late).has_value());
+    CHECK(!client.applyUpdate(lost).has_value());
+    rec.starts.clear();
+    client.advance(6);
+    CHECK(rec.last[kSlotA].pos[0] == 130);
+    CHECK(rec.starts.size() == 1);
+    // the animation has been in play since the tick it was chosen, whenever the client hears of it
+    CHECK(!rec.starts.empty() && rec.starts[0].second.anim == 5 && rec.starts[0].second.steps == 2);
+    // a value that goes back to what is acknowledged, while the client holds another, goes at once
+    sender.acknowledge(*seq);
+    t.tick = 8;
+    t.seen(kSlotA, seenAt(100, 5, 0x2000));
+    const auto a = sender.update(t);
+    CHECK(a.size() > kHeader);
+    t.tick = 10;
+    t.seen(kSlotA, seenAt(130, 5, 0x2000)); // back to what is acknowledged
+    const auto back = sender.update(t);
+    CHECK(back.size() > kHeader);
+    CHECK(client.applyUpdate(a).has_value());
+    const auto seqBack = client.applyUpdate(back);
+    CHECK(seqBack.has_value());
+    client.advance(10);
+    CHECK(rec.last[kSlotA].pos[0] == 130);
+    // and once the client holds it, nothing more goes
+    sender.acknowledge(*seqBack);
+    t.tick = 12;
+    CHECK(sender.update(t).size() == kHeader);
+}
+
+void testEventsFirstAndReuse() {
+    NetWorldTable t;
+    NetStateSender sender;
+    Recorded rec;
+    NetStateClient client(rec);
+    t.seen(kSlotA, seenAt(100));
+    const auto first = sender.events(t);
+    const auto u = sender.update(t);
+    // the update arrives before the actors it counts on: it waits for them
+    CHECK(!client.applyUpdate(u).has_value());
+    for (const auto& batch : first) CHECK(client.applyEvents(batch));
+    CHECK(client.applyHeld().has_value());
+    client.advance(0);
+    CHECK(rec.live.count(kSlotA) == 1);
+    // the slot's occupant changes: goes and appears, in order, and an update built before says nothing of the new one
+    t.tick = 2;
+    t.seen(kSlotA, seenAt(150));
+    const auto before = sender.update(t);
+    t.tick = 4;
+    t.gone(kSlotA);
+    t.tick = 6;
+    NetWorldTable::Seen other = seenAt(300);
+    other.type = 9;
+    other.modelEntry = 4;
+    t.seen(kSlotA, other);
+    const auto batches = sender.events(t);
+    CHECK(batches.size() == 1 && batches[0].size() == 8 + 2 + 22);
+    for (const auto& batch : batches) CHECK(client.applyEvents(batch));
+    CHECK(client.applyUpdate(before).has_value());
+    client.advance(5);
+    CHECK(rec.live[kSlotA].type == 7);
+    client.advance(6);
+    CHECK(rec.live[kSlotA].type == 9 && rec.last[kSlotA].pos[0] == 300);
+    // an actor goes
+    t.tick = 8;
+    t.gone(kSlotA);
+    for (const auto& batch : sender.events(t)) CHECK(client.applyEvents(batch));
+    client.advance(7);
+    CHECK(rec.live.count(kSlotA) == 1);
+    client.advance(8);
+    CHECK(rec.live.count(kSlotA) == 0);
+}
+
+void testFitsOneDatagram() {
+    NetWorldTable t;
+    NetStateSender sender;
+    const auto fill = [&](int d) {
+        for (int i = 0; i < 24; ++i) {
+            NetWorldTable::Seen s = seenAt(i * 8 + d);
+            s.pos = {int16_t(i + d), int16_t(i + d), int16_t(i + d)};
+            s.rot = {int16_t(d), int16_t(d), int16_t(d)};
+            t.seen(uint8_t(0x20 + i), s);
+        }
+        for (int i = 0; i < 64; ++i) {
+            NetWorldTable::Seen s = seenAt(i * 8 + d);
+            s.pos = {int16_t(i + d), int16_t(i + d), int16_t(i + d)};
+            s.rot = {int16_t(d), int16_t(d), int16_t(d)};
+            t.seen(uint8_t(0x60 + i), s);
+        }
+    };
+    t.tick = 0;
+    fill(0);
+    for (const auto& batch : sender.events(t)) CHECK(batch.size() <= kNetMaxEventBatch);
+    t.tick = 2;
+    fill(1);
+    std::map<uint8_t, int> told;
+    for (int round = 0; round < 3; ++round) {
+        const auto u = sender.update(t);
+        CHECK(u.size() <= kNetMaxPayload);
+        // walks past what the last one held: every actor is in some update (the mask of a whole entry: 14 bytes)
+        for (size_t at = kHeader; at + 14 <= u.size(); at += 14) ++told[u[at]];
+    }
+    CHECK(sender.updatesCut() >= 1);
+    CHECK(told.size() == 88);
+}
+
+void testLinkMessages() {
+    WorldMessage ack{WorldMessageType::NetAck};
+    ack.playerId = 3;
+    ack.netSequence = 0xbeef;
+    const auto a = od::app::decodeWorldMessage(od::app::encodeWorldMessage(ack));
+    CHECK(a && a->type == WorldMessageType::NetAck && a->playerId == 3 && a->netSequence == 0xbeef);
+    WorldMessage update{WorldMessageType::NetUpdate};
+    update.playerId = 2;
+    update.netState = {1, 2, 3, 4};
+    const auto u = od::app::decodeWorldMessage(od::app::encodeWorldMessage(update));
+    CHECK(u && u->type == WorldMessageType::NetUpdate && u->playerId == 2 && u->netState == update.netState);
+}
+
+// ---- two real processes -------------------------------------------------------------------------------------------------
+
+// tools/world_compare.py's fighting pad
+const char* const kFightingPad =
+    "45 10; 20 8000; 40 8010; 12 4000; 30 8080; 25 8000; 40 8020; 12 4000; 40 8040; 30 8000; "
+    "45 10; 20 8000; 40 8010; 12 4000; 30 8080; 25 8000; 40 8020; 12 4000; 40 8040; 30 8000";
+constexpr int kTicks = 588;
+
+struct LinkFaults {
+    const char* name;
+    int delayMs; // one way
+    int lossPercent;
+};
+
+// One way of the link: messages held for the delay, what the next one replaces lost at random
+struct Way {
+    struct Held {
+        uint64_t at;
+        WorldMessage message;
+        bool reliable;
+    };
+    std::deque<Held> held;
+    void push(uint64_t at, const WorldMessage& m, bool reliable) { held.push_back({at, m, reliable}); }
+    void flush(uint64_t now, WorldLink& to) {
+        while (!held.empty() && held.front().at <= now) {
+            if (held.front().reliable) to.sendReliable(held.front().message);
+            else to.sendLatest(held.front().message);
+            held.pop_front();
+        }
+    }
+};
+
+struct Tally {
+    uint64_t both = 0, onlyWorld = 0, onlyClient = 0;
+    uint64_t posExact = 0, posWithin2 = 0, posWithin8 = 0, posWithin32 = 0;
+    int posWorst = 0;
+    uint64_t rotExact = 0, rotWithin16 = 0;
+    uint64_t animated = 0, animSame = 0, keySame = 0;
+    uint64_t stateTicks = 0, stateKeySame = 0, statePoseSame = 0, stateKeySamePoseSame = 0;
+};
+
+struct TypeTally {
+    uint64_t records = 0, animSame = 0, keySame = 0, poseSame = 0, keySamePoseDiffers = 0;
+};
+
+std::string runRoom(const char* exe, const char* save, const std::filesystem::path& dir, const std::string& room,
+                    const LinkFaults& faults) {
+    const std::string stage = room.substr(0, room.find(':')), sub = room.substr(room.find(':') + 1);
+    const std::filesystem::path worldPoses = dir / ("poses-world-" + stage + "-" + sub + ".bin"),
+                                clientPoses = dir / ("poses-client-" + stage + "-" + sub + ".bin");
+    std::filesystem::remove(worldPoses);
+    std::filesystem::remove(clientPoses);
+    WorldLink toWorld, toClient;
+    char worldPort[8], clientPort[8], ticks[16];
+    std::snprintf(worldPort, sizeof worldPort, "%u", unsigned(toWorld.port()));
+    std::snprintf(clientPort, sizeof clientPort, "%u", unsigned(toClient.port()));
+    std::snprintf(ticks, sizeof ticks, "%d", kTicks);
+    const std::string worldLog = worldPoses.string(), clientLog = clientPoses.string();
+    const char* worldArgs[] = {exe, "--world", stage.c_str(), sub.c_str(), "--world-link", worldPort, "--world-keep-player",
+                               "--world-ticks", ticks, "--world-pad", kFightingPad, "--world-pose-log", worldLog.c_str(),
+                               "--story-save", save, nullptr};
+    const char* clientArgs[] = {exe, "--world", stage.c_str(), sub.c_str(), "--world-client", "--world-link", clientPort,
+                                "--world-pose-log", clientLog.c_str(), "--story-save", save, nullptr};
+    SDL_Process* client = SDL_CreateProcess(clientArgs, false);
+    CHECK(client != nullptr);
+    SDL_Process* world = SDL_CreateProcess(worldArgs, false);
+    CHECK(world != nullptr);
+    if (!world || !client) return "no process";
+
+    std::mt19937 random(12345);
+    Way toWorldWay, toClientWay;
+    const uint64_t delay = uint64_t(faults.delayMs) * 1'000'000ull;
+    const auto lost = [&] { return faults.lossPercent > 0 && int(random() % 100) < faults.lossPercent; };
+    uint64_t lastKeepAlive = 0, updates = 0, updateBytes = 0, eventBytes = 0;
+    bool worldEnded = false;
+    int code = -1;
+    for (const uint64_t until = SDL_GetTicksNS() + 120'000'000'000ull; !worldEnded && SDL_GetTicksNS() < until;) {
+        const uint64_t now = SDL_GetTicksNS();
+        for (const WorldMessage& m : toWorld.poll(now)) {
+            if (m.type == WorldMessageType::NetEvents) {
+                eventBytes += m.netState.size();
+                toClientWay.push(now + delay, m, true);
+            } else if (m.type == WorldMessageType::NetUpdate) {
+                ++updates;
+                updateBytes += m.netState.size();
+                if (!lost()) toClientWay.push(now + delay, m, false);
+            }
+        }
+        for (const WorldMessage& m : toClient.poll(now)) {
+            if (m.type == WorldMessageType::NetJoin) toWorldWay.push(now + delay, m, true);
+            else if (m.type == WorldMessageType::NetAck && !lost()) toWorldWay.push(now + delay, m, false);
+        }
+        toWorldWay.flush(now, toWorld);
+        toClientWay.flush(now, toClient);
+        if (now - lastKeepAlive > 500'000'000ull) {
+            lastKeepAlive = now;
+            toWorld.sendLatest({WorldMessageType::KeepAlive});
+            toClient.sendLatest({WorldMessageType::KeepAlive});
+        }
+        worldEnded = SDL_WaitProcess(world, false, &code);
+        SDL_DelayNS(1'000'000);
+    }
+    CHECK(worldEnded && code == 0);
+    if (!worldEnded) SDL_KillProcess(world, true);
+    SDL_DestroyProcess(world);
+    toClient.sendReliable({WorldMessageType::Stop});
+    for (const uint64_t until = SDL_GetTicksNS() + 3'000'000'000ull; SDL_GetTicksNS() < until && !toClient.settled();) {
+        toClient.poll(SDL_GetTicksNS());
+        SDL_DelayNS(5'000'000);
+    }
+    int clientCode = -1;
+    bool clientEnded = false;
+    for (const uint64_t until = SDL_GetTicksNS() + 10'000'000'000ull; !clientEnded && SDL_GetTicksNS() < until; SDL_DelayNS(20'000'000))
+        clientEnded = SDL_WaitProcess(client, false, &clientCode);
+    CHECK(clientEnded && clientCode == 0);
+    if (!clientEnded) SDL_KillProcess(client, true);
+    SDL_DestroyProcess(client);
+
+    // ---- the two pose files, tick by tick ---------------------------------------------------------------------------
+    const std::vector<NetPoseRecord> w = readNetPoses(worldPoses), c = readNetPoses(clientPoses);
+    CHECK(!w.empty() && !c.empty());
+    if (w.empty() || c.empty()) return "no poses";
+    std::map<uint64_t, const NetPoseRecord*> atWorld, atClient;
+    const auto key = [](const NetPoseRecord& r) { return uint64_t(r.tick) << 8 | r.slot; };
+    for (const NetPoseRecord& r : w) atWorld[key(r)] = &r;
+    for (const NetPoseRecord& r : c) atClient[key(r)] = &r;
+    uint32_t first = 0xffffffffu, last = 0;
+    for (const NetPoseRecord& r : c) {
+        first = std::min(first, r.tick);
+        last = std::max(last, r.tick);
+    }
+    last = std::min(last, w.back().tick);
+    Tally t;
+    std::map<int, TypeTally> types;
+    for (const NetPoseRecord& r : w)
+        if (r.tick >= first && r.tick <= last && !atClient.count(key(r))) ++t.onlyWorld;
+    for (const NetPoseRecord& r : c) {
+        if (r.tick > last) continue;
+        const auto found = atWorld.find(key(r));
+        if (found == atWorld.end() || found->second->type != r.type) {
+            ++t.onlyClient;
+            continue;
+        }
+        const NetPoseRecord& v = *found->second;
+        ++t.both;
+        int d = 0;
+        for (size_t i = 0; i < 3; ++i) d = std::max(d, std::abs(int(r.pos[i]) - int(v.pos[i])));
+        t.posExact += d == 0;
+        t.posWithin2 += d <= 2;
+        t.posWithin8 += d <= 8;
+        t.posWithin32 += d <= 32;
+        t.posWorst = std::max(t.posWorst, d);
+        int a = 0;
+        for (size_t i = 0; i < 3; ++i) {
+            int e = (int(r.rot[i]) - int(v.rot[i])) & 0xfff;
+            if (e > 0x800) e = 0x1000 - e;
+            a = std::max(a, e);
+        }
+        t.rotExact += a == 0;
+        t.rotWithin16 += a <= 16;
+        if (v.bones.empty() && r.bones.empty()) continue; // a static, or an actor with no animation
+        ++t.animated;
+        TypeTally& type = types[r.type];
+        ++type.records;
+        const bool animSame = r.anim == v.anim;
+        const bool keySame = animSame && r.keyIndex == v.keyIndex && r.frame == v.frame && r.ticksLeft == v.ticksLeft;
+        const bool poseSame = keySame && r.bones == v.bones;
+        t.animSame += animSame;
+        type.animSame += animSame;
+        t.keySame += keySame;
+        type.keySame += keySame;
+        if (r.tick % uint32_t(kNetDefaultUpdateTicks) == 0) { // a state's tick: position and rotation are not in between
+            ++t.stateTicks;
+            t.stateKeySame += keySame;
+            t.statePoseSame += poseSame;
+            t.stateKeySamePoseSame += poseSame;
+            type.poseSame += poseSame;
+            type.keySamePoseDiffers += keySame && !poseSame;
+        }
+    }
+    const auto pct = [](uint64_t a, uint64_t b) { return b ? 100.0 * double(a) / double(b) : 0.0; };
+    std::printf("ST%s-%s [%s]: ticks %u..%u, update %.0f bytes avg (%llu updates), events %llu bytes\n", stage.c_str(), sub.c_str(),
+                faults.name, first, last, updates ? double(updateBytes) / double(updates) : 0.0, (unsigned long long)updates,
+                (unsigned long long)eventBytes);
+    std::printf("  actors: %llu held by both, %llu only the world (%.2f%%), %llu only the receiver\n",
+                (unsigned long long)t.both, (unsigned long long)t.onlyWorld, pct(t.onlyWorld, t.both + t.onlyWorld),
+                (unsigned long long)t.onlyClient);
+    std::printf("  position: exact %.1f%%, within 2 %.1f%%, within 8 %.1f%%, within 32 %.1f%%, worst %d units; rotation exact "
+                "%.1f%%, within 16/4096 %.1f%%\n",
+                pct(t.posExact, t.both), pct(t.posWithin2, t.both), pct(t.posWithin8, t.both), pct(t.posWithin32, t.both),
+                t.posWorst, pct(t.rotExact, t.both), pct(t.rotWithin16, t.both));
+    std::printf("  animated records %llu: same animation %.1f%%, same key (animation, key, frame, ticks left) %.1f%%\n",
+                (unsigned long long)t.animated, pct(t.animSame, t.animated), pct(t.keySame, t.animated));
+    std::printf("  at a state's tick (%llu): same key %.1f%%, pose bit-identical %.1f%%\n", (unsigned long long)t.stateTicks,
+                pct(t.stateKeySame, t.stateTicks), pct(t.statePoseSame, t.stateTicks));
+    for (const auto& [type, n] : types)
+        std::printf("    type %02x: %llu records, same animation %.1f%%, same key %.1f%%, state-tick poses identical %llu, key "
+                    "same but pose differs %llu\n",
+                    type, (unsigned long long)n.records, pct(n.animSame, n.records), pct(n.keySame, n.records),
+                    (unsigned long long)n.poseSame, (unsigned long long)n.keySamePoseDiffers);
+    std::fflush(stdout);
+    // what the data path promises: the same actors, within the interpolation, and the animation the class chose
+    CHECK(t.both > 0);
+    CHECK(pct(t.onlyWorld, t.both + t.onlyWorld) < 2.0);
+    CHECK(pct(t.onlyClient, t.both + t.onlyClient) < 2.0);
+    return "";
+}
+
+} // namespace
+
+int main(int argc, char** argv) {
+    testChangesOnly();
+    testLostUpdate();
+    testEventsFirstAndReuse();
+    testFitsOneDatagram();
+    testLinkMessages();
+    if (argc >= 4) {
+        SDL_Init(0);
+        std::vector<std::string> rooms;
+        for (int i = 4; i < argc; ++i) rooms.push_back(argv[i]);
+        if (rooms.empty()) rooms = {"12:1", "42:2", "41:2"};
+        const LinkFaults clean{"no delay, no loss", 0, 0}, far{"125 ms each way, 3% lost", 125, 3};
+        for (const std::string& room : rooms) {
+            runRoom(argv[1], argv[2], argv[3], room, clean);
+            runRoom(argv[1], argv[2], argv[3], room, far);
+        }
+        SDL_Quit();
+    }
+    return testResult("test_world_net");
+}

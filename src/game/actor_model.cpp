@@ -74,6 +74,26 @@ void bindAnimatedModel(AnimatedActor& actor, const ModelBankEntryData& entry, co
     actor.secondTexturePage = ((cell >> 1) & 0x3f800000u) | (cell & 0x7f0000u);
 }
 
+// the entry bound to the actor, by its pool
+void bindEntry(Actor& actor, const ModelBankEntryData& entry, uint32_t bank) {
+    const uint32_t cls = actorSlotClass(actor.slot);
+    auto header = FileDataRef<ModelHeaderData>(loadedFile(entry.model + bank, 56)).get();
+    header.at = entry.model + bank;
+    if (cls == kAnimatedClass) header.textureCell = loadedScalar<uint32_t>(header.at + 56);
+    switch (cls) {
+    case kShotClass:
+    case kProjectileClass:
+        actor.flags |= kActorMeshModel;
+        actor.runFlags |= kActorMeshModel;
+        if (cls == kShotClass) bindMeshModel(asShot(actor), header, bank);
+        else bindMeshModel(asProjectile(actor), header, bank);
+        return;
+    case kStaticClass: bindMeshModel(asStatic(actor), header, bank); return;
+    case kAnimatedClass: bindAnimatedModel(asAnimated(actor), entry, header, bank); return;
+    default: return;
+    }
+}
+
 } // namespace
 
 bool bindActorModel(Actor& actor, int variant) { // exe 0x5e0be0
@@ -86,24 +106,20 @@ bool bindActorModel(Actor& actor, int variant) { // exe 0x5e0be0
         const auto entry = FileDataRef<ModelBankEntryData>(records.sub(4 + size_t(i) * 16)).get();
         if (cls != (entry.key & 0xf0u) || globalFlag != (entry.key & 0xfu) || actor.type != entry.type) continue;
         if (variant != kAnyModelVariant && uint8_t(variant) != entry.variant) continue;
-        auto header = FileDataRef<ModelHeaderData>(loadedFile(entry.model + bank, 56)).get();
-        header.at = entry.model + bank;
-        if (cls == kAnimatedClass) header.textureCell = loadedScalar<uint32_t>(header.at + 56);
-        switch (cls) {
-        case kShotClass:
-        case kProjectileClass:
-            actor.flags |= kActorMeshModel;
-            actor.runFlags |= kActorMeshModel;
-            if (cls == kShotClass) bindMeshModel(asShot(actor), header, bank);
-            else bindMeshModel(asProjectile(actor), header, bank);
-            return true;
-        case kStaticClass: bindMeshModel(asStatic(actor), header, bank); return true;
-        case kAnimatedClass: bindAnimatedModel(asAnimated(actor), entry, header, bank); return true;
-        default: return true;
-        }
+        bindEntry(actor, entry, bank);
+        return true;
     }
     if (cls == kAnimatedClass) asAnimated(actor).boneBlocks = 0;
     return false;
+}
+
+bool bindActorModelEntry(Actor& actor, uint32_t entry) {
+    const uint32_t bank = stage().modelBank;
+    if (bank == 0) return false;
+    const FileDataReader records = loadedFile(bank, 4);
+    if (entry >= uint32_t(records.read<int32_t>(0))) return false;
+    bindEntry(actor, FileDataRef<ModelBankEntryData>(records.sub(4 + size_t(entry) * 16)).get(), bank);
+    return true;
 }
 
 void resetModelScale(AnimatedActor& actor) {

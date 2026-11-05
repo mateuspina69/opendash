@@ -159,6 +159,8 @@ struct PlayerView {
 
     // param: FUN_005d5b30's (>= 0: room / stage load, the actors are killed first; < 0: in-stage switch)
     void bindRoomData(const RoomMesh& mesh, int param = 0);
+    // ... the room's files and pointers, before its spawn: all a client holds of a room
+    void bindRoomFiles(const RoomMesh& mesh);
 
     // ---- audio: game/audio_logic (the game's sound logic, bit-exact) -> audio/mixer (SDL3 playback) ------------
     // Boot: Maybe_SoundSystemReset with the masters of the save (0x7f / 0x7f), INIT.DAT's global SFX bank (slot 0).
@@ -245,6 +247,9 @@ struct PlayerView {
     void drawMiss(uint32_t a, od::port::ActorPool pool, const char* why, uint32_t model) const;
     void logEffects();
     bool enterPlay(const RoomMesh& mesh);
+    // A client of a world (ADR 0006, "Client mode"): the room's files bound from the state of the story save, no actor
+    // spawned and no world update; the actors come from the world (game/world_net_state)
+    bool enterRoomAsClient(const RoomMesh& mesh);
     void leavePlay(); // F2 out of play: sessionSave from the live state, then play off
     // FUN_00548910 / FUN_00548bc0 sub-state 0 on OpenDash's saves: 0xa5a248 = the slots present, 0xa7b040 their
     // summary (stage / area / location / play time) for the save menu's slot list

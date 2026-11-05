@@ -556,6 +556,14 @@ void PlayerView::clutAnimationSync(const RoomMesh& mesh, od::Renderer& r) {
 }
 
 void PlayerView::bindRoomData(const RoomMesh& mesh, int param) {
+    bindRoomFiles(mesh);
+    spawnNative(mesh, param); // a branch the port does not cover throws: play stops with the error
+    weaponPolicy();
+    od::port::actorCollisionReset();
+    audioBindRoom(mesh);
+}
+
+void PlayerView::bindRoomFiles(const RoomMesh& mesh) {
     od::port::actorCollisionReset();
     od::port::GameState& game = od::port::gameState();
     game.stage = uint8_t(mesh.stage);
@@ -639,10 +647,6 @@ void PlayerView::bindRoomData(const RoomMesh& mesh, int param) {
     if (od::port::roomDraw().params.value() == kStageParams) activeGrid.roomFlags = 0;
     roomStage = mesh.stage;
     roomSub = mesh.sub;
-    spawnNative(mesh, param); // a branch the port does not cover throws: play stops with the error
-    weaponPolicy();
-    od::port::actorCollisionReset();
-    audioBindRoom(mesh);
 }
 
 void PlayerView::audioInit(const od::Config& cfg, bool device) {
@@ -1236,6 +1240,35 @@ bool PlayerView::enterPlay(const RoomMesh& mesh) {
             !sessionSave.empty() ? "session" : storySave.empty() ? "new game" : "--story-save");
     od::port::gameState().frontEnd = od::port::kFrontEndGame; // a normal game, as startGame
     return startGameFromState(mesh.stage, mesh.sub);
+}
+
+bool PlayerView::enterRoomAsClient(const RoomMesh& mesh) {
+    playError.clear();
+    try {
+        if (!ok || !mesh.roomFile) throw std::runtime_error("no player data / room");
+        od::port::GameState& game = od::port::gameState();
+        if (!storySave.empty()) {
+            od::port::saveImageAt(od::port::kSaveBuf).setBytes(storySave);
+            game.loadSave = 1;
+        } else {
+            game.loadSave = 0;
+            game.entryMode = uint8_t(od::port::EntryMode::NewGame);
+            game.clearRoomToNextStory();
+            game.difficulty = 1;
+        }
+        game.frontEnd = od::port::kFrontEndGame;
+        gameModeInit();
+        const int st = mesh.stage, sb = mesh.sub;
+        game.stage = uint8_t(st);
+        game.room = uint8_t(sb);
+        if (loadRoom) loadRoom(st, sb); // the files of the story's state
+        bindRoomFiles(*room);
+    } catch (const std::exception& e) {
+        playError = e.what();
+        SDL_Log("client room failed: %s", e.what());
+        return false;
+    }
+    return true;
 }
 
 // F2 / --play: Megaman in the browsed room -- the room's spawn (chooseSpawn), --doortest k in front of exit k,

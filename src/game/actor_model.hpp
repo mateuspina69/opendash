@@ -18,6 +18,9 @@ constexpr int kAnyModelVariant = -1;
 // first of any) bound to the actor. false when the bank has no such model (an animated actor's bone blocks are then
 // cleared).
 bool bindActorModel(Actor& actor, int variant);
+// the bank's entry number `entry` bound to the actor, whatever its type: what a client binds (game/world_net_state); false
+// when the bank has no such entry
+bool bindActorModelEntry(Actor& actor, uint32_t entry);
 
 // the animated pool's unit scale (0x200 = 1.0 << the stage shift)
 constexpr int16_t kModelScaleOne = 0x200;

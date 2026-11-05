@@ -254,6 +254,23 @@ uint32_t allocActor20() {
     return actor.at;
 }
 
+ActorHeader& claimActorSlot(uint32_t slot) {
+    const uint32_t cls = actorSlotClass(slot);
+    const uint32_t i = slot - cls;
+    ActorSystemState& s = actorSystem();
+    switch (cls) {
+    case kShotClass: s.shotsLive |= slotBit(i); break;
+    case kAnimatedClass: s.animatedLive |= slotBit(i); break;
+    case kProjectileClass: s.projectilesLive |= slotBit(i); break;
+    case kStaticClass: s.staticsLive[i >> 5] |= slotBit(i); break;
+    default: notAnActorSlot(slot, 0);
+    }
+    ActorHeader& actor = actorHeaderAt(actorBySlot(slot));
+    startSlot(actor, cls == kShotClass ? uint8_t(0) : kActorStageClass);
+    actor.flags = kActorLiveDrawn;
+    return actor;
+}
+
 uint32_t allocSubScreenActor() {
     const int i = takeSlot(actorSystem().animatedLive, AnimatedPool::size(), kAnimatedFieldSlots);
     if (i < 0) return 0;

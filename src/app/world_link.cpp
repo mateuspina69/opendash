@@ -29,6 +29,17 @@ std::vector<uint8_t> encodeWorldMessage(const WorldMessage& m) {
         w.u8(m.players);
         w.u64(m.digest);
         break;
+    case WorldMessageType::NetJoin:
+    case WorldMessageType::NetLeave: w.u8(m.playerId); break;
+    case WorldMessageType::NetAck:
+        w.u8(m.playerId);
+        w.u16(m.netSequence);
+        break;
+    case WorldMessageType::NetEvents:
+    case WorldMessageType::NetUpdate:
+        w.u8(m.playerId);
+        w.blob(m.netState);
+        break;
     default: break;
     }
     return w.take();
@@ -38,7 +49,7 @@ std::optional<WorldMessage> decodeWorldMessage(std::span<const uint8_t> bytes) {
     od::net::ByteReader r(bytes);
     WorldMessage m;
     const uint8_t type = r.u8();
-    if (type < uint8_t(WorldMessageType::Hello) || type > uint8_t(WorldMessageType::StageState)) return std::nullopt;
+    if (type < uint8_t(WorldMessageType::Hello) || type > uint8_t(WorldMessageType::NetUpdate)) return std::nullopt;
     m.type = WorldMessageType(type);
     switch (m.type) {
     case WorldMessageType::Join:
@@ -53,6 +64,17 @@ std::optional<WorldMessage> decodeWorldMessage(std::span<const uint8_t> bytes) {
         m.liveActors = r.u32();
         m.players = r.u8();
         m.digest = r.u64();
+        break;
+    case WorldMessageType::NetJoin:
+    case WorldMessageType::NetLeave: m.playerId = r.u8(); break;
+    case WorldMessageType::NetAck:
+        m.playerId = r.u8();
+        m.netSequence = r.u16();
+        break;
+    case WorldMessageType::NetEvents:
+    case WorldMessageType::NetUpdate:
+        m.playerId = r.u8();
+        m.netState = r.blob();
         break;
     default: break;
     }

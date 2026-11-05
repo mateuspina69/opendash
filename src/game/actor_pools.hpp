@@ -299,6 +299,9 @@ uint32_t allocActorE0();                   // exe 0x5e1440: pool 0xe0 (loop flag
 // exe 0x5e16c0(actor, n): n free bone blocks (from bit 31) given to the actor (its boneBlocks bits, lastBoneBlock = the
 // last one), each bone's colour neutral. false when they run out (the blocks taken so far stay taken).
 bool allocBoneBlocks(AnimatedActor& actor, uint32_t n);
+// A client holds the world's actors in the slots the world says (game/world_net_state): this slot id's slot taken, its bit
+// in the pool's live mask set, its head as an allocation leaves it, live and drawn
+ActorHeader& claimActorSlot(uint32_t slot);
 
 // ---- pending frees (the slot's bit in its pool's pending mask, byte 0 cleared) -------------------------------------
 void freeActor(ShotActor& actor);       // exe 0x5e14d0

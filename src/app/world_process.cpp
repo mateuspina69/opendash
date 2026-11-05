@@ -4,8 +4,10 @@
 #include <SDL3/SDL.h>
 
 #include <algorithm>
+#include <array>
 #include <cstdio>
 #include <exception>
+#include <map>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
@@ -34,6 +36,7 @@
 #include "game/title.hpp"
 #include "game/world_view.hpp"
 #include "game/world_digest.hpp"
+#include "game/world_net_state.hpp"
 
 namespace od::app {
 
@@ -59,6 +62,11 @@ struct WorldArgs {
     int linkPort = 0; // the coordinator's port (app/world_link): its players, until it stops this world
     std::optional<od::port::StageRecord> stageRecord; // what the stage's other worlds hold
     int markDefeated = -1; // test instrument: this enemy id counts as defeated from the first tick on
+    bool client = false;       // the receiver of a world's network state (see runClient)
+    bool keepPlayer = false;   // test instrument: on a link, the world's own player stays, driven by the pad
+    int netTicks = od::port::kNetDefaultUpdateTicks; // the ticks between two updates of the network state
+    std::string poseLog;       // test instrument: each actor's pose per tick, in this local file
+    std::string netStats;      // test instrument: the bytes of the network state for one client, in this local file
 };
 
 // "<ticks> <hex PS1 pad bits>; ..."
@@ -106,6 +114,16 @@ WorldArgs parseArgs(int argc, char** argv) {
             if (!w.stageRecord) throw std::invalid_argument("--stage-record");
         } else if (a == "--world-mark-defeated" && more) {
             w.markDefeated = std::stoi(argv[++i]);
+        } else if (a == "--world-client") {
+            w.client = true;
+        } else if (a == "--world-keep-player") {
+            w.keepPlayer = true;
+        } else if (a == "--world-net-ticks" && more) {
+            w.netTicks = std::max(std::stoi(argv[++i]), 1);
+        } else if (a == "--world-pose-log" && more) {
+            w.poseLog = argv[++i];
+        } else if (a == "--world-net-stats" && more) {
+            w.netStats = argv[++i];
         } else if (a == "--world-host-away") {
             w.hostAway = true;
         } else if (a == "--story-save" && more) {
@@ -135,7 +153,165 @@ void holdRoom(RoomMesh& held, int stage, int sub) {
     held = std::move(mesh);
 }
 
+// A file opened for the test instruments
+struct LocalFile {
+    std::FILE* f = nullptr;
+    explicit LocalFile(const std::string& path, const char* mode = "wb") {
+        if (path.empty()) return;
+#ifdef _WIN32
+        if (fopen_s(&f, path.c_str(), mode) != 0) f = nullptr;
+#else
+        f = std::fopen(path.c_str(), mode);
+#endif
+        if (!f) throw std::runtime_error("cannot write " + path);
+    }
+    ~LocalFile() {
+        if (f) std::fclose(f);
+    }
+    LocalFile(const LocalFile&) = delete;
+    LocalFile& operator=(const LocalFile&) = delete;
+};
+
+// What one client's network state takes, tick by tick (--world-net-stats): the update's period, acknowledged as late as a
+// round trip of about 270 ms would (kAckLagUpdates at 15 a second, no loss), once with what the traffic carries and once with
+// the shots and projectiles as state too
+class NetStats {
+public:
+    static constexpr int kAckLagUpdates = 4;
+    NetStats(std::string path, int every) : path_(std::move(path)), every_(every) {}
+
+    void tick(const od::port::NetWorldTable& table, uint32_t tick) {
+        for (Run& r : runs_) {
+            for (const auto& batch : r.sender.events(table)) {
+                r.eventBytes += batch.size();
+                (tick == 0 ? r.joinEventBytes : r.laterEventBytes) += batch.size();
+            }
+            if (int(tick) % every_ != 0) continue;
+            const std::vector<uint8_t> update = r.sender.update(table);
+            r.updates.push_back(uint32_t(update.size()));
+            r.lastSequence = uint16_t(r.lastSequence + 1);
+            if (r.lastSequence > kAckLagUpdates) r.sender.acknowledge(uint16_t(r.lastSequence - kAckLagUpdates));
+        }
+        size_t live = 0;
+        for (size_t i = 0; i < od::port::kNetSlots; ++i)
+            if (table.actors[i].live && od::port::netSlotVisible(uint8_t(i))) ++live;
+        maxLive_ = std::max(maxLive_, live);
+        occupants_ = table.occupants;
+    }
+
+    void write(uint32_t ticks, size_t playerStateBytes) {
+        LocalFile out(path_);
+        std::fprintf(out.f, "ticks %u every %d liveMax %zu occupants %llu playerState %zu\n", ticks, every_, maxLive_,
+                     (unsigned long long)occupants_, playerStateBytes);
+        for (const Run& r : runs_) {
+            std::fprintf(out.f, "run %s joinEvents %llu laterEvents %llu cut %llu updates", r.name,
+                         (unsigned long long)r.joinEventBytes, (unsigned long long)r.laterEventBytes,
+                         (unsigned long long)r.sender.updatesCut());
+            for (const uint32_t n : r.updates) std::fprintf(out.f, " %u", n);
+            std::fprintf(out.f, "\n");
+        }
+    }
+
+private:
+    struct Run {
+        const char* name;
+        od::port::NetStateSender sender;
+        std::vector<uint32_t> updates{};
+        uint64_t eventBytes = 0, joinEventBytes = 0, laterEventBytes = 0;
+        uint16_t lastSequence = 0;
+    };
+    std::string path_;
+    int every_;
+    size_t maxLive_ = 0;
+    uint64_t occupants_ = 0;
+    std::array<Run, 2> runs_{Run{"visible", od::port::NetStateSender(od::port::netSlotVisible)},
+                             Run{"withShots", od::port::NetStateSender(od::port::netSlotVisibleOrShot)}};
+};
+
+// The receiver of a world's network state: the room's files and each actor's animation, no world update
+int runClient(const WorldArgs& w) {
+    od::Config cfg = od::loadConfig();
+    if (!ensureGameFiles(cfg, false)) return 1;
+    auto view = std::make_unique<PlayerView>();
+    const std::unique_ptr<od::DataSource> data = openData(cfg, *view);
+    od::bindDataSource(data.get());
+    view->stageSubs = stageSubRooms();
+    view->modern = false;
+    view->init(cfg);
+    if (!w.storySave.empty()) {
+        view->storySave = od::readFile(w.storySave);
+        if (view->storySave.size() != od::port::kSaveSize || od::port::saveChecksumBad(view->storySave))
+            throw std::runtime_error("--story-save: bad size / checksum");
+    }
+    RoomMesh current;
+    view->room = &current;
+    view->loadRoom = [&](int st, int sb) { holdRoom(current, st, sb); };
+    holdRoom(current, w.stage, w.sub);
+    if (!view->enterRoomAsClient(current)) {
+        SDL_Log("client: %s", view->playError.c_str());
+        return 1;
+    }
+    if (w.linkPort == 0) throw std::invalid_argument("--world-client needs --world-link");
+    WorldLink link{uint16_t(w.linkPort)};
+    const uint8_t client = 0;
+    link.sendReliable({WorldMessageType::Hello});
+    WorldMessage join{WorldMessageType::NetJoin};
+    join.playerId = client;
+    link.sendReliable(join);
+
+    LocalFile poses(w.poseLog);
+    od::port::PoolNetActors actors;
+    od::port::NetStateClient state(actors);
+    od::port::NetRenderClock clock;
+    const auto acknowledge = [&](std::optional<uint16_t> sequence) {
+        if (!sequence) return;
+        WorldMessage ack{WorldMessageType::NetAck};
+        ack.playerId = client;
+        ack.netSequence = *sequence;
+        link.sendLatest(ack);
+    };
+    bool stopped = false, shownAny = false;
+    uint32_t shown = 0;
+    uint64_t next = SDL_GetTicksNS(), ticks = 0;
+    while (!stopped && (w.ticks == 0 || ticks < w.ticks)) {
+        const uint64_t now = SDL_GetTicksNS();
+        for (const WorldMessage& m : link.poll(now)) {
+            switch (m.type) {
+            case WorldMessageType::NetEvents:
+                if (!state.applyEvents(m.netState)) throw std::runtime_error("client: a bad event batch");
+                acknowledge(state.applyHeld());
+                break;
+            case WorldMessageType::NetUpdate:
+                acknowledge(state.applyUpdate(m.netState));
+                if (state.heard()) clock.heard(state.newestTick());
+                break;
+            case WorldMessageType::Stop: stopped = true; break;
+            default: break;
+            }
+        }
+        if (link.silent(now)) stopped = true;
+        if (clock.running()) {
+            const int64_t at = int64_t(clock.at(now));
+            for (; at >= 0 && (!shownAny || int64_t(shown) < at);) {
+                shown = shownAny ? shown + 1 : uint32_t(at);
+                shownAny = true;
+                state.advance(shown);
+                actors.endTick();
+                if (poses.f) od::port::writeNetPoses(poses.f, shown, od::port::netSlotVisible);
+            }
+        }
+        ++ticks;
+        next += kTickNs;
+        const uint64_t after = SDL_GetTicksNS();
+        if (next > after) SDL_DelayNS(next - after);
+        else next = after;
+    }
+    SDL_Log("client: ended at world tick %u, %zu actors shown", shown, state.shownCount());
+    return 0;
+}
+
 int run(const WorldArgs& w) {
+    if (w.client) return runClient(w);
     od::Config cfg = od::loadConfig();
     if (!ensureGameFiles(cfg, false)) return 1;
     auto view = std::make_unique<PlayerView>();
@@ -186,14 +362,44 @@ int run(const WorldArgs& w) {
     std::unique_ptr<WorldLink> link;
     if (w.linkPort != 0) {
         link = std::make_unique<WorldLink>(uint16_t(w.linkPort));
-        od::port::setWorldHasNoView(true);
-        od::port::leavePlayer(0);
+        if (!w.keepPlayer) {
+            od::port::setWorldHasNoView(true);
+            od::port::leavePlayer(0);
+        }
         link->sendReliable({WorldMessageType::Hello});
     }
     bool stopped = false;
     if (w.markDefeated >= 0) od::port::encounterState().defeated[size_t(w.markDefeated) >> 5] |= 0x80000000u >> (w.markDefeated & 0x1f);
     od::port::StageRecord lastRecord{}; // what the coordinator was last told; a first change goes out at once
     if (w.stageRecord) lastRecord = *w.stageRecord;
+    // the network state: one sender per client
+    std::map<uint8_t, od::port::NetStateSender> netClients;
+    std::unique_ptr<od::port::NetWorldTable> netTable;
+    const LocalFile poses(w.poseLog);
+    std::unique_ptr<NetStats> netStats;
+    if (link || !w.netStats.empty()) netTable = std::make_unique<od::port::NetWorldTable>();
+    if (!w.netStats.empty()) netStats = std::make_unique<NetStats>(w.netStats, w.netTicks);
+    const auto netTurn = [&](uint32_t netTick) {
+        if (poses.f) od::port::writeNetPoses(poses.f, netTick, od::port::netSlotVisible);
+        if (!netTable) return;
+        // every tick from the first, whoever is connected: a client that joins later is told how long ago each animation
+        // started
+        od::port::captureNetWorld(*netTable, netTick);
+        if (netStats) netStats->tick(*netTable, netTick);
+        for (auto& [client, sender] : netClients) {
+            for (auto& batch : sender.events(*netTable)) {
+                WorldMessage events{WorldMessageType::NetEvents};
+                events.playerId = client;
+                events.netState = std::move(batch);
+                link->sendReliable(events);
+            }
+            if (int(netTick) % w.netTicks != 0) continue;
+            WorldMessage update{WorldMessageType::NetUpdate};
+            update.playerId = client;
+            update.netState = sender.update(*netTable);
+            link->sendLatest(update);
+        }
+    };
     const auto linkTurn = [&](uint64_t tick) {
         const uint64_t now = SDL_GetTicksNS();
         for (const WorldMessage& m : link->poll(now)) {
@@ -215,6 +421,11 @@ int run(const WorldArgs& w) {
                     od::port::applyStageRecord(*record);
                     lastRecord = od::port::captureStageRecord(); // no echo of what came from the others
                 }
+                break;
+            case WorldMessageType::NetJoin: netClients.try_emplace(m.playerId); break;
+            case WorldMessageType::NetLeave: netClients.erase(m.playerId); break;
+            case WorldMessageType::NetAck:
+                if (const auto c = netClients.find(m.playerId); c != netClients.end()) c->second.acknowledge(m.netSequence);
                 break;
             case WorldMessageType::Stop: stopped = true; break;
             default: break;
@@ -251,6 +462,7 @@ int run(const WorldArgs& w) {
         if (!w.hostAway)
             for (const WorldArgs::Guest& g : w.guests) od::port::remotePlayerState(g.id, guestState(g));
         view->playTick(pad, 128, 128, lx, ly);
+        netTurn(uint32_t(tick));
         if (view->assetsDirty) {
             view->assetsDirty = false;
             g_inStageSwitch = true;
@@ -273,6 +485,7 @@ int run(const WorldArgs& w) {
             else next = after; // late: no burst to catch up, the tick rate falls
         }
     }
+    if (netStats) netStats->write(uint32_t(tick), od::port::encodePlayerState({}).size());
     const int rc = view->playError.empty() ? 0 : 1;
     if (rc != 0) SDL_Log("world: stopped at tick %llu: %s", (unsigned long long)tick, view->playError.c_str());
     else SDL_Log("world: ended after %llu ticks", (unsigned long long)tick);
@@ -294,7 +507,8 @@ int runWorldProcess(int argc, char** argv) {
     try {
         const WorldArgs w = parseArgs(argc, argv);
         char log[48];
-        std::snprintf(log, sizeof log, "opendash-world-ST%02X-%d.log", w.stage, w.sub);
+        std::snprintf(log, sizeof log, w.client ? "opendash-client-ST%02X-%d.log" : "opendash-world-ST%02X-%d.log", w.stage,
+                      w.sub);
         startLogFile(log);
         od::content::registerAll(); // the game code dispatches into the content through its registry
         if (!SDL_Init(0)) throw std::runtime_error(SDL_GetError());
