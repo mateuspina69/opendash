@@ -8,6 +8,7 @@
 #include "game/distances.hpp"
 #include "game/encounter.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 
 namespace od::port {
 
@@ -129,7 +130,7 @@ int headingFromOther(const Actor& actor, const Actor& other, uint8_t side, int r
 }
 
 int headingFromPlayer(const Actor& actor, uint8_t side, int nearDistance, int farDistance) {
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     const int angle = angleOf(p.pos, actor.pos);
     const int dx = int(actor.pos.x.whole) - p.pos.x.whole, dz = int(actor.pos.z.whole) - p.pos.z.whole;
     const int d = isqrt(int32_t(uint32_t(dz * dz) + uint32_t(dx * dx)));

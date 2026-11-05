@@ -19,6 +19,7 @@
 #include "game/game_state.hpp"
 #include "game/matrix.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/projection.hpp"
 #include "game/projection_state.hpp"
@@ -264,6 +265,29 @@ bool inZone(const Fixed16Vec3& pos, const EncounterZone& z, uint32_t type) {
     if (uint32_t(int32_t(pos.x.whole >> 9) - int32_t(z.cellX)) >= z.width) return false;
     return uint32_t(int32_t(pos.z.whole >> 9) - int32_t(z.cellZ)) < z.depth;
 }
+// a player in the session stands in the zone (the lowest id into `who`)
+bool anyPlayerInZone(const EncounterZone& z, uint32_t type, uint8_t& who) {
+    bool found = false;
+    forEachPlayer([&](const Player& p) {
+        if (!found && inZone(p.pos, z, type)) {
+            found = true;
+            who = uint8_t(playerId(p));
+        }
+    });
+    return found;
+}
+// every player in the session stands in the zone
+bool allPlayersInZone(const EncounterZone& z, uint32_t type) {
+    bool all = true;
+    forEachPlayer([&](const Player& p) { all = all && inZone(p.pos, z, type); });
+    return all;
+}
+// the player who set a slot off, while they are in the session; else the one player every session has
+Player& slotPlayer(const EncounterSlot& slot) {
+    return playerPresent(slot.triggeredBy) ? playerById(slot.triggeredBy) : player();
+}
+int8_t& cellXOf(EncounterSlot& slot, size_t id) { return id == 0 ? slot.cellX : slot.otherCellX[id - 1]; }
+int8_t& cellZOf(EncounterSlot& slot, size_t id) { return id == 0 ? slot.cellZ : slot.otherCellZ[id - 1]; }
 // the first zone record of the slot's room
 uint32_t roomZones(const EncounterSlot& slot) {
     return dataScalar<uint32_t>(encounterState().zoneTables + uint32_t(slot.room) * 4);
@@ -279,7 +303,7 @@ void zoneFight(EncounterSlot& slot) {
         if (dataRecord<EncounterZone>(at, EncounterZone::kBytes).marker == kZoneEnd) return;
         for (;; at += kZoneSize) {
             const EncounterZone z = dataRecord<EncounterZone>(at, EncounterZone::kBytes);
-            if (uint8_t(z.group) == slot.group && inZone(player().pos, z, kZoneExit)) {
+            if (uint8_t(z.group) == slot.group && allPlayersInZone(z, kZoneExit)) { // the fight ends once all are out
                 end = true;
                 break;
             }
@@ -296,7 +320,7 @@ void zoneWait(EncounterSlot& slot) {
     if ((encounterState().control & kZonesSuspended) || transitionRequest().state != kTransitionNone ||
         dataRecord<EncounterZone>(at, EncounterZone::kBytes).marker == kZoneEnd)
         return;
-    while (!inZone(player().pos, dataRecord<EncounterZone>(at, EncounterZone::kBytes), kZoneTrigger)) {
+    while (!anyPlayerInZone(dataRecord<EncounterZone>(at, EncounterZone::kBytes), kZoneTrigger, slot.triggeredBy)) {
         at += kZoneSize;
         if (dataRecord<EncounterZone>(at, EncounterZone::kBytes).marker == kZoneEnd) return;
     }
@@ -409,7 +433,7 @@ uint32_t pickFieldFormation(EncounterSlot& slot) {
         loadProjectionTranslation(s.transform);
         break;
     case kFormationTurnPlayer:
-        s.point = player().rotation;
+        s.point = slotPlayer(slot).rotation;
         if (s.point.x > 0) s.point.x = 0;
         s.point.x = int16_t(s.point.x - kPlayerPitchLift);
         s.transform.setRotationYXZ(s.point);
@@ -533,7 +557,10 @@ void fieldStart(EncounterSlot& slot) {
 // (despawn) at 0; otherwise the ticks reset (the facing case leaves them). 0 / -1
 int fieldKeepTest(ActorHeader& a, TrackedActor& entry, uint32_t radius2, uint16_t ticks) {
     ProjectionScratch& s = projectionScratch();
-    const Player& p = player();
+    Fixed16Vec3 keptAt;
+    keptAt.x = int32_t(uint32_t(int32_t(s.point.x)) << 16);
+    keptAt.z = int32_t(uint32_t(int32_t(s.point.z)) << 16);
+    const Player& p = nearestPlayer(keptAt);
     const uint8_t runFlags = a.runFlags & uint8_t(~kActorOffScreen);
     a.runFlags = runFlags;
     loadProjectionPoint(s.point);
@@ -639,9 +666,12 @@ uint8_t fieldTrack(EncounterSlot& slot) {
 // and move-direction yaw) kept, Waves; the cell kept
 void fieldRoam(EncounterSlot& slot) {
     if (encounterState().control & kFieldSuspended) return;
-    const Player& p = player();
+    bool rolled = false;
+    forEachPlayer([&](const Player& p) { // each player's steps count (the user's rule); the first roll stops the rest
+    if (rolled) return;
+    const size_t id = playerId(p);
     const int32_t cx = int32_t(p.pos.x.whole) >> 9, cz = int32_t(p.pos.z.whole) >> 9;
-    if (int32_t(slot.cellX) != cx || int32_t(slot.cellZ) != cz) {
+    if (int32_t(cellXOf(slot, id)) != cx || int32_t(cellZOf(slot, id)) != cz) {
         const uint8_t steps = uint8_t(slot.steps + 1u);
         slot.steps = steps;
         if (steps == fieldStageCells[slot.stepIndex]) ++slot.stepIndex;
@@ -654,16 +684,19 @@ void fieldRoam(EncounterSlot& slot) {
             slot.rollPitch = p.rotation.x;
             slot.rollYaw = p.rotation.y;
             slot.rollMoveYaw = p.directionOffset.y;
+            slot.triggeredBy = uint8_t(id);
             slot.enterState(uint8_t(FieldState::Waves));
+            rolled = true;
         }
     }
-    slot.cellX = int8_t(cx);
-    slot.cellZ = int8_t(cz);
+    cellXOf(slot, id) = int8_t(cx);
+    cellZOf(slot, id) = int8_t(cz);
+    });
 }
 // exe 0x5106e0 (LastWave): the anchor follows the player; the tracking (exe 0x510750) down to 0 -> armed again (Arm),
 // the level up (nobody went down, below the top) or down (someone did, above 0), a calm battle music request
 void fieldEnd(EncounterSlot& slot) {
-    const Player& p = player();
+    const Player& p = slotPlayer(slot);
     slot.anchor.x = p.pos.x.whole;
     slot.anchor.y = p.pos.y.whole;
     slot.anchor.z = p.pos.z.whole;
@@ -693,12 +726,13 @@ void fieldSlot(EncounterSlot& slot) {
         e.battleMusicOn = 0;
         break;
     case FieldState::Arm: { // exe 0x50ff50
-        const Player& p = player();
         slot.steps = 0;
         slot.stepIndex = 0;
         slot.pause = 0;
-        slot.cellX = int8_t(int32_t(p.pos.x.whole) >> 9);
-        slot.cellZ = int8_t(int32_t(p.pos.z.whole) >> 9);
+        forEachPlayer([&](const Player& p) {
+            cellXOf(slot, playerId(p)) = int8_t(int32_t(p.pos.x.whole) >> 9);
+            cellZOf(slot, playerId(p)) = int8_t(int32_t(p.pos.z.whole) >> 9);
+        });
         slot.enterState(uint8_t(FieldState::Roam));
         break;
     }
@@ -1150,7 +1184,7 @@ int encounterFieldBearing(const Actor& actor, int16_t& pitch, int16_t& yaw) {
     const EncounterSlot& slot = e.slots[uint8_t(i)];
     const int16_t roll = slot.rollPitch;
     const int32_t level = roll > 0 ? 0 : roll;
-    const Player& p = player();
+    const Player& p = slotPlayer(slot);
     const int32_t dz = int32_t(uint32_t(p.pos.z) - uint32_t(actor.pos.z));
     const int32_t dy = int32_t(uint32_t(p.pos.y) - uint32_t(actor.pos.y));
     pitch = int16_t(angleDiff(uint32_t(atanAngle(float(dy), float(dz))), uint32_t(level))); // exe 0x40b960, 0x5e3d80
@@ -1160,7 +1194,9 @@ int encounterFieldBearing(const Actor& actor, int16_t& pitch, int16_t& yaw) {
 
 void encounterPlaceAroundPlayer(Actor& actor, int distance, int pitch, int yaw) {
     static constexpr int32_t kNoTranslation[3] = {0, 0, 0};
-    const Player& p = player();
+    const EncounterState& e = encounterState();
+    const int8_t field = e.slotOfKind[uint32_t(EncounterKind::Field)];
+    const Player& p = field >= 0 ? slotPlayer(e.slots[uint8_t(field)]) : player();
     const int16_t look = p.rotation.x;
     const int16_t turnX = int16_t(look < 0 ? int(look) + pitch : pitch);
     const int16_t turnY = int16_t(uint16_t(p.rotation.y) + uint32_t(yaw));

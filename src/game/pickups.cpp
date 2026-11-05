@@ -85,8 +85,7 @@ int amountMultiplier() {
 
 // exe 0x562740: the vacuum arm's pull (the player's suction byte & 2): within the weapon's range the pickup moves to
 // the player by (level + 1) * 0x80 a tick (above level 2 it jumps there and the pull ends); 1 = pulled
-int vacuumPull(StaticActor& actor) {
-    Player& p = player();
+int vacuumPullBy(StaticActor& actor, Player& p) {
     const int w = p.activeSpecial;
     if (!(p.suction & kVacuumPulls)) return 0;
     const int range = weaponStat(p, w, WeaponStat::Range);
@@ -108,6 +107,14 @@ int vacuumPull(StaticActor& actor) {
     integrateVelocity(actor, 0, 0, (level + 1) * 0x80);
     actor.rotation.y = yaw;
     return 1;
+}
+// the first player whose vacuum arm reaches the pickup pulls it
+int vacuumPull(StaticActor& actor) {
+    int pulled = 0;
+    forEachPlayer([&](Player& p) {
+        if (!pulled) pulled = vacuumPullBy(actor, p);
+    });
+    return pulled;
 }
 
 // the wall / floor reflection of exe 0x562440 / 0x5624f0: a bounce off a floor halves the speed; slow enough it
@@ -149,11 +156,11 @@ void give(const StaticActor& actor, const PickupFields& pickup) {
         soundPlayAtPos(kZennySound, actor.pos);
         break;
     case PickupKind::WeaponEnergy:
-        weaponEnergyAdd(player(), energyAmounts[size] * mult >> 4);
+        weaponEnergyAdd(actingPlayer(), energyAmounts[size] * mult >> 4);
         soundPlayAtPos(kRefillSound, actor.pos);
         break;
     case PickupKind::Life:
-        hitPointsAdd(player(), wrap16(lifeAmounts[size] * mult >> 4));
+        hitPointsAdd(actingPlayer(), wrap16(lifeAmounts[size] * mult >> 4));
         soundPlayAtPos(kRefillSound, actor.pos);
         break;
     default: break;
@@ -325,7 +332,7 @@ void pickupUpdate(const PlayerEnv& env, uint32_t address) {
         break;
     }
     case PickupState::Collected: {
-        const Player& p = player();
+        const Player& p = actingPlayer(); // who took it (ownerPlayer, below)
         actor.pos.x = p.pos.x;
         actor.pos.y = int32_t(uint32_t(p.pos.y) - kCollectLift);
         actor.pos.z = p.pos.z;
@@ -357,7 +364,13 @@ void pickupUpdate(const PlayerEnv& env, uint32_t address) {
             actor.pos.y = int32_t(uint32_t(ground) << 16);
     }
     if (actor.state < uint8_t(PickupState::Collected)) {
-        if (distance3(actor.pos, nearestPlayer(actor.pos).pos) < kCollectReach && player().hitPoints >= 0) {
+        // who touches it takes it: the life and the energy are theirs; of two in reach, the lower id
+        const Player* taker = nullptr;
+        forEachPlayer([&](const Player& p) {
+            if (!taker && distance3(actor.pos, p.pos) < kCollectReach && p.hitPoints >= 0) taker = &p;
+        });
+        if (taker) {
+            actor.ownerPlayer = uint8_t(playerId(*taker));
             actor.state = uint8_t(PickupState::Collected);
         } else if (!storyFlag(kFlagPickupsStay)) {
             const uint16_t t = uint16_t(pickup.timeout - 1);

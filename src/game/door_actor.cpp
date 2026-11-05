@@ -11,6 +11,7 @@
 #include "game/message.hpp"
 #include "game/event.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/story_flags.hpp"
 #include "game/transition_state.hpp"
 
@@ -61,11 +62,15 @@ void doorUpdate(StaticActor& actor) {
         [[fallthrough]];
     }
     case DoorState::Closed: {
-        const uint32_t facing = (uint16_t(player().rotation.y) + kFacingBias) & kAngleMask;
         const uint32_t back = (uint16_t(actor.rotation.y) - uint32_t(kHalfTurn)) & kAngleMask;
-        int d = int(facing) - int(back);
-        if (d < 0) d = int(back) - int(facing);
-        if (d < kFacingWindow && player().talksTo(actor) && eventState().active == 0) {
+        bool asked = false; // a player facing the door whose talk target it is
+        forEachPlayer([&](const Player& p) {
+            const uint32_t facing = (uint16_t(p.rotation.y) + kFacingBias) & kAngleMask;
+            int d = int(facing) - int(back);
+            if (d < 0) d = int(back) - int(facing);
+            asked = asked || (d < kFacingWindow && p.talksTo(actor));
+        });
+        if (asked && eventState().active == 0) {
             const bool locked = storyFlag(uint32_t(int32_t(door.lock) + int32_t(kFlagLocked)));
             const int8_t message = locked ? door.lockedMessage : door.message;
             eventStartAt(0, nullptr, 0, 0, uint16_t(int16_t(message))); // exe 0x543b40

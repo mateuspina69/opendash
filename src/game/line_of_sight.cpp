@@ -9,6 +9,7 @@
 #include "game/angles.hpp"
 #include "game/distances.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/stage_state.hpp"
 #include "game/vectors.hpp"
 
@@ -41,7 +42,7 @@ uint8_t ownerFlags(int8_t slot) {
 int actorPointOfSlot(uint32_t slot, uint32_t bone, int16_t out[3]) {
     switch (actorSlotClass(slot)) {
     case kPlayerClass: {
-        const ShortVec3& p = player().bonePoints[bone];
+        const ShortVec3& p = playerById(size_t(playerIdAtAddress(actorBySlot(slot)))).bonePoints[bone];
         out[0] = p.x;
         out[1] = p.y;
         out[2] = p.z;

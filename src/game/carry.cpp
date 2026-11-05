@@ -16,6 +16,7 @@
 #include "game/hud.hpp"
 #include "game/player/player_input.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/shop.hpp"
 #include "game/sky_layers.hpp"
@@ -42,18 +43,22 @@ void stopRiding(const ActorHeader& platform, Actor& rider) {
 } // namespace
 
 bool playerLiftTargetCheck(const Actor& actor, uint8_t mode) { // exe 0x573a60
-    Player& p = player();
-    if (p.airborne != 0 || !p.interactionTarget.is(actor, kInteractLiftMode)) return false;
+    Player* lifter = nullptr; // the first on the ground whose interaction target this is
+    forEachPlayer([&](Player& p) {
+        if (!lifter && p.airborne == 0 && p.interactionTarget.is(actor, kInteractLiftMode)) lifter = &p;
+    });
+    if (!lifter) return false;
     if (mode != kLiftQueryOnly) {
-        p.liftMode = mode;
-        p.subState = uint8_t(PlayerSub::Lift);
-        p.enterStep(0);
+        lifter->liftMode = mode;
+        lifter->subState = uint8_t(PlayerSub::Lift);
+        lifter->enterStep(0);
+        const_cast<Actor&>(actor).ownerPlayer = uint8_t(playerId(*lifter)); // the slot is the pool's
     }
     return true;
 }
 
 void carryAtHands(Actor& actor, int x, int y, int z) { // exe 0x573ab0
-    const Player& p = player();
+    const Player& p = actingPlayer(); // the carrier
     const int yaw = uint16_t(p.rotation.y) & kAngleMask;
     const int sn = fixedSin(yaw), c = fixedCos(yaw);
     int32_t ox = 0, oz = 0;
@@ -74,7 +79,7 @@ void carryAtHands(Actor& actor, int x, int y, int z) { // exe 0x573ab0
 }
 
 CarryRelease carryReleased() { // exe 0x573950
-    const Player& p = player();
+    const Player& p = actingPlayer(); // the carrier
     const PlayerSub sub = p.sub();
     if (sub == PlayerSub::KnockBack || sub == PlayerSub::KnockDown || (sub == PlayerSub::Lift && p.airborne != 0))
         return CarryRelease::Dropped;
@@ -82,7 +87,7 @@ CarryRelease carryReleased() { // exe 0x573950
 }
 
 void carryDropFromPlayer(Actor& actor) { // exe 0x573990
-    const Player& p = player();
+    const Player& p = actingPlayer(); // the carrier
     const BoxAccess box = *actor.collisionBox, playerBox = *p.collisionBox;
     const int16_t bx = box.maxX, px = playerBox.maxX;
     if (px >= bx && playerBox.maxZ >= box.maxZ) {
@@ -100,12 +105,13 @@ void carryDropFromPlayer(Actor& actor) { // exe 0x573990
 }
 
 bool playerRides(const ActorHeader& actor) {
-    const Player& p = player();
-    return p.onPlatform != 0 && p.platform.get() == &actor;
+    bool rides = false;
+    forEachPlayer([&](const Player& p) { rides = rides || (p.onPlatform != 0 && p.platform.get() == &actor); });
+    return rides;
 }
 
 void actorDetachRiders(const ActorHeader& platform) { // exe 0x414e70
-    stopRiding(platform, player());
+    forEachPlayer([&](Player& p) { stopRiding(platform, p); });
     ActorSystemState& s = actorSystem();
     for (uint32_t i = 0; i < kAnimatedFieldSlots; ++i)
         if (int32_t(s.animatedLive << i) < 0) stopRiding(platform, animatedPool()[i]);

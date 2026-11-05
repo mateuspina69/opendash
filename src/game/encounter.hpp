@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "engine/routine_ids.hpp"
+#include "game/player/player_state.hpp"
 #include "game/loaded_data.hpp"
 #include "game/actor_movement.hpp"
 #include "game/actor_state.hpp"
@@ -82,6 +83,11 @@ struct EncounterSlot {
     uint8_t level = 0;     // the field's encounter level (0..kFieldTopLevel)
     uint8_t stepIndex = 0; // the field's walk stage (the odds rise with it)
     uint8_t unread1f = 0;  // (no reader)
+    // OpenDash's co-op: the id of the player who set this slot off; the last cell of the other players (cellX / cellZ
+    // are player 0's): each player's steps count for the field's roll
+    uint8_t triggeredBy = 0;
+    std::array<int8_t, kPlayerSlots - 1> otherCellX{};
+    std::array<int8_t, kPlayerSlots - 1> otherCellZ{};
 
     // the state s, its wave step cleared (the exe's word store at +2)
     void enterState(uint8_t s) {
