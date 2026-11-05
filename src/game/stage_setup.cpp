@@ -1,5 +1,6 @@
 // The stage and room setup's template (see stage_setup.hpp).
 #include "game/stage_setup.hpp"
+#include "game/stage_record.hpp"
 
 #include <cstdio>
 
@@ -205,7 +206,7 @@ void stageSetup() {
         for (const EncounterRest& r : rest)
             if (r.kind == EncounterRestKind::Write)
                 writeStageGlobal(r.global, st, r.routine);
-        encounterStageLayout(st);
+        if (!hasStartingStageRecord()) encounterStageLayout(st); // else the stage's other worlds drew it
         for (const EncounterRest& r : rest)
             if (r.kind == EncounterRestKind::Call && r.routine == kEncounterSlotsSetupRoutine)
                 encounterSlotsSetup(r.a0);

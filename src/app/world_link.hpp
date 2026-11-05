@@ -17,12 +17,16 @@ namespace od::app {
 
 // Coordinator -> world: Join {id, player state}, State {id, player state}, Leave {id}, Stop, KeepAlive.
 // World -> coordinator: Hello, Report {tick, live actors, players in the world, digest}.
-enum class WorldMessageType : uint8_t { Hello = 1, Join = 2, State = 3, Leave = 4, Stop = 5, KeepAlive = 6, Report = 7 };
+// Both ways: StageState {the stage's record: game/stage_record}.
+enum class WorldMessageType : uint8_t {
+    Hello = 1, Join = 2, State = 3, Leave = 4, Stop = 5, KeepAlive = 6, Report = 7, StageState = 8
+};
 
 struct WorldMessage {
     WorldMessageType type = WorldMessageType::KeepAlive;
     uint8_t playerId = 0;
     std::vector<uint8_t> playerState; // Join, State: game/player/player_snapshot's encodePlayerState
+    std::vector<uint8_t> stageRecord; // StageState: game/stage_record's encodeStageRecord
     uint64_t tick = 0;                // Report
     uint32_t liveActors = 0;
     uint8_t players = 0;

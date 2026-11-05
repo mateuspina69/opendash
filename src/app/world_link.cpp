@@ -22,6 +22,7 @@ std::vector<uint8_t> encodeWorldMessage(const WorldMessage& m) {
         w.blob(m.playerState);
         break;
     case WorldMessageType::Leave: w.u8(m.playerId); break;
+    case WorldMessageType::StageState: w.blob(m.stageRecord); break;
     case WorldMessageType::Report:
         w.u64(m.tick);
         w.u32(m.liveActors);
@@ -37,7 +38,7 @@ std::optional<WorldMessage> decodeWorldMessage(std::span<const uint8_t> bytes) {
     od::net::ByteReader r(bytes);
     WorldMessage m;
     const uint8_t type = r.u8();
-    if (type < uint8_t(WorldMessageType::Hello) || type > uint8_t(WorldMessageType::Report)) return std::nullopt;
+    if (type < uint8_t(WorldMessageType::Hello) || type > uint8_t(WorldMessageType::StageState)) return std::nullopt;
     m.type = WorldMessageType(type);
     switch (m.type) {
     case WorldMessageType::Join:
@@ -46,6 +47,7 @@ std::optional<WorldMessage> decodeWorldMessage(std::span<const uint8_t> bytes) {
         m.playerState = r.blob();
         break;
     case WorldMessageType::Leave: m.playerId = r.u8(); break;
+    case WorldMessageType::StageState: m.stageRecord = r.blob(); break;
     case WorldMessageType::Report:
         m.tick = r.u64();
         m.liveActors = r.u32();

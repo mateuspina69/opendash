@@ -27,6 +27,8 @@
 #include "engine/ps1_data_source.hpp"
 #include "game/demo_playback.hpp"
 #include "game/display.hpp"
+#include "game/encounter.hpp"
+#include "game/stage_record.hpp"
 #include "game/player/player_snapshot.hpp"
 #include "game/player/remote_player.hpp"
 #include "game/title.hpp"
@@ -54,6 +56,8 @@ struct WorldArgs {
     std::vector<Guest> guests;
     bool hostAway = false;
     int linkPort = 0; // the coordinator's port (app/world_link): its players, until it stops this world
+    std::optional<od::port::StageRecord> stageRecord; // what the stage's other worlds hold
+    int markDefeated = -1; // test instrument: this enemy id counts as defeated from the first tick on
 };
 
 // "<ticks> <hex PS1 pad bits>; ..."
@@ -93,6 +97,14 @@ WorldArgs parseArgs(int argc, char** argv) {
             w.guests.push_back(g);
         } else if (a == "--world-link" && more) {
             w.linkPort = std::stoi(argv[++i]);
+        } else if (a == "--stage-record" && more) {
+            const std::string hex = argv[++i];
+            std::vector<uint8_t> bytes;
+            for (size_t k = 0; k + 1 < hex.size(); k += 2) bytes.push_back(uint8_t(std::stoi(hex.substr(k, 2), nullptr, 16)));
+            w.stageRecord = od::port::decodeStageRecord(bytes);
+            if (!w.stageRecord) throw std::invalid_argument("--stage-record");
+        } else if (a == "--world-mark-defeated" && more) {
+            w.markDefeated = std::stoi(argv[++i]);
         } else if (a == "--world-host-away") {
             w.hostAway = true;
         } else if (a == "--story-save" && more) {
@@ -149,6 +161,7 @@ int run(const WorldArgs& w) {
     view->gameOver = [&] { od::port::gameOverModeFrame(view->fadeTask); };
     view->afterFrame = [&] { od::port::softResetFrame(view->fadeTask); };
     holdRoom(current, w.stage, w.sub);
+    if (w.stageRecord) od::port::setStartingStageRecord(*w.stageRecord);
 
     // the boot's display state, which no title sets here (App::leaveTitle)
     od::port::display().mode = 0;
@@ -176,6 +189,9 @@ int run(const WorldArgs& w) {
         link->sendReliable({WorldMessageType::Hello});
     }
     bool stopped = false;
+    if (w.markDefeated >= 0) od::port::encounterState().defeated[size_t(w.markDefeated) >> 5] |= 0x80000000u >> (w.markDefeated & 0x1f);
+    od::port::StageRecord lastRecord{}; // what the coordinator was last told; a first change goes out at once
+    if (w.stageRecord) lastRecord = *w.stageRecord;
     const auto linkTurn = [&](uint64_t tick) {
         const uint64_t now = SDL_GetTicksNS();
         for (const WorldMessage& m : link->poll(now)) {
@@ -192,6 +208,12 @@ int run(const WorldArgs& w) {
                 if (m.playerId < od::port::kPlayerSlots && od::port::playerIsRemote(m.playerId))
                     od::port::remotePlayerLeave(m.playerId);
                 break;
+            case WorldMessageType::StageState:
+                if (const auto record = od::port::decodeStageRecord(m.stageRecord)) {
+                    od::port::applyStageRecord(*record);
+                    lastRecord = od::port::captureStageRecord(); // no echo of what came from the others
+                }
+                break;
             case WorldMessageType::Stop: stopped = true; break;
             default: break;
             }
@@ -199,6 +221,12 @@ int run(const WorldArgs& w) {
         if (link->silent(now)) {
             SDL_Log("world: the coordinator went silent");
             stopped = true;
+        }
+        if (const od::port::StageRecord now_ = od::port::captureStageRecord(); now_ != lastRecord) {
+            lastRecord = now_;
+            WorldMessage changed{WorldMessageType::StageState};
+            changed.stageRecord = od::port::encodeStageRecord(now_);
+            link->sendReliable(changed);
         }
         WorldMessage report{WorldMessageType::Report};
         const od::port::WorldDigest digest = od::port::worldDigest();

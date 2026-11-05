@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "app/world_link.hpp"
+#include "game/stage_record.hpp"
 
 struct SDL_Process;
 
@@ -51,6 +52,8 @@ public:
     std::optional<WorldRoom> roomOf(uint8_t playerId) const { return playerRoom_.at(playerId); }
     // the room's world's last report (none before its first, or with no world)
     std::optional<WorldReport> report(WorldRoom room) const;
+    // the stage's record while someone is in the stage (none once it has emptied: its enemies are back)
+    std::optional<od::port::StageRecord> stageRecord(int stage) const;
 
 private:
     struct World {
@@ -63,11 +66,13 @@ private:
     };
     World& worldOf(WorldRoom room);
     void removeFromWorld(uint8_t playerId);
+    void dropEmptiedStage(int stage);
 
     std::filesystem::path exe_, storySave_;
     std::map<WorldRoom, std::unique_ptr<World>> worlds_;
     std::vector<std::unique_ptr<World>> stopping_; // told to stop, waiting for the process to end
     std::array<std::optional<WorldRoom>, kPlayers> playerRoom_{};
+    std::map<int, od::port::StageRecord> stageRecords_;
 };
 
 } // namespace od::app

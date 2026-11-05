@@ -49,6 +49,16 @@ WorldHost::World& WorldHost::worldOf(WorldRoom room) {
     std::snprintf(port, sizeof port, "%u", unsigned(world->link.port()));
     const std::string exe = exe_.string(), save = storySave_.string();
     std::vector<const char*> args = {exe.c_str(), "--world", stage, sub, "--world-link", port};
+    std::string recordHex; // a world started on a stage in use takes what the stage's other worlds hold
+    if (const auto it = stageRecords_.find(room.stage); it != stageRecords_.end()) {
+        char byte[3];
+        for (const uint8_t b : od::port::encodeStageRecord(it->second)) {
+            std::snprintf(byte, sizeof byte, "%02x", unsigned(b));
+            recordHex += byte;
+        }
+        args.push_back("--stage-record");
+        args.push_back(recordHex.c_str());
+    }
     if (!save.empty()) {
         args.push_back("--story-save");
         args.push_back(save.c_str());
@@ -58,6 +68,12 @@ WorldHost::World& WorldHost::worldOf(WorldRoom room) {
     if (!world->process) throw std::runtime_error(std::string("world process: ") + SDL_GetError());
     SDL_Log("coordinator: world ST%s sub %s started", stage, sub);
     return *worlds_.emplace(room, std::move(world)).first->second;
+}
+
+void WorldHost::dropEmptiedStage(int stage) {
+    for (const auto& [room, world] : worlds_)
+        if (room.stage == stage) return;
+    if (stageRecords_.erase(stage)) SDL_Log("coordinator: ST%02X emptied, its enemies are back", unsigned(stage));
 }
 
 void WorldHost::removeFromWorld(uint8_t playerId) {
@@ -78,12 +94,13 @@ void WorldHost::removeFromWorld(uint8_t playerId) {
     SDL_Log("coordinator: world ST%02X sub %d stopping", unsigned(was->stage), was->sub);
     stopping_.push_back(std::move(it->second));
     worlds_.erase(it);
+    dropEmptiedStage(was->stage);
 }
 
 void WorldHost::enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& playerState) {
     if (playerRoom_.at(playerId) == room) return;
+    World& world = worldOf(room); // before the old world goes: a move inside a stage does not empty it
     removeFromWorld(playerId);
-    World& world = worldOf(room);
     WorldMessage m{WorldMessageType::Join};
     m.playerId = playerId;
     m.playerState = playerState;
@@ -106,8 +123,21 @@ void WorldHost::leave(uint8_t playerId) { removeFromWorld(playerId); }
 void WorldHost::poll(uint64_t nowNs) {
     for (auto it = worlds_.begin(); it != worlds_.end();) {
         World& world = *it->second;
-        for (const WorldMessage& m : world.link.poll(nowNs))
+        for (const WorldMessage& m : world.link.poll(nowNs)) {
             if (m.type == WorldMessageType::Report) world.report = WorldReport{m.tick, m.liveActors, m.players, m.digest};
+            if (m.type != WorldMessageType::StageState) continue;
+            const auto changed = od::port::decodeStageRecord(m.stageRecord);
+            if (!changed) continue;
+            const int stage = it->first.stage;
+            const auto held = stageRecords_.find(stage);
+            const od::port::StageRecord merged =
+                held == stageRecords_.end() ? *changed : od::port::mergeStageRecord(held->second, *changed);
+            stageRecords_[stage] = merged;
+            WorldMessage out{WorldMessageType::StageState}; // to the stage's other worlds
+            out.stageRecord = od::port::encodeStageRecord(merged);
+            for (auto& [room, other] : worlds_)
+                if (room.stage == stage && other.get() != &world) other->link.sendReliable(out);
+        }
         if (nowNs - world.lastKeepAliveNs >= kKeepAliveNs) {
             world.lastKeepAliveNs = nowNs;
             world.link.sendLatest({WorldMessageType::KeepAlive});
@@ -119,12 +149,19 @@ void WorldHost::poll(uint64_t nowNs) {
         }
         SDL_Log("coordinator: world ST%02X sub %d ended on its own", unsigned(it->first.stage), it->first.sub);
         for (uint8_t id : world.players) playerRoom_[id].reset();
+        const int stage = it->first.stage;
         it = worlds_.erase(it);
+        dropEmptiedStage(stage);
     }
     std::erase_if(stopping_, [&](const std::unique_ptr<World>& world) {
         world->link.poll(nowNs); // the stop is resent until taken
         return SDL_WaitProcess(world->process, false, nullptr);
     });
+}
+
+std::optional<od::port::StageRecord> WorldHost::stageRecord(int stage) const {
+    const auto it = stageRecords_.find(stage);
+    return it == stageRecords_.end() ? std::nullopt : std::optional(it->second);
 }
 
 std::optional<WorldReport> WorldHost::report(WorldRoom room) const {

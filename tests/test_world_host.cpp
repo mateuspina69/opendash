@@ -6,6 +6,8 @@
 
 #include <cstdio>
 #include <functional>
+#include <optional>
+#include <string>
 #include <vector>
 
 #include "app/world_host.hpp"
@@ -121,6 +123,91 @@ void testWorlds(const char* exe, const char* save) {
     CHECK(waitFor(host, 30, [&] { const auto r = host.report(kRoomA); return r && r->players == 1; }));
 }
 
+// the stage's record, its values
+void testStageRecordValues() {
+    od::port::StageRecord a, b;
+    a.defeated = {1, 0, 0, 0x80000000u};
+    a.fieldLevel = 3;
+    b.defeated = {2, 4, 0, 0};
+    b.fieldLevel = 5;
+    b.control = 7;
+    const od::port::StageRecord m = od::port::mergeStageRecord(a, b);
+    CHECK(m.defeated[0] == 3 && m.defeated[1] == 4 && m.defeated[3] == 0x80000000u);
+    CHECK(m.fieldLevel == 5 && m.control == 7);
+    CHECK(od::port::decodeStageRecord(od::port::encodeStageRecord(m)) == m);
+    const std::vector<uint8_t> shortBytes = {1, 2, 3};
+    CHECK(!od::port::decodeStageRecord(shortBytes));
+}
+
+// a real world: it tells a kill, and one started with a record keeps what the record holds
+void testKillThroughWorld(const char* exe, const char* save) {
+    const auto startAndRead = [&](const char* killed, const std::string& recordHex) {
+        WorldLink link;
+        char port[8];
+        std::snprintf(port, sizeof port, "%u", unsigned(link.port()));
+        std::vector<const char*> args = {exe, "--world", "1E", "0", "--world-link", port, "--world-mark-defeated", killed};
+        if (save) {
+            args.push_back("--story-save");
+            args.push_back(save);
+        }
+        if (!recordHex.empty()) {
+            args.push_back("--stage-record");
+            args.push_back(recordHex.c_str());
+        }
+        args.push_back(nullptr);
+        SDL_Process* world = SDL_CreateProcess(args.data(), false);
+        CHECK(world != nullptr);
+        std::optional<od::port::StageRecord> record;
+        for (uint64_t until = SDL_GetTicksNS() + 30'000'000'000ull; world && !record && SDL_GetTicksNS() < until;) {
+            for (const WorldMessage& m : link.poll(SDL_GetTicksNS()))
+                if (m.type == WorldMessageType::StageState) record = od::port::decodeStageRecord(m.stageRecord);
+            SDL_DelayNS(5'000'000);
+        }
+        link.sendReliable({WorldMessageType::Stop});
+        for (uint64_t until = SDL_GetTicksNS() + 2'000'000'000ull; SDL_GetTicksNS() < until && !link.settled();) {
+            link.poll(SDL_GetTicksNS());
+            SDL_DelayNS(5'000'000);
+        }
+        if (world) {
+            if (!SDL_WaitProcess(world, false, nullptr)) SDL_WaitProcess(world, true, nullptr);
+            SDL_DestroyProcess(world);
+        }
+        return record;
+    };
+    const auto first = startAndRead("3", "");
+    CHECK(first.has_value());
+    if (!first) return;
+    CHECK((first->defeated[0] & (0x80000000u >> 3)) != 0);
+    std::string hex;
+    char byte[3];
+    for (const uint8_t b : od::port::encodeStageRecord(*first)) {
+        std::snprintf(byte, sizeof byte, "%02x", unsigned(b));
+        hex += byte;
+    }
+    const auto second = startAndRead("40", hex); // id 40: word 1, bit 8
+    CHECK(second.has_value());
+    if (!second) return;
+    CHECK((second->defeated[0] & (0x80000000u >> 3)) != 0);  // what the stage's other world killed
+    CHECK((second->defeated[1] & (0x80000000u >> 8)) != 0);  // and its own
+}
+
+void testStageEmpties(const char* exe, const char* save) {
+    WorldHost host(exe, save ? save : "");
+    // the record appears when a world first reports its state
+    host.enter(1, kRoomA, stateAt(100));
+    CHECK(waitFor(host, 30, [&] { return host.stageRecord(kRoomA.stage).has_value(); }));
+    // a move inside the stage: the world of the room left stops, the record stays
+    const WorldRoom other{kRoomA.stage, 1};
+    host.enter(1, other, stateAt(100));
+    CHECK(host.stageRecord(kRoomA.stage).has_value());
+    CHECK(host.worldCount() == 1);
+    CHECK(waitFor(host, 30, [&] { const auto r = host.report(other); return r && r->players == 1; }));
+    // a move out of the stage: it is empty, so its record is gone
+    host.enter(1, kRoomB, stateAt(0));
+    CHECK(host.worldCount() == 1);
+    CHECK(!host.stageRecord(kRoomA.stage));
+}
+
 // a world whose coordinator goes silent ends by itself: nothing outlives the session
 void testNoOrphan(const char* exe, const char* save) {
     WorldLink link;
@@ -163,6 +250,9 @@ int main(int argc, char** argv) {
     const char* save = argc > 2 ? argv[2] : nullptr;
     testCodecAndLink();
     testWorlds(argv[1], save);
+    testStageRecordValues();
+    testKillThroughWorld(argv[1], save);
+    testStageEmpties(argv[1], save);
     testNoOrphan(argv[1], save);
     SDL_Quit();
     return testResult("test_world_host");

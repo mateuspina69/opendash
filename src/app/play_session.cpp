@@ -60,6 +60,7 @@
 #include "game/room_scripts.hpp"
 #include "game/spawn.hpp"
 #include "game/stage_setup.hpp"
+#include "game/stage_record.hpp"
 #include "game/world_digest.hpp"
 #include "game/sky_layers.hpp"
 #include "game/stage_music.hpp"
@@ -346,6 +347,7 @@ void PlayerView::spawnNative(const RoomMesh& mesh, int param) {
         if (param >= 0) od::port::killAllActors();
         if (spawnStage != mesh.stage) {
             od::port::stageSetup(); // FUN_005d5a80's [0x8d3808 + stage * 4]
+            od::port::applyStartingStageRecord();
             spawnStage = mesh.stage;
         }
         if (param >= 0) od::port::actorSystem().boneBlocksUsed = 0; // every pool-0x20 actor is gone: no bone block in use

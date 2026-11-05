@@ -2,7 +2,7 @@
 // windowed game runs.
 //   opendash --world <stage, hex> <sub> [--story-save <file>] [--world-ticks N] [--world-unpaced]
 //     [--world-pad "<ticks> <hex PS1 pad bits>; ..."] [--world-guest <id> <dx> <dz>]... [--world-host-away]
-//     [--world-link <the coordinator's port>]
+//     [--world-link <the coordinator's port>] [--stage-record <hex>] [--world-mark-defeated <enemy id>]
 #pragma once
 
 namespace od::app {
