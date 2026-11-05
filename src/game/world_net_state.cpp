@@ -14,6 +14,7 @@
 #include "game/actor_pools.hpp"
 #include "game/animation_data.hpp"
 #include "game/footstep_dust.hpp"
+#include "game/hit_list.hpp"
 #include "game/loaded_data.hpp"
 #include "game/model_data.hpp"
 #include "game/stage_state.hpp"
@@ -61,8 +62,12 @@ struct Reader {
 
 constexpr uint8_t kMaskX = 0x01, kMaskY = 0x02, kMaskZ = 0x04, kMaskYaw = 0x08, kMaskRotXZ = 0x10, kMaskAnim = 0x20,
                   kMaskShown = 0x40, kMaskMore = 0x80;
-constexpr uint8_t kMoreAge = 0x01, kMoreKey = 0x02, kMoreHeld = 0x04, kMoreScale = 0x08, kMoreTint = 0x10, kMoreParts = 0x20,
+constexpr uint8_t kMoreAnimExtra = 0x01, kMoreLock = 0x02, kMoreScale = 0x08, kMoreTint = 0x10, kMoreParts = 0x20,
                   kMoreAim = 0x40, kMorePath = 0x80;
+constexpr uint8_t kExtraAge = 0x01, kExtraKey = 0x02, kExtraHeld = 0x04; // after the animation's byte, when it needs more
+constexpr uint8_t kLockPositionsOnly = 0x80;
+constexpr int kLockTolerance = 4; // units a lock-on point may drift before the client is told
+constexpr size_t kMaxLockPoints = 8;
 constexpr uint8_t kEventAppear = 1, kEventGo = 2, kEventAppearStill = 3, kEventEffect = 4, kEventShift = 5; // Still: no animation in play
 constexpr size_t kBatchHeaderBytes = 8;
 constexpr size_t kAppearBytes = 26, kGoBytes = 2, kEffectBytes = 31;
@@ -120,6 +125,14 @@ void NetWorldTable::seen(uint8_t slot, const Seen& s) {
     a.state.shown = s.shown;
     a.state.visual = s.visual;
     a.state.aim = s.aim;
+    a.owner = s.owner;
+    bool lockKept = a.state.lock.size() == s.lock.size();
+    for (size_t i = 0; lockKept && i < s.lock.size(); ++i) {
+        const NetLockPoint &was = a.state.lock[i], &now = s.lock[i];
+        lockKept = was.shape == now.shape && was.owner == now.owner && was.harmless == now.harmless;
+        for (size_t l = 0; lockKept && l < 3; ++l) lockKept = std::abs(int(was.offset[l]) - int(now.offset[l])) <= kLockTolerance;
+    }
+    if (!lockKept) a.state.lock = s.lock;
     // the animation does what stepping does, on the client too, until it does not: then the tick, and where it is
     const auto mark = [&](bool held) {
         a.state.animTick = tick;
@@ -228,8 +241,36 @@ void notePoseEdits(const AnimatedActor& a) {
     }
 }
 
+// the tick's lock-on entries by slot, absolute (offset here: the entry's point)
+std::array<std::vector<NetLockPoint>, kNetSlots>& lockEntries() {
+    static std::array<std::vector<NetLockPoint>, kNetSlots> entries;
+    return entries;
+}
+
+void gatherLockEntries() {
+    auto& entries = lockEntries();
+    for (auto& list : entries) list.clear();
+    const ActorSystemState& sys = actorSystem();
+    for (uint32_t i = 0; i < sys.hitCountLast && i < kHitListCapacity; ++i) {
+        const HitEntry& e = sys.hitList[i];
+        const uint32_t group = (e.owner >> kHitGroupShift) & 7;
+        if (!(hitGroupPairs(group) & kHitGroupLockOn)) continue;
+        auto& list = entries[e.owner >> kHitSlotShift];
+        if (list.size() >= kMaxLockPoints) continue;
+        list.push_back({{e.pos.x, e.pos.y, e.pos.z}, uint16_t(e.shape()), e.owner & ((1u << kHitSlotShift) - 1),
+                        (e.attack & kHitAttackHarmless) != 0});
+    }
+}
+
 NetWorldTable::Seen seenOf(const Actor& a, uint32_t model, uint32_t animTable) {
     NetWorldTable::Seen s;
+    s.owner = a.ownerPlayer;
+    s.lock = lockEntries()[a.slot];
+    for (NetLockPoint& p : s.lock) {
+        p.offset[0] = int16_t(uint16_t(p.offset[0]) - uint16_t(a.pos.x.whole));
+        p.offset[1] = int16_t(uint16_t(p.offset[1]) - uint16_t(a.pos.y.whole));
+        p.offset[2] = int16_t(uint16_t(p.offset[2]) - uint16_t(a.pos.z.whole));
+    }
     s.type = a.type;
     s.subtype = a.subtype;
     s.variant = a.variant;
@@ -336,6 +377,7 @@ void watchNetPoses() { setAnimPoseObserver(notePoseEdits); }
 void captureNetWorld(NetWorldTable& table, uint32_t tick) {
     table.tick = tick;
     table.coordinateShift = stage().coordinateShift;
+    gatherLockEntries();
     AnimatedPool& animated = animatedPool();
     for (size_t i = 0; i < kAnimatedFieldSlots; ++i) {
         const AnimatedActor& a = animated[i];
@@ -430,7 +472,9 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
         if (!filter_(slot)) continue;
         Known& k = known_[i];
         const NetWorldActor& a = table.actors[i];
-        const bool same = k.told && a.live && a.generation == k.generation;
+        const bool withheld = a.live && slot >= kShotClass && slot < kShotClass + ShotPool::size() && a.owner == ownShotsOf_;
+        const bool live = a.live && !withheld;
+        const bool same = k.told && live && a.generation == k.generation;
         if (same) continue;
         if (k.told && k.effect) { // an effect ends by itself on the client
             k.told = false;
@@ -441,7 +485,7 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
             ++eventsSent_;
             k.told = false;
         }
-        if (!a.live) continue;
+        if (!live) continue;
         if (a.effect) {
             k.told = true;
             k.effect = true;
@@ -494,6 +538,7 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
         k.acked = a.state;
         k.acked.visual = a.bound; // a client's bind gives it; a class's change goes in an update
         k.acked.aim.clear();
+        k.acked.lock.clear();
         k.sent = k.acked;
     }
     if (w.bytes.size() > kBatchHeaderBytes) batches.push_back(std::move(w.bytes));
@@ -530,13 +575,15 @@ std::vector<uint8_t> NetStateSender::update(const NetWorldTable& table) {
         const bool playing = a.state.animTick != kNetNoAnimTick;
         const bool animChanged = playing && (differs(&NetActorState::anim) || differs(&NetActorState::animTick));
         const uint8_t age = playing ? animAgeByte(table.tick, a.state.animTick) : 0;
-        uint8_t more = 0;
+        uint8_t more = 0, extra = 0;
         if (animChanged) {
             mask |= kMaskAnim;
-            if (age != 0) more |= kMoreAge;
-            if (a.state.animKeyed) more |= kMoreKey;
-            if (a.state.held) more |= kMoreHeld;
+            if (age != 0) extra |= kExtraAge;
+            if (a.state.animKeyed) extra |= kExtraKey;
+            if (a.state.held) extra |= kExtraHeld;
+            if (extra) more |= kMoreAnimExtra;
         }
+        if (a.state.lock != k.acked.lock || a.state.lock != k.sent.lock) more |= kMoreLock;
         const NetActorVisual &v = a.state.visual, &va = k.acked.visual, &vs = k.sent.visual;
         if (v.scale != va.scale || v.scale != vs.scale) more |= kMoreScale;
         if (v.tint != va.tint || v.tint != vs.tint) more |= kMoreTint;
@@ -560,8 +607,9 @@ std::vector<uint8_t> NetStateSender::update(const NetWorldTable& table) {
             e.i16(a.state.rot[2]);
         }
         if (mask & kMaskAnim) e.u8(a.state.anim);
-        if (more & kMoreAge) e.u8(age);
-        if (more & kMoreKey) {
+        if (extra) e.u8(extra);
+        if (extra & kExtraAge) e.u8(age);
+        if (extra & kExtraKey) {
             e.u16(a.state.animKey);
             e.u8(a.state.animTicks);
         }
@@ -581,6 +629,22 @@ std::vector<uint8_t> NetStateSender::update(const NetWorldTable& table) {
                 e.u8(uint8_t(o.entry | lanes << 5));
                 for (size_t l = 0; l < 3; ++l)
                     if (o.lanes[l] != 0) e.i16(o.lanes[l]);
+            }
+        }
+        if (more & kMoreLock) {
+            // the positions alone, when the client is known to hold what else the points are
+            bool positionsOnly = a.state.lock.size() == k.acked.lock.size() && !a.state.lock.empty();
+            for (size_t n = 0; positionsOnly && n < a.state.lock.size(); ++n)
+                positionsOnly = a.state.lock[n].shape == k.acked.lock[n].shape && a.state.lock[n].owner == k.acked.lock[n].owner &&
+                                a.state.lock[n].harmless == k.acked.lock[n].harmless;
+            e.u8(uint8_t(a.state.lock.size() | (positionsOnly ? kLockPositionsOnly : 0)));
+            for (const NetLockPoint& p : a.state.lock) {
+                for (const int16_t c : p.offset) e.i16(c);
+                if (positionsOnly) continue;
+                e.u16(p.shape);
+                e.u16(uint16_t(p.owner));
+                e.u8(uint8_t(p.owner >> 16));
+                e.u8(p.harmless ? 1 : 0);
             }
         }
         if (more & kMorePath) {
@@ -754,15 +818,16 @@ std::optional<uint16_t> NetStateClient::applyParsed(std::span<const uint8_t> byt
         }
         s.shown = (mask & kMaskShown) != 0;
         if (mask & kMaskAnim) s.anim = r.u8();
-        const uint32_t age = (more & kMoreAge) ? r.u8() : 0u;
-        if (more & kMoreKey) {
+        const uint8_t extra = (more & kMoreAnimExtra) ? r.u8() : uint8_t(0);
+        const uint32_t age = (extra & kExtraAge) ? r.u8() : 0u;
+        if (extra & kExtraKey) {
             s.animKey = r.u16();
             s.animTicks = r.u8();
         }
         if (mask & kMaskAnim) {
             s.animTick = tick - age;
-            s.animKeyed = (more & kMoreKey) != 0;
-            s.held = (more & kMoreHeld) != 0;
+            s.animKeyed = (extra & kExtraKey) != 0;
+            s.held = (extra & kExtraHeld) != 0;
         }
         if (more & kMoreScale) {
             for (int16_t& c : s.visual.scale) c = r.i16();
@@ -783,6 +848,19 @@ std::optional<uint16_t> NetStateClient::applyParsed(std::span<const uint8_t> byt
                 const uint8_t head = r.u8();
                 a.entry = head & 0x1f;
                 for (size_t l = 0; l < 3; ++l) a.lanes[l] = (head >> (5 + l) & 1) ? r.i16() : int16_t(0);
+            }
+        }
+        if (more & kMoreLock) {
+            const uint8_t head = r.u8();
+            const bool positionsOnly = (head & kLockPositionsOnly) != 0;
+            s.lock.resize(head & 0x7f);
+            for (NetLockPoint& p : s.lock) {
+                for (int16_t& c : p.offset) c = r.i16();
+                if (positionsOnly) continue;
+                p.shape = r.u16();
+                p.owner = r.u16();
+                p.owner |= uint32_t(r.u8()) << 16;
+                p.harmless = r.u8() != 0;
             }
         }
         if (more & kMorePath) {
@@ -967,6 +1045,7 @@ void PoolNetActors::go(uint8_t slot) {
     }
     ownSlot_[slot] = 0;
     animates_[slot] = false;
+    lock_[slot].clear();
 }
 
 void PoolNetActors::coordinateShift(uint8_t shift) { stage().coordinateShift = shift; }
@@ -1016,6 +1095,7 @@ void PoolNetActors::tick(uint8_t slot, const NetActorState& state, const std::op
     if (!head) return;
     Actor& a = actorLayoutOf(*head);
     a.savePreviousPose(); // what the renderer interpolates from
+    lock_[slot] = state.lock;
     a.pos.x.whole = state.pos[0];
     a.pos.y.whole = state.pos[1];
     a.pos.z.whole = state.pos[2];
@@ -1080,6 +1160,25 @@ void PoolNetActors::tick(uint8_t slot, const NetActorState& state, const std::op
 }
 
 void PoolNetActors::endTick() { applyActorFrees(); }
+
+void PoolNetActors::submitLockPoints() {
+    size_t box = 0;
+    for (size_t i = 0; i < kNetSlots; ++i) {
+        if (lock_[i].empty()) continue;
+        ActorHeader* head = slotOf(uint8_t(i));
+        if (!head || !(head->flags & kActorLive)) continue;
+        const Actor& a = actorLayoutOf(*head);
+        for (const NetLockPoint& p : lock_[i]) {
+            if (box >= lockBoxes_.size()) return;
+            const int16_t pos[3] = {int16_t(uint16_t(a.pos.x.whole) + uint16_t(p.offset[0])),
+                                    int16_t(uint16_t(a.pos.y.whole) + uint16_t(p.offset[1])),
+                                    int16_t(uint16_t(a.pos.z.whole) + uint16_t(p.offset[2]))};
+            lockBoxes_[box].result = 0;
+            hitListPutEntry(pos, p.shape, uint32_t(i) << kHitSlotShift | p.owner, p.harmless ? kHitAttackHarmless : 0u, lockBoxes_[box]);
+            ++box;
+        }
+    }
+}
 
 namespace {
 

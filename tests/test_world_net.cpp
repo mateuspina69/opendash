@@ -18,6 +18,7 @@
 
 #include "app/world_link.hpp"
 #include "check.hpp"
+#include "game/player/remote_combat.hpp"
 #include "game/world_net_state.hpp"
 
 using namespace od::port;
@@ -272,7 +273,7 @@ void testVisualFields() {
     s.atStart = false;
     t.seen(kSlotA, s);
     const auto h = sender.update(t);
-    CHECK(h.size() == kHeader + 3 + 1 + 3);
+    CHECK(h.size() == kHeader + 3 + 1 + 1 + 3); // slot, masks, animation, what it needs more: held, the key
     rec.starts.clear();
     const auto seqHeld = client.applyUpdate(h);
     CHECK(seqHeld.has_value());
@@ -377,6 +378,67 @@ void testEffects() {
     CHECK(second.events(t2).empty());
 }
 
+// a lock-on point: told when it moves past the tolerance, then its position alone
+void testLockPoints() {
+    NetWorldTable t;
+    NetStateSender sender;
+    Recorded rec;
+    NetStateClient client(rec);
+    NetWorldTable::Seen s = seenAt(100);
+    s.lock = {{{1, -40, 2}, 0x1234, 0x210000, false}};
+    t.seen(kSlotA, s);
+    for (const auto& batch : sender.events(t)) CHECK(client.applyEvents(batch));
+    const auto full = sender.update(t);
+    CHECK(full.size() == kHeader + 3 + 1 + 6 + 6);
+    const auto seq = client.applyUpdate(full);
+    CHECK(seq.has_value());
+    client.advance(0);
+    CHECK(rec.last[kSlotA].lock == s.lock);
+    sender.acknowledge(*seq);
+    t.tick = 2;
+    s.lock[0].offset[1] = -43; // within the tolerance
+    t.seen(kSlotA, s);
+    CHECK(sender.update(t).size() == kHeader);
+    t.tick = 4;
+    s.lock[0].offset[1] = -60;
+    t.seen(kSlotA, s);
+    const auto moved = sender.update(t);
+    CHECK(moved.size() == kHeader + 3 + 1 + 6);
+    CHECK(client.applyUpdate(moved).has_value());
+    client.advance(4);
+    CHECK(rec.last[kSlotA].lock == s.lock);
+}
+
+// a client's own shots do not come back to it
+void testOwnShotsWithheld() {
+    constexpr uint8_t kShot = 0x12;
+    NetWorldTable t;
+    NetStateSender mine(netSlotNetworked, 3), other(netSlotNetworked, 4);
+    NetWorldTable::Seen s;
+    s.type = 1;
+    s.owner = 3;
+    s.onPath = true;
+    t.seen(kShot, s);
+    CHECK(mine.events(t).empty());
+    CHECK(other.events(t).size() == 1);
+}
+
+void testFightMessages() {
+    const NetHitResult hit{0x8001234, {1, -2, 3, 4}};
+    CHECK(decodeHitResult(encode(hit)) == hit);
+    NetFire fire;
+    fire.clientSlot = 7;
+    fire.serial = 0x1234;
+    fire.type = 2;
+    fire.aimPoint = {1, 2, 3, 4};
+    fire.target = 0x25;
+    CHECK(decodeFire(encode(fire)) == fire);
+    const NetPlayerReport report{-1, 80, true};
+    CHECK(decodeReport(encode(report)) == report);
+    const NetShotHit shotHit{3, 9, hit};
+    CHECK(decodeShotHit(encode(shotHit)) == shotHit);
+}
+
 void testLinkMessages() {
     WorldMessage ack{WorldMessageType::NetAck};
     ack.playerId = 3;
@@ -453,8 +515,8 @@ std::string runRoom(const char* exe, const char* save, const std::filesystem::pa
                                "--story-save", save, nullptr};
     const std::string effectLog = (dir / ("effects-" + stage + "-" + sub + ".txt")).string();
     const char* clientArgs[] = {exe, "--world", stage.c_str(), sub.c_str(), "--world-client", "--world-link", clientPort,
-                                "--world-pose-log", clientLog.c_str(), "--world-effect-log", effectLog.c_str(), "--story-save", save,
-                                nullptr};
+                                "--world-pose-log", clientLog.c_str(), "--world-effect-log", effectLog.c_str(), "--world-client-id", "7",
+                                "--story-save", save, nullptr};
     SDL_Process* client = SDL_CreateProcess(clientArgs, false);
     CHECK(client != nullptr);
     SDL_Process* world = SDL_CreateProcess(worldArgs, false);
@@ -615,6 +677,9 @@ int main(int argc, char** argv) {
     testVisualFields();
     testPaths();
     testEffects();
+    testLockPoints();
+    testOwnShotsWithheld();
+    testFightMessages();
     testLinkMessages();
     if (argc >= 4) {
         SDL_Init(0);

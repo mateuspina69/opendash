@@ -279,6 +279,7 @@ struct ActorSystemState {
     uint32_t boneBlocksUsed = 0;
     // the hit list (filled by the updates, read and emptied by game/hit_list's pass)
     uint32_t hitCount = 0;
+    uint32_t hitCountLast = 0; // the entries the last pass saw: they stay in the list until the next tick's submits
     StateArray<HitEntry, kHitListCapacity> hitList{};
 };
 // the actor system's globals (one set, for the life of the program)

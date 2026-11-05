@@ -3,7 +3,10 @@
 
 #include <SDL3/SDL.h>
 
+#include <algorithm>
+
 #include "game/actor_sweeps.hpp"
+#include "game/hit_list.hpp"
 #include "game/player/player_snapshot.hpp"
 #include "game/player/player_state.hpp"
 
@@ -26,10 +29,19 @@ void OwnWorldClient::roomBound(int stage, int sub) {
     room_ = WorldRoom{stage, sub};
     host_.enter(kPlayerId, *room_, playerState());
     host_.netJoin(kPlayerId);
+    ownShots_ = {};
+    reported_ = {};
 }
 
 void OwnWorldClient::turn(uint64_t nowNs) {
     if (!room_) return;
+    // a tick never runs ahead of the world's clock (a scripted run renders as fast as it can)
+    constexpr uint64_t kTickNs = 1'000'000'000ull / 30;
+    nextTickNs_ = std::max(nextTickNs_ + kTickNs, nowNs);
+    if (nextTickNs_ > nowNs) {
+        SDL_DelayNS(nextTickNs_ - nowNs);
+        nowNs = nextTickNs_;
+    }
     host_.state(kPlayerId, playerState());
     host_.poll(nowNs);
     const auto acknowledge = [&](std::optional<uint16_t> sequence) {
@@ -42,7 +54,19 @@ void OwnWorldClient::turn(uint64_t nowNs) {
         } else if (m.type == WorldMessageType::NetUpdate) {
             acknowledge(state_->applyUpdate(m.netState));
             if (state_->heard()) clock_->heard(state_->newestTick());
+        } else if (m.type == WorldMessageType::NetHit) {
+            if (const auto hit = od::port::decodeHitResult(m.netState)) od::port::applyPlayerHit(od::port::player(), *hit);
+        } else if (m.type == WorldMessageType::NetShotHit) {
+            const auto hit = od::port::decodeShotHit(m.netState);
+            if (hit && hit->clientSlot < ownShots_.size() && ownShots_[hit->clientSlot].live &&
+                ownShots_[hit->clientSlot].serial == hit->serial)
+                od::port::applyShotHit(od::port::shotPool()[hit->clientSlot], hit->hit);
         }
+    }
+    const od::port::NetPlayerReport report = od::port::netPlayerReportOf(od::port::player());
+    if (report != reported_) {
+        reported_ = report;
+        host_.netSend(kPlayerId, WorldMessageType::NetReport, od::port::encode(report));
     }
     if (clock_->running()) {
         const int64_t at = int64_t(clock_->at(nowNs));
@@ -55,6 +79,22 @@ void OwnWorldClient::turn(uint64_t nowNs) {
     }
     for (; failuresLogged_ < failures_.classes.size(); ++failuresLogged_)
         SDL_Log("own world: failed: %s", failures_.classes[failuresLogged_].c_str());
+}
+
+void OwnWorldClient::endFrame() {
+    if (!room_) return;
+    actors_->submitLockPoints();
+    od::port::hitListLockOnOnly();
+    for (size_t i = 0; i < ownShots_.size(); ++i) {
+        const od::port::ShotActor& shot = od::port::shotPool()[i];
+        const bool mine = (shot.flags & od::port::kActorLive) && (shot.runFlags & od::port::kActorRun);
+        if (mine && !ownShots_[i].live) {
+            ownShots_[i] = {true, nextSerial_++};
+            host_.netSend(kPlayerId, WorldMessageType::NetFire, od::port::encode(od::port::netFireOf(shot, uint8_t(i), ownShots_[i].serial)));
+        } else if (!mine) {
+            ownShots_[i].live = false;
+        }
+    }
 }
 
 void OwnWorldClient::localActors(const od::port::PlayerEnv& env, od::port::ActorContext& context, bool late) {

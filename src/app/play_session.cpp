@@ -873,7 +873,7 @@ void PlayerView::setupHooks() {
             od::port::cameraUpdate();
             ownWorld->localActors(env, actors, true);
             od::port::fieldHudFrame();
-            od::port::actorSystem().hitCount = 0; // the world decides what hits
+            ownWorld->endFrame();
             od::port::skyLayersTick();
             return;
         }

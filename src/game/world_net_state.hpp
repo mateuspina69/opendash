@@ -53,6 +53,7 @@ constexpr double kNetInterpolationTicks = 4.0;   // how far in the past a client
 constexpr uint8_t kNetNoModel = 0xff;            // an actor with no entry of the model bank
 constexpr uint16_t kNetAnimNotPlaying = 0xffff;  // an Appear's age: no animation has started on the actor
 constexpr uint32_t kNetNoAnimTick = 0xffffffffu; // an actor on which no animation has started
+constexpr uint8_t kNetNoPlayer = 0xff;
 
 // which actors go to clients: by slot id
 using NetSlotFilter = bool (*)(uint8_t slot);
@@ -91,6 +92,15 @@ struct NetAimOffset {
     friend bool operator==(const NetAimOffset&, const NetAimOffset&) = default;
 };
 
+// A lock-on candidate of an actor: its hit-list entry, relative to the actor. The client runs the game's selection over these.
+struct NetLockPoint {
+    std::array<int16_t, 3> offset{};
+    uint16_t shape = 0;
+    uint32_t owner = 0;    // the entry's owner word without the slot
+    bool harmless = false; // kHitAttackHarmless
+    friend bool operator==(const NetLockPoint&, const NetLockPoint&) = default;
+};
+
 // What a class changes of its model
 struct NetActorVisual {
     std::array<int16_t, 3> scale{};
@@ -112,6 +122,7 @@ struct NetActorState {
     bool shown = false;
     NetActorVisual visual;
     std::vector<NetAimOffset> aim;
+    std::vector<NetLockPoint> lock;
     uint32_t pathTick = 0;        // on a path: pos and rot are the actor's on this tick, and it goes on by these steps
     std::array<int16_t, 3> posStep{}, rotStep{};
     uint8_t told = 0;             // a client's: which of the visual's fields the world has said (kNetTold...)
@@ -131,6 +142,7 @@ struct NetWorldActor {
     uint8_t lastTicks = 0;
     std::array<int32_t, 3> lastPos{}; // an actor on a path: its 16.16 position and rotation on the last tick
     std::array<int16_t, 3> lastRot{};
+    uint8_t owner = 0;       // ActorHeader::ownerPlayer: a shot's is told to the others only
     bool effect = false;     // it runs on the client from an event
     bool effectGoes = false; // ... and this one goes (one that follows something only the world holds does not)
     NetEffect effectStart;
@@ -159,6 +171,8 @@ public:
         bool stayed = false;  // ... is the last tick's
         NetActorVisual visual, bound;
         std::vector<NetAimOffset> aim;
+        std::vector<NetLockPoint> lock;
+        uint8_t owner = 0;
         bool onPath = false;
         std::array<int32_t, 3> fine{}; // the 16.16 position
         bool effect = false, effectGoes = false;
@@ -177,7 +191,9 @@ void watchNetPoses();
 // One client's view of the world: what it was told, what it acknowledged
 class NetStateSender {
 public:
-    explicit NetStateSender(NetSlotFilter filter = netSlotNetworked) : filter_(filter) {}
+    // ownShotsOf: the player this client plays: their own shots they draw themselves (kNetNoPlayer: none)
+    explicit NetStateSender(NetSlotFilter filter = netSlotNetworked, uint8_t ownShotsOf = kNetNoPlayer)
+        : filter_(filter), ownShotsOf_(ownShotsOf) {}
 
     // what must arrive since the last call: the appearances and departures, in batches of at most kNetMaxEventBatch bytes
     std::vector<std::vector<uint8_t>> events(const NetWorldTable& table);
@@ -206,6 +222,7 @@ private:
         std::vector<Entry> entries;
     };
     NetSlotFilter filter_;
+    uint8_t ownShotsOf_;
     std::array<Known, kNetSlots> known_{};
     std::deque<Sent> inFlight_;
     uint8_t shiftTold_ = 0xff;
@@ -328,6 +345,8 @@ public:
     void tick(uint8_t slot, const NetActorState& state, const std::optional<AnimStart>& start) override;
     // to run after a timeline's ticks: what went frees its slot
     void endTick();
+    // the hit-list entries of the actors held here, for the game's lock-on selection
+    void submitLockPoints();
     uint64_t effectsStarted() const { return effectsStarted_; }
 
 private:
@@ -335,6 +354,8 @@ private:
     bool shotsInOwnSlots_;
     std::array<bool, kNetSlots> animates_{}, held_{};
     std::array<uint32_t, kNetSlots> ownSlot_{}; // a world's shot in a slot of the client's: its address
+    std::array<std::vector<NetLockPoint>, kNetSlots> lock_{};
+    std::array<HitBoxHead, kHitListCapacity> lockBoxes_{}; // nothing reads their results: the world decides
     uint64_t effectsStarted_ = 0;
 };
 

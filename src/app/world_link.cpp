@@ -37,6 +37,10 @@ std::vector<uint8_t> encodeWorldMessage(const WorldMessage& m) {
         break;
     case WorldMessageType::NetEvents:
     case WorldMessageType::NetUpdate:
+    case WorldMessageType::NetFire:
+    case WorldMessageType::NetReport:
+    case WorldMessageType::NetHit:
+    case WorldMessageType::NetShotHit:
         w.u8(m.playerId);
         w.blob(m.netState);
         break;
@@ -49,7 +53,7 @@ std::optional<WorldMessage> decodeWorldMessage(std::span<const uint8_t> bytes) {
     od::net::ByteReader r(bytes);
     WorldMessage m;
     const uint8_t type = r.u8();
-    if (type < uint8_t(WorldMessageType::Hello) || type > uint8_t(WorldMessageType::NetUpdate)) return std::nullopt;
+    if (type < uint8_t(WorldMessageType::Hello) || type > uint8_t(WorldMessageType::NetShotHit)) return std::nullopt;
     m.type = WorldMessageType(type);
     switch (m.type) {
     case WorldMessageType::Join:
@@ -73,6 +77,10 @@ std::optional<WorldMessage> decodeWorldMessage(std::span<const uint8_t> bytes) {
         break;
     case WorldMessageType::NetEvents:
     case WorldMessageType::NetUpdate:
+    case WorldMessageType::NetFire:
+    case WorldMessageType::NetReport:
+    case WorldMessageType::NetHit:
+    case WorldMessageType::NetShotHit:
         m.playerId = r.u8();
         m.netState = r.blob();
         break;

@@ -50,6 +50,8 @@ public:
     void netJoin(uint8_t client);
     std::vector<WorldMessage> takeNet(uint8_t client);
     void netAck(uint8_t client, uint16_t sequence);
+    // what must arrive, to the world the client's player is in (a fire, a report)
+    void netSend(uint8_t client, WorldMessageType type, std::vector<uint8_t> bytes);
     // the turn between frames: the links, the worlds' reports, the keep-alives; a world that ended on its own is forgotten
     void poll(uint64_t nowNs);
 

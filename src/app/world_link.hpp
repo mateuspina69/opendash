@@ -22,7 +22,9 @@ namespace od::app {
 // NetEvents {client, batch} (what must arrive) and NetUpdate {client, update} (what the next one replaces) from it.
 enum class WorldMessageType : uint8_t {
     Hello = 1, Join = 2, State = 3, Leave = 4, Stop = 5, KeepAlive = 6, Report = 7, StageState = 8,
-    NetJoin = 9, NetLeave = 10, NetAck = 11, NetEvents = 12, NetUpdate = 13
+    NetJoin = 9, NetLeave = 10, NetAck = 11, NetEvents = 12, NetUpdate = 13,
+    // the fight (game/player/remote_combat): NetFire, NetReport toward the world; NetHit, NetShotHit from it
+    NetFire = 14, NetReport = 15, NetHit = 16, NetShotHit = 17
 };
 
 struct WorldMessage {

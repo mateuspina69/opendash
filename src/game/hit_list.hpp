@@ -97,5 +97,9 @@ void hitListSubmitCapsule(const int16_t a[3], uint16_t ra, const int16_t b[3], u
 // exe 0x5e4260: the lock-on selection (exe 0x5e4b60 over every group), then every pair of entries whose groups collide
 // and whose owners differ tested (exe 0x5e4350); the list emptied
 void hitListPass();
+// a client: an entry of an actor the world holds, as the world's hit list had it (its result box the caller's)
+void hitListPutEntry(const int16_t pos[3], uint16_t shape, uint32_t owner, uint32_t attack, HitBoxHead& box);
+// a client: the pass's selection only -- the lock-on, its aim points, the radar; the world decides what hits
+void hitListLockOnOnly();
 
 } // namespace od::port

@@ -231,10 +231,25 @@ void hitListSubmitCapsule(const int16_t a[3], uint16_t ra, const int16_t b[3], u
     submitCapsule(a, ra, b, rb, box, &box, ownerShape, attack);
 }
 
+void hitListPutEntry(const int16_t pos[3], uint16_t shape, uint32_t owner, uint32_t attack, HitBoxHead& box) {
+    ActorSystemState& s = actorSystem();
+    if (s.hitCount >= kHitListCapacity) return;
+    writeEntry(s.hitList[s.hitCount++], pos, box, nullptr, owner, shape, attack);
+}
+
+void hitListLockOnOnly() {
+    ActorSystemState& s = actorSystem();
+    const uint32_t n = s.hitCount;
+    s.hitCount = 0;
+    if (modernPlay()) modernAimCollectTargets(n);
+    selectLockOnTargets(n, kHitGroupsAll);
+}
+
 void hitListPass() {
     ActorSystemState& s = actorSystem();
     const uint32_t n = s.hitCount;
     s.hitCount = 0;
+    s.hitCountLast = n;
     if (modernPlay()) modernAimCollectTargets(n); // OpenDash's free aim (game/modern_aim)
     selectLockOnTargets(n, kHitGroupsAll);
     if (n < 2) return;

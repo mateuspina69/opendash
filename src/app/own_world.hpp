@@ -3,6 +3,7 @@
 // and what runs on a client (the effects). Off without the flag: single player never comes here.
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
@@ -10,6 +11,7 @@
 #include <vector>
 
 #include "app/world_host.hpp"
+#include "game/player/remote_combat.hpp"
 #include "game/world_net_state.hpp"
 
 namespace od::app {
@@ -24,6 +26,8 @@ public:
     void turn(uint64_t nowNs);
     // the part of a frame's body that runs on a client (app/play_session's frame)
     void localActors(const od::port::PlayerEnv& env, od::port::ActorContext& context, bool late);
+    // the end of the frame's body: the lock-on and the radar from the world's actors, this tick's shots to the world
+    void endFrame();
 
 private:
     static constexpr uint8_t kPlayerId = 1; // in the world; id 0 is the world's own, which leaves on a link
@@ -37,8 +41,16 @@ private:
     std::unique_ptr<od::port::NetRenderClock> clock_;
     od::port::NetLocalRunFailures failures_;
     size_t failuresLogged_ = 0;
+    struct OwnShot {
+        bool live = false;
+        uint16_t serial = 0;
+    };
+    std::array<OwnShot, 16> ownShots_{};
+    uint16_t nextSerial_ = 1;
+    od::port::NetPlayerReport reported_{};
     bool shownAny_ = false;
     uint32_t shown_ = 0;
+    uint64_t nextTickNs_ = 0;
 };
 
 } // namespace od::app

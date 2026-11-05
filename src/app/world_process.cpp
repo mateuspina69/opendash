@@ -32,6 +32,7 @@
 #include "game/encounter.hpp"
 #include "game/stage_record.hpp"
 #include "game/player/player_snapshot.hpp"
+#include "game/player/remote_combat.hpp"
 #include "game/player/remote_player.hpp"
 #include "game/title.hpp"
 #include "game/world_view.hpp"
@@ -63,6 +64,7 @@ struct WorldArgs {
     std::optional<od::port::StageRecord> stageRecord; // what the stage's other worlds hold
     int markDefeated = -1; // test instrument: this enemy id counts as defeated from the first tick on
     bool client = false;       // the receiver of a world's network state (see runClient)
+    uint8_t clientId = 0;      // its client id: the player whose own shots the world does not send it
     bool keepPlayer = false;   // test instrument: on a link, the world's own player stays, driven by the pad
     int netTicks = od::port::kNetDefaultUpdateTicks; // the ticks between two updates of the network state
     std::string poseLog;       // test instrument: each actor's pose per tick, in this local file
@@ -117,6 +119,8 @@ WorldArgs parseArgs(int argc, char** argv) {
             w.markDefeated = std::stoi(argv[++i]);
         } else if (a == "--world-client") {
             w.client = true;
+        } else if (a == "--world-client-id" && more) {
+            w.clientId = uint8_t(std::stoi(argv[++i]));
         } else if (a == "--world-keep-player") {
             w.keepPlayer = true;
         } else if (a == "--world-net-ticks" && more) {
@@ -277,7 +281,7 @@ int runClient(const WorldArgs& w) {
     }
     if (w.linkPort == 0) throw std::invalid_argument("--world-client needs --world-link");
     WorldLink link{uint16_t(w.linkPort)};
-    const uint8_t client = 0;
+    const uint8_t client = w.clientId;
     link.sendReliable({WorldMessageType::Hello});
     WorldMessage join{WorldMessageType::NetJoin};
     join.playerId = client;
@@ -404,6 +408,39 @@ int run(const WorldArgs& w) {
     if (w.stageRecord) lastRecord = *w.stageRecord;
     // the network state: one sender per client
     std::map<uint8_t, od::port::NetStateSender> netClients;
+    struct FiredShot {
+        bool live = false;
+        uint8_t player = 0, clientSlot = 0;
+        uint16_t serial = 0;
+    };
+    std::array<FiredShot, od::port::ShotPool::size()> fired{}; // the world's shots that came from a client's fire
+    const auto fightTurn = [&] {
+        for (uint8_t id = 0; id < od::port::kPlayerSlots; ++id) {
+            if (!od::port::playerPresent(id) || !od::port::playerIsRemote(id)) continue;
+            if (const auto hit = od::port::takeRemotePlayerHit(od::port::playerById(id))) {
+                WorldMessage m{WorldMessageType::NetHit};
+                m.playerId = id;
+                m.netState = od::port::encode(*hit);
+                link->sendReliable(m);
+            }
+        }
+        for (size_t i = 0; i < fired.size(); ++i) {
+            FiredShot& f = fired[i];
+            if (!f.live) continue;
+            const od::port::ShotActor& shot = od::port::shotPool()[i];
+            if (!(shot.flags & od::port::kActorLive)) {
+                f.live = false;
+            } else if (shot.hitBox.result != 0) {
+                const od::port::NetShotHit hit{f.clientSlot, f.serial,
+                                               {shot.hitBox.result,
+                                                {shot.hitBox.contact.x, shot.hitBox.contact.y, shot.hitBox.contact.z, shot.hitBox.contactKind}}};
+                WorldMessage m{WorldMessageType::NetShotHit};
+                m.playerId = f.player;
+                m.netState = od::port::encode(hit);
+                link->sendReliable(m);
+            }
+        }
+    };
     std::unique_ptr<od::port::NetWorldTable> netTable;
     const LocalFile poses(w.poseLog);
     std::unique_ptr<NetStats> netStats;
@@ -416,6 +453,7 @@ int run(const WorldArgs& w) {
         // every tick from the first, whoever is connected: a client that joins later is told how long ago each animation
         // started
         od::port::captureNetWorld(*netTable, netTick);
+        if (link) fightTurn();
         if (netStats) netStats->tick(*netTable, netTick);
         for (auto& [client, sender] : netClients) {
             for (auto& batch : sender.events(*netTable)) {
@@ -453,7 +491,19 @@ int run(const WorldArgs& w) {
                     lastRecord = od::port::captureStageRecord(); // no echo of what came from the others
                 }
                 break;
-            case WorldMessageType::NetJoin: netClients.try_emplace(m.playerId); break;
+            case WorldMessageType::NetJoin: netClients.try_emplace(m.playerId, od::port::netSlotNetworked, m.playerId); break;
+            case WorldMessageType::NetFire:
+                if (const auto fire = od::port::decodeFire(m.netState);
+                    fire && m.playerId < od::port::kPlayerSlots && od::port::playerIsRemote(m.playerId)) {
+                    if (const od::port::ShotActor* shot = od::port::startFiredShot(m.playerId, *fire))
+                        fired[od::port::ShotPool::index(*shot)] = {true, m.playerId, fire->clientSlot, fire->serial};
+                }
+                break;
+            case WorldMessageType::NetReport:
+                if (const auto report = od::port::decodeReport(m.netState);
+                    report && m.playerId < od::port::kPlayerSlots && od::port::playerIsRemote(m.playerId))
+                    od::port::applyPlayerReport(od::port::playerById(m.playerId), *report);
+                break;
             case WorldMessageType::NetLeave: netClients.erase(m.playerId); break;
             case WorldMessageType::NetAck:
                 if (const auto c = netClients.find(m.playerId); c != netClients.end()) c->second.acknowledge(m.netSequence);
