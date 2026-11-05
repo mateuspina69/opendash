@@ -296,6 +296,8 @@ static void particle_lights() {
     auto l = gatherParticleLights({glowing(0, 1, 1, 0, 0), glowing(5000, 300, 0, 1, 0), glowing(9000, 5000, 0, 0, 1)}, 400, 32);
     CHECK(l.size() == 3);
     CHECK(near(l[0].radius, 400) && near(l[1].radius, 600) && near(l[2].radius, 1600));
+    // characters cast no shadow of it this near: the effect's own size, at least 0.1 radius
+    CHECK(near(l[0].clearing, 40) && near(l[1].clearing, 300) && near(l[2].clearing, 5000));
     // close together: one light, the colours added, its centre toward the brighter one
     l = gatherParticleLights({glowing(0, 1, 3, 0, 0), glowing(100, 1, 0, 1, 0)}, 400, 32);
     CHECK(l.size() == 1);
@@ -306,7 +308,104 @@ static void particle_lights() {
     CHECK(near(l[0].color[0], 1) && near(l[1].color[0], 2) && near(l[1].pos[0], 4500));
 }
 
+static void phong_tessellation() {
+    const float a[3] = {0, 0, 0}, b[3] = {10, 0, 0}, c[3] = {0, 0, 10};
+    const float up[3] = {0, 1, 0};
+    float p[3];
+    // flat normals: the flat triangle
+    phongPoint(a, b, c, up, up, up, 0.25f, 0.25f, 0.5f, 1.0f, p);
+    CHECK(near(p[0], 2.5f) && near(p[1], 0.0f) && near(p[2], 5.0f));
+    // normals leaning outward: the vertices stay, the middle of an edge bulges along the normals
+    const float s = std::sqrt(0.5f);
+    const float na[3] = {-s, s, 0}, nb[3] = {s, s, 0}, nc[3] = {0, 1, 0};
+    phongPoint(a, b, c, na, nb, nc, 1, 0, 0, 1.0f, p);
+    CHECK(near(p[0], 0) && near(p[1], 0) && near(p[2], 0));
+    phongPoint(a, b, c, na, nb, nc, 0.5f, 0.5f, 0, 1.0f, p);
+    CHECK(near(p[0], 5) && near(p[1], 2.5f) && near(p[2], 0));
+    // amount 0: flat; half the amount: half the bulge
+    phongPoint(a, b, c, na, nb, nc, 0.5f, 0.5f, 0, 0.0f, p);
+    CHECK(near(p[1], 0));
+    phongPoint(a, b, c, na, nb, nc, 0.5f, 0.5f, 0, 0.5f, p);
+    CHECK(near(p[1], 1.25f));
+    // an edge's point does not depend on the third vertex: the two faces on it meet
+    const float d[3] = {3, -7, 9}, nd[3] = {0, 0, 1};
+    float q[3];
+    phongPoint(a, b, c, na, nb, nc, 0.3f, 0.7f, 0, 1.0f, p);
+    phongPoint(a, b, d, na, nb, nd, 0.3f, 0.7f, 0, 1.0f, q);
+    CHECK(near(p[0], q[0]) && near(p[1], q[1]) && near(p[2], q[2]));
+}
+
+static void subdivision_plan() {
+    // two faces on the edge b-c; `rise` lifts the corner only the second face has
+    const auto pose = [](float rise) {
+        const float p[6][3] = {{0, 0, 0}, {10, 0, 0}, {0, 0, 10}, {10, 0, 0}, {10, rise, 10}, {0, 0, 10}};
+        std::vector<RenderVertex> v(6);
+        for (int k = 0; k < 6; ++k)
+            for (int c = 0; c < 3; ++c) v[size_t(k)].pos[c] = p[k][c];
+        return v;
+    };
+    SubdivisionPlan flat, steep;
+    const std::vector<RenderVertex> flatPose = pose(0.0f), steepPose = pose(100.0f);
+    CHECK(buildSubdivisionPlan(flatPose.data(), 6, flat));
+    CHECK(flat.roundEdges[0] == 2 && flat.roundEdges[1] == 4); // only the shared edge; the others are open
+    CHECK(buildSubdivisionPlan(steepPose.data(), 6, steep));
+    CHECK(steep.roundEdges[0] == 0 && steep.roundEdges[1] == 0); // past the limit: a crease
+    // the plan outlives the pose: at b, the shared vertex, the flat pose's plan still averages both faces as they are now
+    float fn[6], n[3];
+    faceNormal(steepPose[0].pos, steepPose[1].pos, steepPose[2].pos, &fn[0]);
+    faceNormal(steepPose[3].pos, steepPose[4].pos, steepPose[5].pos, &fn[3]);
+    subdivisionNormal(flat, 1, fn, n);
+    const float mean[3] = {fn[0] + fn[3], fn[1] + fn[4], fn[2] + fn[5]};
+    const float len = std::sqrt(mean[0] * mean[0] + mean[1] * mean[1] + mean[2] * mean[2]);
+    CHECK(near(n[0], mean[0] / len) && near(n[1], mean[1] / len) && near(n[2], mean[2] / len));
+    // the steep pose's plan leaves that vertex with its own face
+    subdivisionNormal(steep, 1, fn, n);
+    CHECK(near(n[0], fn[0]) && near(n[1], fn[1]) && near(n[2], fn[2]));
+    // a fan where neighbours lie under the limit and faces two apart past it: one smoothing group, every shared edge round
+    const float fanAngle = 3.14159265f / 3.0f;
+    std::vector<RenderVertex> fan(9);
+    for (int f = 0; f < 3; ++f) {
+        const float corners[3][3] = {{0, 15, 0},
+                                     {10 * std::cos(fanAngle * float(f)), 0, 10 * std::sin(fanAngle * float(f))},
+                                     {10 * std::cos(fanAngle * float(f + 1)), 0, 10 * std::sin(fanAngle * float(f + 1))}};
+        for (int k = 0; k < 3; ++k)
+            for (int a = 0; a < 3; ++a) fan[size_t(f * 3 + k)].pos[a] = corners[k][a];
+    }
+    float n0[3], n1[3], n2[3];
+    faceNormal(fan[0].pos, fan[1].pos, fan[2].pos, n0);
+    faceNormal(fan[3].pos, fan[4].pos, fan[5].pos, n1);
+    faceNormal(fan[6].pos, fan[7].pos, fan[8].pos, n2);
+    CHECK(n0[0] * n1[0] + n0[1] * n1[1] + n0[2] * n1[2] > 0.5f);
+    CHECK(n0[0] * n2[0] + n0[1] * n2[1] + n0[2] * n2[2] < 0.5f);
+    SubdivisionPlan fanPlan;
+    CHECK(buildSubdivisionPlan(fan.data(), 9, fanPlan));
+    CHECK(fanPlan.roundEdges[0] == 4 && fanPlan.roundEdges[1] == 5 && fanPlan.roundEdges[2] == 1);
+    // everything fallen on one point (a model's first frame) tells nothing
+    std::vector<RenderVertex> fallen(12);
+    for (RenderVertex& v : fallen) v.pos[0] = v.pos[1] = v.pos[2] = 5.0f;
+    SubdivisionPlan none;
+    CHECK(!buildSubdivisionPlan(fallen.data(), 12, none));
+    CHECK(none.roundEdges.empty());
+}
+
+static void subdivided_cull() {
+    const auto is = [](int cull, bool opposite, int mode, bool reverse) {
+        const SubdividedCull r = subdividedCull(cull, opposite);
+        return r.mode == mode && r.reverse == reverse;
+    };
+    CHECK(is(0, false, 0, false));                    // double-sided stays so
+    CHECK(is(1, false, 1, false));                    // its own facing
+    CHECK(is(4, false, 1, false) && is(4, true, 1, false)); // the quad's first half: its own facing
+    CHECK(is(5, false, 1, false));                    // the second half, wound alike
+    CHECK(is(5, true, 1, true));                      // ... wound the other way: reversed, to face with the first
+    CHECK(is(2, false, 1, false) && is(3, false, 1, false));
+    CHECK(is(2, true, 0, false) && is(3, true, 0, false)); // opposite halves: one always faces the camera
+}
+
 int main() {
+    subdivided_cull();
+    subdivision_plan();
+    phong_tessellation();
     particle_lights();
     face_normal();
     jitter_sequence();

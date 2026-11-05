@@ -66,7 +66,7 @@ struct GpuVertex {
 };
 static_assert(sizeof(RenderVertex) == 52 && sizeof(GpuVertex) == 120);
 constexpr uint32_t kSurfaceModel = 1, kSurfaceNearFade = 2, kSurfaceEffect = 4;
-// the instances' ray masks: the sun's rays meet both; a particle light's only the room (scene.hlsl)
+// the instances' ray masks: the sun's rays meet both; a particle light's rays each its own stretch (scene.hlsl)
 constexpr uint8_t kRayMaskRoom = 1, kRayMaskActors = 2;
 
 // scene.hlsl cbuffer Frame
@@ -210,6 +210,58 @@ void toGpu(const std::vector<RenderVertex>& tris, const float* prevPos, std::vec
         for (size_t r = 0; r < surfaceRanges->size(); ++r)
             for (size_t k = (*surfaceRanges)[r].first; k < (*surfaceRanges)[r].second; ++k)
                 out[k].surface += float((*surfaceBits)[r]);
+}
+
+// a model's triangles (ModelSubdivision) appended to `out`, each split in level^2, as `plan` says: the vertices take the
+// plan's normals over this frame's faces. A new vertex interpolates its triangle's attributes; its position and its previous
+// position follow phongPoint with the same normals, and on a straight edge it stays on that edge. Each small triangle
+// is culled by its own facing (subdividedCull)
+void subdivideModel(GpuVertex* v, size_t count, const SubdivisionPlan& plan, int level, float amount, std::vector<float>& faces,
+                    std::vector<GpuVertex>& out) {
+    faces.resize(count);
+    for (size_t f = 0; f + 2 < count; f += 3) std::memcpy(&faces[f], v[f].faceN, 3 * sizeof(float));
+    for (size_t k = 0; k < count; ++k) subdivisionNormal(plan, k, faces.data(), v[k].normal);
+    GpuVertex grid[15]; // (level + 1) * (level + 2) / 2 points at level 4, row by row
+    const auto at = [level](int i, int j) { return j * (level + 1) - j * (j - 1) / 2 + i; };
+    for (size_t f = 0; f + 2 < count; f += 3) {
+        const GpuVertex& a = v[f];
+        const GpuVertex& b = v[f + 1];
+        const GpuVertex& c = v[f + 2];
+        const uint8_t round = plan.roundEdges[f / 3];
+        const bool opposite = a.faceN[0] * a.pairN[0] + a.faceN[1] * a.pairN[1] + a.faceN[2] * a.pairN[2] < 0.0f;
+        const SubdividedCull cull = subdividedCull(int(std::lround(a.v.cull)), opposite);
+        for (int j = 0; j <= level; ++j)
+            for (int i = 0; i + j <= level; ++i) {
+                const float s = float(i) / float(level), t = float(j) / float(level), r = 1.0f - s - t;
+                GpuVertex& o = grid[at(i, j)];
+                o = a;
+                o.v.cull = float(cull.mode);
+                const auto mix = [&](const float* x, const float* y, const float* z, float* to, int n) {
+                    for (int k = 0; k < n; ++k) to[k] = x[k] * r + y[k] * s + z[k] * t;
+                };
+                mix(a.v.uv, b.v.uv, c.v.uv, o.v.uv, 2);
+                mix(a.v.color, b.v.color, c.v.color, o.v.color, 3);
+                o.v.shade = a.v.shade * r + b.v.shade * s + c.v.shade * t;
+                mix(a.normal, b.normal, c.normal, o.normal, 3);
+                const float len = std::sqrt(o.normal[0] * o.normal[0] + o.normal[1] * o.normal[1] + o.normal[2] * o.normal[2]);
+                if (len > 1e-6f)
+                    for (float& n : o.normal) n /= len;
+                const bool straight = (j == 0 && !(round & 1)) || (i + j == level && !(round & 2)) || (i == 0 && !(round & 4));
+                const float by = straight ? 0.0f : amount;
+                phongPoint(a.v.pos, b.v.pos, c.v.pos, a.normal, b.normal, c.normal, r, s, t, by, o.v.pos);
+                phongPoint(a.prevPos, b.prevPos, c.prevPos, a.normal, b.normal, c.normal, r, s, t, by, o.prevPos);
+            }
+        const auto emit = [&](int p, int q, int s) {
+            out.push_back(grid[p]);
+            out.push_back(grid[cull.reverse ? s : q]);
+            out.push_back(grid[cull.reverse ? q : s]);
+        };
+        for (int j = 0; j < level; ++j)
+            for (int i = 0; i + j < level; ++i) {
+                emit(at(i, j), at(i + 1, j), at(i, j + 1));
+                if (i + j + 1 < level) emit(at(i + 1, j), at(i + 1, j + 1), at(i, j + 1));
+            }
+    }
 }
 
 // ray-tracing attributes per vertex: (u, v, slice, 0) -- what the shadow rays' alpha test reads
@@ -458,6 +510,7 @@ public:
 
     void setSun(const SunLight& sun) override { sun_ = sun; }
     void setParticleLighting(const ParticleLighting& l) override { particleLighting_ = l; }
+    void setModelSubdivision(const ModelSubdivision& s) override { subdivision_ = s; }
     void setPrecipitation(const Precipitation& p) override { precip_ = p; }
     void setSeeThrough(const std::vector<SeeThroughBody>& bodies, const std::vector<SeeThroughPiece>& pieces,
                        bool debug) override {
@@ -672,6 +725,9 @@ public:
 
     void uploadDynamic(const std::vector<DynamicObject>& objects) override {
         const auto began = std::chrono::steady_clock::now();
+        const auto isModel = [](uint32_t kind) {
+            return kind == kKindActor || kind == kKindPlayer || kind == kKindPoolModel || kind == kKindWalker;
+        };
         // opaque objects first, then the blended ones by PS1 mode; dynStart_[m] = vertices with blend <= m
         std::vector<DynamicObject> sorted = objects;
         std::stable_sort(sorted.begin(), sorted.end(),
@@ -686,11 +742,11 @@ public:
             const int b = std::min<int>(o.blend, 4);
             for (int m = b; m < 5; ++m) dynStart_[m] += uint32_t(o.tris.size());
             const uint32_t kind = o.id >> 24;
-            if (kind != kKindEffect) // effects: particles / rings / billboards keep their face normals
+            // effects: particles / rings / billboards keep their face normals; a subdivided model has its plan's
+            if (kind != kKindEffect && !(subdivision_.level > 1 && isModel(kind)))
                 models.push_back({dyn_.size(), dyn_.size() + o.tris.size()});
             uint32_t bits = 0;
-            if (kind == kKindActor || kind == kKindPlayer || kind == kKindPoolModel || kind == kKindWalker)
-                bits |= kSurfaceModel;
+            if (isModel(kind)) bits |= kSurfaceModel;
             if (kind == kKindEffect) bits |= kSurfaceEffect;
             if (o.nearFade) bits |= kSurfaceNearFade;
             if (bits) {
@@ -704,12 +760,41 @@ public:
             particleLights_ = gatherParticleLights(sorted, particleLighting_.radius, kMaxParticleLights);
         history_.apply(sorted, dynPrev_);
         toGpu(dyn_, dynPrev_.data(), dynGpu_, &models, &surfaces, &surfaceBits);
+        if (subdivision_.level > 1) {
+            dynFine_.clear();
+            dynFine_.reserve(dynGpu_.size() * 2);
+            dynStart_.fill(0);
+            size_t at = 0;
+            for (const DynamicObject& o : sorted) {
+                const size_t first = dynFine_.size();
+                const SubdivisionPlan* plan = isModel(o.id >> 24) ? subdivisionPlan(o, dyn_.data() + at) : nullptr;
+                if (plan)
+                    subdivideModel(dynGpu_.data() + at, o.tris.size(), *plan, subdivision_.level, subdivision_.amount, planFaces_, dynFine_);
+                else
+                    dynFine_.insert(dynFine_.end(), dynGpu_.begin() + std::ptrdiff_t(at), dynGpu_.begin() + std::ptrdiff_t(at + o.tris.size()));
+                for (int m = std::min<int>(o.blend, 4); m < 5; ++m) dynStart_[m] += uint32_t(dynFine_.size() - first);
+                at += o.tris.size();
+            }
+            dynGpu_.swap(dynFine_);
+        }
         costs_.dynamicMs = msSince(began);
-        costs_.dynamicVertices = uint32_t(dyn_.size());
+        costs_.dynamicVertices = uint32_t(dynGpu_.size());
         costs_.dynamicOpaque = dynStart_[0];
     }
 
+    // the plan of a model, made once per id, vertex count and layout; none for a pose fallen on one point
+    const SubdivisionPlan* subdivisionPlan(const DynamicObject& o, const RenderVertex* tris) {
+        ModelPlan& entry = modelPlans_[o.id];
+        if (entry.count != o.tris.size() || entry.layout != o.layout || entry.plan.roundEdges.empty()) {
+            entry.count = o.tris.size();
+            entry.layout = o.layout;
+            if (!buildSubdivisionPlan(tris, o.tris.size(), entry.plan)) return nullptr;
+        }
+        return &entry.plan;
+    }
+
     void resetHistory() override {
+        modelPlans_.clear();
         history_.reset();
         historyValid_ = false;
         pendingReset_ = true;
@@ -1638,7 +1723,8 @@ private:
         if (staticBlas_)
             inst[n++] = nvrhi::rt::InstanceDesc().setBLAS(staticBlas_).setInstanceID(0).setInstanceMask(kRayMaskRoom).setFlags(flags);
         const uint32_t casters = dynOpaque / 3 * 3;
-        if (sun_.enabled && !sun_.sheltered && casters && dynBuf_) {
+        // the characters cast the sun's shadow and the particle lights'
+        if (((sun_.enabled && !sun_.sheltered) || !particleLights_.empty()) && casters && dynBuf_) {
             std::vector<float> attr;
             toAttr(dynGpu_, casters, attr);
             if (dynAttr_->getDesc().byteSize < attr.size() * sizeof(float)) {
@@ -1732,6 +1818,7 @@ private:
                     f.lightColor[k][c] = l.color[c];
                 }
                 f.lightPos[k][3] = l.radius;
+                f.lightColor[k][3] = l.clearing;
             }
             f.lightInfo[0] = float(particleLights_.size());
             f.lightInfo[1] = particleLighting_.strength;
@@ -2107,6 +2194,15 @@ private:
     bool rt_ = false;
     SunLight sun_;
     ParticleLighting particleLighting_;
+    ModelSubdivision subdivision_;
+    struct ModelPlan {
+        size_t count = 0;
+        uint32_t layout = 0;
+        SubdivisionPlan plan;
+    };
+    std::unordered_map<uint32_t, ModelPlan> modelPlans_; // by object id
+    std::vector<GpuVertex> dynFine_;                     // the subdivided frame, kept for its capacity
+    std::vector<float> planFaces_;
     std::vector<ParticleLight> particleLights_; // this frame's (uploadDynamic)
     FrameCosts costs_;
     std::vector<SeeThroughBody> seeBodies_; // setSeeThrough

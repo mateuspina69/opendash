@@ -173,6 +173,8 @@ void App::parseArgs(int argc, char** argv) {
         else if (a == "--sun-strength") sunStrength = std::stof(argv[++i]);
         else if (a == "--sun-strength-closed") sunStrengthClosed = std::stof(argv[++i]);
         else if (a == "--roof-study") roofStudyPath = argv[++i]; // dev: every room's openness to the sky, a CSV, and exits
+        else if (a == "--model-subdivision") modelSubdivisionLevel = std::clamp(std::stoi(argv[++i]), 1, 4);
+        else if (a == "--model-subdivision-amount") modelSubdivisionAmount = std::stof(argv[++i]);
         else if (a == "--particle-lights") {
             particleLightsArg = std::stoi(argv[++i]);
             particleLights = particleLightsArg != 0;

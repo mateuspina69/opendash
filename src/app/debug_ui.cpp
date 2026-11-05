@@ -212,6 +212,9 @@ void App::drawDebugMenu() {
             }
             else
                 ImGui::TextDisabled("Sol: GPU sem ray tracing");
+            ImGui::SeparatorText("Modelos subdivididos (experimento)");
+            ImGui::SliderInt("subdivisao (1 = original)", &modelSubdivisionLevel, 1, 4);
+            if (modelSubdivisionLevel > 1) ImGui::SliderFloat("arredondar", &modelSubdivisionAmount, 0.0f, 1.0f, "%.2f");
             ImGui::SeparatorText("Luz das particulas");
             if (ImGui::Checkbox("tiros e explosoes iluminam o cenario", &particleLights))
                 od::saveConfigValue("particle_lights", particleLights ? "1" : "0");

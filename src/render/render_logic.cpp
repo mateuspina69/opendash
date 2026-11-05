@@ -270,7 +270,9 @@ std::vector<ParticleLight> gatherParticleLights(const std::vector<DynamicObject>
                 hi[c] = std::max(hi[c], v.pos[c]);
             }
         const float centre[3] = {(lo[0] + hi[0]) * 0.5f, (lo[1] + hi[1]) * 0.5f, (lo[2] + hi[2]) * 0.5f};
-        const float reach = std::clamp(std::sqrt(dist2(lo, hi)), radius, radius * 4.0f);
+        const float size = std::sqrt(dist2(lo, hi));
+        const float reach = std::clamp(size, radius, radius * 4.0f);
+        const float clearing = std::max(size * 0.5f, radius * 0.1f);
         size_t into = lights.size();
         float nearest = radius * radius * 0.25f;
         if (lights.size() >= maxLights) nearest = std::numeric_limits<float>::max();
@@ -281,7 +283,7 @@ std::vector<ParticleLight> gatherParticleLights(const std::vector<DynamicObject>
             }
         if (into == lights.size()) {
             if (lights.size() >= maxLights) continue; // maxLights 0
-            lights.push_back({{centre[0], centre[1], centre[2]}, reach, {o.glow[0], o.glow[1], o.glow[2]}});
+            lights.push_back({{centre[0], centre[1], centre[2]}, reach, {o.glow[0], o.glow[1], o.glow[2]}, clearing});
             weights.push_back(weight);
             continue;
         }
@@ -292,9 +294,112 @@ std::vector<ParticleLight> gatherParticleLights(const std::vector<DynamicObject>
             l.color[c] += o.glow[c];
         }
         l.radius = std::max(l.radius, reach);
+        l.clearing = std::max(l.clearing, clearing);
         weights[into] += weight;
     }
     return lights;
+}
+
+void phongPoint(const float a[3], const float b[3], const float c[3], const float na[3], const float nb[3],
+                const float nc[3], float u, float v, float w, float amount, float out[3]) {
+    const float flat[3] = {a[0] * u + b[0] * v + c[0] * w, a[1] * u + b[1] * v + c[1] * w, a[2] * u + b[2] * v + c[2] * w};
+    // how far the flat point lies off a vertex's tangent plane
+    const auto off = [&](const float* p, const float* n) {
+        return (flat[0] - p[0]) * n[0] + (flat[1] - p[1]) * n[1] + (flat[2] - p[2]) * n[2];
+    };
+    const float oa = off(a, na), ob = off(b, nb), oc = off(c, nc);
+    for (int k = 0; k < 3; ++k) out[k] = flat[k] - amount * (u * oa * na[k] + v * ob * nb[k] + w * oc * nc[k]);
+}
+
+bool buildSubdivisionPlan(const RenderVertex* tris, size_t count, SubdivisionPlan& plan) {
+    plan = {};
+    const size_t faces = count / 3;
+    const auto quant = [](const float* p) {
+        const auto q = [](float x) { return uint64_t(int64_t(std::lround(x * 4.0f)) & 0x1FFFFF); };
+        return q(p[0]) | q(p[1]) << 21 | q(p[2]) << 42;
+    };
+    std::vector<uint64_t> keys(faces * 3);
+    for (size_t k = 0; k < faces * 3; ++k) keys[k] = quant(tris[k].pos);
+    std::vector<float> fn(faces * 3);
+    for (size_t f = 0; f < faces; ++f) faceNormal(tris[f * 3].pos, tris[f * 3 + 1].pos, tris[f * 3 + 2].pos, &fn[f * 3]);
+    const auto dot = [](const float* x, const float* y) { return x[0] * y[0] + x[1] * y[1] + x[2] * y[2]; };
+
+    // the faces on each edge, as their corners at the edge's two ends (lower position first)
+    struct Edge {
+        size_t corners[2][2];
+        int faces = 0;
+    };
+    struct EdgeHash {
+        size_t operator()(const std::pair<uint64_t, uint64_t>& e) const {
+            return size_t(e.first * 0x9E3779B97F4A7C15ull ^ (e.second + 0x7F4A7C15ull));
+        }
+    };
+    std::unordered_map<std::pair<uint64_t, uint64_t>, Edge, EdgeHash> edges;
+    const auto edgeKey = [&](size_t a, size_t b) {
+        return keys[a] < keys[b] ? std::make_pair(keys[a], keys[b]) : std::make_pair(keys[b], keys[a]);
+    };
+    for (size_t f = 0; f < faces; ++f)
+        for (size_t e = 0; e < 3; ++e) {
+            size_t a = f * 3 + e, b = f * 3 + (e + 1) % 3;
+            if (keys[a] > keys[b]) std::swap(a, b);
+            Edge& edge = edges[edgeKey(a, b)];
+            if (edge.faces < 2) {
+                edge.corners[edge.faces][0] = a;
+                edge.corners[edge.faces][1] = b;
+            }
+            ++edge.faces;
+        }
+    if (edges.size() < faces) return false;
+
+    // smoothing groups: two faces on an edge under the limit share their corners at its ends, and whatever those share. A
+    // group is one normal, so both sides of an edge inside it curve alike. (Compared to one face's own normal instead, a
+    // neighbour past the limit gave the two sides different averages and a nearly flat edge counted as a crease.)
+    std::vector<uint32_t> group(faces * 3);
+    for (size_t k = 0; k < group.size(); ++k) group[k] = uint32_t(k);
+    const auto find = [&](uint32_t k) {
+        while (group[k] != k) k = group[k] = group[group[k]];
+        return k;
+    };
+    for (const auto& [key, edge] : edges) {
+        (void)key;
+        if (edge.faces != 2) continue;
+        const size_t f0 = edge.corners[0][0] / 3, f1 = edge.corners[1][0] / 3;
+        if (dot(&fn[f0 * 3], &fn[f1 * 3]) < 0.5f) continue;
+        for (int end = 0; end < 2; ++end) group[find(uint32_t(edge.corners[0][end]))] = find(uint32_t(edge.corners[1][end]));
+    }
+    std::unordered_map<uint32_t, std::vector<uint32_t>> members; // group -> its faces
+    for (size_t k = 0; k < group.size(); ++k) members[find(uint32_t(k))].push_back(uint32_t(k / 3));
+    plan.smoothStart.assign(faces * 3 + 1, 0);
+    for (size_t k = 0; k < group.size(); ++k) {
+        const std::vector<uint32_t>& fs = members[find(uint32_t(k))];
+        plan.smoothFaces.insert(plan.smoothFaces.end(), fs.begin(), fs.end());
+        plan.smoothStart[k + 1] = uint32_t(plan.smoothFaces.size());
+    }
+
+    plan.roundEdges.assign(faces, 0);
+    for (size_t f = 0; f < faces; ++f)
+        for (size_t e = 0; e < 3; ++e) {
+            const Edge& edge = edges[edgeKey(f * 3 + e, f * 3 + (e + 1) % 3)];
+            if (edge.faces == 2 && find(uint32_t(edge.corners[0][0])) == find(uint32_t(edge.corners[1][0])) &&
+                find(uint32_t(edge.corners[0][1])) == find(uint32_t(edge.corners[1][1])))
+                plan.roundEdges[f] |= uint8_t(1 << e);
+        }
+    return true;
+}
+
+void subdivisionNormal(const SubdivisionPlan& plan, size_t k, const float* faceNormals, float out[3]) {
+    float n[3] = {0.0f, 0.0f, 0.0f};
+    for (uint32_t i = plan.smoothStart[k]; i < plan.smoothStart[k + 1]; ++i)
+        for (int c = 0; c < 3; ++c) n[c] += faceNormals[size_t(plan.smoothFaces[i]) * 3 + size_t(c)];
+    const float len = std::sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
+    for (int c = 0; c < 3; ++c) out[c] = len > 1e-6f ? n[c] / len : faceNormals[k / 3 * 3 + size_t(c)];
+}
+
+SubdividedCull subdividedCull(int cull, bool opposite) {
+    if (cull <= 0) return {0, false};
+    if (cull == 1 || cull == 4) return {1, false};
+    if (cull == 5) return {1, opposite};
+    return {opposite ? 0 : 1, false};
 }
 
 void MotionHistory::reset() { last_.clear(); }

@@ -50,7 +50,7 @@ cbuffer Frame : register(b0) {
     float4 skyPoleUp;     // the dome's poles (SkyPoles): the colour, a = where the fade starts (a sine)
     float4 skyPoleDown;   // ... a = where it is whole (a sine); 0: a draw that is not the dome, or no fade
     float4 lightPos[32];   // the particle lights (renderer.hpp kMaxParticleLights): position, radius
-    float4 lightColor[32]; // ... colour
+    float4 lightColor[32]; // ... colour, a = how near it no character stops it (ParticleLight::clearing)
     float4 lightInfo;      // ... how many this draw receives (x), the gain (y)
 };
 Texture2DArray pages : register(t0);
@@ -94,40 +94,50 @@ float sunVisibility(float3 wp, float3 n, float lift) {
     return q.CommittedStatus() == COMMITTED_TRIANGLE_HIT ? 0.0 : 1.0;
 }
 
-// 1 = no wall of the room stands between `from` and a particle light `dist` away along `dir`; the light's last stretch
-// does not count (an effect is often born on the surface it hit). Actors don't stop these (the instance mask)
-float lightVisibility(float3 from, float3 dir, float dist) {
+// 1 = nothing of the instances in `mask` lies along the ray up to tMax
+float rayClear(float3 from, float3 dir, float tMax, uint mask) {
     RayDesc r;
     r.Origin = from;
     r.Direction = dir;
     r.TMin = 0.5;
-    r.TMax = max(dist * 0.9, 0.6);
+    r.TMax = max(tMax, 0.6);
     RayQuery<RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> q;
-    q.TraceRayInline(sceneAS, RAY_FLAG_NONE, 1, r);
+    q.TraceRayInline(sceneAS, RAY_FLAG_NONE, mask, r);
     while (q.Proceed())
         if (q.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE &&
             blocksLight(q.CandidateInstanceID(), q.CandidatePrimitiveIndex(), q.CandidateTriangleBarycentrics()))
             q.CommitNonOpaqueTriangleHit();
     return q.CommittedStatus() == COMMITTED_TRIANGLE_HIT ? 0.0 : 1.0;
 }
+
+// 1 = a particle light `dist` away along `dir` reaches `from`. The room stops it short of its last tenth (an effect is
+// often born on the surface it hit), a character short of the light's own clearing (the body an explosion is born in,
+// the hand a shot leaves, must not put the light out)
+float lightVisibility(float3 from, float3 dir, float dist, float clearing) {
+    if (rayClear(from, dir, dist * 0.9, 1) < 0.5) return 0.0;
+    return rayClear(from, dir, dist - clearing, 2);
+}
 #endif
 
-// what the particle lights give a surface at wp (facing n): a soft window falloff to the light's radius, soft at the
-// terminator (a low shot still lights the floor it flies over), saturating as lights overlap. 0..1 per channel
-float3 particleLight(float3 wp, float3 n) {
+// what the particle lights give a surface at wp (facing n; ns its shading normal): a soft window falloff to the light's
+// radius, soft at the terminator (a low shot still lights the floor it flies over), saturating as lights overlap. 0..1
+// per channel
+float3 particleLight(float3 wp, float3 n, float3 ns) {
     float3 sum = float3(0, 0, 0);
     for (int k = 0; k < int(lightInfo.x + 0.5); ++k) {
         const float3 to = lightPos[k].xyz - wp;
         const float d2 = dot(to, to), r2 = lightPos[k].w * lightPos[k].w;
         if (d2 >= r2) continue;
         const float dist = sqrt(d2);
-        const float3 dir = dist > 1e-3 ? to / dist : n;
+        const float3 dir = dist > 1e-3 ? to / dist : ns;
         const float window = 1.0 - d2 / r2;
-        const float gain = window * window * saturate((dot(n, dir) + 0.25) / 1.25);
+        const float gain = window * window * saturate((dot(ns, dir) + 0.25) / 1.25);
         const float3 add = lightColor[k].rgb * gain;
         if (dot(add, float3(1, 1, 1)) < 0.01) continue; // too little to pay a ray for
 #ifdef OD_RT
-        if (lightVisibility(wp + n * 2.0, dir, dist) < 0.5) continue;
+        // as the sun's: a low-poly face turned away from the light starts further out, past its own neighbours
+        const float lift = dot(n, dir) > 0.0 ? 2.0 : 12.0;
+        if (lightVisibility(wp + ns * lift, dir, dist, lightColor[k].w) < 0.5) continue;
 #endif
         sum += add;
     }
@@ -502,7 +512,7 @@ PSOut ps_main(VSOut i, bool front : SV_IsFrontFace) {
 #endif
     // the particle lights on the opaque surfaces (an effect's own texels give light, they don't take it): on top of the
     // sun's shadow, so a shot lights up a shadowed corner
-    if (lightInfo.x > 0.5 && !(surface & 4u)) rgb = saturate(rgb + unlit * lightInfo.y * particleLight(i.world, ns));
+    if (lightInfo.x > 0.5 && !(surface & 4u)) rgb = saturate(rgb + unlit * lightInfo.y * particleLight(i.world, n, ns));
     // fog: an opaque / averaged surface turns into the fog colour; light a draw adds (B+F, B+F/4) or takes away
     // (B*(1-F)) fades out instead -- pulled toward the fog colour it would add a fog-coloured veil of its own
     const bool fadeOut = blendMode > 1.5;

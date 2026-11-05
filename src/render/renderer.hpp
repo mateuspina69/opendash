@@ -129,13 +129,22 @@ struct Fog {
 // OpenDash remaster: the light of the particles. Every additive effect (a DynamicObject with a glow: the shots, the
 // explosions, the sparks, the fire) is a point light at its centre, of its own colour (its texels' mean times its vertex
 // colour); the opaque surfaces near it gain that light times their texture colour, also where the sun's shadow darkened
-// them. Nothing darkens: the original's light stays painted in the textures. With ray queries the room's walls stop it
+// them. Nothing darkens: the original's light stays painted in the textures. With ray queries the room's walls and the
+// characters stop it
 struct ParticleLighting {
     bool enabled = false;
     float strength = 1.5f; // the light's gain
     float radius = 400.0f; // world units a light reaches at least (a larger effect reaches further)
 };
 constexpr size_t kMaxParticleLights = 32; // a frame; effects close together share one (render_logic gatherParticleLights)
+
+// OpenDash experiment: the characters' models subdivided before they are drawn and traced (Phong tessellation, the
+// original vertices stay in place). level: each triangle's edges split in that many parts (1 = off); amount: how far the
+// new points leave the flat faces, 0..1. A crease or an open edge stays straight, so the model never opens
+struct ModelSubdivision {
+    int level = 1;
+    float amount = 0.75f;
+};
 
 // The slices a room's upload keeps free after its own: an effect's texture met during play takes one without touching
 // the room or the other slices
@@ -251,6 +260,8 @@ public:
     virtual void setPrecipitation(const Precipitation& p) = 0;
     // the light of the particles (ParticleLighting above)
     virtual void setParticleLighting(const ParticleLighting& l) { (void)l; }
+    // the characters' subdivision (ModelSubdivision above)
+    virtual void setModelSubdivision(const ModelSubdivision& s) { (void)s; }
     // --frame-log: what the last uploadDynamic and draw took (FrameCosts above)
     virtual FrameCosts frameCosts() const { return {}; }
     // sky: a dome around the eye or screen-space layers; isSky false = a 2D layer that is not the sky (ST01's travel

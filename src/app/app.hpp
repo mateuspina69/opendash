@@ -81,6 +81,9 @@ struct App {
     bool particleLights = false;
     int particleLightsArg = -1; // --particle-lights: wins over the file
     float particleLightStrength = 1.5f, particleLightRadius = 400.0f;
+    // the experiment of the characters' subdivision (renderer ModelSubdivision; F1 Video, --model-subdivision): 1 = off
+    int modelSubdivisionLevel = 1;
+    float modelSubdivisionAmount = 0.75f;
     float shotZoom = 1.0f;
     float shotOrbit = 0.0f; // --shot-orbit A: dev, the --shot-every shots' camera turned A radians around the player
     bool startPlay = false;

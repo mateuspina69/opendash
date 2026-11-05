@@ -617,6 +617,7 @@ void App::updateScene() {
             lighting.strength = particleLightStrength;
             lighting.radius = particleLightRadius * float(1 << current.shift);
             renderer->setParticleLighting(lighting);
+            renderer->setModelSubdivision({modelSubdivisionLevel, modelSubdivisionAmount});
             applySun(); // whether this room lies under the sun (roomHasNoSky)
         }
         renderer->uploadDynamic(dynFrame);
