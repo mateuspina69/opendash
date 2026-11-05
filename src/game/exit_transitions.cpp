@@ -578,6 +578,33 @@ void walkOffEnd() {
 // ---- kind 14 (the door actor's "yes": game/door_actor), states 0x88c968 --------------------------------------------
 // exe 0x42d5c0: the door actor within reach of the player standing on an exit's trigger found (none: the end), then,
 // once the player is script driven, the camera by the door's yaw and the request armed from that exit
+} // namespace
+
+bool doorActorExitAhead(const Player& p) {
+    for (size_t i = 0; i < StaticPool::size(); ++i) {
+        const StaticActor& a = staticPool()[i];
+        if (!(a.flags & kActorLive) || a.type != kDoorActorType) continue;
+        if (std::abs(int(p.pos.x.whole) - int(a.pos.x.whole)) >= kDoorReach) continue;
+        if (std::abs(int(p.pos.z.whole) - int(a.pos.z.whole)) >= kDoorReach) continue;
+        for (uint32_t e = 0; exitEntry(e).id != kExitEnd; ++e) {
+            const ExitEntry exit = exitEntry(e);
+            if (uint16_t(a.pos.x.whole) != uint16_t(exit.trigger.x) || uint16_t(a.pos.y.whole) != uint16_t(exit.trigger.y) ||
+                uint16_t(a.pos.z.whole) != uint16_t(exit.trigger.z))
+                continue;
+            TransitionRequest& r = transitionRequest();
+            r.destStage = exit.destStage;
+            r.destRoom = exit.destRoom;
+            r.destination = exit.destination;
+            r.fadeOut = kDoorActorFadeOut;
+            r.fadeIn = kDoorActorFadeIn;
+            return true;
+        }
+    }
+    return false;
+}
+
+namespace {
+
 void doorActorStart() {
     ScriptState& s = scriptState();
     DoorActorScriptBytes& bytes = scriptState().part<DoorActorScriptBytes>();

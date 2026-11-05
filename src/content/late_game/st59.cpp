@@ -46,6 +46,7 @@
 #include "game/transition.hpp"
 #include "game/minimap.hpp"
 #include "game/transition_state.hpp"
+#include "game/presentation.hpp"
 
 using namespace od::port::st59_state;
 
@@ -697,6 +698,27 @@ void st59StageCase() { // 0x58ca30
         return;
     default: return;
     }
+}
+
+void registerRaceNetScreen() {
+    registerNetScreenClass({kRaceClass, 10,
+                            [](ControllerActor& c, uint8_t* out) {
+                                const RaceActorFields& f = classState<RaceActorFields>(c);
+                                const int16_t words[4] = {f.x, f.y, f.gaugeValue, int16_t(f.clut)};
+                                for (int k = 0; k < 4; ++k) {
+                                    out[k * 2] = uint8_t(uint16_t(words[k]));
+                                    out[k * 2 + 1] = uint8_t(uint16_t(words[k]) >> 8);
+                                }
+                                out[8] = 0;
+                                out[9] = 0;
+                            },
+                            [](ControllerActor& c, const uint8_t* in) {
+                                RaceActorFields& f = classState<RaceActorFields>(c);
+                                f.x = int16_t(uint16_t(in[0] | in[1] << 8));
+                                f.y = int16_t(uint16_t(in[2] | in[3] << 8));
+                                f.gaugeValue = int16_t(uint16_t(in[4] | in[5] << 8));
+                                f.clut = uint16_t(in[6] | in[7] << 8);
+                            }});
 }
 
 void raceActorUpdate(const PlayerEnv& env, uint32_t actor) { raceActor(env, controllerActorAt(actor)); }

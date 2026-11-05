@@ -416,7 +416,7 @@ int run(const WorldArgs& w) {
     view->afterFrame = [&] { od::port::softResetFrame(view->fadeTask); };
     holdRoom(current, w.stage, w.sub);
     if (w.stageRecord) od::port::setStartingStageRecord(*w.stageRecord);
-    if (w.linkPort != 0) od::port::setStartingGlobalState(w.globalState.value_or(od::port::GlobalChange{}));
+    if (w.linkPort != 0 || w.globalState) od::port::setStartingGlobalState(w.globalState.value_or(od::port::GlobalChange{}));
 
     // the boot's display state, which no title sets here (App::leaveTitle)
     od::port::display().mode = 0;
@@ -435,25 +435,15 @@ int run(const WorldArgs& w) {
     for (const WorldArgs::Guest& g : w.guests) od::port::remotePlayerJoin(g.id, guestState(g));
     if (w.hostAway) od::port::leavePlayer(0);
     SDL_Log("world: ST%02X sub %d running, %u live actors", w.stage, w.sub, od::port::worldDigest().liveActors);
-    if (w.listActors) { // test instrument: what stands in the room
-        const auto list = [](auto& pool, size_t count, od::port::ActorPool kind) {
-            for (size_t i = 0; i < count; ++i) {
-                if (!(pool[i].flags & od::port::kActorLive)) continue;
-                const od::RoutineRef h = od::port::actorHandler(pool[i], kind, false);
-                SDL_Log("world actor: %s at %d %d %d", h ? od::routineName(h.id()) : "?", int(pool[i].pos.x.whole), int(pool[i].pos.y.whole),
-                        int(pool[i].pos.z.whole));
-            }
-        };
-        list(od::port::animatedPool(), od::port::kAnimatedFieldSlots, od::port::ActorPool::Animated);
-        list(od::port::staticPool(), od::port::StaticPool::size(), od::port::ActorPool::Statics);
-    }
 
     od::port::PresentationBatch present;
-    bool sceneOn = false, sceneGated = false, sceneAsked = false;
+    bool sceneOn = false, sceneGated = false, sceneAsked = false, worldWhite = false;
+    std::vector<uint8_t> lastScreen;
     uint16_t scenePad = 0;
     uint8_t sceneOwner = 0;
     od::port::NetPlayerWatch sceneWatch;
     od::port::NetPlayerFields sceneFields;
+    std::map<uint8_t, od::port::NetStateSender> netClients;
     // on a link: no player of its own; the coordinator's come and go, and its silence ends the world
     std::unique_ptr<WorldLink> link;
     if (w.linkPort != 0) {
@@ -464,6 +454,26 @@ int run(const WorldArgs& w) {
         }
         link->sendReliable({WorldMessageType::Hello});
         od::port::setPresentationBatch(&present);
+        od::port::setWorldWarpHook([&](const od::port::TransitionRequest& r) {
+            const auto half = [](int16_t v, std::vector<uint8_t>& o) {
+                o.push_back(uint8_t(v));
+                o.push_back(uint8_t(uint16_t(v) >> 8));
+            };
+            std::vector<uint8_t> bytes = {r.destStage, r.destRoom};
+            half(r.trigger.x, bytes);
+            half(r.trigger.y, bytes);
+            half(r.trigger.z, bytes);
+            half(r.destination.x, bytes);
+            half(r.destination.y, bytes);
+            half(r.destination.z, bytes);
+            half(r.destination.yaw, bytes);
+            for (const auto& [client, sender] : netClients) {
+                WorldMessage warp{WorldMessageType::NetWarp};
+                warp.playerId = client;
+                warp.netState = bytes;
+                link->sendReliable(warp);
+            }
+        });
         sceneGated = !od::port::storyOptionalStage(uint8_t(w.stage));
         od::port::setScriptsGated(sceneGated);
         od::port::setWorldExitHook([&](const od::port::TransitionRequest& r) {
@@ -500,7 +510,6 @@ int run(const WorldArgs& w) {
     od::port::StageRecord lastRecord{}; // what the coordinator was last told; a first change goes out at once
     if (w.stageRecord) lastRecord = *w.stageRecord;
     // the network state: one sender per client
-    std::map<uint8_t, od::port::NetStateSender> netClients;
     struct FiredShot {
         bool live = false;
         uint8_t player = 0, clientSlot = 0;
@@ -525,6 +534,7 @@ int run(const WorldArgs& w) {
             const od::port::NetPlayerFields& f = m.from.fields();
             for (size_t c = 0; c < 2; ++c) m.tracks[c].step(f.channels[c], f.stageAnims, m.ownerTick);
             od::port::remotePlayerState(id, od::port::netPlayerSnapshot(f, m.tracks));
+            od::port::applyNetArm(od::port::playerById(id), f);
         }
     };
     const auto playersToOthers = [&](uint32_t netTick) {
@@ -597,7 +607,7 @@ int run(const WorldArgs& w) {
     // a script runs in the room: a scene, played once, with one Mega Man, for everyone in it
     const auto sceneTurn = [&](uint32_t netTick) {
         const bool now = od::port::scriptState().inUse() && od::port::scriptState().id != 0;
-        if (now && !sceneOn && sceneGated) { // everyone first
+        if (now && !sceneOn && sceneGated && od::port::storyScriptGated(od::port::scriptState().id)) { // everyone first
             if (!sceneAsked) link->sendReliable({WorldMessageType::NetSceneGate});
             sceneAsked = true;
             return;
@@ -667,6 +677,21 @@ int run(const WorldArgs& w) {
         if (link) {
             fightTurn();
             sceneTurn(netTick);
+            if (od::port::hudScriptWhiteNow() != worldWhite) {
+                worldWhite = !worldWhite;
+                present.white(worldWhite);
+            }
+            if (int(netTick) % w.netTicks == 0) {
+                if (std::vector<uint8_t> screen = od::port::netScreenCapture(); screen != lastScreen) {
+                    lastScreen = screen;
+                    for (const auto& [client, sender] : netClients) {
+                        WorldMessage m{WorldMessageType::NetScreen};
+                        m.playerId = client;
+                        m.netState = screen;
+                        link->sendLatest(m);
+                    }
+                }
+            }
             if (!present.empty()) {
                 const std::vector<uint8_t> batch = present.take();
                 for (const auto& [client, sender] : netClients) {
@@ -780,7 +805,7 @@ int run(const WorldArgs& w) {
             case WorldMessageType::NetUse:
                 if (m.playerId < od::port::kPlayerSlots && od::port::playerIsRemote(m.playerId)) od::port::remotePlayerUse(m.playerId);
                 break;
-            case WorldMessageType::NetEventEnd: od::port::eventOwnerEnded(); break;
+            case WorldMessageType::NetEventEnd: od::port::eventOwnerEnded(m.playerId); break;
             case WorldMessageType::NetRevive: {
                 const uint8_t target = m.netState.empty() ? uint8_t(0xff) : m.netState[0];
                 if (target < od::port::kPlayerSlots && od::port::playerIsRemote(target) && m.playerId < od::port::kPlayerSlots &&
@@ -793,7 +818,7 @@ int run(const WorldArgs& w) {
                 break;
             }
             case WorldMessageType::NetSpeaker:
-                if (m.netState.size() == 1) od::port::eventState().speakerAnimation = m.netState[0];
+                if (m.netState.size() == 1 && m.playerId < od::port::kPlayerSlots) od::port::eventOfOwner(m.playerId).speakerAnimation = m.netState[0];
                 break;
             case WorldMessageType::NetLeave: netClients.erase(m.playerId); break;
             case WorldMessageType::NetAck:
@@ -878,6 +903,18 @@ int run(const WorldArgs& w) {
             if (next > after) SDL_DelayNS(next - after);
             else next = after; // late: no burst to catch up, the tick rate falls
         }
+    }
+    if (w.listActors) { // test instrument: what stands in the room
+        const auto list = [](auto& pool, size_t count, od::port::ActorPool kind) {
+            for (size_t i = 0; i < count; ++i) {
+                if (!(pool[i].flags & od::port::kActorLive)) continue;
+                const od::RoutineRef h = od::port::actorHandler(pool[i], kind, false);
+                SDL_Log("world actor: %s at %d %d %d", h ? od::routineName(h.id()) : "?", int(pool[i].pos.x.whole), int(pool[i].pos.y.whole),
+                        int(pool[i].pos.z.whole));
+            }
+        };
+        list(od::port::animatedPool(), od::port::kAnimatedFieldSlots, od::port::ActorPool::Animated);
+        list(od::port::staticPool(), od::port::StaticPool::size(), od::port::ActorPool::Statics);
     }
     if (netStats) netStats->write(uint32_t(tick), od::port::encodePlayerState({}).size());
     const int rc = view->playError.empty() ? 0 : 1;

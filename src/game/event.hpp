@@ -48,7 +48,12 @@ void setEventOwnerHook(std::function<void(const OwnerEvent&)> hook);
 // the player whose Use asked for the next event
 void setEventOwner(size_t player);
 // the owner's event is over: its speaker turns back, then it ends
-void eventOwnerEnded();
+void eventOwnerEnded(size_t player);
+// the actor of this slot is updated next: it sees its player's event, if it is its speaker
+void eventSelectFor(uint8_t actorSlot);
+void eventSelectNone();
+// the request of this player's event (what a world holds of it)
+EventState& eventOfOwner(size_t player);
 // the player is out of the world: their event ends with them
 void eventOwnerLeft(size_t player);
 

@@ -94,8 +94,10 @@ using ActorUpdateFn = void (*)(const PlayerEnv& env, uint32_t actor);
 // off, e.g. exe 0x5e05d0(0xffe, 1) during a mission's opening message): the exe's draw pass 0x5f3fd0 tests byte 0 &
 // byte 1 & 2 (6), not bit 0
 RoutineRef actorHandler(const ActorHeader& actor, ActorPool pool, bool updating = true);
-// the class last updated (a crash's report says it)
+#ifndef NDEBUG
+// the class last updated (a crash's report says it; debug builds)
 RoutineId updatingActorClass();
+#endif
 // actorHandler for host-side queries (draw passes, logs) of the FIELD's actors: while the status sub-screen has
 // swapped the pool-0x20 class table (game mode 5 steps 2..3, table 0x91a7cc) the field's table is the one saved in
 // 0xa5a018; an empty entry resolves to none instead of reading address 0

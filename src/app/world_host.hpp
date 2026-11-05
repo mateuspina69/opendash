@@ -65,8 +65,13 @@ public:
     void respawnAsk(uint8_t playerId);
     // a player who has just joined the session: told to come next to the host's Mega Man
     void placeNextToHost(uint8_t playerId);
+    // everyone is down, once: the players told by the caller. Every world stops and the session's state goes back to this save
+    bool takeEveryoneDown();
+    void reloadFrom(const std::vector<uint8_t>& save, const std::filesystem::path& savePath);
     // test instrument: this flag is clear from the session's start, whatever the save says
     void testClearFlag(uint32_t flag);
+    // test instrument: the story's value from the session's start
+    void testStory(uint8_t story);
     // The gates. Teleport: those far away are brought at once; else they are waited for
     void setGateTeleport(bool teleport) { gateTeleport_ = teleport; }
     void setPlayerName(uint8_t playerId, const std::string& name) { names_.at(playerId) = name; }
@@ -107,7 +112,7 @@ private:
     od::port::GlobalMaster global_;
     std::array<std::optional<WorldBrief::Entry>, kPlayers> briefs_{};
     std::map<WorldRoom, bool> bossFight_;
-    bool gameOverSent_ = false;
+    bool gameOverSent_ = false, everyoneDown_ = false;
     std::array<bool, kPlayers> joining_{}; // to be placed next to the host, as soon as the host's place is known
     void gameOverTurn();
     struct Gate {

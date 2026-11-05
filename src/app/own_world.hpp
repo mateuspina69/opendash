@@ -31,6 +31,10 @@ public:
     void useSession(od::net::Session* session, bool host);
     // the host's save, when it differs from this game's: the game restarts from it (what exists is the host's)
     std::optional<std::vector<uint8_t>> takeHostSave(const std::vector<uint8_t>& current);
+    // everyone was down: the save the game goes on from, when its fade is over
+    std::optional<std::vector<uint8_t>> takeReload();
+    // this game has written a save: on the host, it is what a game over goes back to
+    void gameSaved(std::span<const uint8_t> image) { if (coordinator_) coordinator_->hostSaved(image); }
 
     // the room's files are bound and its spawn has run: the local actors go, this room's world takes over
     void roomBound(int stage, int sub);
@@ -54,6 +58,7 @@ public:
     void setGateTeleport(bool teleport) { if (coordinator_) coordinator_->setGateTeleport(teleport); }
     void testForceAt(uint32_t tick) { testForceTick_ = tick; }
     void testBossFight() { testBossFight_ = true; }
+    void testStory(uint8_t story) { if (coordinator_) coordinator_->testStory(story); }
     void testClearFlag(uint32_t flag) { if (coordinator_) coordinator_->testClearFlag(flag); }
     void stayOnJoin() { if (pipe_) pipe_->setStays(true); stays_ = true; }
     // test instrument: at this local tick the player's life is this
@@ -105,7 +110,11 @@ private:
     };
     void otherPlayerRules(uint8_t id, Other& o, const od::port::PlayerSnapshot& shown);
     void downedTurn();
+    bool reloading_ = false;
+    std::vector<uint8_t> reloadSave_;
     void gateTurn();
+    std::optional<std::array<int16_t, 3>> gateGlow_;
+    int gateGlowTicks_ = 0;
     bool bossFight_ = false, testBossFight_ = false;
     std::string notice_;
     int noticeTicks_ = 0;
@@ -115,7 +124,7 @@ private:
     void sceneTurn();
     void sceneEnd(const std::vector<uint8_t>& at);
     void movedTo(const std::vector<uint8_t>& to);
-    bool stays_ = false;
+    bool stays_ = false, warping_ = false;
     od::port::FadeTask* fade_ = nullptr;
     bool scene_ = false;
     uint8_t sceneOwner_ = 0;

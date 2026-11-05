@@ -48,11 +48,16 @@
 #include "content/nino/st18_props.hpp"
 #include "content/saul_kada/lava_vents.hpp"
 
+namespace od::port {
+void registerRepairGaugeNetScreen();
+} // namespace od::port
+
 namespace od::content {
 
 using namespace od::port;
 
 void registerNinoClasses(ContentRegistry& r) {
+    od::port::registerRepairGaugeNetScreen();
     r.addClasses({
         // the pool-e0 type-0xa enemy spawners of the area's stages
         {RoutineId::SpawnerSt15Update, &spawnerSt15Update},

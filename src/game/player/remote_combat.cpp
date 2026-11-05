@@ -19,7 +19,7 @@ std::vector<uint8_t> encode(const NetGift& v) {
 }
 
 std::optional<NetGift> decodeGift(std::span<const uint8_t> b) {
-    if (b.size() != 4 || b[1] > uint8_t(NetGiftKind::SpecialWeapon)) return std::nullopt;
+    if (b.size() != 4 || b[1] > uint8_t(NetGiftKind::Life)) return std::nullopt;
     return NetGift{b[0], NetGiftKind(b[1]), int16_t(uint16_t(b[2] | b[3] << 8))};
 }
 

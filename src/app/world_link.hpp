@@ -44,7 +44,11 @@ enum class WorldMessageType : uint8_t {
     // the gates: a player stands at a gated exit (where it leads, whether it is a mission's), or has walked off it; the host
     // forces the start; what the session says to everyone; a story boss is being fought in the room; a scene asks for its room,
     // and may start
-    NetGateAsk = 43, NetGateLeave = 44, NetGateForce = 45, NetNotice = 46, NetBossFight = 47, NetSceneGate = 48, NetSceneGo = 49
+    NetGateAsk = 43, NetGateLeave = 44, NetGateForce = 45, NetNotice = 46, NetBossFight = 47, NetSceneGate = 48, NetSceneGo = 49,
+    // a warp inside the room's stage; what a world's controllers draw from; where a gate's door glows
+    NetWarp = 50, NetScreen = 51, NetGateGlow = 52,
+    // everyone is down: the host's last save is what the session goes on from, here its stage and room
+    NetReload = 53
 };
 
 // What a world says of its players to the coordinator

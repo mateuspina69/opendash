@@ -29,4 +29,7 @@ void lightGlowUpdate(const PlayerEnv& env, uint32_t actor);
 // exe 0x598460: the light column (ActorUpdateFn)
 void lightColumnUpdate(const PlayerEnv& env, uint32_t actor);
 
+// the column a glow makes for itself, each machine's glow its own
+bool lightColumnOfAGlow(const StaticActor& column);
+
 } // namespace od::port

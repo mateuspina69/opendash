@@ -2,6 +2,7 @@
 #include "app/play_session.hpp"
 #include "app/lang_sfx.hpp"
 
+#include <utility>
 #include <SDL3/SDL.h>
 
 #include <algorithm>
@@ -1236,6 +1237,7 @@ void PlayerView::logEffects() {
 bool PlayerView::enterPlay(const RoomMesh& mesh) {
     playError.clear();
     leavePlay(); // entered while playing (a dev restart): the live state is the session's
+    if (std::exchange(startFromStorySave, false)) sessionSave.clear(); // ... but what the host's save says comes first
     try {
         if (!ok || !mesh.roomFile) throw std::runtime_error("no player data / room");
         // the state a started game has: the session's (F2 out of a game: sessionSave), else --story-save N's, else
@@ -1387,6 +1389,7 @@ void PlayerView::scanSaveSlots() {
 }
 
 int PlayerView::writeSaveSlot(uint8_t slot, std::span<const uint8_t> img) {
+    if (ownWorld) ownWorld->gameSaved(img);
     try {
         if (savesDir.empty()) throw std::runtime_error("no saves dir");
         char nm[32];
@@ -1723,8 +1726,17 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
         od::port::padVibrationTick(); // 0x54a4cd: the pad vibration's tick (FUN_0055cc40)
         ++game.frame; // 0x54a4dc: the frame counter (u16), before the mode's frame
         if (ownWorld) {
+            if (auto save = ownWorld->takeReload()) { // everyone was down: all go on from the host's last save
+                storySave = std::move(*save);
+                startFromStorySave = true;
+                const int st = storySave[0x128], sb = storySave[0x129];
+                od::port::gameState().setMode(od::port::GameMode::Field);
+                if (loadRoom) loadRoom(st, sb);
+                if (room) enterPlay(*room);
+            }
             if (auto hostSave = ownWorld->takeHostSave(storySave)) { // what exists is the host's
                 storySave = std::move(*hostSave);
+                startFromStorySave = true;
                 if (room) enterPlay(*room);
             }
             if (const int weapon = ownWorld->takeTestWeapon(); weapon >= 0) { // a test instrument: a special weapon equipped

@@ -130,6 +130,8 @@ struct HurtSparksFields : ActorClassState {
 void hitSparkUpdate(const PlayerEnv& env, uint32_t actor);
 // exe 0x55d3c0 (effect type 1): a shot's burst (6 ticks)
 void burstUpdate(const PlayerEnv& env, uint32_t actor);
+// a session's gate: a glint on its door, on this machine only
+void doorGlowAt(int16_t x, int16_t y, int16_t z);
 // exe 0x566130 (static type 13): the player's hurt sparks
 void hurtSparksUpdate(const PlayerEnv& env, uint32_t actor);
 // exe 0x5e5400(loopFlags, x, y, z): the global hit spark (effect type 0, variant 0) at the s16 point, its sprite's size

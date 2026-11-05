@@ -40,6 +40,7 @@ struct NetPlayerFields {
     std::array<NetPlayerChannel, 2> channels{};
     uint8_t status = 0, charge = 0, specialFiring = 0; // what a client's rules for their markers and arms read
     uint8_t downed = 0; // down, for a teammate to revive
+    uint8_t specialHeld = 0; // the special button held with the arm out: a swing, a beam, a suction goes on
     friend bool operator==(const NetPlayerFields&, const NetPlayerFields&) = default;
 };
 
@@ -58,6 +59,9 @@ private:
 };
 
 // Toward one receiver: what changed since what it acknowledged
+// What a shot running from its event reads of its owner, on the world and on the others' machines
+void applyNetArm(Player& p, const NetPlayerFields& f);
+
 class NetPlayerSender {
 public:
     std::vector<uint8_t> update(uint8_t playerId, uint32_t tick, const NetPlayerFields& now);

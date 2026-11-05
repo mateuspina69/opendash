@@ -7,6 +7,7 @@
 #include <memory>
 #include <optional>
 #include <set>
+#include <span>
 #include <vector>
 
 #include "app/world_host.hpp"
@@ -43,7 +44,12 @@ public:
     // the session whose clients come through here (none: a game on its own)
     void useSession(od::net::Session* session) { session_ = session; }
     void testClearFlag(uint32_t flag) { worlds_.testClearFlag(flag); }
+    void testStory(uint8_t story) { worlds_.testStory(story); }
     void setGateTeleport(bool teleport) { worlds_.setGateTeleport(teleport); }
+    // the host's game has written a save: a game over goes back to it
+    void hostSaved(std::span<const uint8_t> save);
+    // everyone was down: the host's game goes on from this save
+    std::optional<std::vector<uint8_t>> takeReload();
 
     std::optional<uint8_t> playerId() const override { return uint8_t(0); }
     void enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& state) override;
@@ -60,6 +66,8 @@ private:
     std::vector<uint8_t> save_;
     od::net::Session* session_ = nullptr;
     std::set<uint8_t> clients_;
+    std::filesystem::path savePath_, lastSavePath_;
+    std::optional<std::vector<uint8_t>> reload_;
 };
 
 // A client's way: the session to the host

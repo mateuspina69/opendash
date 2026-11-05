@@ -23,11 +23,18 @@
 #include "content/calbania/talking_npc.hpp"
 #include "content/calbania/tron_boss.hpp"
 
+namespace od::port {
+void registerAlarmNetScreen();
+void registerEscapeTimerNetScreen();
+} // namespace od::port
+
 namespace od::content {
 
 using namespace od::port;
 
 void registerCalbaniaClasses(ContentRegistry& r) {
+    od::port::registerAlarmNetScreen();
+    od::port::registerEscapeTimerNetScreen();
     r.addClasses({
         // the pool-e0 type-0xa enemy spawners of the area's stages
         {RoutineId::SpawnerSt1fUpdate, &spawnerSt1fUpdate},

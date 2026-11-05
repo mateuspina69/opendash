@@ -45,7 +45,7 @@ constexpr const char* kTransitionArea = "transition port"; // the area of its po
 // The running game task frame's context (set by each field mode tick; the script fades and the frame body use it)
 const PlayerEnv* gEnv = nullptr;
 TransitionHooks* gHooks = nullptr;
-std::function<void(const TransitionRequest&)> g_worldExit;
+std::function<void(const TransitionRequest&)> g_worldExit, g_worldWarp;
 FadeTask* gFade = nullptr;
 
 // story flags the field mode and the room scripts test
@@ -270,6 +270,7 @@ void inStageWarp() {
 } // namespace
 
 void setWorldExitHook(std::function<void(const TransitionRequest&)> hook) { g_worldExit = std::move(hook); }
+void setWorldWarpHook(std::function<void(const TransitionRequest&)> hook) { g_worldWarp = std::move(hook); }
 
 void playTimeTick() {
     GameState& g = gameState();
@@ -355,7 +356,10 @@ void fieldMode(const PlayerEnv& env, TransitionHooks& hooks, FadeTask& fade) {
             g_worldExit(r);
             r.state = kTransitionNone;
         } else if (request != kTransitionNone) {
-            if (request == kTransitionWarp) inStageWarp();
+            if (request == kTransitionWarp) {
+                if (worldHasNoView() && g_worldWarp) g_worldWarp(r);
+                inStageWarp();
+            }
             else g.modeStep = uint8_t(step + 1);
         }
         frameBody();

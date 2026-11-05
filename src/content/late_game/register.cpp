@@ -27,11 +27,21 @@
 #include "content/late_game/st5c_fx3.hpp"
 #include "content/yosyonke/st0a_fx.hpp"
 
+namespace od::port {
+void registerSt5cShockNetLinks();
+} // namespace od::port
+
+namespace od::port {
+void registerRaceNetScreen();
+} // namespace od::port
+
 namespace od::content {
 
 using namespace od::port;
 
 void registerLateGameClasses(ContentRegistry& r) {
+    od::port::registerRaceNetScreen();
+    od::port::registerSt5cShockNetLinks();
     r.addClasses({
         // the pool-e0 type-0xa enemy spawners of the area's stages
         {RoutineId::SpawnerSt45Update, &spawnerSt45Update},

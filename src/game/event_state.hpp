@@ -2,6 +2,8 @@
 // 0x543bb0), its modes, flags and the talk event's states, and the speaker point the start routines take by address.
 #pragma once
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 
 #include "game/vectors.hpp"
@@ -81,9 +83,19 @@ struct EventState {
         turnedRotation = nullptr;
     }
 };
-inline EventState& eventState() {
-    static EventState s;
+// The request: one in the game; a session's world has one per player too, each for the actor that started it (game/event)
+constexpr size_t kEventSlots = 9;
+struct EventSlots {
+    std::array<EventState, kEventSlots> slots{};
+    size_t current = 0;
+};
+inline EventSlots& eventSlots() {
+    static EventSlots s;
     return s;
+}
+inline EventState& eventState() {
+    EventSlots& e = eventSlots();
+    return e.slots[e.current];
 }
 
 // The 16.16 point a start routine passes as the speaker position (its address goes into EventState::speakerPosition)

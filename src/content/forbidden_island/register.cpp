@@ -13,11 +13,16 @@
 #include "content/forbidden_island/st49_landing.hpp"
 #include "content/forbidden_island/st1d_rock_burst.hpp"
 
+namespace od::port {
+void registerSt49DropshipNetLinks();
+} // namespace od::port
+
 namespace od::content {
 
 using namespace od::port;
 
 void registerForbiddenIslandClasses(ContentRegistry& r) {
+    od::port::registerSt49DropshipNetLinks();
     r.addClasses({
         {RoutineId::St1cRisingPropUpdate, &st1cRisingPropUpdate},
         {RoutineId::St1cFaceFigureUpdate, &st1cFaceFigureUpdate},

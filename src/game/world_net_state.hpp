@@ -73,6 +73,9 @@ struct NetEffect {
     uint8_t parent = kNetNoParent; // the slot of the actor it hangs from (a walker's foot dust, a glow, a splash)
     uint8_t bone = 0;              // the point of the player it follows (a splash at a player's bone)
     uint8_t owner = 0;             // the player it belongs to (a blade's swing)
+    uint8_t second = kNetNoParent; // a second actor it holds (a cable's cargo, a ribbon's other bomb)
+    uint8_t subState = 0, step = 0, stepCounter = 0; // what its spawner set on the slot itself
+    std::array<int16_t, 8> trail{};
     std::array<uint8_t, 4> params{};
     std::array<int16_t, 3> pos{}, rot{}, velocity{};
     int16_t spare = 0;

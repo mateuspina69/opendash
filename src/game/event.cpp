@@ -181,29 +181,43 @@ void standEvent(EventState& ev) {
 
 std::function<void(const OwnerEvent&)> g_ownerHook;
 size_t g_owner = 0;
-bool g_ownerEventRuns = false, g_ownerEventEnding = false;
+uint8_t g_updatingSlot = 0;
+std::array<bool, kPlayerSlots> g_ownerEventEnding{};
+std::array<uint8_t, kEventSlots> g_speakerSlot{}; // the actor that started each player's event
 
 // what a world does of an event that runs on its player's machine
-void ownerEventTick(EventState& ev) {
-    if (!g_ownerEventEnding) {
+void ownerEventTick(size_t player) {
+    EventState& ev = eventSlots().slots[player + 1];
+    if (ev.active == 0) return;
+    if (!g_ownerEventEnding[player]) {
         if (ev.turnedRotation) turnSpeakerYaw(ev.turnedRotation, ev.faceYaw);
         return;
     }
     if (ev.turnedRotation && !turnSpeakerYaw(ev.turnedRotation, ev.restoreYaw)) return;
-    g_ownerEventRuns = false;
-    g_ownerEventEnding = false;
+    g_ownerEventEnding[player] = false;
     ev.active = 0;
+    g_speakerSlot[player + 1] = 0;
 }
 
 } // namespace
 
 void setEventOwnerHook(std::function<void(const OwnerEvent&)> hook) { g_ownerHook = std::move(hook); }
 void setEventOwner(size_t player) { g_owner = player; }
-void eventOwnerEnded() {
-    if (g_ownerEventRuns) g_ownerEventEnding = true;
+void eventOwnerEnded(size_t player) {
+    if (player < kPlayerSlots) g_ownerEventEnding[player] = true;
 }
-void eventOwnerLeft(size_t player) {
-    if (g_ownerEventRuns && g_owner == player) g_ownerEventEnding = true;
+void eventOwnerLeft(size_t player) { eventOwnerEnded(player); }
+EventState& eventOfOwner(size_t player) { return eventSlots().slots[player + 1]; }
+void eventSelectFor(uint8_t actorSlot) {
+    eventSlots().current = 0;
+    if (!g_ownerHook) return;
+    for (size_t k = 1; k < kEventSlots; ++k)
+        if (g_speakerSlot[k] == actorSlot && actorSlot != 0 && eventSlots().slots[k].active != 0) eventSlots().current = k;
+    g_updatingSlot = actorSlot;
+}
+void eventSelectNone() {
+    eventSlots().current = 0;
+    g_updatingSlot = 0;
 }
 
 std::vector<uint8_t> encode(const OwnerEvent& e) {
@@ -243,12 +257,10 @@ std::optional<OwnerEvent> decodeOwnerEvent(std::span<const uint8_t> b) {
 }
 
 void eventTick() {
+    if (g_ownerHook)
+        for (size_t player = 0; player < kPlayerSlots; ++player) ownerEventTick(player);
     EventState& ev = eventState();
     if (ev.active == 0) return;
-    if (g_ownerEventRuns) {
-        ownerEventTick(ev);
-        return;
-    }
     const uint8_t mode = ev.mode;
     const RoutineRef& h = eventRunners[mode];
     switch (h.id()) {
@@ -266,7 +278,6 @@ void eventTick() {
 void eventStart(const Fixed16Vec3* pos, ShortVec3* rot, uint32_t param, uint16_t window, uint16_t message) {
     const GameMode mode = gameState().gameMode();
     if (int8_t(mode) < int8_t(GameMode::Field) || int8_t(mode) > int8_t(GameMode::Pause)) return;
-    EventState& ev = eventState();
     if (g_ownerHook && !scriptState().inUse()) {
         size_t owner = g_owner;
         if (!playerPresent(owner)) {
@@ -274,6 +285,8 @@ void eventStart(const Fixed16Vec3* pos, ShortVec3* rot, uint32_t param, uint16_t
             while (owner < kPlayerSlots && !playerPresent(owner)) ++owner;
             if (owner == kPlayerSlots) return; // nobody in the room to show it to
         }
+        EventState& ev = eventSlots().slots[owner + 1];
+        g_speakerSlot[owner + 1] = g_updatingSlot;
         ev.setModeWord(uint16_t(int32_t(param) >> 16));
         ev.active = 1;
         ev.flags = uint8_t(param);
@@ -295,12 +308,11 @@ void eventStart(const Fixed16Vec3* pos, ShortVec3* rot, uint32_t param, uint16_t
                 ev.restoreYaw = int16_t(r >> 4);
             }
         }
-        g_owner = owner;
-        g_ownerEventRuns = true;
-        g_ownerEventEnding = false;
+        g_ownerEventEnding[owner] = false;
         g_ownerHook(e);
         return;
     }
+    EventState& ev = eventState();
     Player& p = player();
     if (windowStatus(uint8_t(window)) != 0) windowClose(int8_t(ev.window), WindowClose::Force);
     ev.setModeWord(uint16_t(int32_t(param) >> 16));

@@ -1,14 +1,7 @@
 // The network state of a world's actors (see world_net_state.hpp).
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#ifdef _WIN32
-#include <windows.h>
-#undef min
-#undef max
-#endif
+#include <map>
 #include <cstdio>
 #include <cstdlib>
-#include "game/presentation.hpp"
 #include "game/world_net_state.hpp"
 
 #include <algorithm>
@@ -34,6 +27,12 @@
 #include "game/loaded_data.hpp"
 #include "game/model_data.hpp"
 #include "game/stage_state.hpp"
+
+#include "game/light_column.hpp"
+#include "game/net_effect_links.hpp"
+#include "game/shockwave_state.hpp"
+#include "game/shots/machine_gun_state.hpp"
+#include "game/presentation.hpp"
 
 namespace od::port {
 
@@ -90,7 +89,7 @@ constexpr int kLockTolerance = 4; // units a lock-on point may drift before the 
 constexpr size_t kMaxLockPoints = 8;
 constexpr uint8_t kEventAppear = 1, kEventGo = 2, kEventAppearStill = 3, kEventEffect = 4, kEventShift = 5, kEventRoomPatch = 6; // Still: no animation in play
 constexpr size_t kBatchHeaderBytes = 8;
-constexpr size_t kAppearBytes = 26, kGoBytes = 2, kEffectBytes = 35;
+constexpr size_t kAppearBytes = 26, kGoBytes = 2, kEffectBytes = 35 + 4 + 16;
 constexpr int kPathPosTolerance = 32; // 1/16 units an actor may leave its path by before the world sends a new one
 constexpr int kPathRotTolerance = 16; // of a turn of 4096
 constexpr size_t kMaxInFlight = 64;
@@ -325,9 +324,19 @@ void gatherLockEntries() {
         const uint32_t group = (e.owner >> kHitGroupShift) & 7;
         if (!(hitGroupPairs(group) & kHitGroupLockOn)) continue;
         auto& list = entries[e.owner >> kHitSlotShift];
-        if (list.size() >= kMaxLockPoints) continue;
+        // a capsule is two entries, kept together: the selection reads them as one
+        const bool capsule = (uint16_t(e.shape()) & kHitCapsuleMask) != 0 && i + 1 < sys.hitCountLast;
+        if (list.size() + (capsule ? 2u : 1u) > kMaxLockPoints) {
+            if (capsule) ++i;
+            continue;
+        }
         list.push_back({{e.pos.x, e.pos.y, e.pos.z}, uint16_t(e.shape()), e.owner & ((1u << kHitSlotShift) - 1),
                         (e.attack & kHitAttackHarmless) != 0});
+        if (capsule) {
+            const HitEntry& end = sys.hitList[++i];
+            list.push_back({{end.pos.x, end.pos.y, end.pos.z}, uint16_t(end.shape()), end.owner & ((1u << kHitSlotShift) - 1),
+                            (end.attack & kHitAttackHarmless) != 0});
+        }
     }
 }
 
@@ -442,8 +451,9 @@ template <class Pool> void captureMeshPool(NetWorldTable& table, Pool& pool, siz
             if (!held.live || held.identity.type != a.type || held.model != a.model) {
                 const RoutineRef h =
                     actorHandler(a, (a.loopFlags & kActorLateLoop) ? ActorPool::StaticsLate : ActorPool::Statics, false);
-                s.effect = h && (netEffectClass(h.id()) || netClientKeepsClass(h.id()));
-                s.effectGoes = s.effect && !netClientKeepsClass(h.id());
+                const bool glowsColumn = h && h.id() == RoutineId::LightColumnUpdate && lightColumnOfAGlow(a);
+                s.effect = h && (netEffectClass(h.id()) || netClientKeepsClass(h.id()) || glowsColumn);
+                s.effectGoes = s.effect && !netClientKeepsClass(h.id()) && !glowsColumn;
                 s.effectStart.pool = uint8_t(kStaticClass);
                 s.effectStart.type = a.type;
                 s.effectStart.subtype = a.subtype;
@@ -474,7 +484,7 @@ template <class Pool> void captureMeshPool(NetWorldTable& table, Pool& pool, siz
         if constexpr (std::is_same_v<Pool, ShotPool>) {
             // a blade's swing follows its owner's arm: each client runs it from its event
             const RoutineRef h = actorHandler(a, ActorPool::Shots, false);
-            if (h && h.id() == RoutineId::BladeArmShotUpdate) {
+            if (h && (h.id() == RoutineId::BladeArmShotUpdate || h.id() == RoutineId::ShiningLaserShotUpdate || h.id() == RoutineId::VacuumArmShotUpdate)) {
                 s.effect = true;
                 s.effectGoes = true;
                 s.effectStart.pool = uint8_t(kShotClass);
@@ -570,10 +580,18 @@ void captureNetWorld(NetWorldTable& table, uint32_t tick) {
         s.type = e.type;
         s.effect = true;
         s.effectGoes = true;
-        // a shock wave's ring: the shock wave, which runs on the client from its own event, makes its own
-        if (const RoutineRef h = actorHandler(e, (e.loopFlags & kActorLateLoop) ? ActorPool::EffectsLate : ActorPool::Effects, false);
-            h && h.id() == RoutineId::ShockRingUpdate)
-            s.effectGoes = false;
+        if (const RoutineRef h = actorHandler(e, (e.loopFlags & kActorLateLoop) ? ActorPool::EffectsLate : ActorPool::Effects, false)) {
+            if (const NetEffectLinks* links = netEffectLinksOf(h.id())) {
+                std::array<const ActorHeader*, 2> held{};
+                if (!links->read(const_cast<EffectActor&>(e), held)) s.effectGoes = false;
+                if (held[0]) s.effectStart.parent = held[0]->slot;
+                if (held[1]) s.effectStart.second = held[1]->slot;
+            }
+        }
+        s.effectStart.subState = e.subState;
+        s.effectStart.step = e.step;
+        s.effectStart.stepCounter = e.stepCounter;
+        for (size_t k = 0; k < e.trail.size(); ++k) s.effectStart.trail[k] = e.trail[k];
         s.effectStart.pool = uint8_t(kEffectClass);
         s.effectStart.type = e.type;
         s.effectStart.subtype = e.subtype;
@@ -584,11 +602,51 @@ void captureNetWorld(NetWorldTable& table, uint32_t tick) {
         for (size_t p = 0; p < 4; ++p) s.effectStart.params[p] = e.params[p];
         s.effectStart.pos = {e.pos.x, e.pos.y, e.pos.z};
         s.effectStart.spare = e.posSpare;
-        if (const auto* glow = heldClassStateOf<GlowTrailFields>(e); glow && glow->parent) s.effectStart.parent = glow->parent->slot;
         s.owner = e.ownerPlayer;
         s.startedByShot = e.startedByShot;
         table.seen(slot, s);
     }
+}
+
+namespace {
+std::map<RoutineId, NetEffectLinks>& linksTable() {
+    static std::map<RoutineId, NetEffectLinks> table = [] {
+        std::map<RoutineId, NetEffectLinks> t;
+        t[RoutineId::GlowTrailUpdate] = {
+            [](EffectActor& e, std::array<const ActorHeader*, 2>& held) {
+                held[0] = classState<GlowTrailFields>(e).parent.get();
+                return true;
+            },
+            [](EffectActor& e, const std::array<ActorHeader*, 2>& held) { classState<GlowTrailFields>(e).parent = held[0]; }};
+        t[RoutineId::ShockRingUpdate] = {
+            [](EffectActor& e, std::array<const ActorHeader*, 2>& held) {
+                held[0] = classState<shockwave_state::ShockRingFxFields>(e).shock.get();
+                return true;
+            },
+            [](EffectActor& e, const std::array<ActorHeader*, 2>& held) { classState<shockwave_state::ShockRingFxFields>(e).shock = held[0]; }};
+        // what a shot makes: the shot runs on each client from its own event, and makes its own
+        const NetEffectLinks ofShot = {[](EffectActor&, std::array<const ActorHeader*, 2>&) { return false; },
+                                       [](EffectActor&, const std::array<ActorHeader*, 2>&) {}};
+        t[RoutineId::BladeTrailUpdate] = ofShot;
+        t[RoutineId::ShiningLaserBeamUpdate] = ofShot;
+        t[RoutineId::SuctionUpdate] = ofShot;
+        t[RoutineId::MachineGunMuzzleUpdate] = {
+            [](EffectActor& e, std::array<const ActorHeader*, 2>& held) {
+                const uint32_t shot = classState<machine_gun_state::MuzzleFields>(e).shot;
+                held[0] = shot ? &actorHeaderAt(shot) : nullptr;
+                return true;
+            },
+            [](EffectActor& e, const std::array<ActorHeader*, 2>& held) { classState<machine_gun_state::MuzzleFields>(e).shot = held[0] ? held[0]->at : 0; }};
+        return t;
+    }();
+    return table;
+}
+} // namespace
+
+void registerNetEffectLinks(RoutineId cls, const NetEffectLinks& links) { linksTable()[cls] = links; }
+const NetEffectLinks* netEffectLinksOf(RoutineId cls) {
+    const auto it = linksTable().find(cls);
+    return it == linksTable().end() ? nullptr : &it->second;
 }
 
 // ---- the world's side, per client ---------------------------------------------------------------------------------------
@@ -659,6 +717,11 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
             w.u8(e.loopFlags);
             w.u8(e.flags);
             w.u8(e.parent);
+            w.u8(e.second);
+            w.u8(e.subState);
+            w.u8(e.step);
+            w.u8(e.stepCounter);
+            for (const int16_t v : e.trail) w.i16(v);
             w.u8(e.bone);
             w.u8(e.owner);
             for (const uint8_t p : e.params) w.u8(p);
@@ -973,6 +1036,11 @@ bool NetStateClient::applyEvents(std::span<const uint8_t> bytes) {
             e.loopFlags = r.u8();
             e.flags = r.u8();
             e.parent = r.u8();
+            e.second = r.u8();
+            e.subState = r.u8();
+            e.step = r.u8();
+            e.stepCounter = r.u8();
+            for (int16_t& v : e.trail) v = r.i16();
             e.bone = r.u8();
             e.owner = r.u8();
             for (uint8_t& p : e.params) p = r.u8();
@@ -1344,7 +1412,6 @@ void PoolNetActors::roomPatch(const NetRoomPatch& patch) {
 
 void PoolNetActors::effect(const NetEffect& e) {
     static const bool logged = std::getenv("OD_NET_EFFECT_LOG") != nullptr; // test instrument
-    if (logged) std::fprintf(stderr, "net effect pool %02x type %02x subtype %02x variant %02x\n", unsigned(e.pool), unsigned(e.type), unsigned(e.subtype), unsigned(e.variant));
     // what it hangs from: an actor held here, or (a player's slot) this machine's Mega Man
     Actor* parent = nullptr;
     if (e.parent != kNetNoParent) {
@@ -1366,6 +1433,12 @@ void PoolNetActors::effect(const NetEffect& e) {
     for (size_t i = 0; i < 4; ++i) head.params[i] = e.params[i];
     head.enterState(0);
     head.ownerPlayer = tableOfPlayer(e.owner);
+    if (logged) {
+        const RoutineRef named = e.pool == kShotClass ? actorHandler(head, ActorPool::Shots, false)
+                                 : e.pool == kEffectClass ? actorHandler(head, (e.loopFlags & kActorLateLoop) ? ActorPool::EffectsLate : ActorPool::Effects, false)
+                                                          : actorHandler(head, (e.loopFlags & kActorLateLoop) ? ActorPool::StaticsLate : ActorPool::Statics, false);
+        std::fprintf(stderr, "net effect %s\n", named ? routineName(named.id()) : "?");
+    }
     if (e.pool == kShotClass) {
         head.loopFlags = e.loopFlags;
         ++effectsStarted_;
@@ -1377,8 +1450,13 @@ void PoolNetActors::effect(const NetEffect& e) {
                                                     : ((e.loopFlags & kActorLateLoop) ? ActorPool::StaticsLate : ActorPool::Statics), false);
         return h && h.id() == id;
     };
-    if (parent && e.pool == kEffectClass)
-        classState<GlowTrailFields>(asEffect(head)).parent = parent;
+    if (e.pool == kEffectClass) {
+        const RoutineRef h = actorHandler(head, (e.loopFlags & kActorLateLoop) ? ActorPool::EffectsLate : ActorPool::Effects, false);
+        if (const NetEffectLinks* links = h ? netEffectLinksOf(h.id()) : nullptr) {
+            ActorHeader* second = e.second != kNetNoParent ? slotOf(e.second) : nullptr;
+            links->write(asEffect(head), {parent, second});
+        }
+    }
     if (parent && e.pool == kStaticClass && handlerIs(RoutineId::FootstepDustUpdate))
         classState<FootstepDustFields>(asStatic(head)).parent = parent;
     if (parent && e.pool == kStaticClass && handlerIs(RoutineId::DarkTrailUpdate))
@@ -1389,6 +1467,10 @@ void PoolNetActors::effect(const NetEffect& e) {
         fx.pos.y = e.pos[1];
         fx.pos.z = e.pos[2];
         fx.posSpare = e.spare;
+        fx.subState = e.subState;
+        fx.step = e.step;
+        fx.stepCounter = e.stepCounter;
+        for (size_t k = 0; k < fx.trail.size(); ++k) fx.trail[k] = e.trail[k];
     } else {
         StaticActor& s = asStatic(head);
         s.pos.x = int32_t(uint32_t(uint16_t(e.pos[0])) << 16);
@@ -1544,29 +1626,11 @@ void PoolNetActors::submitLockPoints() {
 
 namespace {
 
-#ifdef _WIN32
-// a class whose spawner's pointer is not here (a null read): it fails as one that throws
-constexpr unsigned long kAccessViolation = 0xC0000005ul;
-bool updatePoolGuarded(const PlayerEnv& env, ActorContext& context, ActorPool pool) {
-    __try {
-        updatePool(env, context, pool);
-        return true;
-    } __except (GetExceptionCode() == kAccessViolation ? 1 : 0) {
-        return false;
-    }
-}
-#else
-bool updatePoolGuarded(const PlayerEnv& env, ActorContext& context, ActorPool pool) {
-    updatePool(env, context, pool);
-    return true;
-}
-#endif
-
 // one pool loop; a class that throws loses the actor it was on
 void runLocalPool(const PlayerEnv& env, ActorContext& context, ActorPool pool, uint32_t& cursor, NetLocalRunFailures& failed) {
     for (int guard = 0; guard < 64; ++guard) {
         try {
-            if (!updatePoolGuarded(env, context, pool)) throw std::runtime_error("a null read: what its spawner gives it is not here");
+            updatePool(env, context, pool);
             return;
         } catch (const std::exception& e) {
             ActorHeader& actor = actorHeaderAt(cursor);

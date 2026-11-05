@@ -99,11 +99,16 @@
 #include "content/saul_kada/st41_carrier.hpp"
 #include "content/saul_kada/st48_gunship.hpp"
 
+namespace od::port {
+void registerBombRibbonNetLinks();
+} // namespace od::port
+
 namespace od::content {
 
 using namespace od::port;
 
 void registerSaulKadaClasses(ContentRegistry& r) {
+    od::port::registerBombRibbonNetLinks();
     r.addClasses({
         // the pool-e0 type-0xa enemy spawners of the area's stages
         {RoutineId::SpawnerSt26Update, &spawnerSt26Update},

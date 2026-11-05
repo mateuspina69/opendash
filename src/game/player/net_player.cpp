@@ -1,4 +1,5 @@
 // A player's state on the network (see net_player.hpp).
+#include "game/player/player_weapons.hpp"
 #include "game/player/net_player.hpp"
 #include "game/player/player_downed.hpp"
 
@@ -70,11 +71,23 @@ uint16_t maskOf(const NetPlayerFields& n, const NetPlayerFields& o) {
     if (!(n.look == o.look)) m |= kLook;
     if (!(n.channels[0] == o.channels[0])) m |= kChannel0;
     if (!(n.channels[1] == o.channels[1])) m |= kChannel1;
-    if (n.status != o.status || n.charge != o.charge || n.specialFiring != o.specialFiring || n.downed != o.downed) m |= kFight;
+    if (n.status != o.status || n.charge != o.charge || n.specialFiring != o.specialFiring || n.downed != o.downed || n.specialHeld != o.specialHeld) m |= kFight;
     return m;
 }
 
 } // namespace
+
+void applyNetArm(Player& p, const NetPlayerFields& f) {
+    const uint16_t special = p.button(PlayerButton::Special);
+    if (f.specialHeld) {
+        p.held |= special;
+        p.armFlags |= kArmSpecial;
+        p.gauge = 0x7fff; // its owner pays
+    } else {
+        p.held &= uint16_t(~special);
+        p.armFlags = uint16_t(p.armFlags & ~kArmSpecial);
+    }
+}
 
 NetPlayerFields NetPlayerWatch::see(const Player& p, uint32_t tick) {
     NetPlayerFields& f = fields_;
@@ -97,6 +110,7 @@ NetPlayerFields NetPlayerWatch::see(const Player& p, uint32_t tick) {
     f.status = uint8_t(p.status);
     f.charge = uint8_t(p.charge);
     f.downed = playerIsDowned(p) ? 1 : 0;
+    f.specialHeld = p.holds(PlayerButton::Special) && (p.armFlags & kArmSpecial) ? 1 : 0;
     f.specialFiring = uint8_t(p.specialFiring);
     const std::array<const AnimChannel*, 2> channels = {&p.body, &p.upper};
     for (size_t i = 0; i < 2; ++i) {
@@ -208,6 +222,7 @@ std::vector<uint8_t> NetPlayerSender::update(uint8_t playerId, uint32_t tick, co
         o.u8(now.status);
         o.u8(now.charge);
         o.u8(now.downed);
+        o.u8(now.specialHeld);
         o.u8(now.specialFiring);
     }
     inFlight_.push_back({sequence, now});
@@ -287,6 +302,7 @@ std::optional<NetPlayerHeard> NetPlayerReceiver::apply(std::span<const uint8_t> 
         f.status = r.u8();
         f.charge = r.u8();
         f.downed = r.u8();
+        f.specialHeld = r.u8();
         f.specialFiring = r.u8();
     }
     if (!r.ok || r.at != bytes.size()) return std::nullopt;

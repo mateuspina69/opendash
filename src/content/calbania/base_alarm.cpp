@@ -11,6 +11,7 @@
 #include "game/angles.hpp"
 #include "game/audio_logic.hpp"
 #include "game/display.hpp"
+#include "game/presentation.hpp"
 
 namespace od::port {
 
@@ -41,6 +42,16 @@ void alarmFlashUpdate(const PlayerEnv&, uint32_t actor) {
         soundPlayAtXyz(kSiren, 0, kSirenY, 0); // exe 0x5d5380
     }
     f.phase = uint16_t(f.phase + kPhaseStep);
+}
+
+void registerAlarmNetScreen() {
+    registerNetScreenClass({kAlarmClass, 2,
+                            [](ControllerActor& c, uint8_t* out) {
+                                const uint16_t v = classState<AlarmFields>(c).phase;
+                                out[0] = uint8_t(v);
+                                out[1] = uint8_t(v >> 8);
+                            },
+                            [](ControllerActor& c, const uint8_t* in) { classState<AlarmFields>(c).phase = uint16_t(in[0] | in[1] << 8); }});
 }
 
 std::vector<hud::Prim> alarmFlashDraw() {

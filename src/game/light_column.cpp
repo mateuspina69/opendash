@@ -248,6 +248,8 @@ void lightColumn(StaticActor& actor) { // exe 0x598460
 
 } // namespace
 
+bool lightColumnOfAGlow(const StaticActor& column) { return column.variant == kGlowColumnVariant; }
+
 void lightGlowUpdate(const PlayerEnv&, uint32_t actor) { glow(effectActorAt(actor)); }
 
 void lightColumnUpdate(const PlayerEnv&, uint32_t actor) { lightColumn(staticActorAt(actor)); }

@@ -5,6 +5,7 @@
 #include "game/loaded_data.hpp"
 #include "game/audio_logic.hpp"
 
+#include <map>
 #include <cmath>
 #include <cstdio>
 #include <stdexcept>
@@ -180,16 +181,18 @@ SoundDescriptor descriptor(uint32_t id) {
 }
 
 // exe 0x5d5220(kind): a free queue entry (the queue full: -1), its kind, the count + 1, the queue pending
+constexpr uint32_t kSoundMutedStamp = 0x4d555445; // a request a session's client drops: the world plays it
 uint8_t g_soundOwner = kNoSoundOwner;
 bool g_localEffectsMuted = false;
 
 int queueAlloc(SoundRequestKind kind) {
     SoundQueue& q = soundQueue();
     const uint32_t n = q.count;
-    if (n == kQueueEntries || g_localEffectsMuted) return -1;
+    if (n == kQueueEntries) return -1;
     auto&& e = q.entries[n];
     e.kind = uint16_t(kind);
     if (presentationBatch()) e.unread04 = g_soundOwner;
+    else if (g_localEffectsMuted || e.unread04 == kSoundMutedStamp) e.unread04 = g_localEffectsMuted ? kSoundMutedStamp : 0;
     q.count = q.count + 1;
     q.flags |= kQueuePending;
     return int(n);
@@ -926,6 +929,12 @@ int soundPlayAtXyz(uint16_t id, int16_t x, int16_t y, int16_t z) {
 }
 
 namespace {
+struct WorldLoop {
+    int16_t x = 0, y = 0, z = 0;
+    uint16_t param = 0;
+};
+std::map<uint32_t, WorldLoop> g_worldLoops; // a world: what its players were last told of each loop
+
 // a loop sound's point: a 16.16 point's integer parts, or none (the listener's)
 struct LoopPoint {
     bool set;
@@ -977,7 +986,12 @@ uint32_t startLoop(uint16_t id, const LoopPoint& pos, uint16_t param) {
         setLoopPoint(lv, pos);
         lv.pitch = int16_t(param);
     }
-    return (extra << kHandleExtraShift) | (first + 1);
+    const uint32_t handle = (extra << kHandleExtraShift) | (first + 1);
+    if (PresentationBatch* batch = presentationBatch()) {
+        batch->loopStart(handle, id, pos.set, pos.x, pos.y, pos.z, param);
+        g_worldLoops[handle] = {pos.x, pos.y, pos.z, param};
+    }
+    return handle;
 }
 } // namespace
 
@@ -997,6 +1011,18 @@ uint32_t soundStartLoopAtPlayer(uint16_t id, uint16_t param) {
 namespace {
 int updateLoop(uint32_t handle, const LoopPoint& pos, uint16_t param) {
     if (handle == 0) return 0;
+    if (PresentationBatch* batch = presentationBatch()) {
+        // a loop follows its actor: told when it has moved a little or its parameter changed
+        constexpr int kLoopMoved = 0x20;
+        WorldLoop& held = g_worldLoops[handle];
+        if (held.param != param || std::abs(held.x - pos.x) > kLoopMoved || std::abs(held.z - pos.z) > kLoopMoved || std::abs(held.y - pos.y) > kLoopMoved) {
+            held.x = pos.x;
+            held.y = pos.y;
+            held.z = pos.z;
+            held.param = param;
+            batch->loopMove(handle, pos.set, pos.x, pos.y, pos.z, param);
+        }
+    }
     LoopVoices& loops = loopVoices();
     const uint32_t extra = (handle >> kHandleExtraShift) & 3;
     uint32_t c = (handle & kHandleVoiceMask) - 1;
@@ -1044,6 +1070,10 @@ int soundUpdateLoopAtPlayer(uint32_t handle, uint16_t param) {
 
 void soundStopLoop(uint32_t handle) {
     if (handle == 0) return;
+    if (PresentationBatch* batch = presentationBatch()) {
+        batch->loopStop(handle);
+        g_worldLoops.erase(handle);
+    }
     LoopVoices& loops = loopVoices();
     uint32_t c = (handle & kHandleVoiceMask) - 1;
     const uint32_t last = ((handle >> kHandleExtraShift) & 3) + c;
@@ -1075,6 +1105,7 @@ void soundRequestReplay(const SoundRequest& r) {
     SoundQueue& q = soundQueue();
     if (q.count == kQueueEntries) return;
     auto&& e = q.entries[q.count];
+    e.unread04 = 0;
     e.kind = r.kind;
     e.id = r.id;
     e.x = r.x;
@@ -1484,6 +1515,11 @@ void soundUpdate() {
     SoundContext& ctx = soundContext();
     voiceClipUpdate();
     while (q.entries[0].kind != 0) {
+        if (q.entries[0].unread04 == kSoundMutedStamp) {
+            q.entries[0].unread04 = 0;
+            soundQueuePopFront();
+            continue;
+        }
         ctx.request.copyFrom(q.entries[0]);
         // a world's sounds are played by its players (the loops follow their actors: they are not sent)
         if (PresentationBatch* batch = presentationBatch();

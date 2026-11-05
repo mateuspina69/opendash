@@ -189,10 +189,6 @@ void pickupGiftArrived(Player& p, const NetGift& gift) {
         hitPointsAdd(p, gift.amount);
         soundPlayAtPos(kRefillSound, p.pos);
         break;
-    case NetGiftKind::SpecialWeapon:
-        p.specialWeapon = int8_t(gift.amount);
-        setupSpecialGauge(p, true);
-        break;
     }
 }
 

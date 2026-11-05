@@ -98,6 +98,21 @@ void hitSparkUpdate(const PlayerEnv&, uint32_t address) {
     }
 }
 
+void doorGlowAt(int16_t x, int16_t y, int16_t z) {
+    constexpr uint16_t kGlowSize = 0x180;
+    constexpr int kGlowHeight = 0x80;
+    const uint32_t slot = allocActorA0(0);
+    if (!slot) return;
+    EffectActor& e = effectActorAt(slot);
+    e.flags = kActorLiveDrawn;
+    e.type = typeByte(GlobalEffectType::HitSpark);
+    e.variant = 0;
+    e.pos.x = x;
+    e.pos.y = int16_t(y - kGlowHeight);
+    e.pos.z = z;
+    classState<HitSparkFields>(e).size = kGlowSize;
+}
+
 void burstUpdate(const PlayerEnv&, uint32_t address) {
     EffectActor& burst = effectActorAt(address);
     auto&& fields = classState<BurstFields>(burst);

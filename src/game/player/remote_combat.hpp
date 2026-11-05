@@ -54,7 +54,7 @@ std::vector<uint8_t> netEquipmentOf(const Player& p);
 void applyEquipment(Player& p, std::span<const uint8_t> bytes);
 
 // What a pickup or a chest gave a player in a world, for their owner to take
-enum class NetGiftKind : uint8_t { Zenny, WeaponEnergy, Life, SpecialWeapon };
+enum class NetGiftKind : uint8_t { Zenny, WeaponEnergy, Life };
 struct NetGift {
     uint8_t player = 0;
     NetGiftKind kind = NetGiftKind::Zenny;

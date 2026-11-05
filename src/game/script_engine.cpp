@@ -1,4 +1,5 @@
 // The script engine (see script_engine.hpp).
+#include "game/story_table.hpp"
 #include "game/loaded_data.hpp"
 #include "game/script_engine.hpp"
 
@@ -97,7 +98,7 @@ void scriptRunnerTick(const PlayerEnv& env) {
     const ScriptState& s = scriptState();
     if (!(s.flags & kScriptRunning)) return;
     const uint8_t id = s.id;
-    if (g_scriptsGated && id != kExitTransitionScript) return;
+    if (g_scriptsGated && storyScriptGated(id)) return;
     if (id != kExitTransitionScript) { // [0x89b6d0 + id * 4]: the story / cutscene scripts (game/story)
         if (!storyScriptTick(env, id)) notPortedAt(kScriptArea, "script", id);
         return;

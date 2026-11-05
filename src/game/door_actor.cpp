@@ -10,10 +10,13 @@
 #include "game/event_state.hpp"
 #include "game/message.hpp"
 #include "game/event.hpp"
+#include "game/game_state.hpp"
 #include "game/player/player_state.hpp"
 #include "game/player/players.hpp"
 #include "game/story_flags.hpp"
 #include "game/transition_state.hpp"
+#include "game/story_table.hpp"
+#include "game/world_view.hpp"
 
 namespace od::port {
 
@@ -70,6 +73,13 @@ void doorUpdate(StaticActor& actor) {
             if (d < 0) d = int(back) - int(facing);
             asked = asked || (d < kFacingWindow && p.talksTo(actor));
         });
+        if (asked && worldIsElsewhere() &&
+            storyPlaceOf(gameState().stage, gameState().room, gameState().story) == StoryPlaceKind::Mission) {
+            // a mission: no dialog, the room changes when the group stands at the exit
+            transitionRequest().kind = uint8_t(TransitionKind::DoorActor);
+            setStoryFlag(kFlagTransitionArmed);
+            break;
+        }
         if (asked && eventState().active == 0) {
             const bool locked = storyFlag(uint32_t(int32_t(door.lock) + int32_t(kFlagLocked)));
             const int8_t message = locked ? door.lockedMessage : door.message;

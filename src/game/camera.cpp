@@ -16,6 +16,7 @@
 #include "game/script_state.hpp"
 #include "game/stage_state.hpp"
 #include "game/vectors.hpp"
+#include "game/presentation.hpp"
 
 namespace od::port {
 
@@ -375,6 +376,7 @@ void cameraRestoreSaved() {
 void cameraSetFollow(CameraFollow follow) { cameraState().setFollow(follow); }
 
 void cameraShake(bool force, uint32_t amount, uint16_t decay) {
+    if (PresentationBatch* batch = presentationBatch()) batch->shake(amount, decay, force);
     CameraState& cam = cameraState();
     if (uint32_t(int32_t(cam.shake)) <= amount || force) {
         cam.shake = int16_t(uint16_t(amount));

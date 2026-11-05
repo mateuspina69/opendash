@@ -1,5 +1,6 @@
 // The ST49 dropship, its cargo and its cable (see st49_dropship.hpp). States are their exe tables' ([0x896be4] the
 // dropship's, [0x896c0c] the cargo's, [0x88d53c] the cable's).
+#include "game/net_effect_links.hpp"
 #include "content/forbidden_island/st49_dropship.hpp"
 #include "content/forbidden_island/st49_dropship_state.hpp"
 
@@ -340,6 +341,20 @@ void st49DropshipCableUpdate(const PlayerEnv&, uint32_t actor) {
     const EffectActor& cable = effectActorAt(actor);
     if (cable.state != kCableState) notPortedAt(kStoryPort, "0x439060 state (table 0x88d53c)", cable.state);
     drawCable(cable);
+}
+
+void registerSt49DropshipNetLinks() {
+    registerNetEffectLinks(RoutineId::St49DropshipCableUpdate,
+                           {[](EffectActor& e, std::array<const ActorHeader*, 2>& held) {
+                                CableFields& f = classState<CableFields>(e);
+                                held = {f.dropship.get(), f.cargo.get()};
+                                return true;
+                            },
+                            [](EffectActor& e, const std::array<ActorHeader*, 2>& held) {
+                                CableFields& f = classState<CableFields>(e);
+                                if (held[0]) f.dropship = &asAnimated(*held[0]);
+                                if (held[1]) f.cargo = &asAnimated(*held[1]);
+                            }});
 }
 
 } // namespace od::port

@@ -1,4 +1,5 @@
 // The actor system's update loops, class dispatch and registry (see actors.hpp).
+#include "game/world_view.hpp"
 #include "game/presentation.hpp"
 #include "game/actor_state.hpp"
 #include "game/actors.hpp"
@@ -69,6 +70,7 @@
 #include "game/walker_shot.hpp"
 #include "game/wall_crumble.hpp"
 #include "game/wall_debris.hpp"
+#include "game/event.hpp"
 
 namespace od::port {
 
@@ -301,11 +303,13 @@ ActorUpdateFn portedActorClass(RoutineId cls) {
     return it == r.end() ? nullptr : it->second;
 }
 
+#ifndef NDEBUG
 namespace {
 RoutineId g_updatingClass = RoutineId::None;
 } // namespace
 
 RoutineId updatingActorClass() { return g_updatingClass; }
+#endif
 
 int updatePool(const PlayerEnv& env, ActorContext& ctx, ActorPool pool) {
     PoolLoop loop = poolLoop(pool);
@@ -335,10 +339,20 @@ int updatePool(const PlayerEnv& env, ActorContext& ctx, ActorPool pool) {
         }
         try {
             const ScopedActingPlayer acting(actor.ownerPlayer);
+#ifndef NDEBUG
             g_updatingClass = h.id();
-            if (pool == ActorPool::Shots) setSoundOwner(actor.ownerPlayer);
+#endif
+            if (worldHasNoView()) eventSelectFor(actor.slot);
+            if (pool == ActorPool::Shots) {
+                setSoundOwner(actor.ownerPlayer);
+                if (worldIsElsewhere() && actor.ownerPlayer != 0) setLocalEffectsMuted(true); // heard from the world
+            }
             fn(env, actor.at);
-            if (pool == ActorPool::Shots) setSoundOwner(kNoSoundOwner);
+            if (worldHasNoView()) eventSelectNone();
+            if (pool == ActorPool::Shots) {
+                setSoundOwner(kNoSoundOwner);
+                if (worldIsElsewhere() && actor.ownerPlayer != 0) setLocalEffectsMuted(false);
+            }
             ++n;
         } catch (const std::logic_error& e) {
             if (pool == ActorPool::Shots) actorSystem().shotCursor = 0;

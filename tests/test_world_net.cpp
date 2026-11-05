@@ -362,7 +362,7 @@ void testEffects() {
     s.pos = {1, 2, 3};
     t.seen(0x61, s);
     auto batches = sender.events(t);
-    CHECK(batches.size() == 1 && batches[0].size() == 8 + 35);
+    CHECK(batches.size() == 1 && batches[0].size() == 8 + 55);
     for (const auto& batch : batches) CHECK(client.applyEvents(batch));
     CHECK(sender.update(t).size() == kHeader); // no state for it
     client.advance(0);
@@ -736,8 +736,9 @@ void testStoryTable() {
     CHECK(storyPlaceOf(0x55, 2, 1) == StoryPlaceKind::Mission);
     CHECK(storyDoorGated(0x37, 0x37, 6, 1));
     CHECK(!storyDoorGated(0x37, 0x37, 5, 1));
-    CHECK(storyDoorGated(0x2a, 0x2b, 0, 12)); // into a stage listed whole
-    CHECK(!storyDoorGated(0x2b, 0x2b, 1, 12)); // ... not inside it
+    CHECK(storyDoorGated(0x2a, 0x55, 0, 4)); // into a stage listed whole
+    CHECK(!storyDoorGated(0x55, 0x55, 1, 4)); // ... not inside it
+    CHECK(storyScriptGated(0x1c) && !storyScriptGated(0x56)); // the story byte: gated; a first visit: optional
 }
 
 void testGlobalState() {

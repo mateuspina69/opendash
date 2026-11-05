@@ -38,6 +38,7 @@
 // dc::otQuadG4 as content/late_game/st5c_fx's screen quads (screen-pixel corners brought back to the point's depth).
 //
 // Spawned, not ported: none (the shock ring spawns only its own type).
+#include "game/net_effect_links.hpp"
 #include "content/late_game/st5c_fx3.hpp"
 #include "content/late_game/st5c_fx3_state.hpp"
 
@@ -347,5 +348,12 @@ void beamImpactUpdate(const PlayerEnv&, uint32_t actor) { beamImpact(staticActor
 void screenShockRingUpdate(const PlayerEnv&, uint32_t actor) { shockRingTick(effectActorAt(actor)); }
 
 void electricSparkUpdate(const PlayerEnv&, uint32_t actor) { electricSpark(controllerActorAt(actor)); }
+
+void registerSt5cShockNetLinks() {
+    // a spawner's ring: the spawner, which runs on the client from its own event, makes its own
+    registerNetEffectLinks(RoutineId::ScreenShockRingUpdate,
+                           {[](EffectActor& e, std::array<const ActorHeader*, 2>&) { return classState<ShockRingFields>(e).spawner.get() == nullptr; },
+                            [](EffectActor&, const std::array<ActorHeader*, 2>&) {}});
+}
 
 } // namespace od::port

@@ -2,6 +2,7 @@
 // names). States [0x88d4f0]: 0 start 0x4383f0 (its grey 0x60), 1 draw 0x438410 (while the first bomb lives: two
 // textured quads between the bombs, 0x20 above / below them, their texels alternating by its frame), 2 freed. The OT
 // link of the quads (0x6d004c / 0x6d0048) is the draw commands' side channel (as game/global_fx).
+#include "game/net_effect_links.hpp"
 #include "content/saul_kada/st28_bomb_ribbon.hpp"
 #include "content/saul_kada/st28_bomb_ribbon_state.hpp"
 
@@ -110,6 +111,20 @@ void bombRibbon(EffectActor& actor) { // exe 0x4383d0: [0x88d4f0]
 }
 
 } // namespace
+
+void registerBombRibbonNetLinks() {
+    registerNetEffectLinks(RoutineId::BombRibbonUpdate,
+                           {[](EffectActor& e, std::array<const ActorHeader*, 2>& held) {
+                                RibbonFields& f = classState<RibbonFields>(e);
+                                held = {f.firstBomb.get(), f.secondBomb.get()};
+                                return true;
+                            },
+                            [](EffectActor& e, const std::array<ActorHeader*, 2>& held) {
+                                RibbonFields& f = classState<RibbonFields>(e);
+                                if (held[0]) pointAtWord(f.firstBomb, held[0]->at);
+                                if (held[1]) pointAtWord(f.secondBomb, held[1]->at);
+                            }});
+}
 
 void spawnBombRibbon(uint32_t firstBomb, uint32_t secondBomb) { // exe 0x438720
     const uint32_t slot = allocActorA0(kActorStageClass); // exe 0x5e13a0

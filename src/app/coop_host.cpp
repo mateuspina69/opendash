@@ -4,6 +4,7 @@
 #include <SDL3/SDL.h>
 
 #include <algorithm>
+#include <fstream>
 #include <utility>
 
 #include "engine/dat.hpp"
@@ -47,7 +48,10 @@ bool isReliable(WorldMessageType t) {
     case WorldMessageType::NetGateLeave:
     case WorldMessageType::NetGateForce:
     case WorldMessageType::NetNotice:
-    case WorldMessageType::NetBossFight: return true;
+    case WorldMessageType::NetBossFight:
+    case WorldMessageType::NetWarp:
+    case WorldMessageType::NetGateGlow:
+    case WorldMessageType::NetReload: return true;
     default: return false;
     }
 }
@@ -61,7 +65,13 @@ std::vector<uint8_t> readSave(const std::filesystem::path& storySave) {
 } // namespace
 
 CoopHost::CoopHost(std::filesystem::path exe, std::filesystem::path storySave)
-    : worlds_(std::move(exe), storySave, od::port::saveZenny(readSave(storySave))), save_(readSave(storySave)) {}
+    : worlds_(exe, storySave, od::port::saveZenny(readSave(storySave))), save_(readSave(storySave)), savePath_(storySave) {
+    lastSavePath_ = exe.parent_path() / "opendash-session-save.dat";
+}
+
+void CoopHost::hostSaved(std::span<const uint8_t> save) { save_.assign(save.begin(), save.end()); }
+
+std::optional<std::vector<uint8_t>> CoopHost::takeReload() { return std::exchange(reload_, std::nullopt); }
 
 void CoopHost::enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& state) { worlds_.enter(playerId, room, state); }
 
@@ -126,6 +136,22 @@ void CoopHost::fromClient(uint8_t id, const WorldMessage& m, uint64_t nowNs) {
 
 void CoopHost::poll(uint64_t nowNs) {
     worlds_.poll(nowNs);
+    if (worlds_.takeEveryoneDown()) {
+        // the worlds start from the file: the host's last save
+        {
+            std::ofstream out(lastSavePath_, std::ios::binary);
+            out.write(reinterpret_cast<const char*>(save_.data()), std::streamsize(save_.size()));
+        }
+        worlds_.reloadFrom(save_, lastSavePath_);
+        reload_ = save_;
+        if (session_)
+            for (const uint8_t id : clients_) {
+                WorldMessage m{WorldMessageType::NetReload};
+                m.playerId = id;
+                session_->sendWorld(nowNs, id, true, encodeWorldMessage(m));
+                sendSave(id, nowNs);
+            }
+    }
     if (!session_) return;
     for (const od::net::ReceivedWorld& d : session_->takeWorld())
         if (const auto m = decodeWorldMessage(d.payload)) fromClient(d.fromId, *m, nowNs);

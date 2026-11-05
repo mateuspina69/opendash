@@ -9,6 +9,7 @@
 #include "game/actor_pools.hpp"
 #include "game/actor_state.hpp"
 #include "game/actors.hpp"
+#include "game/presentation.hpp"
 
 namespace od::port {
 
@@ -66,6 +67,26 @@ void escapeTimerUpdate(const PlayerEnv&, uint32_t actor) {
         f.stopwatchFrame = k;
         if (k == kStopwatchFrames) f.stopwatchFrame = 0;
     }
+}
+
+namespace {
+uint32_t g_clientTimer = 0; // a client: the world's count
+} // namespace
+
+void registerEscapeTimerNetScreen() {
+    registerNetScreenClass({kEscapeTimerClass, 5,
+                            [](ControllerActor& c, uint8_t* out) {
+                                const EscapeTimerFields& f = classState<EscapeTimerFields>(c);
+                                const uint32_t v = f.timer ? *f.timer : 0;
+                                for (int k = 0; k < 4; ++k) out[k] = uint8_t(v >> (8 * k));
+                                out[4] = f.stopwatchFrame;
+                            },
+                            [](ControllerActor& c, const uint8_t* in) {
+                                EscapeTimerFields& f = classState<EscapeTimerFields>(c);
+                                g_clientTimer = uint32_t(in[0]) | uint32_t(in[1]) << 8 | uint32_t(in[2]) << 16 | uint32_t(in[3]) << 24;
+                                f.timer = &g_clientTimer;
+                                f.stopwatchFrame = in[4];
+                            }});
 }
 
 std::vector<hud::Prim> escapeTimerDraw() {

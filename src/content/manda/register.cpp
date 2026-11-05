@@ -19,11 +19,16 @@
 #include "content/manda/st24_ruin_gate.hpp"
 #include "content/manda/st25_tron_scenes.hpp"
 
+namespace od::port {
+void registerExamNetScreen();
+} // namespace od::port
+
 namespace od::content {
 
 using namespace od::port;
 
 void registerMandaClasses(ContentRegistry& r) {
+    od::port::registerExamNetScreen();
     r.addClasses({
         // the story's cast (the scripts of Pokte Village and of the Manda ruin)
         {RoutineId::St25TronUpdate, &st25TronUpdate},

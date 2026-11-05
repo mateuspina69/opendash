@@ -9,6 +9,9 @@
 
 #include "engine/config.hpp"
 #include "game/actor_sweeps.hpp"
+#include "game/fade_state.hpp"
+#include "game/transition.hpp"
+#include "game/hit_effects.hpp"
 #include "game/story_flags.hpp"
 #include "game/story_table.hpp"
 #include "game/script_state.hpp"
@@ -54,8 +57,30 @@ void OwnWorldClient::useSession(od::net::Session* session, bool host) {
     pipe_->setStays(stays_);
 }
 
+namespace {
+constexpr uint32_t kReloadFade = 0x11; // to black, as the time trial's restart
+} // namespace
+
+std::optional<std::vector<uint8_t>> OwnWorldClient::takeReload() {
+    if (coordinator_) {
+        if (auto save = coordinator_->takeReload()) {
+            SDL_Log("own world: everyone is down: the session goes on from the last save");
+            reloading_ = true;
+            reloadSave_ = std::move(*save);
+            if (fade_) od::port::fadeStart(*fade_, kReloadFade, 0);
+        }
+    } else if (reloading_ && hostSaveWhole_) {
+        reloadSave_ = hostSave_;
+    }
+    if (!reloading_ || reloadSave_.empty() || od::port::fadeState().busy != 0) return std::nullopt;
+    reloading_ = false;
+    hostSaveWhole_ = false;
+    room_.reset();
+    return std::exchange(reloadSave_, {});
+}
+
 std::optional<std::vector<uint8_t>> OwnWorldClient::takeHostSave(const std::vector<uint8_t>& current) {
-    if (!hostSaveWhole_) return std::nullopt;
+    if (reloading_ || !hostSaveWhole_) return std::nullopt;
     hostSaveWhole_ = false;
     if (hostSave_ == current) return std::nullopt;
     SDL_Log("own world: the host's save differs: the game restarts from it");
@@ -68,6 +93,11 @@ std::vector<uint8_t> OwnWorldClient::playerState() const {
 }
 
 void OwnWorldClient::roomBound(int stage, int sub) {
+    if (warping_) { // a warp inside the stage: the room's world goes on; only this game's room moved
+        warping_ = false;
+        return;
+    }
+    od::port::presentationLoopsClear();
     // the room setup's actors go, but what a client keeps
     od::port::StaticPool& statics = od::port::staticPool();
     for (size_t i = 0; i < od::port::StaticPool::size(); ++i)
@@ -162,6 +192,7 @@ void OwnWorldClient::turn(uint64_t nowNs) {
     for (const WorldMessage& m : pipe_->take(playerId_)) handle(m, nowNs);
     sceneTurn();
     gateTurn();
+    od::port::presentationLoopsTick();
     // what happened in this game goes to the session; not what a stage's load does; in a scene the world does it all
     if (scene_) {
         od::port::globalWatchRebase();
@@ -281,10 +312,12 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
             }
         }
         break;
-    case WorldMessageType::NetGameOver:
-        SDL_Log("own world: everyone is down");
-        od::port::gameState().setMode(od::port::GameMode::GameOver);
-        od::port::gameState().modeStep = 0;
+    case WorldMessageType::NetReload:
+        SDL_Log("own world: everyone is down: the session goes on from the host's last save");
+        reloading_ = true;
+        hostSave_.clear();
+        hostSaveWhole_ = false;
+        if (fade_) od::port::fadeStart(*fade_, kReloadFade, 0);
         break;
     case WorldMessageType::NetPresent:
         if (fade_) od::port::applyPresentation(m.netState, *fade_, playerId_, scenePad_);
@@ -305,6 +338,33 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
         break;
     case WorldMessageType::NetMoveTo:
         pendingMove_ = m.netState;
+        break;
+    case WorldMessageType::NetWarp:
+        if (m.netState.size() == 16) { // as the world did: this game's Mega Man and room with it
+            const auto half = [&](size_t i) { return int16_t(uint16_t(m.netState[i] | m.netState[i + 1] << 8)); };
+            od::port::TransitionRequest& r = od::port::transitionRequest();
+            r.destStage = m.netState[0];
+            r.destRoom = m.netState[1];
+            r.trigger.x = half(2);
+            r.trigger.y = half(4);
+            r.trigger.z = half(6);
+            r.destination.x = half(8);
+            r.destination.y = half(10);
+            r.destination.z = half(12);
+            r.destination.yaw = half(14);
+            r.state = od::port::kTransitionWarp;
+            warping_ = true;
+        }
+        break;
+    case WorldMessageType::NetScreen:
+        od::port::netScreenApply(m.netState);
+        break;
+    case WorldMessageType::NetGateGlow:
+        if (m.netState.size() == 6) {
+            const auto half = [&](size_t i) { return int16_t(uint16_t(m.netState[i] | m.netState[i + 1] << 8)); };
+            gateGlow_ = std::array<int16_t, 3>{half(0), half(2), half(4)};
+            gateGlowTicks_ = 45; // the coordinator repeats it while the gate waits
+        }
         break;
     case WorldMessageType::NetNotice:
         notice_.assign(m.netState.begin(), m.netState.end());
@@ -341,6 +401,7 @@ void OwnWorldClient::otherPlayerRules(uint8_t id, Other& o, const od::port::Play
     const od::port::NetPlayerFields& f = o.from.fields();
     p.status = uint16_t((p.status & od::port::kStatusMarkerMask) | f.status);
     p.specialFiring = int8_t(f.specialFiring);
+    od::port::applyNetArm(p, f);
     const od::port::ScopedActingPlayer acting(table);
     od::port::showStatusMarkers(p);
     od::port::showChargeMarker(p, f.charge);
@@ -483,9 +544,14 @@ void OwnWorldClient::showSceneView() {
 // An exit this player has taken: not while a story boss is being fought; at a gate they wait, with who is at it
 void OwnWorldClient::gateTurn() {
     if (noticeTicks_ > 0) --noticeTicks_;
+    if (gateGlow_) {
+        if (--gateGlowTicks_ <= 0) gateGlow_.reset();
+        else if (gateGlowTicks_ % 8 == 0) od::port::doorGlowAt((*gateGlow_)[0], (*gateGlow_)[1], (*gateGlow_)[2]);
+    }
     od::port::TransitionRequest& r = od::port::transitionRequest();
     const od::port::GameState& g = od::port::gameState();
     const bool asked = od::port::storyFlag(od::port::kFlagTransitionArmed) || r.state == od::port::kTransitionAsked;
+    if (asked && r.kind == uint8_t(od::port::TransitionKind::DoorActor)) od::port::doorActorExitAhead(od::port::player());
     if (coordinator_ && noticeTicks_ > 0 && (od::port::player().pressedNow(od::port::PlayerButton::Use) || localTick_ == testForceTick_))
         pipe_->sendReliable(playerId_, WorldMessageType::NetGateForce, {});
     bool stands = false;

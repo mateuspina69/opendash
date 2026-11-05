@@ -324,6 +324,17 @@ void WorldHost::gateTurn(uint64_t nowNs) {
     }
     if (nowNs < g.nextNoticeNs) return;
     g.nextNoticeNs = nowNs + 500'000'000;
+    if (!g.scene && playerRoom_[g.first] && briefs_[g.first]) {
+        // the door glows for those in its room
+        const WorldBrief::Entry& e = *briefs_[g.first];
+        for (uint8_t id = 0; id < kPlayers; ++id) {
+            if (playerRoom_[id] != playerRoom_[g.first]) continue;
+            WorldMessage glow{WorldMessageType::NetGateGlow};
+            glow.playerId = id;
+            glow.netState = {uint8_t(e.x), uint8_t(uint16_t(e.x) >> 8), uint8_t(e.y), uint8_t(uint16_t(e.y) >> 8), uint8_t(e.z), uint8_t(uint16_t(e.z) >> 8)};
+            netInbox_[id].push_back(std::move(glow));
+        }
+    }
     char text[96];
     const std::string name = !names_[g.first].empty() ? names_[g.first] : g.first == 0 ? "The host" : "Player " + std::to_string(int(g.first));
     if (g.forceAtNs != 0)
@@ -346,7 +357,8 @@ void WorldHost::poll(uint64_t nowNs) {
                  m.type == WorldMessageType::NetGift || m.type == WorldMessageType::NetEventStart ||
                  m.type == WorldMessageType::NetRevived || m.type == WorldMessageType::NetPresent ||
                  m.type == WorldMessageType::NetSceneStart || m.type == WorldMessageType::NetSceneView ||
-                 m.type == WorldMessageType::NetSceneEnd || m.type == WorldMessageType::NetHold) &&
+                 m.type == WorldMessageType::NetSceneEnd || m.type == WorldMessageType::NetHold ||
+                 m.type == WorldMessageType::NetWarp || m.type == WorldMessageType::NetScreen) &&
                 m.playerId < kPlayers &&
                 playerRoom_[m.playerId] == it->first)
                 netInbox_[m.playerId].push_back(m);
@@ -449,17 +461,40 @@ void WorldHost::gameOverTurn() {
     if (gameOverSent_) return;
     gameOverSent_ = true;
     SDL_Log("coordinator: everyone is down");
-    for (uint8_t id = 0; id < kPlayers; ++id) {
-        if (!playerRoom_[id]) continue;
-        WorldMessage m{WorldMessageType::NetGameOver};
-        m.playerId = id;
-        netInbox_[id].push_back(std::move(m));
+    everyoneDown_ = true;
+}
+
+bool WorldHost::takeEveryoneDown() { return std::exchange(everyoneDown_, false); }
+
+void WorldHost::reloadFrom(const std::vector<uint8_t>& save, const std::filesystem::path& savePath) {
+    for (auto& [room, world] : worlds_) {
+        world->link.sendReliable({WorldMessageType::Stop});
+        stopping_.push_back(std::move(world));
     }
+    worlds_.clear();
+    for (uint8_t id = 0; id < kPlayers; ++id) {
+        playerRoom_[id].reset();
+        briefs_[id].reset();
+        joining_[id] = false;
+        netInbox_[id].clear();
+    }
+    stageRecords_.clear();
+    bossFight_.clear();
+    gate_.reset();
+    gameOverSent_ = false;
+    global_ = od::port::GlobalMaster(od::port::saveZenny(save));
+    storySave_ = savePath;
 }
 
 void WorldHost::testClearFlag(uint32_t flag) {
     od::port::GlobalChange c;
     c.flags.push_back({uint16_t(flag >> 3), 0, uint8_t(1u << (flag & 7))});
+    global_.merge(c);
+}
+
+void WorldHost::testStory(uint8_t story) {
+    od::port::GlobalChange c;
+    c.values = {{0, story}, {1, story}};
     global_.merge(c);
 }
 

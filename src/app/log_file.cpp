@@ -1,10 +1,13 @@
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(NDEBUG)
+#define OD_CRASH_REPORT
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
 #endif
 #include "app/log_file.hpp"
+#ifndef NDEBUG
 #include "game/actors.hpp"
+#endif
 
 #include <SDL3/SDL_filesystem.h>
 #include <SDL3/SDL_log.h>
@@ -31,7 +34,7 @@ void writeLine(void* data, int category, SDL_LogPriority priority, const char* m
 
 } // namespace
 
-#ifdef _WIN32
+#ifdef OD_CRASH_REPORT
 namespace {
 // a crash says where it was, in the log: offsets into the executable
 LONG WINAPI logCrash(EXCEPTION_POINTERS* e) {
@@ -49,7 +52,7 @@ LONG WINAPI logCrash(EXCEPTION_POINTERS* e) {
 #endif
 
 void startLogFile(const char* fileName) {
-#ifdef _WIN32
+#ifdef OD_CRASH_REPORT
     SetUnhandledExceptionFilter(logCrash);
 #endif
     if (g_file) return;

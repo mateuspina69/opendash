@@ -252,6 +252,7 @@ struct PlayerView {
     bool enterRoomAsClient(const RoomMesh& mesh);
     // --own-world: this game is a client of a world process of its own (app/own_world); null otherwise
     std::shared_ptr<class OwnWorldClient> ownWorld;
+    bool startFromStorySave = false; // the next enterPlay: from storySave, not the running game's state
     void leavePlay(); // F2 out of play: sessionSave from the live state, then play off
     // FUN_00548910 / FUN_00548bc0 sub-state 0 on OpenDash's saves: 0xa5a248 = the slots present, 0xa7b040 their
     // summary (stage / area / location / play time) for the save menu's slot list

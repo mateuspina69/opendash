@@ -34,6 +34,7 @@
 #include "game/state_array.hpp"
 #include "game/story_flags.hpp"
 #include "game/visibility.hpp"
+#include "game/presentation.hpp"
 
 namespace od::port {
 
@@ -1455,6 +1456,22 @@ constexpr uint32_t kHitColour = 0x2020f0;
 constexpr uint8_t kMachineHitSlow = 1, kMachineHitFast = 2; // the machine's +0xd: blinks every 0x10 / 4 frames
 
 } // namespace
+
+void registerRepairGaugeNetScreen() {
+    registerNetScreenClass({kSt18Spawner, 5,
+                            [](ControllerActor& c, uint8_t* out) {
+                                if (c.variant != kRepairGaugeVariant) return;
+                                const St18RepairFields& f = classState<St18RepairFields>(c);
+                                for (int k = 0; k < 4; ++k) out[k] = uint8_t(uint32_t(f.gauge) >> (8 * k));
+                                out[4] = f.machine ? f.machine->slot : uint8_t(0);
+                            },
+                            [](ControllerActor& c, const uint8_t* in) {
+                                if (c.variant != kRepairGaugeVariant) return;
+                                St18RepairFields& f = classState<St18RepairFields>(c);
+                                f.gauge = int32_t(uint32_t(in[0]) | uint32_t(in[1]) << 8 | uint32_t(in[2]) << 16 | uint32_t(in[3]) << 24);
+                                if (in[4]) f.machine = &animatedPool()[size_t(in[4] - kAnimatedClass)];
+                            }});
+}
 
 std::vector<hud::Prim> ninoGaugeDraw() {
     std::vector<hud::Prim> out;

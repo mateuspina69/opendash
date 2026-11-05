@@ -28,6 +28,7 @@
 #include "game/story_flags.hpp"
 #include "game/transition.hpp"
 #include "game/visibility.hpp"
+#include "game/presentation.hpp"
 
 namespace od::port {
 
@@ -73,6 +74,18 @@ constexpr float kExamDigitY = 0x12;
 constexpr uint32_t kExamBlinkTicks = 15; // the plates are left out on the ticks with (t + 1) % 15 == 0 outside room 0
 
 } // namespace
+
+void registerExamNetScreen() {
+    registerNetScreenClass({kSt55Spawner, 4,
+                            [](ControllerActor&, uint8_t* out) {
+                                const StageBlockHead* clock = stageBlock().parts.held<StageBlockHead>();
+                                const uint32_t v = clock ? clock->word : 0;
+                                for (int k = 0; k < 4; ++k) out[k] = uint8_t(v >> (8 * k));
+                            },
+                            [](ControllerActor&, const uint8_t* in) {
+                                stageBlock().part<StageBlockHead>().word = uint32_t(in[0]) | uint32_t(in[1]) << 8 | uint32_t(in[2]) << 16 | uint32_t(in[3]) << 24;
+                            }});
+}
 
 std::vector<hud::Prim> examTimerDraw() {
     std::vector<hud::Prim> out;

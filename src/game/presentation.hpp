@@ -7,10 +7,13 @@
 #include <span>
 #include <vector>
 
+#include "engine/routine_ids.hpp"
+
 namespace od::port {
 
 struct SoundRequest;
 struct FadeTask;
+struct ControllerActor;
 
 constexpr uint8_t kNoSoundOwner = 0xff;
 
@@ -21,6 +24,12 @@ public:
     void fadeStarted(uint32_t request, uint8_t param);
     void sound(const SoundRequest& r, uint8_t owner); // owner: the player whose shot made it, who has played it already
     void pad(uint16_t bits);
+    void loopStart(uint32_t handle, uint16_t id, bool hasPoint, int16_t x, int16_t y, int16_t z, uint16_t param);
+    void loopMove(uint32_t handle, bool hasPoint, int16_t x, int16_t y, int16_t z, uint16_t param);
+    void loopStop(uint32_t handle);
+    void shake(uint32_t amount, uint16_t decay, bool force);
+    void banner(uint16_t x, uint16_t y, uint8_t style);
+    void white(bool on);
     std::vector<uint8_t> take();
     bool empty() const { return bytes_.empty(); }
 
@@ -34,6 +43,24 @@ PresentationBatch* presentationBatch();
 // What a player's game does of a batch: the windows and fades only while a scene runs; the sounds always, but those of its own
 // shots. The last pad bits of the scene's owner come back
 void applyPresentation(std::span<const uint8_t> bytes, FadeTask& fade, uint8_t me, uint16_t& scenePad);
+
+// A player's game, each tick: the world's loops kept going; what it had of a world it has left dropped
+void presentationLoopsTick();
+void presentationLoopsClear();
+// the world's script draws its white screen (a player's game does not run the script)
+bool presentationWhiteWanted();
+
+// The game state a world's controllers draw from, for a client to show: each class says what its controller holds. A client keeps a
+// controller of the class in the same state: it is not run, the class's draw reads it
+struct NetScreenClass {
+    RoutineId cls;
+    size_t bytes;
+    void (*read)(ControllerActor& c, uint8_t* out);
+    void (*write)(ControllerActor& c, const uint8_t* in);
+};
+void registerNetScreenClass(const NetScreenClass& c);
+std::vector<uint8_t> netScreenCapture();
+void netScreenApply(std::span<const uint8_t> bytes);
 
 // This shot's owner makes the next sounds (kNoSoundOwner: nobody's)
 void setSoundOwner(uint8_t owner);

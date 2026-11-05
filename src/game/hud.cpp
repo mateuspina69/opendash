@@ -13,6 +13,7 @@
 #include "game/game_state.hpp"
 #include "game/player/player_state.hpp"
 #include "game/script_state.hpp"
+#include "game/presentation.hpp"
 
 namespace od::port {
 
@@ -581,8 +582,8 @@ std::vector<Prim> overlayDrawPass() {
 std::vector<Prim> scriptWhiteDraw() {
     std::vector<Prim> out;
     const ScriptState& sc = scriptState();
-    if (!(sc.flags & kScriptRunning)) return out;
-    bool white = false;
+    bool white = od::port::presentationWhiteWanted(); // a session's client: its world says
+    if (!(sc.flags & kScriptRunning) && !white) return out;
     for (bool (*draws)() : od::port::content().scriptWhiteScreens)
         if (draws()) {
             white = true;
@@ -641,6 +642,7 @@ void setGaugeColour(HudElementRecord& g, uint32_t colour, uint8_t shift) {
 } // namespace
 
 void hudBannerShow(uint16_t x, uint16_t y, HudBannerStyle style) {
+    if (od::port::PresentationBatch* batch = od::port::presentationBatch()) batch->banner(x, y, uint8_t(style));
     const uint32_t kind = uint32_t(style);
     HudBanner& b = hudBanner();
     b.x = x;
@@ -688,6 +690,13 @@ void hudElementsInit() {
     weapons.length = kWeaponGaugesLength;
     weapons.clut = hudCluts[hudParts[kWeaponGaugePart].clutIndex];
     gameState().enemyNear = 0;
+}
+
+bool hudScriptWhiteNow() {
+    if (!(od::port::scriptState().flags & od::port::kScriptRunning)) return false;
+    for (bool (*draws)() : od::port::content().scriptWhiteScreens)
+        if (draws()) return true;
+    return false;
 }
 
 bool hudBossGaugeShown() { return gaugesOfType(HudElementType::BossGauge) != 0; }

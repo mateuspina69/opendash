@@ -19,8 +19,7 @@
 #include "game/game_state.hpp"
 #include "game/actor_movement.hpp"
 #include "game/player/player_weapons.hpp"
-#include "game/player/remote_combat.hpp"
-#include "game/player/remote_player.hpp"
+#include "game/world_view.hpp"
 #include "game/story_flags.hpp"
 
 namespace od::port {
@@ -74,6 +73,7 @@ enum class ChestSub : uint8_t {
 };
 
 constexpr uint32_t kContentKindMask = 0xff000000u, kContentValueMask = 0xffffff;
+constexpr uint32_t kWeaponItemFlags = 0x380;        // + a special weapon's id: owned (content/yosyonke/dev_room)
 constexpr uint32_t kContentWeapon = 0x1000000u;     // a special weapon: its id
 constexpr uint32_t kContentFlag = 0x3000000u;       // an event flag
 constexpr uint32_t kContentFlagToo = 0x6000000u;    // an event flag (another kind of item)
@@ -150,10 +150,13 @@ void chestClosed(AnimatedActor& actor, const ChestFields& chest) {
         if ((c & kContentKindMask) == kContentWeapon) { // a special weapon: equipped, the buster's stats set
             // the table's one record of this kind (group 0, variant 10); the items are flags (below). Who opened it:
             // the player nearest the chest
-            Player& opener = nearestPlayer(actor.pos);
-            opener.specialWeapon = uint8_t(c);
-            setupSpecialGauge(opener, true);
-            if (const size_t id = playerId(opener); playerIsRemote(id)) noteGift({uint8_t(id), NetGiftKind::SpecialWeapon, int16_t(uint8_t(c))});
+            if (worldHasNoView()) { // a session: it equips no one; it is what Roll develops and Change Weapon changes
+                setStoryFlag(kWeaponItemFlags + uint32_t(uint8_t(c)));
+            } else {
+                Player& opener = nearestPlayer(actor.pos);
+                opener.specialWeapon = uint8_t(c);
+                setupSpecialGauge(opener, true);
+            }
         } else if (((c & kContentKindMask) == kContentFlag || (c & kContentKindMask) == kContentFlagToo) &&
                    (c & kContentValueMask) != 0) {
             setStoryFlag(c & kContentValueMask);

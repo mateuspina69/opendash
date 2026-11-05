@@ -55,6 +55,11 @@ void scriptFade(uint32_t request, uint8_t param);
 
 // a session's world: a transition asked in it goes here instead of playing
 struct TransitionRequest;
+struct Player;
+// the exit of the door actor in front of this player into the request (a session's gate reads where it leads)
+bool doorActorExitAhead(const Player& p);
 void setWorldExitHook(std::function<void(const TransitionRequest&)> hook);
+// ... an in-stage warp plays there and here
+void setWorldWarpHook(std::function<void(const TransitionRequest&)> hook);
 
 } // namespace od::port
