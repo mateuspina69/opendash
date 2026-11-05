@@ -331,10 +331,12 @@ int updatePool(const PlayerEnv& env, ActorContext& ctx, ActorPool pool) {
             fn(env, actor.at);
             ++n;
         } catch (const std::logic_error& e) {
+            if (pool == ActorPool::Shots) actorSystem().shotCursor = 0;
             ctx.disabled.insert(h.id());
             if (ctx.log) ctx.log(std::string("PORT GAP: actor class disabled: ") + e.what());
         }
     }
+    if (pool == ActorPool::Shots) actorSystem().shotCursor = 0; // startSlot: no shot's update is running now
     return n;
 }
 

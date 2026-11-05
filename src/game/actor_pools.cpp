@@ -220,6 +220,7 @@ int takeSlot(uint32_t& mask, uint32_t n, uint32_t first = 0) {
 void startSlot(ActorHeader& actor, uint8_t loopFlags) {
     actor.beginLifetime();
     actor.ownerPlayer = uint8_t(actingPlayerId());
+    actor.startedByShot = actorSystem().shotCursor != 0;
     actor.runFlags = kActorRun | kActorShown;
     actor.loopFlags = loopFlags;
     actor.clearIdentity();

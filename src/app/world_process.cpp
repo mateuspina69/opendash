@@ -446,13 +446,19 @@ int run(const WorldArgs& w) {
     std::unique_ptr<NetStats> netStats;
     if (link || !w.netStats.empty()) netTable = std::make_unique<od::port::NetWorldTable>();
     if (!w.netStats.empty()) netStats = std::make_unique<NetStats>(w.netStats, w.netTicks);
-    if (netTable) od::port::watchNetPoses();
+    if (netTable) {
+        od::port::watchNetPoses();
+        // the room block as its file holds it: what the game has changed since goes to the clients
+        const od::FileDataBlock pristine(od::roomBlock(*current.roomFile));
+        netTable->roomShadow.assign(pristine.data(), pristine.data() + pristine.size());
+    }
     const auto netTurn = [&](uint32_t netTick) {
         if (poses.f) od::port::writeNetPoses(poses.f, netTick, od::port::netSlotVisibleOrShot, false);
         if (!netTable) return;
         // every tick from the first, whoever is connected: a client that joins later is told how long ago each animation
         // started
         od::port::captureNetWorld(*netTable, netTick);
+        netTable->watchRoomBlock(std::span<const uint8_t>(view->roomBlock.data(), view->roomBlock.size()));
         if (link) fightTurn();
         if (netStats) netStats->tick(*netTable, netTick);
         for (auto& [client, sender] : netClients) {

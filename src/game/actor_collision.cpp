@@ -439,6 +439,7 @@ struct Pass {
     // exe 0x4140e0's loop: every mover against every solid of the queues, then both queues emptied
     void run() {
         CollisionQueues& q = queues();
+        q.solidCountLast = q.solidCount;
         uint32_t moverAt = 0;
         if (q.moverCount == 0) {
             q.moverCount = 0;

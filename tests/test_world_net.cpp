@@ -56,6 +56,8 @@ struct Recorded : NetClientActors {
         last.erase(slot);
     }
     void coordinateShift(uint8_t) override {}
+    std::vector<NetRoomPatch> patches;
+    void roomPatch(const NetRoomPatch& p) override { patches.push_back(p); }
     std::vector<NetEffect> effects;
     void effect(const NetEffect& e) override { effects.push_back(e); }
     void tick(uint8_t slot, const NetActorState& state, const std::optional<AnimStart>& start) override {
@@ -439,6 +441,30 @@ void testFightMessages() {
     CHECK(decodeShotHit(encode(shotHit)) == shotHit);
 }
 
+void testRoomPatches() {
+    NetWorldTable t;
+    t.roomShadow = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20};
+    std::vector<uint8_t> live = t.roomShadow;
+    t.watchRoomBlock(live);
+    CHECK(t.roomPatches.empty());
+    live[2] = 99;
+    live[4] = 98;
+    live[18] = 97;
+    t.watchRoomBlock(live);
+    CHECK(t.roomPatches.size() == 2);
+    CHECK(t.roomShadow == live);
+    NetStateSender sender;
+    Recorded rec;
+    NetStateClient client(rec);
+    for (const auto& batch : sender.events(t)) CHECK(client.applyEvents(batch));
+    client.advance(0);
+    CHECK(rec.patches.size() == 2 && rec.patches[0].offset == 2 && rec.patches[0].bytes.size() == 3 && rec.patches[1].offset == 18);
+    // a joiner hears them too; an old client only once
+    NetStateSender joiner;
+    CHECK(!joiner.events(t).empty());
+    CHECK(sender.events(t).empty());
+}
+
 void testLinkMessages() {
     WorldMessage ack{WorldMessageType::NetAck};
     ack.playerId = 3;
@@ -678,6 +704,7 @@ int main(int argc, char** argv) {
     testPaths();
     testEffects();
     testLockPoints();
+    testRoomPatches();
     testOwnShotsWithheld();
     testFightMessages();
     testLinkMessages();

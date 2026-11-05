@@ -27,6 +27,7 @@ struct CollisionQueues {
     static constexpr size_t kMovers = 0x100; // more than every slot of the pools and the player
     StateArray<SolidEntry, kSolids> solids{};
     uint32_t solidCount = 0;
+    uint32_t solidCountLast = 0; // the entries the last pass ran over: they stay in the queue until the next tick's submits
     StateArray<ActorRef<ActorHeader>, kMovers> movers{};
     uint32_t moverCount = 0;
 };

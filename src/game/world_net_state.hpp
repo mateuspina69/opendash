@@ -101,6 +101,13 @@ struct NetLockPoint {
     friend bool operator==(const NetLockPoint&, const NetLockPoint&) = default;
 };
 
+// A solid an actor submits to the actor collision pass: the client's Mega Man collides with it
+struct NetSolid {
+    int16_t type = 0, bone = 0;
+    uint32_t param = 0;
+    friend bool operator==(const NetSolid&, const NetSolid&) = default;
+};
+
 // What a class changes of its model
 struct NetActorVisual {
     std::array<int16_t, 3> scale{};
@@ -123,6 +130,7 @@ struct NetActorState {
     NetActorVisual visual;
     std::vector<NetAimOffset> aim;
     std::vector<NetLockPoint> lock;
+    std::vector<NetSolid> solids;
     uint32_t pathTick = 0;        // on a path: pos and rot are the actor's on this tick, and it goes on by these steps
     std::array<int16_t, 3> posStep{}, rotStep{};
     uint8_t told = 0;             // a client's: which of the visual's fields the world has said (kNetTold...)
@@ -143,13 +151,25 @@ struct NetWorldActor {
     std::array<int32_t, 3> lastPos{}; // an actor on a path: its 16.16 position and rotation on the last tick
     std::array<int16_t, 3> lastRot{};
     uint8_t owner = 0;       // ActorHeader::ownerPlayer: a shot's is told to the others only
+    bool startedByShot = false; // ... and so is what a shot started
     bool effect = false;     // it runs on the client from an event
     bool effectGoes = false; // ... and this one goes (one that follows something only the world holds does not)
     NetEffect effectStart;
 };
 
+// A change the game made to the room block: a door's cell opened, a wall broken. The client's copy takes the same bytes.
+struct NetRoomPatch {
+    uint32_t offset = 0;
+    std::vector<uint8_t> bytes;
+    friend bool operator==(const NetRoomPatch&, const NetRoomPatch&) = default;
+};
+
 class NetWorldTable {
 public:
+    std::vector<NetRoomPatch> roomPatches; // since the room's files were read
+    std::vector<uint8_t> roomShadow;       // the room block as the patches leave it
+    // the live room block against the shadow: what differs becomes patches
+    void watchRoomBlock(std::span<const uint8_t> live);
     uint32_t tick = 0;
     uint8_t coordinateShift = 0xff; // the stage's (a camera script can change it): every pose scales by it
     std::array<NetWorldActor, kNetSlots> actors{};
@@ -172,7 +192,9 @@ public:
         NetActorVisual visual, bound;
         std::vector<NetAimOffset> aim;
         std::vector<NetLockPoint> lock;
+        std::vector<NetSolid> solids;
         uint8_t owner = 0;
+        bool startedByShot = false;
         bool onPath = false;
         std::array<int32_t, 3> fine{}; // the 16.16 position
         bool effect = false, effectGoes = false;
@@ -226,6 +248,7 @@ private:
     std::array<Known, kNetSlots> known_{};
     std::deque<Sent> inFlight_;
     uint8_t shiftTold_ = 0xff;
+    size_t patchesTold_ = 0;
     uint16_t nextSequence_ = 1;
     uint32_t eventsSent_ = 0;
     size_t cursor_ = 0;
@@ -239,6 +262,8 @@ public:
     // the slot's occupant appears
     virtual void appear(uint8_t slot, const NetActorIdentity& identity, const NetActorState& state) = 0;
     virtual void go(uint8_t slot) = 0;
+    // the room block changes
+    virtual void roomPatch(const NetRoomPatch& patch) = 0;
     // the stage's coordinate shift changes
     virtual void coordinateShift(uint8_t shift) = 0;
     // an effect starts, in a slot of the client's own
@@ -316,6 +341,7 @@ private:
         std::shared_ptr<Occupant> occupant;
         std::optional<NetEffect> effect;
         std::optional<uint8_t> shift;
+        std::optional<NetRoomPatch> patch;
     };
     void noteStart(Occupant& o, const NetActorState& s);
     std::optional<uint16_t> applyParsed(std::span<const uint8_t> bytes, uint32_t eventsThrough);
@@ -342,11 +368,14 @@ public:
     void go(uint8_t slot) override;
     void effect(const NetEffect& start) override;
     void coordinateShift(uint8_t shift) override;
+    void roomPatch(const NetRoomPatch& patch) override;
     void tick(uint8_t slot, const NetActorState& state, const std::optional<AnimStart>& start) override;
     // to run after a timeline's ticks: what went frees its slot
     void endTick();
     // the hit-list entries of the actors held here, for the game's lock-on selection
     void submitLockPoints();
+    // the solids of the actors held here, for the actor collision pass
+    void submitSolids();
     uint64_t effectsStarted() const { return effectsStarted_; }
 
 private:
@@ -355,9 +384,13 @@ private:
     std::array<bool, kNetSlots> animates_{}, held_{};
     std::array<uint32_t, kNetSlots> ownSlot_{}; // a world's shot in a slot of the client's: its address
     std::array<std::vector<NetLockPoint>, kNetSlots> lock_{};
+    std::array<std::vector<NetSolid>, kNetSlots> solids_{};
     std::array<HitBoxHead, kHitListCapacity> lockBoxes_{}; // nothing reads their results: the world decides
     uint64_t effectsStarted_ = 0;
 };
+
+// the actors a client keeps from its own room setup and runs itself: the door actor and its leaves (a door asks its own player)
+bool netClientKeepsActor(const StaticActor& a);
 
 // One tick of what runs on a client: the effects, and the statics started as effects (the world's actors are held with their
 // run flag off, so the pool loops pass them by). A class that throws ends its own actor, not the client; the classes that

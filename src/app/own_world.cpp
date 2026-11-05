@@ -21,7 +21,19 @@ std::vector<uint8_t> OwnWorldClient::playerState() const {
 }
 
 void OwnWorldClient::roomBound(int stage, int sub) {
-    od::port::killAllActors();
+    // the room setup's actors go, but what a client keeps
+    od::port::StaticPool& statics = od::port::staticPool();
+    for (size_t i = 0; i < od::port::StaticPool::size(); ++i)
+        if ((statics[i].flags & od::port::kActorLive) && !od::port::netClientKeepsActor(statics[i])) od::port::freeActor(statics[i]);
+    for (size_t i = 0; i < od::port::kAnimatedFieldSlots; ++i)
+        if (od::port::animatedPool()[i].flags & od::port::kActorLive) od::port::freeActor(od::port::animatedPool()[i]);
+    for (size_t i = 0; i < od::port::ProjectilePool::size(); ++i)
+        if (od::port::projectilePool()[i].flags & od::port::kActorLive) od::port::freeActor(od::port::projectilePool()[i]);
+    for (size_t i = 0; i < od::port::EffectPool::size(); ++i)
+        if (od::port::effectPool()[i].flags & od::port::kActorLive) od::port::freeActor(od::port::effectPool()[i]);
+    for (size_t i = 0; i < od::port::ControllerPool::size(); ++i)
+        if (od::port::controllerPool()[i].flags & od::port::kActorLive) od::port::freeActor(od::port::controllerPool()[i]);
+    od::port::applyActorFrees();
     actors_ = std::make_unique<od::port::PoolNetActors>(true);
     state_ = std::make_unique<od::port::NetStateClient>(*actors_);
     clock_ = std::make_unique<od::port::NetRenderClock>();
@@ -99,6 +111,7 @@ void OwnWorldClient::endFrame() {
 
 void OwnWorldClient::localActors(const od::port::PlayerEnv& env, od::port::ActorContext& context, bool late) {
     od::port::runNetLocalActors(env, context, late, failures_);
+    if (!late && actors_) actors_->submitSolids();
 }
 
 } // namespace od::app

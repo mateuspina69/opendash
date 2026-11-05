@@ -10,11 +10,13 @@
 #include <type_traits>
 
 #include "game/actor_animation.hpp"
+#include "game/actor_collision.hpp"
 #include "game/actor_model.hpp"
 #include "game/actor_pools.hpp"
 #include "game/animation_data.hpp"
 #include "game/footstep_dust.hpp"
 #include "game/hit_list.hpp"
+#include "game/room_grid.hpp"
 #include "game/loaded_data.hpp"
 #include "game/model_data.hpp"
 #include "game/stage_state.hpp"
@@ -62,13 +64,13 @@ struct Reader {
 
 constexpr uint8_t kMaskX = 0x01, kMaskY = 0x02, kMaskZ = 0x04, kMaskYaw = 0x08, kMaskRotXZ = 0x10, kMaskAnim = 0x20,
                   kMaskShown = 0x40, kMaskMore = 0x80;
-constexpr uint8_t kMoreAnimExtra = 0x01, kMoreLock = 0x02, kMoreScale = 0x08, kMoreTint = 0x10, kMoreParts = 0x20,
+constexpr uint8_t kMoreAnimExtra = 0x01, kMoreLock = 0x02, kMoreSolids = 0x04, kMoreScale = 0x08, kMoreTint = 0x10, kMoreParts = 0x20,
                   kMoreAim = 0x40, kMorePath = 0x80;
 constexpr uint8_t kExtraAge = 0x01, kExtraKey = 0x02, kExtraHeld = 0x04; // after the animation's byte, when it needs more
 constexpr uint8_t kLockPositionsOnly = 0x80;
 constexpr int kLockTolerance = 4; // units a lock-on point may drift before the client is told
 constexpr size_t kMaxLockPoints = 8;
-constexpr uint8_t kEventAppear = 1, kEventGo = 2, kEventAppearStill = 3, kEventEffect = 4, kEventShift = 5; // Still: no animation in play
+constexpr uint8_t kEventAppear = 1, kEventGo = 2, kEventAppearStill = 3, kEventEffect = 4, kEventShift = 5, kEventRoomPatch = 6; // Still: no animation in play
 constexpr size_t kBatchHeaderBytes = 8;
 constexpr size_t kAppearBytes = 26, kGoBytes = 2, kEffectBytes = 31;
 constexpr int kPathPosTolerance = 32; // 1/16 units an actor may leave its path by before the world sends a new one
@@ -126,6 +128,8 @@ void NetWorldTable::seen(uint8_t slot, const Seen& s) {
     a.state.visual = s.visual;
     a.state.aim = s.aim;
     a.owner = s.owner;
+    a.startedByShot = s.startedByShot;
+    a.state.solids = s.solids;
     bool lockKept = a.state.lock.size() == s.lock.size();
     for (size_t i = 0; lockKept && i < s.lock.size(); ++i) {
         const NetLockPoint &was = a.state.lock[i], &now = s.lock[i];
@@ -191,6 +195,28 @@ void NetWorldTable::seen(uint8_t slot, const Seen& s) {
 
 void NetWorldTable::gone(uint8_t slot) { actors[slot].live = false; }
 
+void NetWorldTable::watchRoomBlock(std::span<const uint8_t> live) {
+    if (live.size() != roomShadow.size() || std::memcmp(live.data(), roomShadow.data(), live.size()) == 0) return;
+    constexpr size_t kMaxRun = 200, kJoinGap = 8;
+    for (size_t i = 0; i < live.size();) {
+        if (live[i] == roomShadow[i]) {
+            ++i;
+            continue;
+        }
+        size_t end = i + 1, last = i;
+        while (end < live.size() && end - i < kMaxRun && end - last <= kJoinGap) {
+            if (live[end] != roomShadow[end]) last = end;
+            ++end;
+        }
+        NetRoomPatch p;
+        p.offset = uint32_t(i);
+        p.bytes.assign(live.begin() + ptrdiff_t(i), live.begin() + ptrdiff_t(last) + 1);
+        std::copy(p.bytes.begin(), p.bytes.end(), roomShadow.begin() + ptrdiff_t(i));
+        roomPatches.push_back(std::move(p));
+        i = last + 1;
+    }
+}
+
 namespace {
 
 // the entry of the stage's model bank the actor's model was bound from, and what that bind gives
@@ -247,6 +273,22 @@ std::array<std::vector<NetLockPoint>, kNetSlots>& lockEntries() {
     return entries;
 }
 
+// the tick's solids by slot
+std::array<std::vector<NetSolid>, kNetSlots>& solidEntries() {
+    static std::array<std::vector<NetSolid>, kNetSlots> entries;
+    return entries;
+}
+
+void gatherSolids() {
+    auto& entries = solidEntries();
+    for (auto& list : entries) list.clear();
+    const CollisionQueues& q = actorCollisionQueues();
+    for (uint32_t i = 0; i < q.solidCountLast && i < CollisionQueues::kSolids; ++i) {
+        const SolidEntry& e = q.solids[i];
+        if (e.actor) entries[e.actor->slot].push_back({e.type, e.bone, e.param});
+    }
+}
+
 void gatherLockEntries() {
     auto& entries = lockEntries();
     for (auto& list : entries) list.clear();
@@ -265,6 +307,8 @@ void gatherLockEntries() {
 NetWorldTable::Seen seenOf(const Actor& a, uint32_t model, uint32_t animTable) {
     NetWorldTable::Seen s;
     s.owner = a.ownerPlayer;
+    s.startedByShot = a.startedByShot;
+    s.solids = solidEntries()[a.slot];
     s.lock = lockEntries()[a.slot];
     for (NetLockPoint& p : s.lock) {
         p.offset[0] = int16_t(uint16_t(p.offset[0]) - uint16_t(a.pos.x.whole));
@@ -280,6 +324,12 @@ NetWorldTable::Seen seenOf(const Actor& a, uint32_t model, uint32_t animTable) {
     s.rot = {a.rotation.x, a.rotation.y, a.rotation.z};
     s.shown = (a.flags & kActorDrawn) != 0 && (a.runFlags & kActorShown) != 0;
     return s;
+}
+
+// the classes a client runs from its own room setup
+bool netClientKeepsClass(RoutineId id) {
+    return id == RoutineId::DoorActorUpdate || id == RoutineId::DoorLeafHingedUpdate || id == RoutineId::DoorLeafDoubleUpdate ||
+           id == RoutineId::DoorLeafSlidingUpdate;
 }
 
 // the statics that are effects: seen, not played with, and the same on every machine's own random numbers
@@ -340,8 +390,8 @@ template <class Pool> void captureMeshPool(NetWorldTable& table, Pool& pool, siz
             if (!held.live || held.identity.type != a.type || held.model != a.model) {
                 const RoutineRef h =
                     actorHandler(a, (a.loopFlags & kActorLateLoop) ? ActorPool::StaticsLate : ActorPool::Statics, false);
-                s.effect = h && netEffectClass(h.id());
-                s.effectGoes = s.effect && !effectFollowsTheWorld(a, h.id());
+                s.effect = h && (netEffectClass(h.id()) || netClientKeepsClass(h.id()));
+                s.effectGoes = s.effect && !netClientKeepsClass(h.id()) && !effectFollowsTheWorld(a, h.id());
                 s.effectStart.pool = uint8_t(kStaticClass);
                 s.effectStart.type = a.type;
                 s.effectStart.subtype = a.subtype;
@@ -378,6 +428,7 @@ void captureNetWorld(NetWorldTable& table, uint32_t tick) {
     table.tick = tick;
     table.coordinateShift = stage().coordinateShift;
     gatherLockEntries();
+    gatherSolids();
     AnimatedPool& animated = animatedPool();
     for (size_t i = 0; i < kAnimatedFieldSlots; ++i) {
         const AnimatedActor& a = animated[i];
@@ -441,6 +492,8 @@ void captureNetWorld(NetWorldTable& table, uint32_t tick) {
         for (size_t p = 0; p < 4; ++p) s.effectStart.params[p] = e.params[p];
         s.effectStart.pos = {e.pos.x, e.pos.y, e.pos.z};
         s.effectStart.spare = e.posSpare;
+        s.owner = e.ownerPlayer;
+        s.startedByShot = e.startedByShot;
         table.seen(slot, s);
     }
 }
@@ -467,12 +520,23 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
         ++eventsSent_;
         shiftTold_ = table.coordinateShift;
     }
+    for (; patchesTold_ < table.roomPatches.size(); ++patchesTold_) {
+        const NetRoomPatch& p = table.roomPatches[patchesTold_];
+        room(1 + 4 + 1 + p.bytes.size());
+        w.u8(kEventRoomPatch);
+        w.u32(p.offset);
+        w.u8(uint8_t(p.bytes.size()));
+        w.bytes.insert(w.bytes.end(), p.bytes.begin(), p.bytes.end());
+        ++eventsSent_;
+    }
     for (size_t i = 0; i < kNetSlots; ++i) {
         const uint8_t slot = uint8_t(i);
         if (!filter_(slot)) continue;
         Known& k = known_[i];
         const NetWorldActor& a = table.actors[i];
-        const bool withheld = a.live && slot >= kShotClass && slot < kShotClass + ShotPool::size() && a.owner == ownShotsOf_;
+        // a client's own shot, and what it started: the client runs those itself
+        const bool withheld = a.live && a.owner == ownShotsOf_ &&
+                              ((slot >= kShotClass && slot < kShotClass + ShotPool::size()) || a.startedByShot);
         const bool live = a.live && !withheld;
         const bool same = k.told && live && a.generation == k.generation;
         if (same) continue;
@@ -539,6 +603,7 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
         k.acked.visual = a.bound; // a client's bind gives it; a class's change goes in an update
         k.acked.aim.clear();
         k.acked.lock.clear();
+        k.acked.solids.clear();
         k.sent = k.acked;
     }
     if (w.bytes.size() > kBatchHeaderBytes) batches.push_back(std::move(w.bytes));
@@ -584,6 +649,7 @@ std::vector<uint8_t> NetStateSender::update(const NetWorldTable& table) {
             if (extra) more |= kMoreAnimExtra;
         }
         if (a.state.lock != k.acked.lock || a.state.lock != k.sent.lock) more |= kMoreLock;
+        if (a.state.solids != k.acked.solids || a.state.solids != k.sent.solids) more |= kMoreSolids;
         const NetActorVisual &v = a.state.visual, &va = k.acked.visual, &vs = k.sent.visual;
         if (v.scale != va.scale || v.scale != vs.scale) more |= kMoreScale;
         if (v.tint != va.tint || v.tint != vs.tint) more |= kMoreTint;
@@ -629,6 +695,14 @@ std::vector<uint8_t> NetStateSender::update(const NetWorldTable& table) {
                 e.u8(uint8_t(o.entry | lanes << 5));
                 for (size_t l = 0; l < 3; ++l)
                     if (o.lanes[l] != 0) e.i16(o.lanes[l]);
+            }
+        }
+        if (more & kMoreSolids) {
+            e.u8(uint8_t(a.state.solids.size()));
+            for (const NetSolid& s : a.state.solids) {
+                e.i16(s.type);
+                e.i16(s.bone);
+                e.u32(s.param);
             }
         }
         if (more & kMoreLock) {
@@ -746,19 +820,28 @@ bool NetStateClient::applyEvents(std::span<const uint8_t> bytes) {
             } else {
                 e.spare = r.i16();
             }
-            due_.push_back({tick, false, nullptr, e, std::nullopt});
+            due_.push_back({tick, false, nullptr, e, std::nullopt, std::nullopt});
             ++eventsArrived_;
             continue;
         }
         if (kind == kEventShift) {
-            due_.push_back({tick, false, nullptr, std::nullopt, r.u8()});
+            due_.push_back({tick, false, nullptr, std::nullopt, r.u8(), std::nullopt});
+            ++eventsArrived_;
+            continue;
+        }
+        if (kind == kEventRoomPatch) {
+            NetRoomPatch p;
+            p.offset = r.u32();
+            p.bytes.resize(r.u8());
+            for (uint8_t& b : p.bytes) b = r.u8();
+            due_.push_back({tick, false, nullptr, std::nullopt, std::nullopt, std::move(p)});
             ++eventsArrived_;
             continue;
         }
         const uint8_t slot = r.u8();
         if (kind == kEventGo) {
             if (std::shared_ptr<Occupant>& o = heardOf_[slot]) {
-                due_.push_back({tick, false, o, std::nullopt, std::nullopt});
+                due_.push_back({tick, false, o, std::nullopt, std::nullopt, std::nullopt});
                 o = nullptr;
             }
         } else if (kind == kEventAppear || kind == kEventAppearStill) {
@@ -785,7 +868,7 @@ bool NetStateClient::applyEvents(std::span<const uint8_t> bytes) {
             o->samples.push_back({tick, o->last});
             noteStart(*o, o->last);
             heardOf_[slot] = o;
-            due_.push_back({tick, true, o, std::nullopt, std::nullopt});
+            due_.push_back({tick, true, o, std::nullopt, std::nullopt, std::nullopt});
         } else {
             return false;
         }
@@ -848,6 +931,14 @@ std::optional<uint16_t> NetStateClient::applyParsed(std::span<const uint8_t> byt
                 const uint8_t head = r.u8();
                 a.entry = head & 0x1f;
                 for (size_t l = 0; l < 3; ++l) a.lanes[l] = (head >> (5 + l) & 1) ? r.i16() : int16_t(0);
+            }
+        }
+        if (more & kMoreSolids) {
+            s.solids.resize(r.u8());
+            for (NetSolid& v : s.solids) {
+                v.type = r.i16();
+                v.bone = r.i16();
+                v.param = r.u32();
             }
         }
         if (more & kMoreLock) {
@@ -952,6 +1043,10 @@ void NetStateClient::advance(uint32_t tick) {
             actors_.coordinateShift(*d.shift);
             continue;
         }
+        if (d.patch) {
+            actors_.roomPatch(*d.patch);
+            continue;
+        }
         const uint8_t slot = d.occupant->slot;
         if (d.appear) {
             if (shown_[slot]) actors_.go(slot);
@@ -1046,9 +1141,15 @@ void PoolNetActors::go(uint8_t slot) {
     ownSlot_[slot] = 0;
     animates_[slot] = false;
     lock_[slot].clear();
+    solids_[slot].clear();
 }
 
 void PoolNetActors::coordinateShift(uint8_t shift) { stage().coordinateShift = shift; }
+
+void PoolNetActors::roomPatch(const NetRoomPatch& patch) {
+    const uint32_t block = roomGrid().block;
+    for (size_t i = 0; i < patch.bytes.size(); ++i) GameStorage::Field<uint8_t>{block + patch.offset + uint32_t(i)} = patch.bytes[i];
+}
 
 void PoolNetActors::effect(const NetEffect& e) {
     // what it hangs from: an actor held here, or (a player's slot) this machine's Mega Man
@@ -1096,6 +1197,7 @@ void PoolNetActors::tick(uint8_t slot, const NetActorState& state, const std::op
     Actor& a = actorLayoutOf(*head);
     a.savePreviousPose(); // what the renderer interpolates from
     lock_[slot] = state.lock;
+    solids_[slot] = state.solids;
     a.pos.x.whole = state.pos[0];
     a.pos.y.whole = state.pos[1];
     a.pos.z.whole = state.pos[2];
@@ -1160,6 +1262,20 @@ void PoolNetActors::tick(uint8_t slot, const NetActorState& state, const std::op
 }
 
 void PoolNetActors::endTick() { applyActorFrees(); }
+
+void PoolNetActors::submitSolids() {
+    for (size_t i = 0; i < kNetSlots; ++i) {
+        if (solids_[i].empty()) continue;
+        ActorHeader* head = slotOf(uint8_t(i));
+        if (!head || !(head->flags & kActorLive)) continue;
+        for (const NetSolid& s : solids_[i]) actorCollisionSubmitSolid(*head, SolidType(s.type), s.bone, s.param);
+    }
+}
+
+bool netClientKeepsActor(const StaticActor& a) {
+    const RoutineRef h = actorHandler(a, (a.loopFlags & kActorLateLoop) ? ActorPool::StaticsLate : ActorPool::Statics, false);
+    return h && netClientKeepsClass(h.id());
+}
 
 void PoolNetActors::submitLockPoints() {
     size_t box = 0;
