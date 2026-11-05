@@ -45,6 +45,7 @@
 #include "game/hud.hpp"
 #include "game/matrix.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/player/player_weapons.hpp"
 #include "game/port_gap.hpp"
 #include "game/projection.hpp"
@@ -152,8 +153,8 @@ FightRow fightRow(const AnimatedActor& actor, uint32_t table, bool second) {
 
 bool secondFight() { return storyFlag(kFlagSecondFight); }
 bool playerIn(uint32_t box) { return pointInCellBox(player().pos, CellBox(box)); }
-int playerDistance(const AnimatedActor& actor) { return planarDistance(player().pos, actor.pos); }
-int angleToPlayer(const AnimatedActor& actor) { return angleOf(player().pos, actor.pos); }
+int playerDistance(const AnimatedActor& actor) { return planarDistance(nearestPlayer(actor.pos).pos, actor.pos); }
+int angleToPlayer(const AnimatedActor& actor) { return angleOf(nearestPlayer(actor.pos).pos, actor.pos); }
 void ask(AnimatedActor& actor, BossFields& boss, uint8_t anim, uint8_t key = 0) {
     actor.anim = anim;
     boss.startKey = key;
@@ -168,7 +169,7 @@ void enterMove(AnimatedActor& actor, BossMove move) {
 bool facingAngle(const AnimatedActor& actor, int angle) {
     return int16_t(uint16_t(angle - uint16_t(actor.rotation.y) - 0x780) & 0xfff) <= 0x100;
 }
-bool facingPlayer(const AnimatedActor& actor) { return facingAngle(actor, angleOf(actor.pos, player().pos)); }
+bool facingPlayer(const AnimatedActor& actor) { return facingAngle(actor, angleOf(actor.pos, nearestPlayer(actor.pos).pos)); }
 bool facingPoint(const AnimatedActor& actor, const int32_t t[3]) {
     return facingAngle(actor, angleOf(actor.pos.x, actor.pos.z, t[0], t[2]));
 }

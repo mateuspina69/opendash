@@ -34,6 +34,7 @@
 #include "game/matrix.hpp"
 #include "game/pickups.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/room_grid.hpp"
@@ -949,8 +950,8 @@ constexpr uint8_t kSemiOn = ((1 & 1) << 4 | (1 & 3)) << 1;  // exe 0x5e1a00(acto
 constexpr uint8_t kSemiOff = ((1 & 1) << 4 | (0 & 3)) << 1; // exe 0x5e1a00(actor, 1, 0)
 
 AnimatedActorStats diggerStats(const AnimatedActor& a) { return animatedStats(a.type, a.spawnByte); }
-int distanceToPlayer(const AnimatedActor& a) { return distance3(player().pos, a.pos); }  // exe 0x5e3a60
-int angleToPlayer(const AnimatedActor& a) { return angleOf(player().pos, a.pos); }      // exe 0x5e3bc0(player, actor)
+int distanceToPlayer(const AnimatedActor& a) { return distance3(nearestPlayer(a.pos).pos, a.pos); }  // exe 0x5e3a60
+int angleToPlayer(const AnimatedActor& a) { return angleOf(nearestPlayer(a.pos).pos, a.pos); }      // exe 0x5e3bc0(player, actor)
 int facingDiff(const AnimatedActor& a) { // exe 0x5e3d80(yaw, the angle to the player)
     return angleDiff(uint32_t(int32_t(a.rotation.y)), uint32_t(angleToPlayer(a)));
 }

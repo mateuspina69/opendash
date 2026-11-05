@@ -29,6 +29,7 @@
 #include "game/hit_list.hpp"
 #include "game/pickups.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/projection_state.hpp"
 #include "game/random.hpp"
@@ -83,7 +84,7 @@ constexpr uint16_t kTintPenned = 0x7f18;
 int yawDiff(const AnimatedActor& actor, int angle) { // exe 0x5e3d80(yaw, angle)
     return angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angle));
 }
-int angleFromPlayer(const AnimatedActor& actor) { return angleOf(player().pos, actor.pos); }
+int angleFromPlayer(const AnimatedActor& actor) { return angleOf(nearestPlayer(actor.pos).pos, actor.pos); }
 void enterHerd(AnimatedActor& actor, Herd h) { // the behaviour with the step and the step counter cleared
     actor.subState = uint8_t(h);
     actor.restartStep();

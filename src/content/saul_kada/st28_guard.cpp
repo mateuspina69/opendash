@@ -30,6 +30,7 @@
 #include "game/hit_points.hpp"
 #include "game/pickups.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/story.hpp"
@@ -76,8 +77,8 @@ void enterSub(AnimatedActor& actor, GuardSub sub) {
     actor.subState = uint8_t(sub);
     actor.restartStep();
 }
-uint16_t angleToPlayer(const AnimatedActor& actor) { return uint16_t(angleOf(player().pos, actor.pos)); }
-int playerDistance(const AnimatedActor& actor) { return planarDistance(actor.pos, player().pos); }
+uint16_t angleToPlayer(const AnimatedActor& actor) { return uint16_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos)); }
+int playerDistance(const AnimatedActor& actor) { return planarDistance(actor.pos, nearestPlayer(actor.pos).pos); }
 // exe 0x4f1cd0: the player within 0x708 of its home
 bool playerNearHome(const GuardFields& guard) {
     const int32_t home[3] = {int32_t(uint32_t(uint16_t(guard.homeX)) << 16), 0,

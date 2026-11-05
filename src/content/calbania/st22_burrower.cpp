@@ -36,6 +36,7 @@
 #include "game/hit_points.hpp"
 #include "game/pickups.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/room_grid.hpp"
@@ -95,7 +96,7 @@ int playerDistance(const AnimatedActor& actor) {
     const int dx = int(player().pos.x.whole) - actor.pos.x.whole, dz = int(player().pos.z.whole) - actor.pos.z.whole;
     return isqrt(int32_t(uint32_t(dz * dz) + uint32_t(dx * dx)));
 }
-int angleFromPlayer(const AnimatedActor& actor) { return angleOf(player().pos, actor.pos); }
+int angleFromPlayer(const AnimatedActor& actor) { return angleOf(nearestPlayer(actor.pos).pos, actor.pos); }
 // |((yaw - to) & 0xfff) as -0x7ff..0x800|
 int absWrap(uint32_t yaw, uint32_t to) {
     int v = int((yaw - to) & 0xfff);

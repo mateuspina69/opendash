@@ -25,6 +25,7 @@
 #include "game/pickups.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/rewards.hpp"
@@ -84,7 +85,7 @@ void setSub(AnimatedActor& a, CritterSub s) {
     a.restartStep();
 }
 void moveForward(AnimatedActor& a, int z) { moveAlongYaw(a.pos, a.rotation.y, 0, 0, z); } // exe 0x5e36f0
-int distanceFromPlayer(const AnimatedActor& a) { return planarDistance(player().pos, a.pos); }
+int distanceFromPlayer(const AnimatedActor& a) { return planarDistance(nearestPlayer(a.pos).pos, a.pos); }
 // a random heading within +-0x200 of the yaw
 int16_t randomHeading(const AnimatedActor& a) {
     return int16_t(uint16_t((rngStep() & 0x3ff) + uint16_t(a.rotation.y) - 0x200));

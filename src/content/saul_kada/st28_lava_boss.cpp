@@ -44,6 +44,7 @@
 #include "game/hud.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/room_grid.hpp"
@@ -85,8 +86,8 @@ constexpr uint8_t kDustVariant = 1;
 void sound(uint16_t id, const AnimatedActor& actor) { soundPlayAtPos(id, actor.pos); } // exe 0x5d5380
 void setAnim(AnimatedActor& actor, BossAnim anim) { actor.anim = uint8_t(anim); }
 int ground(const PlayerEnv& env, const AnimatedActor& actor) { return actorGround(env, actor); } // exe 0x40f190
-int playerDistance(const AnimatedActor& actor) { return planarDistance(player().pos, actor.pos); }
-int angleToPlayer(const AnimatedActor& actor) { return angleOf(player().pos, actor.pos); }
+int playerDistance(const AnimatedActor& actor) { return planarDistance(nearestPlayer(actor.pos).pos, actor.pos); }
+int angleToPlayer(const AnimatedActor& actor) { return angleOf(nearestPlayer(actor.pos).pos, actor.pos); }
 // a sub-state's first step (the exe's byte stores at +9 / +0xa / +0xb)
 void enterSubBytes(AnimatedActor& actor, BossSub sub) {
     actor.subState = uint8_t(sub);

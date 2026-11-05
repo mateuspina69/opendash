@@ -34,6 +34,7 @@
 #include "game/matrix.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/story.hpp"
 #include "game/vectors.hpp"
@@ -101,7 +102,7 @@ void yawStep(AnimatedActor& actor, int angle) {
     else actor.rotation.y = int16_t(uint16_t(uint16_t(actor.rotation.y) + uint32_t(d)));
 }
 // exe 0x462670: turned toward the player
-void facePlayer(AnimatedActor& actor) { yawStep(actor, int16_t(angleOf(player().pos, actor.pos))); }
+void facePlayer(AnimatedActor& actor) { yawStep(actor, int16_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos))); }
 // exe 0x4626c0: turned toward the player's angle offset 0x80 (helper 1) / -0x80 (helper 0)
 void faceSide(AnimatedActor& actor) {
     const int offset = sideOf(actor) ? 0x80 : -0x80;

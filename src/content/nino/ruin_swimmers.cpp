@@ -43,6 +43,7 @@
 #include "game/hit_points.hpp"
 #include "game/pickups.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/story.hpp"
@@ -104,8 +105,8 @@ void collide(const PlayerEnv& env, Actor& actor, uint8_t& contact) {
     }
     actorCollisionSubmitMover(actor);
 }
-int angleFromPlayer(const Actor& actor) { return angleOf(player().pos, actor.pos); } // exe 0x5e3bc0(player, actor)
-int playerDistance(const Actor& actor) { return planarDistance(player().pos, actor.pos); } // exe 0x5e3b00
+int angleFromPlayer(const Actor& actor) { return angleOf(nearestPlayer(actor.pos).pos, actor.pos); } // exe 0x5e3bc0(player, actor)
+int playerDistance(const Actor& actor) { return planarDistance(nearestPlayer(actor.pos).pos, actor.pos); } // exe 0x5e3b00
 void enterSub(AnimatedActor& actor, uint8_t sub) {
     actor.subState = sub;
     actor.restartStep();

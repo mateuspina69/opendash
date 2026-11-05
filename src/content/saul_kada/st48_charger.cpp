@@ -44,6 +44,7 @@
 #include "game/hit_points.hpp"
 #include "game/pickups.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/room_grid.hpp"
@@ -101,11 +102,11 @@ template <class Step> void enterStep(AnimatedActor& actor, Step step) { actor.en
 void moveAlongHeading(AnimatedActor& actor, const ChargerFields& charger, int y, int z) {
     moveAlongYaw(actor.pos, charger.heading, 0, y, z);
 }
-int angleToPlayer(const AnimatedActor& actor) { return angleOf(player().pos, actor.pos); } // exe 0x5e3bc0
+int angleToPlayer(const AnimatedActor& actor) { return angleOf(nearestPlayer(actor.pos).pos, actor.pos); } // exe 0x5e3bc0
 int turnToPlayer(const AnimatedActor& actor) {
     return angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angleToPlayer(actor)));
 }
-int playerDistance(const AnimatedActor& actor) { return planarDistance(actor.pos, player().pos); } // exe 0x5e3b00
+int playerDistance(const AnimatedActor& actor) { return planarDistance(actor.pos, nearestPlayer(actor.pos).pos); } // exe 0x5e3b00
 void dustOnOddFrames(ChargerFields& charger) {
     if (gameState().frame & 1) charger.dust = 1;
 }

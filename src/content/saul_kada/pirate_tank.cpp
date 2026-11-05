@@ -40,6 +40,7 @@
 #include "game/matrix.hpp"
 #include "game/pickups.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/room_grid.hpp"
@@ -91,7 +92,7 @@ bool ridden(const AnimatedActor& actor) {
     return p.onPlatform != 0 && ((slotIdentityWord(p.platform) ^ slotIdentityWord(actor)) & kRiderMatch) == 0;
 }
 int turretAngle(const AnimatedActor& actor, const TankFields& tank) { return int(tank.turretYaw) + int(actor.rotation.y); }
-int angleToPlayer(const AnimatedActor& actor) { return angleOf(player().pos, actor.pos); }
+int angleToPlayer(const AnimatedActor& actor) { return angleOf(nearestPlayer(actor.pos).pos, actor.pos); }
 
 // exe 0x4bfda0(actor, limit, step): its speed toward the limit (reached: -limit), turned to its drive's yaw, moved;
 // true once facing it

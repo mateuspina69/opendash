@@ -39,6 +39,7 @@
 #include "game/hud.hpp"
 #include "game/pickups.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/script_state.hpp"
@@ -129,7 +130,7 @@ void collide(const PlayerEnv& env, Actor& actor, uint8_t& contact, const uint8_t
     actorCollisionSubmitMover(actor);
 }
 // the angle of the actor seen from the player / its distance
-int angleFromPlayer(const Actor& actor) { return angleOf(player().pos, actor.pos); } // exe 0x5e3bc0(player, actor)
+int angleFromPlayer(const Actor& actor) { return angleOf(nearestPlayer(actor.pos).pos, actor.pos); } // exe 0x5e3bc0(player, actor)
 // exe 0x5e3bc0 from a point whose 16.16 fractions the exe leaves unset (taken as 0): the actor seen from (x, z)
 int angleFromPoint(int16_t x, int16_t z, const Actor& actor) {
     return angleOf(int32_t(uint32_t(uint16_t(x)) << 16), int32_t(uint32_t(uint16_t(z)) << 16), actor.pos.x, actor.pos.z);

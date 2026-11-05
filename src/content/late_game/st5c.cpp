@@ -62,6 +62,7 @@
 #include "game/keyframe_tracks.hpp"
 #include "game/player/player_input.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/script_state.hpp"
@@ -187,7 +188,7 @@ void nextAttack(AnimatedActor& actor, BossAttack next) {
 void nextStep(AnimatedActor& actor) { ++actor.step; }
 bool animEnd(const AnimatedActor& actor) { return actor.animKey.flags == kKeyHold; }
 void dashForward(AnimatedActor& actor) { integrateVelocity(actor, 0, 0, actor.velocity.z); } // exe 0x5e3690
-uint32_t distanceToPlayer(const AnimatedActor& actor) { return uint32_t(planarDistance(actor.pos, player().pos)); }
+uint32_t distanceToPlayer(const AnimatedActor& actor) { return uint32_t(planarDistance(actor.pos, nearestPlayer(actor.pos).pos)); }
 uint32_t distanceToCentre(const AnimatedActor& actor) { return uint32_t(planarDistance(actor.pos, kRoomCentre)); }
 bool halfHitPointsLost(const AnimatedActor& actor) { return actor.hitPoints < int16_t(actor.maxHitPoints >> 1); }
 

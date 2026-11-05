@@ -39,6 +39,7 @@
 #include "game/hit_points.hpp"
 #include "game/pickups.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/projection_state.hpp"
 #include "game/random.hpp"
@@ -76,7 +77,7 @@ template <class Sub> void enterSub(AnimatedActor& a, Sub s) {
     a.subState = uint8_t(s);
     a.step = 0;
 }
-uint32_t playerDistance(const AnimatedActor& a) { return uint32_t(planarDistance(a.pos, player().pos)); } // exe 0x5e3b00
+uint32_t playerDistance(const AnimatedActor& a) { return uint32_t(planarDistance(a.pos, nearestPlayer(a.pos).pos)); } // exe 0x5e3b00
 bool dustFrame() { return (gameState().frame & 4) != 0; }
 
 // ---- the class's routines ---------------------------------------------------------------------------------------

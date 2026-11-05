@@ -27,6 +27,7 @@
 #include "game/hit_points.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/story.hpp"
@@ -54,8 +55,8 @@ AnimatedActorStats shellStats(const AnimatedActor& actor) {
     return animatedStats(actor.type, uint8_t(actor.spawnByte + actor.variant * 2));
 }
 void setAnim(AnimatedActor& actor, ShellAnim anim) { actor.anim = uint8_t(anim); }
-int playerDistance(const AnimatedActor& actor) { return planarDistance(actor.pos, player().pos); }
-uint32_t angleToPlayer(const AnimatedActor& actor) { return uint32_t(angleOf(player().pos, actor.pos)); }
+int playerDistance(const AnimatedActor& actor) { return planarDistance(actor.pos, nearestPlayer(actor.pos).pos); }
+uint32_t angleToPlayer(const AnimatedActor& actor) { return uint32_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos)); }
 // the dying's start
 void startDying(AnimatedActor& actor, ShellFields& shell) {
     actor.subState = uint8_t(ShellRoutine::Dying);

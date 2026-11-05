@@ -31,6 +31,7 @@
 #include "game/matrix.hpp"
 #include "game/pickups.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/shockwave.hpp"
@@ -116,7 +117,7 @@ AnimatedActorStats statsOf(const AnimatedActor& a) { return animatedStats(a.type
 // exe 0x5e1810: the bone's point (a bone past the actor's blocks is the port gap)
 ShortVec4& bone(const AnimatedActor& a, uint32_t b) { return bonePoint(a, b, kGuardianPort); }
 // the angle of the guardian seen from the player (exe 0x5e3bc0(player, +0x10)) and its yaw's difference to it
-int angleToPlayer(const AnimatedActor& a) { return angleOf(player().pos, a.pos); }
+int angleToPlayer(const AnimatedActor& a) { return angleOf(nearestPlayer(a.pos).pos, a.pos); }
 int facing(const AnimatedActor& a) { return angleDiff(uint32_t(int32_t(a.rotation.y)), uint32_t(angleToPlayer(a))); }
 
 // exe 0x4571e0: the velocity and the acceleration cleared (dwords)

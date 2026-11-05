@@ -23,6 +23,7 @@
 #include "game/hit_points.hpp"
 #include "game/line_of_sight.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/rewards.hpp"
@@ -67,7 +68,7 @@ int distanceFromPoint(const AnimatedActor& a, int16_t x, int16_t z) {
     const int32_t p[3] = {wholeToFixed(x), 0, wholeToFixed(z)};
     return planarDistance(a.pos, p);
 }
-int distanceFromPlayer(const AnimatedActor& a) { return planarDistance(player().pos, a.pos); }
+int distanceFromPlayer(const AnimatedActor& a) { return planarDistance(nearestPlayer(a.pos).pos, a.pos); }
 // an angle difference wrapped into -0x800 .. 0x800 (the exe's inline form)
 int wrappedDiff(int d) {
     if (uint32_t(d + kHalfTurn) > 0x1000u) d = int((uint32_t(-d) ^ 0xfffu) + 1u);

@@ -7,6 +7,7 @@
 #include "check.hpp"
 #include "game/actor_pools.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/random.hpp"
 #include "game/world_digest.hpp"
 
@@ -73,6 +74,50 @@ void testJoinAndLeave() {
     CHECK(actorBySlot(3) == kPlayer);
 }
 
+void testNearest() {
+    resetPlayer();
+    const auto at = [](Player& p, int x, int z) {
+        p.pos.x = int32_t(uint32_t(x) << 16);
+        p.pos.z = int32_t(uint32_t(z) << 16);
+    };
+    Fixed16Vec3 point;
+    point.x = 100 << 16;
+    point.z = 0;
+    at(player(), 0, 0);
+
+    // alone: the one player, however far
+    at(playerById(2), 100, 0);
+    CHECK(&nearestPlayer(point) == &player());
+
+    joinPlayer(2);
+    joinPlayer(5);
+    at(playerById(2), 100, 10);
+    at(playerById(5), 300, 0);
+    CHECK(&nearestPlayer(point) == &playerById(2));
+    point.x = -50 << 16;
+    CHECK(&nearestPlayer(point) == &player());
+    point.x = 400 << 16;
+    CHECK(&nearestPlayer(point) == &playerById(5));
+
+    // as near: the lower id
+    at(playerById(5), 100, 10);
+    point.x = 100 << 16;
+    CHECK(&nearestPlayer(point) == &playerById(2));
+
+    int seen = 0;
+    size_t sum = 0;
+    forEachPlayer([&](Player& p) {
+        ++seen;
+        sum += playerId(p);
+    });
+    CHECK(seen == 3 && sum == 7);
+
+    leavePlayer(2);
+    leavePlayer(5);
+    CHECK(&nearestPlayer(point) == &player());
+    resetPlayer();
+}
+
 // the digest two runs of a room are compared by: the same state the same hash, a change in what it covers another
 void testWorldDigest() {
     resetPlayer();
@@ -124,6 +169,7 @@ int main() {
     testSlotsAlone();
     testJoinAndLeave();
     testSlotsAlone();
+    testNearest();
     testWorldDigest();
     testRefusals();
     return testResult("test_player_table");

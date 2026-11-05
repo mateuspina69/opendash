@@ -47,6 +47,7 @@
 #include "game/hud.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/projection.hpp"
 #include "game/random.hpp"
@@ -304,7 +305,7 @@ bool fadeIn(AnimatedActor& a, GuardianFields& f, const FadeThresholds& table = f
     return false;
 }
 // exe 0x486670(actor, player, 0x80)
-void facePlayer(AnimatedActor& a) { turnYawTo(a.rotation.y, uint32_t(angleOf(player().pos, a.pos)), 0x80); }
+void facePlayer(AnimatedActor& a) { turnYawTo(a.rotation.y, uint32_t(angleOf(nearestPlayer(a.pos).pos, a.pos)), 0x80); }
 // the pitch from the point to the player's chest, clamped to +-limit (the shots')
 int16_t pitchToChest(const int16_t from[3], uint32_t limit) {
     int16_t chest[3];

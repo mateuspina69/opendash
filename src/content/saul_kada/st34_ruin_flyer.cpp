@@ -38,6 +38,7 @@
 #include "game/hit_points.hpp"
 #include "game/pickups.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/story.hpp"
 
@@ -70,7 +71,7 @@ AnimatedActorStats flyerStats(const AnimatedActor& actor, uint32_t rowIndex) {
                               ((uint32_t(actor.spawnByte) + rowIndex * 2u) << 4));
 }
 void sound(uint16_t id, const AnimatedActor& actor) { soundPlayAtPos(id, actor.pos); } // exe 0x5d5380
-int angleToPlayer(const AnimatedActor& actor) { return angleOf(player().pos, actor.pos); } // exe 0x5e3bc0(player, it)
+int angleToPlayer(const AnimatedActor& actor) { return angleOf(nearestPlayer(actor.pos).pos, actor.pos); } // exe 0x5e3bc0(player, it)
 void turnTo(AnimatedActor& actor, int angle) { turnYawTo(actor.rotation.y, uint32_t(angle), 0x20); } // exe 0x5e3df0
 bool facingPlayerWithin(const AnimatedActor& actor, int tolerance) {
     return facingWithin(actor, player().pos.x, player().pos.z, tolerance);

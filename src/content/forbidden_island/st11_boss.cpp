@@ -36,6 +36,7 @@
 #include "game/hud.hpp"
 #include "game/pickups.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/story.hpp"
 #include "game/visibility.hpp"
@@ -72,7 +73,7 @@ void enterSub(AnimatedActor& a, FighterSub s) {
     a.restartStep();
 }
 void turnBy(AnimatedActor& a, int d) { a.rotation.y += d; }
-int playerAngle(const AnimatedActor& a) { return angleOf(player().pos, a.pos); }
+int playerAngle(const AnimatedActor& a) { return angleOf(nearestPlayer(a.pos).pos, a.pos); }
 void moveForward(AnimatedActor& a) { moveAlongYaw(a.pos, a.rotation.y, 0, 0, a.velocity.z); }
 
 // exe 0x47a480: a death explosion (global static type 8) 0x60 above the actor, spread 0x30, 0x3c flashes

@@ -47,6 +47,7 @@
 #include "game/player/player_input.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/story.hpp"
@@ -95,8 +96,8 @@ void explosionAt(int16_t x, int16_t y, int16_t z, uint16_t spread, uint16_t flas
 }
 // bone k's point (exe 0x5e1810; a null result would crash the exe)
 ShortVec4& bonePointOf(const AnimatedActor& a, uint32_t k) { return bonePoint(a, k, kStoryPort); }
-int playerAngle(const AnimatedActor& a) { return angleOf(player().pos, a.pos); }       // exe 0x5e3bc0(player, actor)
-int playerDistance(const AnimatedActor& a) { return planarDistance(player().pos, a.pos); } // exe 0x5e3b00
+int playerAngle(const AnimatedActor& a) { return angleOf(nearestPlayer(a.pos).pos, a.pos); }       // exe 0x5e3bc0(player, actor)
+int playerDistance(const AnimatedActor& a) { return planarDistance(nearestPlayer(a.pos).pos, a.pos); } // exe 0x5e3b00
 
 // ==== the small liftable reaverbot (exe 0x48e750, pool 0x20 type 0x2a) ==============================================
 namespace hopper {

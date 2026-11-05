@@ -43,6 +43,7 @@
 #include "game/pickups.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/territory.hpp"
@@ -122,7 +123,7 @@ void turnHead(BurrowerFields& f, int16_t d) { f.headYaw = int16_t(f.headYaw + d)
 int playerBearing(const AnimatedActor& a) {
     return angleDiff(uint32_t(angleOf(player().pos, a.pos)), uint32_t(int32_t(a.rotation.y)));
 }
-int playerDistance(const AnimatedActor& a) { return planarDistance(player().pos, a.pos); }
+int playerDistance(const AnimatedActor& a) { return planarDistance(nearestPlayer(a.pos).pos, a.pos); }
 
 // the death explosion (global static type 8) at the actor, 0x60 up
 void explosion(const AnimatedActor& a, uint16_t spread, uint16_t flashes) {

@@ -28,6 +28,7 @@
 #include "game/hit_points.hpp"
 #include "game/pickups.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/projection.hpp"
 #include "game/random.hpp"
@@ -85,7 +86,7 @@ void enterSub(AnimatedActor& actor, TurretSub sub) {
 void destroy(AnimatedActor& actor) { actor.enterStateKeepingStep(uint8_t(TurretState::Destroyed)); }
 
 // exe 0x46c330: exe 0x5e3a10(turret, player) > 0x1200
-bool playerFar(const AnimatedActor& actor) { return uint32_t(distance3(actor.pos, player().pos)) > kFarDistance; }
+bool playerFar(const AnimatedActor& actor) { return uint32_t(distance3(actor.pos, nearestPlayer(actor.pos).pos)) > kFarDistance; }
 // exe 0x46c3e0: the gun (0x80 above) projects in front, inside 320 x 240
 bool gunOnScreen(const AnimatedActor& actor) {
     const int16_t p[3] = {actor.pos.x.whole, int16_t(actor.pos.y.whole - 0x80), actor.pos.z.whole};
