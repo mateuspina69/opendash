@@ -11,6 +11,7 @@
 //     flags 0x3e9 and 0x3ea).
 #include "content/nino/st35_rooms.hpp"
 
+#include "game/player/room_player_effects.hpp"
 #include "game/audio_logic.hpp"
 #include "game/display.hpp"
 #include "game/event.hpp"
@@ -149,7 +150,7 @@ void ninoRuinSt35RoomTail() {
     RoomScriptState& room = roomScriptState();
     if (room.handlerByte3 != 0) return;
     display().pace = kDryPace;
-    player().inWater = 0;
+    roomPlayersSet(RoomPlayerField::InWater, 0);
     room.handlerByte3 += 1u;
 }
 

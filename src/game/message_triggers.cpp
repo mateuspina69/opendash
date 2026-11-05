@@ -1,4 +1,6 @@
 // The message triggers (see message_triggers.hpp).
+#include "game/player/players.hpp"
+#include "game/world_view.hpp"
 #include "game/actor_state.hpp"
 #include "game/field_alias.hpp"
 #include "game/message_triggers.hpp"
@@ -58,7 +60,7 @@ void triggerFire(ControllerActor& trigger) {
 
 // the player's point as s16 (the integer parts of its position)
 void playerPoint(int16_t out[3]) {
-    const Player& p = player();
+    const Player& p = actingPlayer();
     out[0] = p.pos.x.whole;
     out[1] = p.pos.y.whole;
     out[2] = p.pos.z.whole;
@@ -78,14 +80,14 @@ int triggerDistance(const MessageTriggerFields& t, bool planar) {
 bool triggerGate(const ControllerActor& trigger, const MessageTriggerFields& t, uint8_t flagVariant) {
     const int32_t v = t.params[1];
     if (trigger.variant == flagVariant) return v == kNoMessageFlag || storyFlag(uint32_t(v));
-    if (trigger.variant == flagVariant + kWeaponGateOffset) return int32_t(player().specialWeapon) == v;
+    if (trigger.variant == flagVariant + kWeaponGateOffset) return int32_t(actingPlayer().specialWeapon) == v;
     return true;
 }
 
 // exe 0x4263f0: the trigger's state, then its condition while no script / event runs
 void messageTrigger(ControllerActor& trigger) {
     MessageTriggerFields& t = classState<MessageTriggerFields>(trigger);
-    const Player& p = player();
+    const Player& p = actingPlayer();
     if (p.hitPoints < 0) {
         freeActor(trigger);
         return;
@@ -222,7 +224,26 @@ void scriptedMessage(ControllerActor& controller) {
 
 } // namespace
 
-void messageTriggerUpdate(const PlayerEnv&, uint32_t actor) { messageTrigger(controllerActorAt(actor)); }
+void messageTriggerUpdate(const PlayerEnv&, uint32_t actor) {
+    ControllerActor& trigger = controllerActorAt(actor);
+    if (!worldHasNoView()) {
+        messageTrigger(trigger);
+        return;
+    }
+    // a session's world: whoever of the room's players meets it sets it off, and its message is theirs; it is let go only when
+    // nobody stands
+    bool anyone = false;
+    for (size_t id = 0; id < kPlayerSlots && (trigger.flags & kActorLive); ++id) {
+        if (!playerPresent(id) || playerById(id).hitPoints < 0) continue;
+        anyone = true;
+        const ScopedActingPlayer acting(id);
+        setEventOwner(id);
+        const uint8_t state = trigger.state;
+        messageTrigger(trigger);
+        if (trigger.state != state && MessageTriggerState(trigger.state) == MessageTriggerState::Fired) break;
+    }
+    if (!anyone && (trigger.flags & kActorLive)) messageTrigger(trigger);
+}
 void scriptedMessageUpdate(const PlayerEnv&, uint32_t actor) { scriptedMessage(controllerActorAt(actor)); }
 
 } // namespace od::port

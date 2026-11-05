@@ -4,6 +4,8 @@
 #include "content/nino/stage_light.hpp"
 
 #include "content/nino/st16_script33.hpp"
+#include "game/player/room_player_effects.hpp"
+#include "game/player/players.hpp"
 #include "game/world_view.hpp"
 #include "game/loaded_data.hpp"
 #include "game/actor_pools.hpp"
@@ -141,7 +143,7 @@ bool ch2RoomCase() {
             if (st16) clearStoryFlag(kFlagCaught);
             clearStoryFlag(kFlagMissionFailed);
             room.handlerStep = 3;
-        } else if (storyFlag(kFlagMissionFailed) && (!st16 || player().hitPoints >= 0)) {
+        } else if (storyFlag(kFlagMissionFailed) && (!st16 || roomPlayerStands())) {
             if (st16) windowClose(kMissionWindow, WindowClose::Force);
             eventStartAt(0, nullptr, kEventGoBack, 0, kMessageFailed);
             room.handlerStep = 3;
@@ -169,7 +171,7 @@ bool ch2RoomHandler(RoutineId fn, bool run) {
     case RoutineId::St46Story5To9Sub3RoomHandler:
         // ST46 sub 3, stories 5..9: the player's hit points 0; step 0 -> script 0x3c (not ported), step 1
         if (!run) return true;
-        player().hitPoints = 0;
+        roomPlayersSet(RoomPlayerField::HitPoints, 0);
         if (room.handlerStep == 0) {
             scriptRun(kScriptSt46Sub3);
             room.handlerStep = 1;

@@ -5,6 +5,7 @@
 #include "content/yosyonke/ice_ruin_rooms.hpp"
 
 #include "engine/data_source.hpp"
+#include "game/player/players.hpp"
 #include "game/actor_pools.hpp"
 #include "game/actor_sweeps.hpp"
 #include "game/actor_state.hpp"
@@ -128,7 +129,6 @@ bool eventRunning() { return eventState().active != 0; }
 
 // 0x584550: ST2D sub 0
 void st2dEntrance(RoomScriptState& room) {
-    const Player& p = player();
     switch (EntranceStep(room.handlerStep)) {
     case EntranceStep::Start:
         ++room.handlerStep;
@@ -145,13 +145,13 @@ void st2dEntrance(RoomScriptState& room) {
         }
         return;
     case EntranceStep::WaitNorth:
-        if (p.pos.z.whole < kEntranceNorthZ) {
+        if (roomPlayerMeets([](const Player& p) { return p.pos.z.whole < kEntranceNorthZ; })) {
             room.handlerStep = uint8_t(EntranceStep::Drop);
             room.handlerByte1 = kEntranceDropTicks;
         }
         return;
     case EntranceStep::Drop:
-        if (p.pos.y.whole > kEntranceDropY) {
+        if (roomPlayerMeets([](const Player& p) { return p.pos.y.whole > kEntranceDropY; })) {
             room.handlerStep = kHandlerOver;
             return;
         }
@@ -159,7 +159,7 @@ void st2dEntrance(RoomScriptState& room) {
         if (room.handlerByte1 == 0) room.handlerStep = uint8_t(EntranceStep::WaitNorthAgain);
         return;
     case EntranceStep::WaitNorthAgain:
-        if (p.pos.z.whole < kEntranceNorthZ) {
+        if (roomPlayerMeets([](const Player& p) { return p.pos.z.whole < kEntranceNorthZ; })) {
             messageNow(0x20);
             ++room.handlerStep;
         }
@@ -197,17 +197,24 @@ void st2dShrinkRoom(RoomScriptState& room) {
 // 0x584780: ST2D sub 6 -- before the ruin is cleared, the player's boxes -> the hints once each
 void st2dHintBoxes() {
     if (storyFlag(kFlagSt2dCleared)) return;
-    const Player& p = player();
-    const int16_t x = p.pos.x.whole, y = p.pos.y.whole, z = p.pos.z.whole;
-    if (!storyFlag(0x254) && x < 0x200 && x > -0xa00 && z < 0x800 && z > 0x400) {
+    if (!storyFlag(0x254) && roomPlayerMeets([](const Player& p) {
+            const int16_t x = p.pos.x.whole, z = p.pos.z.whole;
+            return x < 0x200 && x > -0xa00 && z < 0x800 && z > 0x400;
+        })) {
         setStoryFlag(0x254);
         messageNow(0x22);
     }
-    if (!storyFlag(0x255) && y < -0x400 && x < -0x600 && x > -0xa00 && z < 0x400) {
+    if (!storyFlag(0x255) && roomPlayerMeets([](const Player& p) {
+            const int16_t x = p.pos.x.whole, y = p.pos.y.whole, z = p.pos.z.whole;
+            return y < -0x400 && x < -0x600 && x > -0xa00 && z < 0x400;
+        })) {
         setStoryFlag(0x255);
         messageNow(0x23);
     }
-    if (!storyFlag(0x256) && y == 0 && x < -0x600 && x > -0xa00 && z < 0x400) {
+    if (!storyFlag(0x256) && roomPlayerMeets([](const Player& p) {
+            const int16_t x = p.pos.x.whole, y = p.pos.y.whole, z = p.pos.z.whole;
+            return y == 0 && x < -0x600 && x > -0xa00 && z < 0x400;
+        })) {
         setStoryFlag(0x256);
         messageNow(0x24);
     }
@@ -333,7 +340,7 @@ void st2fTutorialRoom(RoomScriptState& room) {
             spawnRecords(stateAddress(TableId::IceRuinRoomsSub7Record), 1);
             messageOnce(0x26c, 0x19);
         }
-        if (!storyFlag(0x26d) && player().pos.z.whole < kSub7NorthZ) {
+        if (!storyFlag(0x26d) && roomPlayerMeets([](const Player& p) { return p.pos.z.whole < kSub7NorthZ; })) {
             setStoryFlag(0x26d);
             messageNow(0x1b);
         }
@@ -394,7 +401,7 @@ bool iceRuinRoomHandler(RoutineId fn, bool run) {
     case RoutineId::St2DSub2RoomHandler:
         // sub 2: the door first; before the ruin is cleared, standing on an actor -> its hint once
         if (!run || roomDoorScript()) return true;
-        if (!storyFlag(kFlagSt2dCleared) && player().onPlatform != 0) messageOnce(0x253, 0x21);
+        if (!storyFlag(kFlagSt2dCleared) && roomPlayerMeets([](const Player& p) { return p.onPlatform != 0; })) messageOnce(0x253, 0x21);
         return true;
     case RoutineId::St2DSub5RoomHandler: // sub 5
         if (!run) return true;
@@ -414,7 +421,7 @@ bool iceRuinRoomHandler(RoutineId fn, bool run) {
         if (!run || roomDoorScript()) return true;
         if (storyFlag(kFlagSt2eCleared)) return true;
         messageOnce(0x259, 0x14);
-        if (player().pos.y.whole == 0) messageOnce(0x25a, 0x15);
+        if (roomPlayerMeets([](const Player& p) { return p.pos.y.whole == 0; })) messageOnce(0x25a, 0x15);
         return true;
     case RoutineId::St2ESub3RoomHandler: // sub 3: the door first; before the ruin is cleared its hint once
         if (!run || roomDoorScript()) return true;
@@ -425,10 +432,12 @@ bool iceRuinRoomHandler(RoutineId fn, bool run) {
         // x (-0x600, 0x600) another once
         if (!run || roomDoorScript()) return true;
         if (storyFlag(kFlagSt2eCleared)) return true;
-        const Player& p = player();
-        const int16_t x = p.pos.x.whole, z = p.pos.z.whole;
         messageOnce(0x25c, 0x17);
-        if (x > -0x600 && x < 0x800 && z > -0x600 && z < 0x600) messageOnce(0x25d, 0x19);
+        if (roomPlayerMeets([](const Player& p) {
+                const int16_t x = p.pos.x.whole, z = p.pos.z.whole;
+                return x > -0x600 && x < 0x800 && z > -0x600 && z < 0x600;
+            }))
+            messageOnce(0x25d, 0x19);
         return true;
     }
     case RoutineId::St2ESub7RoomHandler: // sub 7: the door first; before the ruin is cleared its hint once

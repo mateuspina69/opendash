@@ -31,6 +31,9 @@ template <class F> Player* findPlayer(F&& f) {
     return nullptr;
 }
 template <class F> bool anyPlayer(F&& f) { return findPlayer(f) != nullptr; }
+// a room's condition on its player: true when a player meets it; that player's machine shows what follows (game/event)
+bool roomPlayerMeets(bool (*cond)(const Player& p));
+bool roomPlayerStands(); // a player of the room is not down
 template <class F> bool allPlayers(F&& f) {
     return findPlayer([&](const Player& p) { return !f(p); }) == nullptr;
 }

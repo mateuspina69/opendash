@@ -5,6 +5,7 @@
 
 #include "content/yosyonke/abandoned_mine_scripts.hpp"
 
+#include "game/player/players.hpp"
 #include "game/actor_pools.hpp"
 #include "game/actor_state.hpp"
 #include "game/audio_logic.hpp"
@@ -78,7 +79,7 @@ bool abandonedMineRoomHandler(RoutineId fn, bool run) {
             ++room.handlerStep;
             return true;
         case 2:
-            if (player().pos.x.whole < kLiftTriggerX) return true;
+            if (!roomPlayerMeets([](const Player& p) { return p.pos.x.whole >= kLiftTriggerX; })) return true;
             setStoryFlag(kFlagRodeLift);
             scriptRun(kRuinLiftScript);
             ++room.handlerStep;

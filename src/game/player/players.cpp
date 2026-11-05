@@ -1,4 +1,5 @@
 // The players of a session (see players.hpp).
+#include "game/event.hpp"
 #include "game/player/players.hpp"
 
 #include "game/distances.hpp"
@@ -34,6 +35,17 @@ Player& nearestPlayer(int16_t x, int16_t z) {
     v.x.whole = x;
     v.z.whole = z;
     return nearestPlayer(v);
+}
+
+bool roomPlayerMeets(bool (*cond)(const Player& p)) {
+    const Player* who = findPlayer([&](const Player& p) { return p.hitPoints >= 0 && cond(p); });
+    if (!who) return false;
+    setEventOwner(playerId(*who));
+    return true;
+}
+
+bool roomPlayerStands() {
+    return anyPlayer([](const Player& p) { return p.hitPoints >= 0; });
 }
 
 bool anyPlayerTalksTo(const ActorHeader& actor) {

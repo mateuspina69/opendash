@@ -3,6 +3,7 @@
 // the mission opening's step). One case per exe routine (addresses in the comments).
 #include "content/nino/st15_st16_rooms.hpp"
 
+#include "game/player/players.hpp"
 #include "game/actor_sweeps.hpp"
 #include "game/event.hpp"
 #include "game/event_state.hpp"
@@ -120,7 +121,7 @@ bool st15St16RoomHandler(RoutineId fn, bool run) {
                 clearStoryFlag(kFlagSt16CraneScene);
                 clearStoryFlag(kFlagMissionFailed);
                 room.handlerStep = uint8_t(MissionRoomStep::Over);
-            } else if (storyFlag(kFlagMissionFailed) && player().hitPoints >= 0) {
+            } else if (storyFlag(kFlagMissionFailed) && roomPlayerStands()) {
                 windowClose(kSt16MissionWindow, WindowClose::Force); // exe 0x5576b0(4, 1)
                 eventStartAt(0, nullptr, kFailedWindow, 0, kMsgMissionFailed);
                 room.handlerStep = uint8_t(MissionRoomStep::Over);

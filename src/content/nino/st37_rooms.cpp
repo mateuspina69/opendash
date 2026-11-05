@@ -10,6 +10,8 @@
 #include "content/nino/ch2_rooms.hpp"
 #include "content/nino/pedestal_item.hpp"
 
+#include "game/player/room_player_effects.hpp"
+#include "game/player/players.hpp"
 #include "game/audio_logic.hpp"
 #include "game/breakable_walls.hpp"
 #include "game/display.hpp"
@@ -97,7 +99,6 @@ void bossRoom(RoomScriptState& room) {
 }
 void handler(RoutineId fn) {
     RoomScriptState& room = roomScriptState();
-    const Player& p = player();
     switch (fn) {
     case RoutineId::St37StoryASub2RoomHandler:
         // sub 2, story 10: the group 1 (9 drained); the two hints by the player's z
@@ -111,11 +112,11 @@ void handler(RoutineId fn) {
                 room.handlerStep = 1;
             }
         } else if (room.handlerStep == 1) {
-            if (!storyFlag(kFlagHintNear) && p.pos.z.whole > 0x160) {
+            if (!storyFlag(kFlagHintNear) && roomPlayerMeets([](const Player& p) { return p.pos.z.whole > 0x160; })) {
                 hint(kHintNearMessage);
                 setStoryFlag(kFlagHintNear);
             }
-            if (!storyFlag(kFlagHintFar) && p.pos.z.whole > 0x600) {
+            if (!storyFlag(kFlagHintFar) && roomPlayerMeets([](const Player& p) { return p.pos.z.whole > 0x600; })) {
                 hint(kHintFarMessage);
                 setStoryFlag(kFlagHintFar);
             }
@@ -146,7 +147,7 @@ void handler(RoutineId fn) {
                 encounterSpawnGroupZoneSlot(7);
                 room.handlerStep = 1;
             }
-        } else if (room.handlerStep == 1 && !storyFlag(kFlagHintNear) && p.pos.x.whole > -0x2a0) {
+        } else if (room.handlerStep == 1 && !storyFlag(kFlagHintNear) && roomPlayerMeets([](const Player& p) { return p.pos.x.whole > -0x2a0; })) {
             hint(kHintNearMessage);
             setStoryFlag(kFlagHintNear);
         }
@@ -225,7 +226,7 @@ void st37RoomCaseTail() { // exe 0x587120 after [[0x8cb390 + story * 4] + sub * 
             [[fallthrough]];
         case 1:
             display().pace = kFloodedPace; // the flooded ruin runs at the 20 fps pace
-            player().inWater = 1;          // the player swims
+            roomPlayersSet(RoomPlayerField::InWater, 1);          // the player swims
             break;
         default: break;
         }
@@ -234,7 +235,7 @@ void st37RoomCaseTail() { // exe 0x587120 after [[0x8cb390 + story * 4] + sub * 
     if (room.handlerByte3 == 0) {
         display().pace = kDryPace;
         room.handlerByte3 += 1u;
-        player().inWater = 0;
+        roomPlayersSet(RoomPlayerField::InWater, 0);
     }
 }
 

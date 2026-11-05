@@ -4,6 +4,7 @@
 #include "content/subruins/subruin_rooms.hpp"
 
 #include "engine/data_source.hpp"
+#include "game/player/room_player_effects.hpp"
 #include "game/actor_pools.hpp"
 #include "game/actor_state.hpp"
 #include "game/breakable_walls.hpp"
@@ -298,7 +299,7 @@ bool subruinRoomScripts() {
     case kStageST4D: roomDoorScript(); break; // the case's own door test (0x58b5c5)
     case kStageST50: // after the handler (0x58bbf3): the pace 3 (20 fps; see the 30 fps cap notes) and the player in water
         display().pace = kST50Pace;
-        player().inWater = 1;
+        roomPlayersSet(RoomPlayerField::InWater, 1);
         break;
     default: break;
     }

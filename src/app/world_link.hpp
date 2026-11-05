@@ -48,7 +48,9 @@ enum class WorldMessageType : uint8_t {
     // a warp inside the room's stage; what a world's controllers draw from; where a gate's door glows
     NetWarp = 50, NetScreen = 51, NetGateGlow = 52,
     // everyone is down: the host's last save is what the session goes on from, here its stage and room
-    NetReload = 53
+    NetReload = 53,
+    // a room's logic set this on its players (game/player/room_player_effects): field, value
+    NetRoomPlayer = 54
 };
 
 // What a world says of its players to the coordinator

@@ -7,6 +7,7 @@
 #include "content/intro/fire_mission.hpp"
 
 #include "engine/data_source.hpp"
+#include "game/player/players.hpp"
 #include "game/actor_state.hpp"
 #include "game/room_scripts.hpp"
 #include "game/actor_pools.hpp"
@@ -64,7 +65,7 @@ FireMissionState& mission() { return fireMission(); }
 // down) and no event runs
 int missionTimer(size_t room, uint16_t limit) {
     FireMissionState& m = mission();
-    if (m.roomTimers[room] < limit && player().hitPoints != 0) {
+    if (m.roomTimers[room] < limit && anyPlayer([](const Player& p) { return p.hitPoints != 0; })) {
         m.roomTimers[room] += 1u;
         return 0;
     }
@@ -74,7 +75,7 @@ int missionTimer(size_t room, uint16_t limit) {
 // exe 0x580bf0: a hint due every 900 ticks without one shown (and while the extinguisher's arm is down)
 int hintDue() {
     FireMissionState& m = mission();
-    if (!storyFlag(kHintShownFlag) && !(player().armFlags & kArmSpecial)) {
+    if (!storyFlag(kHintShownFlag) && !anyPlayer([](const Player& p) { return (p.armFlags & kArmSpecial) != 0; })) {
         if (m.hintTicks < kHintEvery) {
             m.hintTicks += 1u;
             return 0;

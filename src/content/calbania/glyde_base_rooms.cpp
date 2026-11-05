@@ -40,6 +40,7 @@
 
 #include "content/nino/glyde_box_walkers_state.hpp"
 #include "engine/data_source.hpp"
+#include "game/player/players.hpp"
 #include "game/actor_pools.hpp"
 #include "game/actor_state.hpp"
 #include "game/actor_sweeps.hpp"
@@ -157,7 +158,7 @@ StaticActor* gateStatic(uint32_t k) {
 }
 // exe 0x586450(variant, message): a message trigger of the variant unless the player is down; nullptr when none
 ControllerActor* messageTrigger(uint8_t variant, int16_t message) {
-    if (player().hitPoints < 0) return nullptr;
+    if (!roomPlayerStands()) return nullptr;
     const uint32_t address = allocActorE0(); // exe 0x5e1440
     if (address == 0) return nullptr;
     ControllerActor& c = controllerActorAt(address);
@@ -495,8 +496,7 @@ void gateEscape(uint8_t s0) {
         if (baseOpening(kEscapeMessage)) ++room.handlerStep;
         return;
     case EscapeStep::Run: {
-        Player& p = player();
-        if (p.hitPoints < 0) return;
+        if (!roomPlayerStands()) return;
         const uint32_t c = base.escapeTicks - 1u;
         base.escapeTicks = c;
         if (c == 0) {
@@ -510,10 +510,9 @@ void gateEscape(uint8_t s0) {
         }
         if (c == kHurryTick) messageTrigger(kMessageTriggerAtOnce, kHurryMessage);
         if (c == kHintTick && base.gateHintLatch == 0) messageTrigger(kMessageTriggerAtOnce, kHintMessage);
-        if (p.airborne != 0) return;
         const Actor& carried = actorAt(base.carriedActor);
         if (carried.airborne != 0) return;
-        if (!inGate(uint16_t(p.pos.x.whole), uint16_t(p.pos.z.whole))) return;
+        if (!roomPlayerMeets([](const Player& p) { return p.airborne == 0 && inGate(uint16_t(p.pos.x.whole), uint16_t(p.pos.z.whole)); })) return;
         if (inGate(uint16_t(carried.pos.x.whole), uint16_t(carried.pos.z.whole))) {
             ++room.handlerStep;
             setStoryFlag(kFlagEscaped);
@@ -760,7 +759,7 @@ void cellRoom() { // exe 0x586220
         return;
     }
     case CellStep::Wait:
-        if (player().hitPoints < 0) return;
+        if (!roomPlayerStands()) return;
         --room.handlerByte1;
         if (room.handlerByte1 != 0) return;
         room.handlerStep = uint8_t(CellStep::Done);

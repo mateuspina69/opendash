@@ -3,6 +3,7 @@
 #include "content/saul_kada/saul_kada_rooms.hpp"
 
 #include "engine/data_source.hpp"
+#include "game/player/room_player_effects.hpp"
 #include "game/breakable_walls.hpp"
 #include "game/display.hpp"
 #include "game/encounter.hpp"
@@ -154,7 +155,7 @@ bool saulKadaRoomHelper(RoutineId fn, bool run) {
         if (g.room == 0)
             switchGridCellVariant(0x45, 0x3c, g.story == kSt48GateStory && storyFlag(kFlagSt48Gate) ? 0 : 1);
         display().pace = kFloodedPace;
-        player().inWater = 0;
+        roomPlayersSet(RoomPlayerField::InWater, 0);
         if (!storyFlag(kFlagSt48Keys[0]) && !storyFlag(kFlagSt48Keys[1]) && !storyFlag(kFlagSt48Keys[2]))
             setStoryFlag(kFlagDoorLock1);
         return true;
@@ -204,7 +205,7 @@ int32_t st48EncounterKinds() {
 // ST41 / ST42 / ST44 (exe 0x589d80 / 0x58a1a0 / 0x58a6f0, before the handler): the player's burden by the load
 // carried
 void carryBurden() {
-    player().burden = storyFlag(kFlagCarryHeavy) ? kHeavyBurden : (storyFlag(kFlagCarryLight) ? kLightBurden : 0);
+    roomPlayersSet(RoomPlayerField::Burden, storyFlag(kFlagCarryHeavy) ? kHeavyBurden : (storyFlag(kFlagCarryLight) ? kLightBurden : 0));
 }
 
 // ---- the room scripts --------------------------------------------------------------------------------------------

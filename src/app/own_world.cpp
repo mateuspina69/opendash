@@ -9,6 +9,7 @@
 
 #include "engine/config.hpp"
 #include "game/actor_sweeps.hpp"
+#include "game/player/room_player_effects.hpp"
 #include "game/fade_state.hpp"
 #include "game/transition.hpp"
 #include "game/hit_effects.hpp"
@@ -282,6 +283,7 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
             eventPoint_.y = e->y;
             eventPoint_.z = e->z;
             od::port::eventStart(e->hasPos ? &eventPoint_ : nullptr, nullptr, e->param, e->window, e->message);
+            SDL_Log("own world: an event of the room's world, message %u", unsigned(e->message));
             ownEvent_ = true;
         }
         break;
@@ -365,6 +367,10 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
             gateGlow_ = std::array<int16_t, 3>{half(0), half(2), half(4)};
             gateGlowTicks_ = 45; // the coordinator repeats it while the gate waits
         }
+        break;
+    case WorldMessageType::NetRoomPlayer:
+        if (m.netState.size() == 3 && m.netState[0] <= uint8_t(od::port::RoomPlayerField::FullLife))
+            od::port::applyRoomPlayerField(od::port::player(), od::port::RoomPlayerField(m.netState[0]), int16_t(uint16_t(m.netState[1] | m.netState[2] << 8)));
         break;
     case WorldMessageType::NetNotice:
         notice_.assign(m.netState.begin(), m.netState.end());

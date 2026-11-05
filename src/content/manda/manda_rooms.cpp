@@ -1,6 +1,7 @@
 // The Manda ruin's rooms in the room setup and the room scripts (see manda_rooms.hpp), one routine per exe routine.
 #include "content/manda/manda_rooms.hpp"
 
+#include "game/player/players.hpp"
 #include "game/audio_logic.hpp"
 #include "game/breakable_walls.hpp"
 #include "game/event.hpp"
@@ -176,8 +177,7 @@ bool lastHall(bool run) {
     switch (room.handlerStep) {
     case 0: room.handlerStep = storyFlag(kFlagLastHallSeen) ? 5u : 1u; return true;
     case 1: {
-        const Player& p = player();
-        if (p.pos.x.whole > 0xa7f && p.pos.z.whole > -0x81 && p.pos.z.whole < 0x81) {
+        if (roomPlayerMeets([](const Player& p) { return p.pos.x.whole > 0xa7f && p.pos.z.whole > -0x81 && p.pos.z.whole < 0x81; })) {
             setStoryFlag(kFlagLastHallSeen);
             setStoryFlag(kFlagExitLock);
             scriptRun(kScriptLastHall);

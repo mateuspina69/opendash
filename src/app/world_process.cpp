@@ -35,6 +35,7 @@
 #include "game/event.hpp"
 #include "game/global_state.hpp"
 #include "content/nino/st16_script33.hpp"
+#include "game/player/room_player_effects.hpp"
 #include "game/presentation.hpp"
 #include "game/script_engine.hpp"
 #include "game/story_table.hpp"
@@ -446,6 +447,13 @@ int run(const WorldArgs& w) {
     std::map<uint8_t, od::port::NetStateSender> netClients;
     // on a link: no player of its own; the coordinator's come and go, and its silence ends the world
     std::unique_ptr<WorldLink> link;
+    std::array<std::optional<int16_t>, 2> roomPlayerFields{}; // in the water, the burden: what a joining player is told
+    const auto roomPlayerMessage = [&](uint8_t client, od::port::RoomPlayerField field, int16_t value) {
+        WorldMessage m{WorldMessageType::NetRoomPlayer};
+        m.playerId = client;
+        m.netState = {uint8_t(field), uint8_t(value), uint8_t(uint16_t(value) >> 8)};
+        link->sendReliable(m);
+    };
     if (w.linkPort != 0) {
         link = std::make_unique<WorldLink>(uint16_t(w.linkPort));
         if (!w.keepPlayer) {
@@ -454,6 +462,10 @@ int run(const WorldArgs& w) {
         }
         link->sendReliable({WorldMessageType::Hello});
         od::port::setPresentationBatch(&present);
+        od::port::setRoomPlayersHook([&](od::port::RoomPlayerField field, int16_t value) {
+            roomPlayerFields[size_t(field)] = value;
+            for (const auto& [client, sender] : netClients) roomPlayerMessage(client, field, value);
+        });
         od::port::setWorldWarpHook([&](const od::port::TransitionRequest& r) {
             const auto half = [](int16_t v, std::vector<uint8_t>& o) {
                 o.push_back(uint8_t(v));
@@ -492,6 +504,7 @@ int run(const WorldArgs& w) {
             link->sendReliable(exit);
         });
         od::port::st16SetHoldHook([&](size_t player, uint8_t slot, uint8_t pose, bool holds) {
+            SDL_Log("world: the box carrier %s player %u", holds ? "holds" : "lets go of", unsigned(player));
             WorldMessage hold{WorldMessageType::NetHold};
             hold.playerId = uint8_t(player);
             hold.netState = {slot, pose, uint8_t(holds ? 1 : 0)};
@@ -746,6 +759,8 @@ int run(const WorldArgs& w) {
             case WorldMessageType::NetJoin:
                 netClients.try_emplace(m.playerId, od::port::netSlotNetworked, m.playerId);
                 if (sceneOn) sceneStartMessage(m.playerId); // joining during a scene: they watch it
+                for (size_t f = 0; f < roomPlayerFields.size(); ++f)
+                    if (roomPlayerFields[f]) roomPlayerMessage(m.playerId, od::port::RoomPlayerField(f), *roomPlayerFields[f]);
                 break;
             case WorldMessageType::NetSceneGo:
                 sceneGated = false;

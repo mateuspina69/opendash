@@ -358,7 +358,8 @@ void WorldHost::poll(uint64_t nowNs) {
                  m.type == WorldMessageType::NetRevived || m.type == WorldMessageType::NetPresent ||
                  m.type == WorldMessageType::NetSceneStart || m.type == WorldMessageType::NetSceneView ||
                  m.type == WorldMessageType::NetSceneEnd || m.type == WorldMessageType::NetHold ||
-                 m.type == WorldMessageType::NetWarp || m.type == WorldMessageType::NetScreen) &&
+                 m.type == WorldMessageType::NetWarp || m.type == WorldMessageType::NetScreen ||
+                 m.type == WorldMessageType::NetRoomPlayer) &&
                 m.playerId < kPlayers &&
                 playerRoom_[m.playerId] == it->first)
                 netInbox_[m.playerId].push_back(m);

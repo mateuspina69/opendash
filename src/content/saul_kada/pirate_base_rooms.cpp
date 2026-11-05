@@ -5,6 +5,7 @@
 
 #include "content/saul_kada/mission_rooms.hpp"
 
+#include "game/player/players.hpp"
 #include "game/loaded_data.hpp"
 #include "game/breakable_walls.hpp"
 #include "game/distances.hpp"
@@ -125,8 +126,8 @@ void st3bBase() {
             break;
         }
         if (d9 || d10) setStoryFlag(0x5ce);
-        if (!storyFlag(0x5a8) || storyFlag(0x5a0) || storyFlag(0x59f) || player().pos.x <= 0) break;
-        if (planarDistance(player().pos, kGatePoint) > 0x400) break; // exe 0x5e3b00
+        if (!storyFlag(0x5a8) || storyFlag(0x5a0) || storyFlag(0x59f)) break;
+        if (!roomPlayerMeets([](const Player& p) { return p.pos.x > 0 && planarDistance(p.pos, kGatePoint) <= 0x400; })) break; // exe 0x5e3b00
         flagsFromDefeats(stateAddress(TableId::PirateBaseRoomsBaseDefeats), kBaseDefeatCount);            // exe 0x587fc0
         setStoryFlag(0x59f);
         setStoryFlag(0x5ce);

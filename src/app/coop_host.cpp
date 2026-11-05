@@ -51,7 +51,8 @@ bool isReliable(WorldMessageType t) {
     case WorldMessageType::NetBossFight:
     case WorldMessageType::NetWarp:
     case WorldMessageType::NetGateGlow:
-    case WorldMessageType::NetReload: return true;
+    case WorldMessageType::NetReload:
+    case WorldMessageType::NetRoomPlayer: return true;
     default: return false;
     }
 }

@@ -5,6 +5,7 @@
 #include "content/late_game/st4b_st4c_rooms_state.hpp"
 
 #include "engine/routine_ids.hpp"
+#include "game/player/players.hpp"
 #include "game/loaded_data.hpp"
 #include "game/actor_movement.hpp"
 #include "game/actor_pools.hpp"
@@ -1076,7 +1077,7 @@ bool st4bSt4cRoomHandler(RoutineId fn, bool run) {
         default: break;
         }
         if (!storyFlag(kDoorFlag)) return true;
-        if (player().pos.z.whole < -0x400) {
+        if (roomPlayerMeets([](const Player& p) { return p.pos.z.whole < -0x400; })) {
             clearStoryFlag(kDoorFlag);
             saveSerialise(kClearDataImage); // exe 0x542ac0
             SaveImage& image = saveImageAt(kClearDataImage);

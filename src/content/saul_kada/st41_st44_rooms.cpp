@@ -3,6 +3,7 @@
 // timer). One case per exe routine (addresses in the comments).
 #include "content/saul_kada/st41_st44_rooms.hpp"
 
+#include "game/player/players.hpp"
 #include "game/actor_pools.hpp"
 #include "game/actor_state.hpp"
 #include "game/encounter.hpp"
@@ -129,7 +130,7 @@ bool st41St44RoomHandler(RoutineId fn, bool run) {
     case RoutineId::St41Sub2RoomHandler:
         // sub 2: the door; the player past x 0x600 -> once (flag 0x592) the message 0x2a
         if (!run || roomDoorScript()) return true;
-        if (room.handlerStep == 0 && player().pos.x.whole < 0x600) {
+        if (room.handlerStep == 0 && roomPlayerMeets([](const Player& p) { return p.pos.x.whole < 0x600; })) {
             room.handlerStep = 1;
             if (!storyFlag(kFlagSt41HintC)) {
                 setStoryFlag(kFlagSt41HintC);

@@ -8,6 +8,7 @@
 #include "content/saul_kada/st28_lava_boss.hpp"
 
 #include "engine/data_source.hpp"
+#include "game/player/players.hpp"
 #include "game/loaded_data.hpp"
 #include "game/actor_pools.hpp"
 #include "game/actor_state.hpp"
@@ -43,6 +44,7 @@ RoomScriptState& room() { return roomScriptState(); }
 uint8_t step() { return room().handlerStep; }
 void setStep(uint8_t s) { room().handlerStep = s; }
 void nextStep() { room().handlerStep += 1u; }
+// the room's set-up by where its player arrives (in a session: the first in, the world's player 0)
 int16_t playerZ() { return player().pos.z.whole; }
 bool eventRunning() { return eventState().active != 0; }
 void openWall(uint32_t column, uint32_t row) { switchGridCellVariant(column, row, 1); } // exe 0x58d5f0
@@ -80,7 +82,7 @@ void st26Entry() {
         setStep(storyFlag(0x58) ? 2 : 1);
         break;
     case 1:
-        if (playerZ() > -0x700) {
+        if (roomPlayerMeets([](const Player& p) { return p.pos.z.whole > -0x700; })) {
             scriptRun(0x63);
             setStoryFlag(0x58);
             setStep(2);
@@ -209,7 +211,7 @@ void st27LavaPassage() {
                 lavaEmber(stateAddress(TableId::FireRuinRoomsEmberPointB), pitch, yaw, uint8_t((uint8_t(gameState().frame) >> 1) & 1));
             }
         }
-        if (!storyFlag(0x59) && playerZ() > 0) {
+        if (!storyFlag(0x59) && roomPlayerMeets([](const Player& p) { return p.pos.z.whole > 0; })) {
             spawnRecords(stateAddress(TableId::FireRuinRoomsSt27LavaPassageSpawns), 1);
             setStoryFlag(0x59);
         }
@@ -240,7 +242,7 @@ void st27Entrance() {
         break;
     case 1:
         if (!storyFlag(0x681)) {
-            if (playerZ() <= 0x800) {
+            if (roomPlayerMeets([](const Player& p) { return p.pos.z.whole <= 0x800; })) {
                 scriptRun(0x2e);
                 tail = false;
             }
@@ -420,11 +422,11 @@ void st28Lift() {
     RoomScriptState& r = room();
     if (!storyFlag(0x591)) {
         if (step() == 0) {
-            if (playerZ() > 0) {
+            if (anyPlayer([](const Player& p) { return p.pos.z.whole > 0; })) {
                 spawnRecords(stateAddress(TableId::FireRuinRoomsSt28LiftSpawns), 1);
                 setStep(1);
             }
-        } else if (playerZ() <= 0) {
+        } else if (!anyPlayer([](const Player& p) { return p.pos.z.whole > 0; })) { // all are back
             actorHeaderAt(r.actors[1]).state = 2;
             setStep(0);
         }

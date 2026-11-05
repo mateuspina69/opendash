@@ -8,6 +8,7 @@
 
 #include "content/late_game/exam_loadout.hpp"
 #include "engine/data_source.hpp"
+#include "game/player/room_player_effects.hpp"
 #include "game/loaded_data.hpp"
 #include "game/actor_pools.hpp"
 #include "game/actor_state.hpp"
@@ -81,7 +82,7 @@ void examOffice() {
     switch (OfficeState(s)) {
     case OfficeState::Arrive:
         if (storyFlag(kFlagBackFromExam)) {
-            hitPointsChange(player(), player().maxHitPoints + 1);
+            roomPlayersSet(RoomPlayerField::FullLife, 0);
             eventStartAt(0, nullptr, 0, 0, kWelcomeBackMessage);
             clearStoryFlag(kFlagBackFromExam);
             s = uint8_t(OfficeState::Result);

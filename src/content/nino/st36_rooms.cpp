@@ -8,6 +8,7 @@
 
 #include "content/nino/ch2_rooms.hpp"
 
+#include "game/player/room_player_effects.hpp"
 #include "game/audio_logic.hpp"
 #include "game/breakable_walls.hpp"
 #include "game/display.hpp"
@@ -80,7 +81,7 @@ void ninoSt36RoomCaseTail() { // exe 0x586d80 after [[0x8cb250 + story * 4] + su
             [[fallthrough]];
         case 1:
             display().pace = kFloodedPace;
-            player().inWater = 1;
+            roomPlayersSet(RoomPlayerField::InWater, 1);
             break;
         default: break;
         }
@@ -88,7 +89,7 @@ void ninoSt36RoomCaseTail() { // exe 0x586d80 after [[0x8cb250 + story * 4] + su
     }
     if (room.handlerByte3 == 0) {
         display().pace = kDryPace;
-        player().inWater = 0;
+        roomPlayersSet(RoomPlayerField::InWater, 0);
         room.handlerByte3 += 1u;
     }
 }

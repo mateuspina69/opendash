@@ -17,6 +17,7 @@
 
 #include <utility>
 
+#include "game/player/players.hpp"
 #include "game/actor_sweeps.hpp"
 #include "game/audio_logic.hpp"
 #include "game/breakable_walls.hpp"
@@ -136,7 +137,7 @@ void attackRoom() { // exe 0x57f810
             scriptRun(kAttackEndScript);
             clearStoryFlag(kFlagMachineLost);
             room.handlerStep = uint8_t(AttackStep::Done);
-        } else if (storyFlag(kFlagMachineLost) && player().hitPoints >= 0) {
+        } else if (storyFlag(kFlagMachineLost) && roomPlayerStands()) {
             eventStartAt(0, nullptr, kLostEventFlags, 0, kLostMessage);
             room.handlerStep = uint8_t(AttackStep::Done);
         }
