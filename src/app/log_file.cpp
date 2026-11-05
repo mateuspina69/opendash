@@ -13,6 +13,7 @@
 #include <SDL3/SDL_log.h>
 
 #include <cstdio>
+#include <cstdlib>
 #include <string>
 
 namespace od::app {
@@ -48,12 +49,23 @@ LONG WINAPI logCrash(EXCEPTION_POINTERS* e) {
     for (USHORT k = 0; k < n; ++k) SDL_Log("crash: frame exe+%llx", (unsigned long long)(reinterpret_cast<uintptr_t>(frames[k]) - base));
     return EXCEPTION_CONTINUE_SEARCH;
 }
+// OPENDASH_TRACE_THROWS: every C++ exception thrown says where, even one caught later (a load that fails)
+LONG WINAPI logThrow(EXCEPTION_POINTERS* e) {
+    constexpr DWORD kCppException = 0xe06d7363;
+    if (e->ExceptionRecord->ExceptionCode != kCppException) return EXCEPTION_CONTINUE_SEARCH;
+    const uintptr_t base = reinterpret_cast<uintptr_t>(GetModuleHandleW(nullptr));
+    void* frames[24];
+    const USHORT n = CaptureStackBackTrace(0, 24, frames, nullptr);
+    for (USHORT k = 0; k < n; ++k) SDL_Log("throw: frame exe+%llx", (unsigned long long)(reinterpret_cast<uintptr_t>(frames[k]) - base));
+    return EXCEPTION_CONTINUE_SEARCH;
+}
 } // namespace
 #endif
 
 void startLogFile(const char* fileName) {
 #ifdef OD_CRASH_REPORT
     SetUnhandledExceptionFilter(logCrash);
+    if (std::getenv("OPENDASH_TRACE_THROWS")) AddVectoredExceptionHandler(1, logThrow);
 #endif
     if (g_file) return;
     const char* base = SDL_GetBasePath();

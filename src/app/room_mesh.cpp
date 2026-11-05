@@ -483,6 +483,8 @@ RoomMesh loadRoom(int stage, int sub) {
     const od::GameFile st = od::dataSource().gameFile(geometryFile);
 
     const auto block = od::roomBlock(st);
+    if (const int rooms = stageRoomCount(stage, od::roomGrids(block).size()); sub >= rooms)
+        throw std::runtime_error(std::string(name) + " has " + std::to_string(rooms) + " rooms: no sub " + std::to_string(sub));
     od::RoomStats stats;
     // Maybe_SetupRoomParams 0x5f59d0 with the sub-room's param struct (the room function's [table + sub * 0x2c]):
     // +3 = the coordinate shift (0x6d00b5; a camera script may switch it at run time, FUN_005118a0 -- the render

@@ -173,9 +173,9 @@ void OwnWorldClient::turn(uint64_t nowNs) {
         od::port::player().weaponLevels[od::port::weaponLevelIndex(od::port::player().busterWeapon, od::port::WeaponStat::Attack)] = testLevel_;
         SDL_Log("own world: buster attack level set to %d at tick %u", int(testLevel_), localTick_);
     }
-    if (coordinator_ && testClearTick_ != 0 && localTick_ == testClearTick_) {
-        coordinator_->testClearFlagNow(testClearFlag_, uint8_t(room_->stage));
-        SDL_Log("own world: flag %03x cleared at tick %u", unsigned(testClearFlag_), localTick_);
+    if (coordinator_ && testFlagTick_ != 0 && localTick_ == testFlagTick_) {
+        coordinator_->testFlagNow(testFlag_, testFlagSet_, uint8_t(room_->stage));
+        SDL_Log("own world: flag %03x %s at tick %u", unsigned(testFlag_), testFlagSet_ ? "set" : "cleared", localTick_);
     }
     if (testLifeTick_ != 0 && localTick_ == testLifeTick_) {
         od::port::Player& p = od::port::player();
@@ -442,9 +442,13 @@ void OwnWorldClient::showPlayers(GhostView& ghosts, uint64_t localFingerprint, u
             ghosts.clearRemote(int(slot++));
             continue;
         }
-        // the animation is played here, from the slot's own files, up to the shown tick
+        // the animation is played here, from the slot's own files, up to the shown tick; only where the ghost is posed (both
+        // in field play, in the same room): a stage's animations are this machine's data only in that stage
         const int64_t tick = int64_t(o.buffer.renderTick());
-        if (od::LoadedFileData* files = ghosts.files(int(slot))) {
+        const od::port::GhostRoom here = od::port::ghostRoomOf();
+        const bool posed = here.fieldPlay && shown->room.fieldPlay && shown->room.stage == here.stage && shown->room.sub == here.sub;
+        if (!posed) o.stepped = -1; // where it is next posed it starts at the shown tick
+        else if (od::LoadedFileData* files = ghosts.files(int(slot))) {
             const od::ScopedLoadedFiles bound(*files);
             const od::port::NetPlayerFields& f = o.from.fields();
             for (int64_t t = o.stepped < 0 ? tick : o.stepped + 1; t <= tick; ++t)
