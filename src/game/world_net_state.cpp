@@ -1,4 +1,13 @@
 // The network state of a world's actors (see world_net_state.hpp).
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#ifdef _WIN32
+#include <windows.h>
+#undef min
+#undef max
+#endif
+#include <cstdio>
+#include <cstdlib>
 #include "game/presentation.hpp"
 #include "game/world_net_state.hpp"
 
@@ -561,6 +570,10 @@ void captureNetWorld(NetWorldTable& table, uint32_t tick) {
         s.type = e.type;
         s.effect = true;
         s.effectGoes = true;
+        // a shock wave's ring: the shock wave, which runs on the client from its own event, makes its own
+        if (const RoutineRef h = actorHandler(e, (e.loopFlags & kActorLateLoop) ? ActorPool::EffectsLate : ActorPool::Effects, false);
+            h && h.id() == RoutineId::ShockRingUpdate)
+            s.effectGoes = false;
         s.effectStart.pool = uint8_t(kEffectClass);
         s.effectStart.type = e.type;
         s.effectStart.subtype = e.subtype;
@@ -1330,6 +1343,8 @@ void PoolNetActors::roomPatch(const NetRoomPatch& patch) {
 }
 
 void PoolNetActors::effect(const NetEffect& e) {
+    static const bool logged = std::getenv("OD_NET_EFFECT_LOG") != nullptr; // test instrument
+    if (logged) std::fprintf(stderr, "net effect pool %02x type %02x subtype %02x variant %02x\n", unsigned(e.pool), unsigned(e.type), unsigned(e.subtype), unsigned(e.variant));
     // what it hangs from: an actor held here, or (a player's slot) this machine's Mega Man
     Actor* parent = nullptr;
     if (e.parent != kNetNoParent) {
@@ -1529,11 +1544,29 @@ void PoolNetActors::submitLockPoints() {
 
 namespace {
 
+#ifdef _WIN32
+// a class whose spawner's pointer is not here (a null read): it fails as one that throws
+constexpr unsigned long kAccessViolation = 0xC0000005ul;
+bool updatePoolGuarded(const PlayerEnv& env, ActorContext& context, ActorPool pool) {
+    __try {
+        updatePool(env, context, pool);
+        return true;
+    } __except (GetExceptionCode() == kAccessViolation ? 1 : 0) {
+        return false;
+    }
+}
+#else
+bool updatePoolGuarded(const PlayerEnv& env, ActorContext& context, ActorPool pool) {
+    updatePool(env, context, pool);
+    return true;
+}
+#endif
+
 // one pool loop; a class that throws loses the actor it was on
 void runLocalPool(const PlayerEnv& env, ActorContext& context, ActorPool pool, uint32_t& cursor, NetLocalRunFailures& failed) {
     for (int guard = 0; guard < 64; ++guard) {
         try {
-            updatePool(env, context, pool);
+            if (!updatePoolGuarded(env, context, pool)) throw std::runtime_error("a null read: what its spawner gives it is not here");
             return;
         } catch (const std::exception& e) {
             ActorHeader& actor = actorHeaderAt(cursor);

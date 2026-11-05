@@ -42,7 +42,12 @@ bool isReliable(WorldMessageType t) {
     case WorldMessageType::NetSceneEnd:
     case WorldMessageType::NetScenePad:
     case WorldMessageType::NetMoveTo:
-    case WorldMessageType::NetHold: return true;
+    case WorldMessageType::NetHold:
+    case WorldMessageType::NetGateAsk:
+    case WorldMessageType::NetGateLeave:
+    case WorldMessageType::NetGateForce:
+    case WorldMessageType::NetNotice:
+    case WorldMessageType::NetBossFight: return true;
     default: return false;
     }
 }
@@ -64,6 +69,9 @@ void CoopHost::sendReliable(uint8_t playerId, WorldMessageType type, std::vector
     if (type == WorldMessageType::NetJoin) worlds_.netJoin(playerId);
     else if (type == WorldMessageType::GlobalChange) worlds_.globalFromPlayer(playerId, bytes);
     else if (type == WorldMessageType::NetRespawnAsk) worlds_.respawnAsk(playerId);
+    else if (type == WorldMessageType::NetGateAsk) worlds_.gateAsk(playerId, bytes);
+    else if (type == WorldMessageType::NetGateLeave) worlds_.gateLeave(playerId);
+    else if (type == WorldMessageType::NetGateForce) worlds_.gateForce(SDL_GetTicksNS());
     else worlds_.netSend(playerId, type, std::move(bytes));
 }
 
@@ -107,6 +115,8 @@ void CoopHost::fromClient(uint8_t id, const WorldMessage& m, uint64_t nowNs) {
     case WorldMessageType::NetRevive:
     case WorldMessageType::NetScenePad: worlds_.netSend(id, m.type, m.netState); break;
     case WorldMessageType::NetRespawnAsk: worlds_.respawnAsk(id); break;
+    case WorldMessageType::NetGateAsk: worlds_.gateAsk(id, m.netState); break;
+    case WorldMessageType::NetGateLeave: worlds_.gateLeave(id); break;
     case WorldMessageType::GlobalChange: worlds_.globalFromPlayer(id, m.netState); break;
     case WorldMessageType::NetPlayer:
     case WorldMessageType::NetPlayerAck: worlds_.netSendLatest(id, m.type, m.netState); break;
@@ -121,6 +131,8 @@ void CoopHost::poll(uint64_t nowNs) {
         if (const auto m = decodeWorldMessage(d.payload)) fromClient(d.fromId, *m, nowNs);
     // a client that has gone is out of its world
     const od::net::SessionStatus status = session_->status(nowNs);
+    for (const od::net::PlayerStatus& p : status.players)
+        if (p.playerId < WorldHost::kPlayers) worlds_.setPlayerName(p.playerId, p.name);
     for (auto it = clients_.begin(); it != clients_.end();) {
         const bool there = std::any_of(status.players.begin(), status.players.end(), [&](const od::net::PlayerStatus& p) { return p.playerId == *it; });
         if (there) {

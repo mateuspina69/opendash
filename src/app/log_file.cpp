@@ -1,4 +1,10 @@
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#endif
 #include "app/log_file.hpp"
+#include "game/actors.hpp"
 
 #include <SDL3/SDL_filesystem.h>
 #include <SDL3/SDL_log.h>
@@ -25,7 +31,27 @@ void writeLine(void* data, int category, SDL_LogPriority priority, const char* m
 
 } // namespace
 
+#ifdef _WIN32
+namespace {
+// a crash says where it was, in the log: offsets into the executable
+LONG WINAPI logCrash(EXCEPTION_POINTERS* e) {
+    const uintptr_t base = reinterpret_cast<uintptr_t>(GetModuleHandleW(nullptr));
+    SDL_Log("crash: code %08lx at exe+%llx, address %llx", e->ExceptionRecord->ExceptionCode,
+            (unsigned long long)(reinterpret_cast<uintptr_t>(e->ExceptionRecord->ExceptionAddress) - base),
+            (unsigned long long)e->ExceptionRecord->ExceptionInformation[1]);
+    SDL_Log("crash: the last actor class updated: %s", od::routineName(od::port::updatingActorClass()));
+    void* frames[24];
+    const USHORT n = CaptureStackBackTrace(0, 24, frames, nullptr);
+    for (USHORT k = 0; k < n; ++k) SDL_Log("crash: frame exe+%llx", (unsigned long long)(reinterpret_cast<uintptr_t>(frames[k]) - base));
+    return EXCEPTION_CONTINUE_SEARCH;
+}
+} // namespace
+#endif
+
 void startLogFile(const char* fileName) {
+#ifdef _WIN32
+    SetUnhandledExceptionFilter(logCrash);
+#endif
     if (g_file) return;
     const char* base = SDL_GetBasePath();
     const std::string path = std::string(base ? base : "") + fileName;

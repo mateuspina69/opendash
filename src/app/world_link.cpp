@@ -102,6 +102,13 @@ std::vector<uint8_t> encodeWorldMessage(const WorldMessage& m) {
     case WorldMessageType::NetWorldExit:
     case WorldMessageType::NetMoveTo:
     case WorldMessageType::NetHold:
+    case WorldMessageType::NetGateAsk:
+    case WorldMessageType::NetGateLeave:
+    case WorldMessageType::NetGateForce:
+    case WorldMessageType::NetNotice:
+    case WorldMessageType::NetBossFight:
+    case WorldMessageType::NetSceneGate:
+    case WorldMessageType::NetSceneGo:
         w.u8(m.playerId);
         w.blob(m.netState);
         break;
@@ -114,7 +121,7 @@ std::optional<WorldMessage> decodeWorldMessage(std::span<const uint8_t> bytes) {
     od::net::ByteReader r(bytes);
     WorldMessage m;
     const uint8_t type = r.u8();
-    if (type < uint8_t(WorldMessageType::Hello) || type > uint8_t(WorldMessageType::NetHold)) return std::nullopt;
+    if (type < uint8_t(WorldMessageType::Hello) || type > uint8_t(WorldMessageType::NetSceneGo)) return std::nullopt;
     m.type = WorldMessageType(type);
     switch (m.type) {
     case WorldMessageType::Join:
@@ -167,6 +174,13 @@ std::optional<WorldMessage> decodeWorldMessage(std::span<const uint8_t> bytes) {
     case WorldMessageType::NetWorldExit:
     case WorldMessageType::NetMoveTo:
     case WorldMessageType::NetHold:
+    case WorldMessageType::NetGateAsk:
+    case WorldMessageType::NetGateLeave:
+    case WorldMessageType::NetGateForce:
+    case WorldMessageType::NetNotice:
+    case WorldMessageType::NetBossFight:
+    case WorldMessageType::NetSceneGate:
+    case WorldMessageType::NetSceneGo:
         m.playerId = r.u8();
         m.netState = r.blob();
         break;

@@ -301,6 +301,12 @@ ActorUpdateFn portedActorClass(RoutineId cls) {
     return it == r.end() ? nullptr : it->second;
 }
 
+namespace {
+RoutineId g_updatingClass = RoutineId::None;
+} // namespace
+
+RoutineId updatingActorClass() { return g_updatingClass; }
+
 int updatePool(const PlayerEnv& env, ActorContext& ctx, ActorPool pool) {
     PoolLoop loop = poolLoop(pool);
     ctx.skipped.clear();
@@ -329,6 +335,7 @@ int updatePool(const PlayerEnv& env, ActorContext& ctx, ActorPool pool) {
         }
         try {
             const ScopedActingPlayer acting(actor.ownerPlayer);
+            g_updatingClass = h.id();
             if (pool == ActorPool::Shots) setSoundOwner(actor.ownerPlayer);
             fn(env, actor.at);
             if (pool == ActorPool::Shots) setSoundOwner(kNoSoundOwner);

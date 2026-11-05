@@ -22,6 +22,8 @@ void scriptStart(uint8_t id);
 void scriptRun(uint8_t id);
 // exe 0x5128b0 (the frame body's first step): the running script's tick
 void scriptRunnerTick(const PlayerEnv& env);
+// A session's world: a scene waits at its start until the coordinator says everyone is there
+void setScriptsGated(bool gated);
 // exe 0x511720 (the frame body's end): the block's ended mark cleared
 void scriptBlockIdle();
 

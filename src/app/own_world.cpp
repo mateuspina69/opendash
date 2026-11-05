@@ -7,7 +7,10 @@
 #include <algorithm>
 #include <cstdio>
 
+#include "engine/config.hpp"
 #include "game/actor_sweeps.hpp"
+#include "game/story_flags.hpp"
+#include "game/story_table.hpp"
 #include "game/script_state.hpp"
 #include "content/nino/st16_script33.hpp"
 #include "game/player/player_input.hpp"
@@ -33,6 +36,7 @@ OwnWorldClient::OwnWorldClient(std::filesystem::path exe, std::filesystem::path 
     coordinator_ = coordinator.get();
     pipe_ = std::move(coordinator);
     od::port::setPlayerDownsInstead(true);
+    coordinator_->setGateTeleport(od::loadConfig().coopGate == "teleport");
     // Use pressed by nothing of this machine's: the world looks among its actors
     od::port::setUseNothingHook([this] {
         if (room_ && joined_) pipe_->sendReliable(playerId_, WorldMessageType::NetUse, {});
@@ -92,6 +96,8 @@ void OwnWorldClient::roomBound(int stage, int sub) {
     ownShots_ = {};
     reported_ = {};
     ownEvent_ = false;
+    gateAsked_ = false;
+    bossFight_ = false;
     od::port::globalWatchRebase();
     scene_ = false;
     sceneViewHeard_ = false;
@@ -155,6 +161,7 @@ void OwnWorldClient::turn(uint64_t nowNs) {
     if (guest_ && coordinator_) (void)pipe_->take(kGuestId);
     for (const WorldMessage& m : pipe_->take(playerId_)) handle(m, nowNs);
     sceneTurn();
+    gateTurn();
     // what happened in this game goes to the session; not what a stage's load does; in a scene the world does it all
     if (scene_) {
         od::port::globalWatchRebase();
@@ -298,6 +305,13 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
         break;
     case WorldMessageType::NetMoveTo:
         pendingMove_ = m.netState;
+        break;
+    case WorldMessageType::NetNotice:
+        notice_.assign(m.netState.begin(), m.netState.end());
+        noticeTicks_ = 30;
+        break;
+    case WorldMessageType::NetBossFight:
+        bossFight_ = !m.netState.empty() && m.netState[0] != 0;
         break;
     case WorldMessageType::NetHold:
         if (m.netState.size() == 3) { // the box carrier holds this player, and only them
@@ -466,6 +480,55 @@ void OwnWorldClient::showSceneView() {
     if (scene_ && sceneViewHeard_) od::port::sceneViewShow(sceneView_);
 }
 
+// An exit this player has taken: not while a story boss is being fought; at a gate they wait, with who is at it
+void OwnWorldClient::gateTurn() {
+    if (noticeTicks_ > 0) --noticeTicks_;
+    od::port::TransitionRequest& r = od::port::transitionRequest();
+    const od::port::GameState& g = od::port::gameState();
+    const bool asked = od::port::storyFlag(od::port::kFlagTransitionArmed) || r.state == od::port::kTransitionAsked;
+    if (coordinator_ && noticeTicks_ > 0 && (od::port::player().pressedNow(od::port::PlayerButton::Use) || localTick_ == testForceTick_))
+        pipe_->sendReliable(playerId_, WorldMessageType::NetGateForce, {});
+    bool stands = false;
+    const bool gateWasAsked = gateAsked_;
+    if (asked && g.gameMode() == od::port::GameMode::Field && g.fieldStep() == od::port::FieldStep::Playing) {
+        const bool mission = od::port::storyPlaceOf(uint8_t(room_->stage), room_->sub, g.story) == od::port::StoryPlaceKind::Mission;
+        const bool gated = mission || od::port::storyDoorGated(uint8_t(room_->stage), r.destStage, r.destRoom, g.story);
+        if (bossFight_ || testBossFight_ || gated) {
+            r.state = od::port::kTransitionNone;
+            od::port::clearStoryFlag(od::port::kFlagTransitionArmed);
+        }
+        if (bossFight_ || testBossFight_) {
+            notice_ = "Nobody leaves during the fight";
+            noticeTicks_ = 60;
+        } else if (gated) {
+            stands = true;
+            if (!gateAsked_) {
+                const auto half = [](int16_t v, std::vector<uint8_t>& o) {
+                    o.push_back(uint8_t(v));
+                    o.push_back(uint8_t(uint16_t(v) >> 8));
+                };
+                std::vector<uint8_t> move = {r.destStage, r.destRoom};
+                half(r.destination.x, move);
+                half(r.destination.y, move);
+                half(r.destination.z, move);
+                half(r.destination.yaw, move);
+                move.push_back(r.fadeIn);
+                move.push_back(r.fadeOut);
+                move.push_back(uint8_t(mission ? 1 : 0));
+                pipe_->sendReliable(playerId_, WorldMessageType::NetGateAsk, std::move(move));
+                gateAsked_ = true;
+            }
+        }
+    }
+    constexpr int kWalkedOff = 0x180;
+    if (stands && !gateWasAsked) {
+        gatePlace_ = od::port::player().pos;
+    } else if (gateAsked_ && od::port::distance3(gatePlace_, od::port::player().pos) > kWalkedOff) {
+        pipe_->sendReliable(playerId_, WorldMessageType::NetGateLeave, {});
+        gateAsked_ = false;
+    }
+}
+
 void OwnWorldClient::downedTurn() {
     od::port::Player& p = od::port::player();
     if (od::port::playerIsDowned(p)) {
@@ -509,6 +572,7 @@ void OwnWorldClient::drawNotice() const {
     } else if (reviving_) {
         std::snprintf(text, sizeof text, "Reviving: %d%%", reviveTicks_ * 100 / od::port::kReviveTicks);
     }
+    if (text[0] == 0 && noticeTicks_ > 0) std::snprintf(text, sizeof text, "%s", notice_.c_str());
     if (text[0] == 0) return;
     const ImGuiViewport* view = ImGui::GetMainViewport();
     const ImVec2 size = ImGui::CalcTextSize(text);

@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <memory>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include "app/coop_host.hpp"
@@ -50,6 +51,9 @@ public:
     void showSceneView();
     void setFade(od::port::FadeTask* fade) { fade_ = fade; }
     // test instrument: on joining, stay where this game is
+    void setGateTeleport(bool teleport) { if (coordinator_) coordinator_->setGateTeleport(teleport); }
+    void testForceAt(uint32_t tick) { testForceTick_ = tick; }
+    void testBossFight() { testBossFight_ = true; }
     void testClearFlag(uint32_t flag) { if (coordinator_) coordinator_->testClearFlag(flag); }
     void stayOnJoin() { if (pipe_) pipe_->setStays(true); stays_ = true; }
     // test instrument: at this local tick the player's life is this
@@ -101,6 +105,13 @@ private:
     };
     void otherPlayerRules(uint8_t id, Other& o, const od::port::PlayerSnapshot& shown);
     void downedTurn();
+    void gateTurn();
+    bool bossFight_ = false, testBossFight_ = false;
+    std::string notice_;
+    int noticeTicks_ = 0;
+    bool gateAsked_ = false;
+    od::port::Fixed16Vec3 gatePlace_{};
+    uint32_t testForceTick_ = 0;
     void sceneTurn();
     void sceneEnd(const std::vector<uint8_t>& at);
     void movedTo(const std::vector<uint8_t>& to);

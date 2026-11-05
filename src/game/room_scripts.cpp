@@ -1,4 +1,5 @@
 // The room scripts (see room_scripts.hpp): exe 0x512890's dispatch of the stage cases.
+#include "game/story_table.hpp"
 #include "game/room_scripts.hpp"
 
 #include <cstdio>
@@ -100,6 +101,8 @@ bool contentRoomCaseKnown(uint8_t stage) {
 }
 
 } // namespace
+
+bool storyOptionalStage(uint8_t stage) { return subruinStage(stage); }
 
 bool roomDoorScript() {
     if (!storyFlag(kFlagTransitionArmed)) return false;

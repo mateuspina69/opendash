@@ -82,6 +82,7 @@ Config loadConfig() {
             if (key == "data") cfg.data = trim(line.substr(eq + 1));
             if (key == "texture_pack") cfg.texturePack = pathValue(line.substr(eq + 1));
             if (key == "texture_dump") cfg.textureDump = pathValue(line.substr(eq + 1));
+            if (key == "coop_gate") cfg.coopGate = trim(line.substr(eq + 1));
             if (key == "restored_voices") cfg.restoredVoices = trim(line.substr(eq + 1)) != "0";
             if (key == "story_save") cfg.storySave = trim(line.substr(eq + 1));
             if (key == "display") cfg.display = trim(line.substr(eq + 1));

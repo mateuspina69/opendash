@@ -15,6 +15,7 @@ struct Config {
     std::filesystem::path disc;    // disc= / OPENDASH_DISC: the PS1 disc image (.cue); the English pack is read off it
     std::string data = "pc";       // data= pc|disc / OPENDASH_DATA: the game's files and tables from the PC install or
                                    // the disc image (engine/ps1_data_source)
+    std::string coopGate = "wait"; // coop_gate= wait|teleport: how a session's players come to a story gate
     bool restoredVoices = true;    // restored_voices= 0|1: the pack's AI-restored voices (snd_restored) when present
     // texture_pack= the texture pack's folder (the pages' larger images, engine/texture_pack), a relative path from
     // the executable's folder; unset: textures/ next to the executable when present, else the PS1 pages as they are

@@ -93,6 +93,7 @@ void WorldHost::removeFromWorld(uint8_t playerId) {
     if (!was) return;
     playerRoom_[playerId].reset();
     briefs_[playerId].reset();
+    gateLeave(playerId);
     const auto it = worlds_.find(*was);
     if (it == worlds_.end()) return;
     World& world = *it->second;
@@ -242,6 +243,98 @@ void WorldHost::netAck(uint8_t client, uint16_t sequence) {
     worlds_.at(*room)->link.sendLatest(m);
 }
 
+void WorldHost::moveTo(uint8_t playerId, const std::vector<uint8_t>& move) {
+    WorldMessage m{WorldMessageType::NetMoveTo};
+    m.playerId = playerId;
+    m.netState = move;
+    netInbox_.at(playerId).push_back(std::move(m));
+}
+
+void WorldHost::gateNotice(const std::string& text) {
+    for (uint8_t id = 0; id < kPlayers; ++id) {
+        if (!playerRoom_[id]) continue;
+        WorldMessage m{WorldMessageType::NetNotice};
+        m.playerId = id;
+        m.netState.assign(text.begin(), text.end());
+        netInbox_[id].push_back(std::move(m));
+    }
+}
+
+void WorldHost::gateAsk(uint8_t playerId, const std::vector<uint8_t>& move) {
+    if (move.size() != 13) return;
+    if (gate_ && gate_->scene) return; // a scene comes first
+    if (!gate_) {
+        Gate g;
+        g.mission = move[12] != 0;
+        g.move.assign(move.begin(), move.begin() + 12);
+        g.first = playerId;
+        gate_ = g;
+    }
+    gate_->waiting.insert(playerId);
+}
+
+void WorldHost::gateLeave(uint8_t playerId) {
+    if (!gate_ || gate_->scene) return;
+    gate_->waiting.erase(playerId);
+    if (gate_->waiting.empty()) gate_.reset();
+}
+
+void WorldHost::gateForce(uint64_t nowNs) {
+    constexpr uint64_t kForceCountdownNs = 5'000'000'000;
+    if (gate_ && gate_->forceAtNs == 0) gate_->forceAtNs = nowNs + kForceCountdownNs;
+}
+
+void WorldHost::gateTurn(uint64_t nowNs) {
+    if (!gate_) return;
+    Gate& g = *gate_;
+    size_t all = 0, here = 0;
+    for (uint8_t id = 0; id < kPlayers; ++id) {
+        if (!playerRoom_[id] || (briefs_[id] && briefs_[id]->downed)) continue;
+        ++all;
+        if (g.scene ? playerRoom_[id] == g.room : g.waiting.count(id) != 0) ++here;
+    }
+    const bool bring = gateTeleport_ && !g.mission;
+    if (bring) {
+        if (g.scene) { // next to who is there
+            for (uint8_t id = 0; id < kPlayers; ++id) {
+                if (!playerRoom_[id] || playerRoom_[id] == g.room || !briefs_[g.first] || g.brought.count(id) != 0) continue;
+                g.brought.insert(id);
+                const WorldBrief::Entry& e = *briefs_[g.first];
+                const int16_t x = int16_t(e.x + 0x80);
+                moveTo(id, {uint8_t(g.room.stage), uint8_t(g.room.sub), uint8_t(x), uint8_t(uint16_t(x) >> 8), uint8_t(e.y), uint8_t(uint16_t(e.y) >> 8), uint8_t(e.z),
+                            uint8_t(uint16_t(e.z) >> 8), uint8_t(e.yaw), uint8_t(uint16_t(e.yaw) >> 8), 2, 0x11});
+            }
+        } else { // through the door with who asked
+            for (uint8_t id = 0; id < kPlayers; ++id)
+                if (playerRoom_[id]) moveTo(id, g.move);
+            gate_.reset();
+            return;
+        }
+    }
+    const bool forced = g.forceAtNs != 0 && nowNs >= g.forceAtNs;
+    if (here >= all || forced) {
+        if (g.scene) {
+            if (const auto it = worlds_.find(g.room); it != worlds_.end()) it->second->link.sendReliable({WorldMessageType::NetSceneGo});
+        } else {
+            for (const uint8_t id : g.waiting)
+                if (playerRoom_[id]) moveTo(id, g.move);
+        }
+        gate_.reset();
+        return;
+    }
+    if (nowNs < g.nextNoticeNs) return;
+    g.nextNoticeNs = nowNs + 500'000'000;
+    char text[96];
+    const std::string name = !names_[g.first].empty() ? names_[g.first] : g.first == 0 ? "The host" : "Player " + std::to_string(int(g.first));
+    if (g.forceAtNs != 0)
+        std::snprintf(text, sizeof text, "Starting in %d", int((g.forceAtNs - nowNs) / 1'000'000'000) + 1);
+    else if (g.mission)
+        std::snprintf(text, sizeof text, "%s is waiting at the exit (%zu/%zu)", name.c_str(), here, all);
+    else
+        std::snprintf(text, sizeof text, "%s is waiting (%zu/%zu)", name.c_str(), here, all);
+    gateNotice(text);
+}
+
 void WorldHost::poll(uint64_t nowNs) {
     for (auto it = worlds_.begin(); it != worlds_.end();) {
         World& world = *it->second;
@@ -257,6 +350,17 @@ void WorldHost::poll(uint64_t nowNs) {
                 m.playerId < kPlayers &&
                 playerRoom_[m.playerId] == it->first)
                 netInbox_[m.playerId].push_back(m);
+            if (m.type == WorldMessageType::NetSceneGate) {
+                if (!gate_) {
+                    // a scene wants the room: who is here is waiting for the rest
+                    Gate g;
+                    g.scene = true;
+                    g.room = it->first;
+                    g.first = world.players.empty() ? uint8_t(0) : world.players[0];
+                    gate_ = g;
+                }
+                continue;
+            }
             if (m.type == WorldMessageType::NetWorldExit) {
                 // everyone in the room goes where the scene or the room's logic takes them
                 SDL_Log("coordinator: the world of ST%02X sub %d sends its players on", unsigned(it->first.stage), it->first.sub);
@@ -270,7 +374,16 @@ void WorldHost::poll(uint64_t nowNs) {
             }
             if (m.type == WorldMessageType::PlayerBrief) {
                 if (const auto brief = decodeBrief(m.netState)) {
-                    bossFight_[it->first] = brief->bossFight;
+                    if (bool& fight = bossFight_[it->first]; fight != brief->bossFight) {
+                        fight = brief->bossFight;
+                        SDL_Log("coordinator: ST%02X sub %d: a story boss fight %s", unsigned(it->first.stage), it->first.sub, fight ? "starts" : "ends");
+                        for (const uint8_t id : world.players) {
+                            WorldMessage notice{WorldMessageType::NetBossFight};
+                            notice.playerId = id;
+                            notice.netState = {uint8_t(fight ? 1 : 0)};
+                            netInbox_[id].push_back(std::move(notice));
+                        }
+                    }
                     for (const WorldBrief::Entry& e : brief->players)
                         if (e.id < kPlayers && playerRoom_[e.id] == it->first) briefs_[e.id] = e;
                 }
@@ -312,6 +425,7 @@ void WorldHost::poll(uint64_t nowNs) {
         dropEmptiedStage(stage);
     }
     gameOverTurn();
+    gateTurn(nowNs);
     if (briefs_[0])
         for (uint8_t id = 1; id < kPlayers; ++id)
             if (joining_[id]) placeNextToHost(id);

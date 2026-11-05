@@ -36,6 +36,8 @@
 #include "game/global_state.hpp"
 #include "content/nino/st16_script33.hpp"
 #include "game/presentation.hpp"
+#include "game/script_engine.hpp"
+#include "game/story_table.hpp"
 #include "game/script_state.hpp"
 #include "game/transition.hpp"
 #include "game/stage_record.hpp"
@@ -447,7 +449,7 @@ int run(const WorldArgs& w) {
     }
 
     od::port::PresentationBatch present;
-    bool sceneOn = false;
+    bool sceneOn = false, sceneGated = false, sceneAsked = false;
     uint16_t scenePad = 0;
     uint8_t sceneOwner = 0;
     od::port::NetPlayerWatch sceneWatch;
@@ -462,6 +464,8 @@ int run(const WorldArgs& w) {
         }
         link->sendReliable({WorldMessageType::Hello});
         od::port::setPresentationBatch(&present);
+        sceneGated = !od::port::storyOptionalStage(uint8_t(w.stage));
+        od::port::setScriptsGated(sceneGated);
         od::port::setWorldExitHook([&](const od::port::TransitionRequest& r) {
             const auto half = [](int16_t v, std::vector<uint8_t>& o) {
                 o.push_back(uint8_t(v));
@@ -593,6 +597,11 @@ int run(const WorldArgs& w) {
     // a script runs in the room: a scene, played once, with one Mega Man, for everyone in it
     const auto sceneTurn = [&](uint32_t netTick) {
         const bool now = od::port::scriptState().inUse() && od::port::scriptState().id != 0;
+        if (now && !sceneOn && sceneGated) { // everyone first
+            if (!sceneAsked) link->sendReliable({WorldMessageType::NetSceneGate});
+            sceneAsked = true;
+            return;
+        }
         if (now && !sceneOn) {
             sceneOn = true;
             sceneOwner = 0;
@@ -607,6 +616,9 @@ int run(const WorldArgs& w) {
             for (const auto& [client, sender] : netClients) sceneStartMessage(client);
         } else if (!now && sceneOn) {
             sceneOn = false;
+            sceneAsked = false;
+            sceneGated = !od::port::storyOptionalStage(uint8_t(w.stage));
+            od::port::setScriptsGated(sceneGated);
             const od::port::Player& man = od::port::player();
             const auto half = [](int16_t v, std::vector<uint8_t>& o) {
                 o.push_back(uint8_t(v));
@@ -710,6 +722,10 @@ int run(const WorldArgs& w) {
                 netClients.try_emplace(m.playerId, od::port::netSlotNetworked, m.playerId);
                 if (sceneOn) sceneStartMessage(m.playerId); // joining during a scene: they watch it
                 break;
+            case WorldMessageType::NetSceneGo:
+                sceneGated = false;
+                od::port::setScriptsGated(false);
+                break;
             case WorldMessageType::NetScenePad:
                 if (sceneOn && m.playerId == sceneOwner && m.netState.size() == 2) {
                     scenePad = uint16_t(m.netState[0] | m.netState[1] << 8);
@@ -804,7 +820,7 @@ int run(const WorldArgs& w) {
         }
         if (tick % kBriefTicks == 0) {
             WorldBrief brief;
-            brief.bossFight = od::port::hudBossGaugeShown();
+            brief.bossFight = od::port::hudBossGaugeShown() && !od::port::storyOptionalStage(uint8_t(w.stage));
             for (uint8_t id = 0; id < od::port::kPlayerSlots; ++id) {
                 if (!od::port::playerPresent(id) || !od::port::playerIsRemote(id)) continue;
                 const od::port::Player& p = od::port::playerById(id);

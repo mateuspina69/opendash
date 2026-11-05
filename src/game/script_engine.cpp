@@ -87,10 +87,17 @@ void scriptRun(uint8_t id) {
     scriptStart(id);
 }
 
+namespace {
+bool g_scriptsGated = false;
+} // namespace
+
+void setScriptsGated(bool gated) { g_scriptsGated = gated; }
+
 void scriptRunnerTick(const PlayerEnv& env) {
     const ScriptState& s = scriptState();
     if (!(s.flags & kScriptRunning)) return;
     const uint8_t id = s.id;
+    if (g_scriptsGated && id != kExitTransitionScript) return;
     if (id != kExitTransitionScript) { // [0x89b6d0 + id * 4]: the story / cutscene scripts (game/story)
         if (!storyScriptTick(env, id)) notPortedAt(kScriptArea, "script", id);
         return;

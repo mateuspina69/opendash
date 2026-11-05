@@ -21,6 +21,7 @@
 #include "game/player/net_player.hpp"
 #include "game/player/remote_combat.hpp"
 #include "game/global_state.hpp"
+#include "game/story_table.hpp"
 #include "game/world_net_state.hpp"
 
 using namespace od::port;
@@ -727,6 +728,18 @@ std::string runRoom(const char* exe, const char* save, const std::filesystem::pa
 
 } // namespace
 
+void testStoryTable() {
+    using namespace od::port;
+    CHECK(storyPlaceOf(0x25, 6, 3) == StoryPlaceKind::Boss);
+    CHECK(storyPlaceOf(0x25, 6, 4) == StoryPlaceKind::Free); // past its story
+    CHECK(storyPlaceOf(0x25, 5, 3) == StoryPlaceKind::Free);
+    CHECK(storyPlaceOf(0x55, 2, 1) == StoryPlaceKind::Mission);
+    CHECK(storyDoorGated(0x37, 0x37, 6, 1));
+    CHECK(!storyDoorGated(0x37, 0x37, 5, 1));
+    CHECK(storyDoorGated(0x2a, 0x2b, 0, 12)); // into a stage listed whole
+    CHECK(!storyDoorGated(0x2b, 0x2b, 1, 12)); // ... not inside it
+}
+
 void testGlobalState() {
     using namespace od::port;
     CHECK(flagScope(0x2f0) == FlagScope::Shared);
@@ -762,6 +775,7 @@ void testGlobalState() {
 
 int main(int argc, char** argv) {
     testGlobalState();
+    testStoryTable();
     testChangesOnly();
     testLostUpdate();
     testEventsFirstAndReuse();

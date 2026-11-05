@@ -8,7 +8,9 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <span>
+#include <string>
 #include <vector>
 
 #include "app/world_link.hpp"
@@ -65,6 +67,13 @@ public:
     void placeNextToHost(uint8_t playerId);
     // test instrument: this flag is clear from the session's start, whatever the save says
     void testClearFlag(uint32_t flag);
+    // The gates. Teleport: those far away are brought at once; else they are waited for
+    void setGateTeleport(bool teleport) { gateTeleport_ = teleport; }
+    void setPlayerName(uint8_t playerId, const std::string& name) { names_.at(playerId) = name; }
+    void gateAsk(uint8_t playerId, const std::vector<uint8_t>& move);
+    void gateLeave(uint8_t playerId);
+    // the host starts it without those missing, after a visible countdown
+    void gateForce(uint64_t nowNs);
     // the turn between frames: the links, the worlds' reports, the keep-alives; a world that ended on its own is forgotten
     void poll(uint64_t nowNs);
 
@@ -101,6 +110,23 @@ private:
     bool gameOverSent_ = false;
     std::array<bool, kPlayers> joining_{}; // to be placed next to the host, as soon as the host's place is known
     void gameOverTurn();
+    struct Gate {
+        bool scene = false;       // a scene waits in `room`; else a door, to `move`
+        bool mission = false;     // ... a mission's: everyone walks there, nobody is brought
+        WorldRoom room{};
+        std::vector<uint8_t> move;
+        std::set<uint8_t> waiting;
+        uint8_t first = 0;        // who got there first
+        std::set<uint8_t> brought;
+        uint64_t forceAtNs = 0, nextNoticeNs = 0;
+    };
+    std::optional<Gate> gate_;
+    bool gateTeleport_ = false;
+    std::array<std::string, kPlayers> names_{};
+    uint64_t lastNowNs_ = 0;
+    void gateTurn(uint64_t nowNs);
+    void gateNotice(const std::string& text);
+    void moveTo(uint8_t playerId, const std::vector<uint8_t>& move);
 };
 
 } // namespace od::app

@@ -40,7 +40,11 @@ enum class WorldMessageType : uint8_t {
     // Mega Man stands; a transition asked in a world; a player is moved there
     NetPresent = 35, NetSceneStart = 36, NetSceneView = 37, NetScenePad = 38, NetSceneEnd = 39, NetWorldExit = 40, NetMoveTo = 41,
     // the box carrier holds a player, or lets go (ST16's catch): carrier's slot, grip pose, holds
-    NetHold = 42
+    NetHold = 42,
+    // the gates: a player stands at a gated exit (where it leads, whether it is a mission's), or has walked off it; the host
+    // forces the start; what the session says to everyone; a story boss is being fought in the room; a scene asks for its room,
+    // and may start
+    NetGateAsk = 43, NetGateLeave = 44, NetGateForce = 45, NetNotice = 46, NetBossFight = 47, NetSceneGate = 48, NetSceneGo = 49
 };
 
 // What a world says of its players to the coordinator

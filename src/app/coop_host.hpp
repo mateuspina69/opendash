@@ -43,6 +43,7 @@ public:
     // the session whose clients come through here (none: a game on its own)
     void useSession(od::net::Session* session) { session_ = session; }
     void testClearFlag(uint32_t flag) { worlds_.testClearFlag(flag); }
+    void setGateTeleport(bool teleport) { worlds_.setGateTeleport(teleport); }
 
     std::optional<uint8_t> playerId() const override { return uint8_t(0); }
     void enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& state) override;
