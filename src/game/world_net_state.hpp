@@ -70,7 +70,8 @@ constexpr uint8_t kNetNoParent = 0xff;
 // What starts an effect on a client
 struct NetEffect {
     uint8_t pool = 0, type = 0, subtype = 0, variant = 0, spawnByte = 0, loopFlags = 0, flags = 0;
-    uint8_t parent = kNetNoParent; // the slot of the actor it hangs from (a walker's foot dust)
+    uint8_t parent = kNetNoParent; // the slot of the actor it hangs from (a walker's foot dust, a glow, a splash)
+    uint8_t bone = 0;              // the point of the player it follows (a splash at a player's bone)
     std::array<uint8_t, 4> params{};
     std::array<int16_t, 3> pos{}, rot{}, velocity{};
     int16_t spare = 0;
@@ -108,11 +109,23 @@ struct NetSolid {
     friend bool operator==(const NetSolid&, const NetSolid&) = default;
 };
 
+// What a class paints on one part of its model (a fade, a flash, a part that grows), different from what the model binds
+struct NetPartPaint {
+    uint8_t part = 0;
+    uint16_t colour = 0;
+    std::array<uint8_t, 3> scale{};
+    uint8_t semi = 0;
+    friend bool operator==(const NetPartPaint&, const NetPartPaint&) = default;
+};
+
 // What a class changes of its model
 struct NetActorVisual {
     std::array<int16_t, 3> scale{};
     uint16_t tint = 0;
     uint32_t hiddenParts = 0; // bit k: part k carries kPartHidden
+    bool boneScale = false;   // kActorBoneScale: the pose takes each part's scale bytes
+    std::array<uint8_t, 3> rootScale{0x40, 0x40, 0x40}; // the root's scale bytes / a mesh's
+    uint8_t semi = 0;         // the draw's semi-transparency bits
     friend bool operator==(const NetActorVisual&, const NetActorVisual&) = default;
 };
 
@@ -129,14 +142,16 @@ struct NetActorState {
     bool shown = false;
     NetActorVisual visual;
     std::vector<NetAimOffset> aim;
+    std::vector<NetPartPaint> paint;
     std::vector<NetLockPoint> lock;
     std::vector<NetSolid> solids;
     uint32_t pathTick = 0;        // on a path: pos and rot are the actor's on this tick, and it goes on by these steps
     std::array<int16_t, 3> posStep{}, rotStep{};
+    int16_t fallStep = 0;         // ... its y step growing by this each tick (a fall, an arc)
     uint8_t told = 0;             // a client's: which of the visual's fields the world has said (kNetTold...)
     friend bool operator==(const NetActorState&, const NetActorState&) = default;
 };
-constexpr uint8_t kNetToldScale = 1, kNetToldTint = 2, kNetToldParts = 4;
+constexpr uint8_t kNetToldScale = 1, kNetToldTint = 2, kNetToldParts = 4, kNetToldLook = 8;
 
 // An actor as the world's table holds it
 struct NetWorldActor {
@@ -168,8 +183,9 @@ class NetWorldTable {
 public:
     std::vector<NetRoomPatch> roomPatches; // since the room's files were read
     std::vector<uint8_t> roomShadow;       // the room block as the patches leave it
-    // the live room block against the shadow: what differs becomes patches
-    void watchRoomBlock(std::span<const uint8_t> live);
+    // the live room block against the shadow: what differs becomes patches. Only the range of it: the grid's cells and
+    // segments, which decide what collides; the rest (a texture's scroll) each machine runs by itself.
+    void watchRoomBlock(std::span<const uint8_t> live, size_t from = 0, size_t to = size_t(-1));
     uint32_t tick = 0;
     uint8_t coordinateShift = 0xff; // the stage's (a camera script can change it): every pose scales by it
     std::array<NetWorldActor, kNetSlots> actors{};
@@ -191,6 +207,7 @@ public:
         bool stayed = false;  // ... is the last tick's
         NetActorVisual visual, bound;
         std::vector<NetAimOffset> aim;
+        std::vector<NetPartPaint> paint;
         std::vector<NetLockPoint> lock;
         std::vector<NetSolid> solids;
         uint8_t owner = 0;
@@ -225,6 +242,11 @@ public:
     // the client holds update `sequence`
     void acknowledge(uint16_t sequence);
     uint64_t updatesCut() const { return updatesCut_; } // updates that did not hold every change
+    // the bytes of the largest update, by kind of field (measuring)
+    struct UpdateBytes {
+        uint32_t total = 0, head = 0, position = 0, rotation = 0, animation = 0, visual = 0, aim = 0, paint = 0, solids = 0, lock = 0, path = 0;
+    };
+    const UpdateBytes& largestUpdate() const { return largest_; }
 
 private:
     struct Known {
@@ -253,6 +275,7 @@ private:
     uint32_t eventsSent_ = 0;
     size_t cursor_ = 0;
     uint64_t updatesCut_ = 0;
+    UpdateBytes largest_;
 };
 
 // What a client does with what it holds, tick by tick of its timeline
@@ -410,6 +433,7 @@ struct NetPoseRecord {
     uint8_t ticksLeft = 0;
     uint16_t tint = 0;
     uint32_t hiddenParts = 0;
+    uint32_t paint = 0; // a hash of the parts' colours, scale bytes and semi-transparency
     std::array<int16_t, 3> pos{}, rot{};
     std::vector<int16_t> bones; // per part: the point relative to the root's, then the matrix (12 values)
 };

@@ -31,6 +31,7 @@
 #include "game/display.hpp"
 #include "game/encounter.hpp"
 #include "game/stage_record.hpp"
+#include "game/room_grid.hpp"
 #include "game/player/player_snapshot.hpp"
 #include "game/player/remote_combat.hpp"
 #include "game/player/remote_player.hpp"
@@ -219,6 +220,9 @@ public:
                          (unsigned long long)r.sender.updatesCut());
             for (const uint32_t n : r.updates) std::fprintf(out.f, " %u", n);
             std::fprintf(out.f, "\n");
+            const od::port::NetStateSender::UpdateBytes& b = r.sender.largestUpdate();
+            std::fprintf(out.f, "largest %u head %u position %u rotation %u animation %u visual %u aim %u paint %u solids %u lock %u path %u\n",
+                         b.total, b.head, b.position, b.rotation, b.animation, b.visual, b.aim, b.paint, b.solids, b.lock, b.path);
         }
     }
 
@@ -458,7 +462,14 @@ int run(const WorldArgs& w) {
         // every tick from the first, whoever is connected: a client that joins later is told how long ago each animation
         // started
         od::port::captureNetWorld(*netTable, netTick);
-        netTable->watchRoomBlock(std::span<const uint8_t>(view->roomBlock.data(), view->roomBlock.size()));
+        const od::port::RoomGridState& grid = od::port::roomGrid();
+        const std::span<const uint8_t> block(view->roomBlock.data(), view->roomBlock.size());
+        // the two ranges of the room block that decide what collides
+        const size_t cellsAt = grid.cells - grid.block, segmentsAt = grid.segments - grid.block;
+        netTable->watchRoomBlock(block, cellsAt, cellsAt + size_t(grid.width) * grid.depth * od::kGridCellSize);
+        netTable->watchRoomBlock(block, segmentsAt,
+                                 segmentsAt + od::kListHeaderSize +
+                                     size_t(od::port::SegmentListHeader(grid.segments).segmentCount) * od::kSegmentEntrySize);
         if (link) fightTurn();
         if (netStats) netStats->tick(*netTable, netTick);
         for (auto& [client, sender] : netClients) {

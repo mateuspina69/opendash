@@ -319,7 +319,7 @@ void testPaths() {
     t.tick = 2;
     t.seen(kShot, shotAt(20 * 16));
     const auto u = sender.update(t);
-    CHECK(u.size() == kHeader + 3 + 1 + 12); // slot, masks, age, steps
+    CHECK(u.size() == kHeader + 3 + 2 + 2); // slot, masks, age, which steps, x's step
     CHECK(client.applyUpdate(u).has_value());
     client.advance(0);
     client.advance(1);
@@ -359,7 +359,7 @@ void testEffects() {
     s.pos = {1, 2, 3};
     t.seen(0x61, s);
     auto batches = sender.events(t);
-    CHECK(batches.size() == 1 && batches[0].size() == 8 + 31);
+    CHECK(batches.size() == 1 && batches[0].size() == 8 + 34);
     for (const auto& batch : batches) CHECK(client.applyEvents(batch));
     CHECK(sender.update(t).size() == kHeader); // no state for it
     client.advance(0);
@@ -387,16 +387,17 @@ void testLockPoints() {
     Recorded rec;
     NetStateClient client(rec);
     NetWorldTable::Seen s = seenAt(100);
-    s.lock = {{{1, -40, 2}, 0x1234, 0x210000, false}};
+    s.lock = {{{4, -40, 0}, 0x1234, 0x210000, false}};
     t.seen(kSlotA, s);
     for (const auto& batch : sender.events(t)) CHECK(client.applyEvents(batch));
     const auto full = sender.update(t);
-    CHECK(full.size() == kHeader + 3 + 1 + 6 + 6);
+    CHECK(full.size() == kHeader + 3 + 1 + 4 + 3 + 2); // slot, masks, count, owner, offset, shape
     const auto seq = client.applyUpdate(full);
     CHECK(seq.has_value());
     client.advance(0);
     CHECK(rec.last[kSlotA].lock == s.lock);
     sender.acknowledge(*seq);
+    // a fall needs no new path each tick (checked below in testPaths)
     t.tick = 2;
     s.lock[0].offset[1] = -43; // within the tolerance
     t.seen(kSlotA, s);
@@ -405,7 +406,7 @@ void testLockPoints() {
     s.lock[0].offset[1] = -60;
     t.seen(kSlotA, s);
     const auto moved = sender.update(t);
-    CHECK(moved.size() == kHeader + 3 + 1 + 6);
+    CHECK(moved.size() == kHeader + 3 + 1 + 3);
     CHECK(client.applyUpdate(moved).has_value());
     client.advance(4);
     CHECK(rec.last[kSlotA].lock == s.lock);
@@ -515,7 +516,7 @@ struct Tally {
     uint64_t posExact = 0, posWithin2 = 0, posWithin8 = 0, posWithin32 = 0;
     int posWorst = 0;
     uint64_t rotExact = 0, rotWithin16 = 0;
-    uint64_t animated = 0, animSame = 0, keySame = 0, tintSame = 0, partsSame = 0;
+    uint64_t animated = 0, animSame = 0, keySame = 0, tintSame = 0, partsSame = 0, paintSame = 0;
     uint64_t stateTicks = 0, stateKeySame = 0, statePoseSame = 0, stateKeySamePoseSame = 0;
 };
 
@@ -649,6 +650,7 @@ std::string runRoom(const char* exe, const char* save, const std::filesystem::pa
         const bool keySame = animSame && r.key == v.key && r.frame == v.frame && r.ticksLeft == v.ticksLeft;
         t.tintSame += r.tint == v.tint;
         t.partsSame += r.hiddenParts == v.hiddenParts;
+        t.paintSame += r.paint == v.paint;
         const bool poseSame = keySame && r.bones == v.bones;
         t.animSame += animSame;
         type.animSame += animSame;
@@ -675,9 +677,9 @@ std::string runRoom(const char* exe, const char* save, const std::filesystem::pa
                 pct(t.posExact, t.both), pct(t.posWithin2, t.both), pct(t.posWithin8, t.both), pct(t.posWithin32, t.both),
                 t.posWorst, pct(t.rotExact, t.both), pct(t.rotWithin16, t.both));
     std::printf("  animated records %llu: same animation %.1f%%, same key (animation, key, frame, ticks left) %.1f%%, same tint "
-                "%.1f%%, same hidden parts %.1f%%\n",
+                "%.1f%%, same hidden parts %.1f%%, same part paint %.1f%%\n",
                 (unsigned long long)t.animated, pct(t.animSame, t.animated), pct(t.keySame, t.animated),
-                pct(t.tintSame, t.animated), pct(t.partsSame, t.animated));
+                pct(t.tintSame, t.animated), pct(t.partsSame, t.animated), pct(t.paintSame, t.animated));
     std::printf("  at a state's tick (%llu): same key %.1f%%, pose bit-identical %.1f%%\n", (unsigned long long)t.stateTicks,
                 pct(t.stateKeySame, t.stateTicks), pct(t.statePoseSame, t.stateTicks));
     for (const auto& [type, n] : types)

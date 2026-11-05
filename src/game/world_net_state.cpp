@@ -15,6 +15,9 @@
 #include "game/actor_pools.hpp"
 #include "game/animation_data.hpp"
 #include "game/footstep_dust.hpp"
+#include "game/glow_trails.hpp"
+#include "game/player/players.hpp"
+#include "game/water_splash_state.hpp"
 #include "game/hit_list.hpp"
 #include "game/room_grid.hpp"
 #include "game/loaded_data.hpp"
@@ -66,13 +69,17 @@ constexpr uint8_t kMaskX = 0x01, kMaskY = 0x02, kMaskZ = 0x04, kMaskYaw = 0x08, 
                   kMaskShown = 0x40, kMaskMore = 0x80;
 constexpr uint8_t kMoreAnimExtra = 0x01, kMoreLock = 0x02, kMoreSolids = 0x04, kMoreScale = 0x08, kMoreTint = 0x10, kMoreParts = 0x20,
                   kMoreAim = 0x40, kMorePath = 0x80;
-constexpr uint8_t kExtraAge = 0x01, kExtraKey = 0x02, kExtraHeld = 0x04; // after the animation's byte, when it needs more
-constexpr uint8_t kLockPositionsOnly = 0x80;
+constexpr uint8_t kExtraAge = 0x01, kExtraKey = 0x02, kExtraHeld = 0x04, kExtraPaint = 0x08, kExtraLook = 0x10,
+                  kExtraUniformScale = 0x20; // what else
+constexpr uint8_t kLookBoneScale = 0x01;
+constexpr uint8_t kLockPositionsOnly = 0x80, kLockWide = 0x40, kLockOwners = 0x20, kLockCountMask = 0x1f;
+constexpr int kLockGrain = 4;   // the units a narrow lock offset counts in
+constexpr uint8_t kSolidHasParam = 0x80;
 constexpr int kLockTolerance = 4; // units a lock-on point may drift before the client is told
 constexpr size_t kMaxLockPoints = 8;
 constexpr uint8_t kEventAppear = 1, kEventGo = 2, kEventAppearStill = 3, kEventEffect = 4, kEventShift = 5, kEventRoomPatch = 6; // Still: no animation in play
 constexpr size_t kBatchHeaderBytes = 8;
-constexpr size_t kAppearBytes = 26, kGoBytes = 2, kEffectBytes = 31;
+constexpr size_t kAppearBytes = 26, kGoBytes = 2, kEffectBytes = 34;
 constexpr int kPathPosTolerance = 32; // 1/16 units an actor may leave its path by before the world sends a new one
 constexpr int kPathRotTolerance = 16; // of a turn of 4096
 constexpr size_t kMaxInFlight = 64;
@@ -127,6 +134,7 @@ void NetWorldTable::seen(uint8_t slot, const Seen& s) {
     a.state.shown = s.shown;
     a.state.visual = s.visual;
     a.state.aim = s.aim;
+    a.state.paint = s.paint;
     a.owner = s.owner;
     a.startedByShot = s.startedByShot;
     a.state.solids = s.solids;
@@ -168,13 +176,19 @@ void NetWorldTable::seen(uint8_t slot, const Seen& s) {
         const uint32_t age = tick - a.state.pathTick;
         bool left = false;
         for (size_t i = 0; i < 3; ++i) {
-            const int predicted = int(pathPos[i]) * 16 + int(a.state.posStep[i]) * int(age);
+            const int predicted = int(pathPos[i]) * 16 + int(a.state.posStep[i]) * int(age) +
+                                  (i == 1 ? int(a.state.fallStep) * int(age) * (int(age) - 1) / 2 : 0);
             left = left || std::abs((s.fine[i] >> 12) - predicted) > kPathPosTolerance;
             int turned = (int(s.rot[i]) - (int(pathRot[i]) + int(a.state.rotStep[i]) * int(age))) & 0xfff;
             if (turned > 0x800) turned = 0x1000 - turned;
             left = left || turned > kPathRotTolerance;
         }
         if (left) {
+            // the y step's growth since this path started: a fall goes on by itself
+            const int newStep = (s.fine[1] - a.lastPos[1]) >> 12;
+            const bool wasStill = a.state.posStep == std::array<int16_t, 3>{} && a.state.fallStep == 0;
+            a.state.fallStep = wasStill || age < 2 ? int16_t(0) : int16_t(std::clamp((newStep - int(a.state.posStep[1])) / int(age - 1), -0x7fff, 0x7fff));
+
             for (size_t i = 0; i < 3; ++i) {
                 a.state.posStep[i] = int16_t(std::clamp((s.fine[i] - a.lastPos[i]) >> 12, -0x8000, 0x7fff));
                 int turn = (int(s.rot[i]) - int(a.lastRot[i])) & 0xfff;
@@ -195,16 +209,18 @@ void NetWorldTable::seen(uint8_t slot, const Seen& s) {
 
 void NetWorldTable::gone(uint8_t slot) { actors[slot].live = false; }
 
-void NetWorldTable::watchRoomBlock(std::span<const uint8_t> live) {
-    if (live.size() != roomShadow.size() || std::memcmp(live.data(), roomShadow.data(), live.size()) == 0) return;
+void NetWorldTable::watchRoomBlock(std::span<const uint8_t> live, size_t from, size_t to) {
+    if (live.size() != roomShadow.size()) return;
+    to = std::min(to, live.size());
+    if (from >= to || std::memcmp(live.data() + from, roomShadow.data() + from, to - from) == 0) return;
     constexpr size_t kMaxRun = 200, kJoinGap = 8;
-    for (size_t i = 0; i < live.size();) {
+    for (size_t i = from; i < to;) {
         if (live[i] == roomShadow[i]) {
             ++i;
             continue;
         }
         size_t end = i + 1, last = i;
-        while (end < live.size() && end - i < kMaxRun && end - last <= kJoinGap) {
+        while (end < to && end - i < kMaxRun && end - last <= kJoinGap) {
             if (live[end] != roomShadow[end]) last = end;
             ++end;
         }
@@ -326,9 +342,10 @@ NetWorldTable::Seen seenOf(const Actor& a, uint32_t model, uint32_t animTable) {
     return s;
 }
 
-// the classes a client runs from its own room setup
+// the classes a client runs from its own room setup, or for its own Mega Man (the markers of the charge and of a status)
 bool netClientKeepsClass(RoutineId id) {
-    return id == RoutineId::DoorActorUpdate || id == RoutineId::DoorLeafHingedUpdate || id == RoutineId::DoorLeafDoubleUpdate ||
+    return id == RoutineId::ChargeMarkerUpdate || id == RoutineId::DrainBurnMarkerUpdate || id == RoutineId::SlowMarkerUpdate ||
+           id == RoutineId::DoorActorUpdate || id == RoutineId::DoorLeafHingedUpdate || id == RoutineId::DoorLeafDoubleUpdate ||
            id == RoutineId::DoorLeafSlidingUpdate;
 }
 
@@ -355,6 +372,7 @@ bool netEffectClass(RoutineId id) {
     case RoutineId::MachineGunImpactUpdate:
     case RoutineId::FootstepDustUpdate:
     case RoutineId::SparkEmitterUpdate:
+    case RoutineId::MissileTrailUpdate:
     case RoutineId::WaterSplashUpdate: return true;
     default: return false;
     }
@@ -365,8 +383,28 @@ bool staticIsEffect(const StaticActor& a) {
     return h && netEffectClass(h.id());
 }
 
-// a splash whose source is an actor or a player's bone point follows what only the world holds (its variant's top bits)
-bool effectFollowsTheWorld(const StaticActor& a, RoutineId id) { return id == RoutineId::WaterSplashUpdate && (a.variant >> 6) != 0; }
+// what a splash follows, by its variant's top bits: its own position (0), an actor (1), a player's bone point (2)
+void noteSplashSource(StaticActor& a, NetEffect& e, bool& goes) {
+    const auto* splash = heldClassStateOf<WaterSplashFields>(a);
+    const uint32_t source = a.variant >> 6;
+    if (source == 0) return;
+    e.spare = int16_t(a.pos.y.frac); // the point's offset over the position's words (WaterSplashFields)
+    if (splash && source == 1 && splash->followed) {
+        e.parent = splash->followed->slot;
+    } else if (splash && source == 2 && splash->point) {
+        goes = false;
+        forEachPlayer([&](const Player& p) {
+            for (size_t b = 0; b < kPlayerBones; ++b)
+                if (static_cast<const ShortVec3*>(&p.bonePoints[b]) == splash->point) {
+                    e.parent = p.slot;
+                    e.bone = uint8_t(b);
+                    goes = true;
+                }
+        });
+    } else {
+        goes = false;
+    }
+}
 
 template <class Pool> void captureMeshPool(NetWorldTable& table, Pool& pool, size_t count) {
     for (size_t i = 0; i < count; ++i) {
@@ -385,13 +423,15 @@ template <class Pool> void captureMeshPool(NetWorldTable& table, Pool& pool, siz
         if (s.modelEntry != kNetNoModel) {
             s.visual.scale = {a.scale.x, a.scale.y, a.scale.z};
             s.visual.tint = a.tint;
+            s.visual.rootScale = {a.scaleBytes[0], a.scaleBytes[1], a.scaleBytes[2]};
+            s.visual.semi = a.semiTransparency;
         }
         if constexpr (std::is_same_v<Pool, StaticPool>) {
             if (!held.live || held.identity.type != a.type || held.model != a.model) {
                 const RoutineRef h =
                     actorHandler(a, (a.loopFlags & kActorLateLoop) ? ActorPool::StaticsLate : ActorPool::Statics, false);
                 s.effect = h && (netEffectClass(h.id()) || netClientKeepsClass(h.id()));
-                s.effectGoes = s.effect && !netClientKeepsClass(h.id()) && !effectFollowsTheWorld(a, h.id());
+                s.effectGoes = s.effect && !netClientKeepsClass(h.id());
                 s.effectStart.pool = uint8_t(kStaticClass);
                 s.effectStart.type = a.type;
                 s.effectStart.subtype = a.subtype;
@@ -410,6 +450,8 @@ template <class Pool> void captureMeshPool(NetWorldTable& table, Pool& pool, siz
                     if (parent) s.effectStart.parent = parent->slot;
                     else s.effectGoes = false;
                 }
+                if (h && h.id() == RoutineId::WaterSplashUpdate)
+                    noteSplashSource(const_cast<StaticActor&>(static_cast<const StaticActor&>(a)), s.effectStart, s.effectGoes);
             }
         }
         if (netSlotOnPath(slot)) {
@@ -453,6 +495,21 @@ void captureNetWorld(NetWorldTable& table, uint32_t tick) {
             for (uint32_t k = 0; k < slots; ++k)
                 if (a.parts[k].flags & kPartHidden) s.visual.hiddenParts |= 1u << k;
             s.aim = poseEdits()[i];
+            s.visual.boneScale = (a.runFlags & kActorBoneScale) != 0;
+            s.visual.rootScale = {a.rootScaleBytes[0], a.rootScaleBytes[1], a.rootScaleBytes[2]};
+            s.visual.semi = a.semiTransparency;
+            for (int k = 0; k < int(a.partCount) && k < 32; ++k) {
+                const BoneBlock* b = boneBlockOf(a, k >> 2);
+                if (!b) break;
+                NetPartPaint p;
+                p.part = uint8_t(k);
+                p.colour = b->boneColour(size_t(k & 3));
+                p.semi = b->semiBits(size_t(k & 3));
+                if (s.visual.boneScale) p.scale = {b->scaleBytes[size_t(k & 3)][0], b->scaleBytes[size_t(k & 3)][1], b->scaleBytes[size_t(k & 3)][2]};
+                else p.scale = {kScaleByteOne, kScaleByteOne, kScaleByteOne};
+                if (p.colour != kTintNeutral || p.semi != 0 || p.scale != std::array<uint8_t, 3>{kScaleByteOne, kScaleByteOne, kScaleByteOne})
+                    s.paint.push_back(p);
+            }
         }
         if (s.animScript != 0) {
             s.keyAt = a.animKeyAt.value();
@@ -492,6 +549,7 @@ void captureNetWorld(NetWorldTable& table, uint32_t tick) {
         for (size_t p = 0; p < 4; ++p) s.effectStart.params[p] = e.params[p];
         s.effectStart.pos = {e.pos.x, e.pos.y, e.pos.z};
         s.effectStart.spare = e.posSpare;
+        if (const auto* glow = heldClassStateOf<GlowTrailFields>(e); glow && glow->parent) s.effectStart.parent = glow->parent->slot;
         s.owner = e.ownerPlayer;
         s.startedByShot = e.startedByShot;
         table.seen(slot, s);
@@ -566,13 +624,13 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
             w.u8(e.loopFlags);
             w.u8(e.flags);
             w.u8(e.parent);
+            w.u8(e.bone);
             for (const uint8_t p : e.params) w.u8(p);
             for (const int16_t v : e.pos) w.i16(v);
+            w.i16(e.spare);
             if (e.pool == kStaticClass) {
                 for (const int16_t v : e.rot) w.i16(v);
                 for (const int16_t v : e.velocity) w.i16(v);
-            } else {
-                w.i16(e.spare);
             }
             ++eventsSent_;
             continue;
@@ -619,6 +677,8 @@ std::vector<uint8_t> NetStateSender::update(const NetWorldTable& table) {
     Sent sent;
     sent.sequence = sequence;
     bool cut = false;
+    UpdateBytes counted;
+    counted.head = uint32_t(w.bytes.size());
     const size_t from = cursor_;
     for (size_t n = 0; n < kNetSlots; ++n) {
         const size_t i = (from + n) % kNetSlots;
@@ -646,8 +706,12 @@ std::vector<uint8_t> NetStateSender::update(const NetWorldTable& table) {
             if (age != 0) extra |= kExtraAge;
             if (a.state.animKeyed) extra |= kExtraKey;
             if (a.state.held) extra |= kExtraHeld;
-            if (extra) more |= kMoreAnimExtra;
         }
+        if (a.state.paint != k.acked.paint || a.state.paint != k.sent.paint) extra |= kExtraPaint;
+        const auto lookDiffers = [&](const NetActorVisual& o) {
+            return a.state.visual.boneScale != o.boneScale || a.state.visual.rootScale != o.rootScale || a.state.visual.semi != o.semi;
+        };
+        if (lookDiffers(k.acked.visual) || lookDiffers(k.sent.visual)) extra |= kExtraLook;
         if (a.state.lock != k.acked.lock || a.state.lock != k.sent.lock) more |= kMoreLock;
         if (a.state.solids != k.acked.solids || a.state.solids != k.sent.solids) more |= kMoreSolids;
         const NetActorVisual &v = a.state.visual, &va = k.acked.visual, &vs = k.sent.visual;
@@ -656,22 +720,34 @@ std::vector<uint8_t> NetStateSender::update(const NetWorldTable& table) {
         if (v.hiddenParts != va.hiddenParts || v.hiddenParts != vs.hiddenParts) more |= kMoreParts;
         if (a.state.aim != k.acked.aim || a.state.aim != k.sent.aim) more |= kMoreAim;
         const auto pathDiffers = [&](const NetActorState& o) {
-            return a.state.pathTick != o.pathTick || a.state.posStep != o.posStep || a.state.rotStep != o.rotStep;
+            return a.state.pathTick != o.pathTick || a.state.posStep != o.posStep || a.state.rotStep != o.rotStep ||
+                   a.state.fallStep != o.fallStep;
         };
         if (pathDiffers(k.acked) || pathDiffers(k.sent)) more |= kMorePath;
+        const bool uniformScale = v.scale[0] == v.scale[1] && v.scale[1] == v.scale[2];
+        if ((more & kMoreScale) && uniformScale) extra |= kExtraUniformScale;
+        if (extra) more |= kMoreAnimExtra;
         if (more) mask |= kMaskMore;
         Writer e;
+        size_t mark = 0;
+        const auto count = [&](uint32_t UpdateBytes::*field) {
+            counted.*field += uint32_t(e.bytes.size() - mark);
+            mark = e.bytes.size();
+        };
         e.u8(uint8_t(i));
         e.u8(mask);
         if (more) e.u8(more);
+        count(&UpdateBytes::head);
         if (mask & kMaskX) e.i16(a.state.pos[0]);
         if (mask & kMaskY) e.i16(a.state.pos[1]);
         if (mask & kMaskZ) e.i16(a.state.pos[2]);
+        count(&UpdateBytes::position);
         if (mask & kMaskYaw) e.i16(a.state.rot[1]);
         if (mask & kMaskRotXZ) {
             e.i16(a.state.rot[0]);
             e.i16(a.state.rot[2]);
         }
+        count(&UpdateBytes::rotation);
         if (mask & kMaskAnim) e.u8(a.state.anim);
         if (extra) e.u8(extra);
         if (extra & kExtraAge) e.u8(age);
@@ -679,13 +755,18 @@ std::vector<uint8_t> NetStateSender::update(const NetWorldTable& table) {
             e.u16(a.state.animKey);
             e.u8(a.state.animTicks);
         }
-        if (more & kMoreScale)
-            for (const int16_t c : v.scale) e.i16(c);
+        count(&UpdateBytes::animation);
+        if (more & kMoreScale) {
+            if (uniformScale) e.i16(v.scale[0]);
+            else
+                for (const int16_t c : v.scale) e.i16(c);
+        }
         if (more & kMoreTint) e.u16(v.tint);
         if (more & kMoreParts) {
             e.u16(uint16_t(v.hiddenParts));
             e.u8(uint8_t(v.hiddenParts >> 16));
         }
+        count(&UpdateBytes::visual);
         if (more & kMoreAim) {
             e.u8(uint8_t(a.state.aim.size()));
             for (const NetAimOffset& o : a.state.aim) {
@@ -697,35 +778,77 @@ std::vector<uint8_t> NetStateSender::update(const NetWorldTable& table) {
                     if (o.lanes[l] != 0) e.i16(o.lanes[l]);
             }
         }
+        count(&UpdateBytes::aim);
+        if (extra & kExtraPaint) {
+            e.u8(uint8_t(a.state.paint.size()));
+            for (const NetPartPaint& p : a.state.paint) {
+                e.u8(p.part);
+                e.u16(p.colour);
+                for (const uint8_t c : p.scale) e.u8(c);
+                e.u8(p.semi);
+            }
+        }
+        if (extra & kExtraLook) {
+            e.u8(a.state.visual.boneScale ? kLookBoneScale : uint8_t(0));
+            for (const uint8_t c : a.state.visual.rootScale) e.u8(c);
+            e.u8(a.state.visual.semi);
+        }
+        count(&UpdateBytes::paint);
         if (more & kMoreSolids) {
             e.u8(uint8_t(a.state.solids.size()));
             for (const NetSolid& s : a.state.solids) {
-                e.i16(s.type);
-                e.i16(s.bone);
-                e.u32(s.param);
+                e.u8(uint8_t(uint8_t(s.type) | (s.param != 0 ? kSolidHasParam : 0)));
+                e.u8(uint8_t(int8_t(s.bone)));
+                if (s.param != 0) e.u32(s.param);
             }
         }
+        count(&UpdateBytes::solids);
         if (more & kMoreLock) {
             // the positions alone, when the client is known to hold what else the points are
             bool positionsOnly = a.state.lock.size() == k.acked.lock.size() && !a.state.lock.empty();
             for (size_t n = 0; positionsOnly && n < a.state.lock.size(); ++n)
                 positionsOnly = a.state.lock[n].shape == k.acked.lock[n].shape && a.state.lock[n].owner == k.acked.lock[n].owner &&
                                 a.state.lock[n].harmless == k.acked.lock[n].harmless;
-            e.u8(uint8_t(a.state.lock.size() | (positionsOnly ? kLockPositionsOnly : 0)));
+            bool wide = false, sameOwner = true;
             for (const NetLockPoint& p : a.state.lock) {
-                for (const int16_t c : p.offset) e.i16(c);
-                if (positionsOnly) continue;
-                e.u16(p.shape);
+                for (const int16_t c : p.offset) wide = wide || c < -127 * kLockGrain || c > 127 * kLockGrain;
+                sameOwner = sameOwner && p.owner == a.state.lock.front().owner && p.harmless == a.state.lock.front().harmless;
+            }
+            e.u8(uint8_t(a.state.lock.size() | (positionsOnly ? kLockPositionsOnly : 0) | (wide ? kLockWide : 0) |
+                         (!sameOwner ? kLockOwners : 0)));
+            const auto owner = [&](const NetLockPoint& p) {
                 e.u16(uint16_t(p.owner));
                 e.u8(uint8_t(p.owner >> 16));
                 e.u8(p.harmless ? 1 : 0);
+            };
+            if (!positionsOnly && sameOwner && !a.state.lock.empty()) owner(a.state.lock.front());
+            for (const NetLockPoint& p : a.state.lock) {
+                for (const int16_t c : p.offset) {
+                    if (wide) e.i16(c);
+                    else e.u8(uint8_t(int8_t(c >= 0 ? (c + kLockGrain / 2) / kLockGrain : (c - kLockGrain / 2) / kLockGrain)));
+                }
+                if (positionsOnly) continue;
+                e.u16(p.shape);
+                if (!sameOwner) owner(p);
             }
         }
+        count(&UpdateBytes::lock);
         if (more & kMorePath) {
             e.u8(animAgeByte(table.tick, a.state.pathTick));
-            for (const int16_t c : a.state.posStep) e.i16(c);
-            for (const int16_t c : a.state.rotStep) e.i16(c);
+            // which steps are not zero: bits 0..2 the position's, 3..5 the rotation's, 6 the fall
+            uint8_t steps = a.state.fallStep != 0 ? 0x40 : 0;
+            for (size_t l = 0; l < 3; ++l) {
+                if (a.state.posStep[l] != 0) steps |= uint8_t(1u << l);
+                if (a.state.rotStep[l] != 0) steps |= uint8_t(8u << l);
+            }
+            e.u8(steps);
+            for (size_t l = 0; l < 3; ++l)
+                if (a.state.posStep[l] != 0) e.i16(a.state.posStep[l]);
+            for (size_t l = 0; l < 3; ++l)
+                if (a.state.rotStep[l] != 0) e.i16(a.state.rotStep[l]);
+            if (steps & 0x40) e.i16(a.state.fallStep);
         }
+        count(&UpdateBytes::path);
         if (w.bytes.size() + e.bytes.size() > kNetMaxPayload) {
             cursor_ = i; // the next update starts with what did not fit
             cut = true;
@@ -735,6 +858,8 @@ std::vector<uint8_t> NetStateSender::update(const NetWorldTable& table) {
         sent.entries.push_back({uint8_t(i), a.generation, a.state});
         k.sent = a.state;
     }
+    counted.total = uint32_t(w.bytes.size());
+    if (counted.total > largest_.total) largest_ = counted;
     if (cut) ++updatesCut_;
     else cursor_ = 0;
     inFlight_.push_back(std::move(sent));
@@ -812,13 +937,13 @@ bool NetStateClient::applyEvents(std::span<const uint8_t> bytes) {
             e.loopFlags = r.u8();
             e.flags = r.u8();
             e.parent = r.u8();
+            e.bone = r.u8();
             for (uint8_t& p : e.params) p = r.u8();
             for (int16_t& v : e.pos) v = r.i16();
+            e.spare = r.i16();
             if (e.pool == kStaticClass) {
                 for (int16_t& v : e.rot) v = r.i16();
                 for (int16_t& v : e.velocity) v = r.i16();
-            } else {
-                e.spare = r.i16();
             }
             due_.push_back({tick, false, nullptr, e, std::nullopt, std::nullopt});
             ++eventsArrived_;
@@ -913,7 +1038,9 @@ std::optional<uint16_t> NetStateClient::applyParsed(std::span<const uint8_t> byt
             s.held = (extra & kExtraHeld) != 0;
         }
         if (more & kMoreScale) {
-            for (int16_t& c : s.visual.scale) c = r.i16();
+            if (extra & kExtraUniformScale) s.visual.scale.fill(r.i16());
+            else
+                for (int16_t& c : s.visual.scale) c = r.i16();
             s.told |= kNetToldScale;
         }
         if (more & kMoreTint) {
@@ -933,31 +1060,58 @@ std::optional<uint16_t> NetStateClient::applyParsed(std::span<const uint8_t> byt
                 for (size_t l = 0; l < 3; ++l) a.lanes[l] = (head >> (5 + l) & 1) ? r.i16() : int16_t(0);
             }
         }
+        if (extra & kExtraPaint) {
+            s.paint.resize(r.u8());
+            for (NetPartPaint& p : s.paint) {
+                p.part = r.u8();
+                p.colour = r.u16();
+                for (uint8_t& c : p.scale) c = r.u8();
+                p.semi = r.u8();
+            }
+        }
+        if (extra & kExtraLook) {
+            s.visual.boneScale = (r.u8() & kLookBoneScale) != 0;
+            for (uint8_t& c : s.visual.rootScale) c = r.u8();
+            s.visual.semi = r.u8();
+            s.told |= kNetToldLook;
+        }
         if (more & kMoreSolids) {
             s.solids.resize(r.u8());
             for (NetSolid& v : s.solids) {
-                v.type = r.i16();
-                v.bone = r.i16();
-                v.param = r.u32();
+                const uint8_t type = r.u8();
+                v.type = int16_t(type & ~kSolidHasParam);
+                v.bone = int16_t(int8_t(r.u8()));
+                v.param = (type & kSolidHasParam) ? r.u32() : 0;
             }
         }
         if (more & kMoreLock) {
             const uint8_t head = r.u8();
-            const bool positionsOnly = (head & kLockPositionsOnly) != 0;
-            s.lock.resize(head & 0x7f);
-            for (NetLockPoint& p : s.lock) {
-                for (int16_t& c : p.offset) c = r.i16();
-                if (positionsOnly) continue;
-                p.shape = r.u16();
+            const bool positionsOnly = (head & kLockPositionsOnly) != 0, wide = (head & kLockWide) != 0, owners = (head & kLockOwners) != 0;
+            s.lock.resize(head & kLockCountMask);
+            const auto owner = [&](NetLockPoint& p) {
                 p.owner = r.u16();
                 p.owner |= uint32_t(r.u8()) << 16;
                 p.harmless = r.u8() != 0;
+            };
+            NetLockPoint shared;
+            if (!positionsOnly && !owners && !s.lock.empty()) owner(shared);
+            for (NetLockPoint& p : s.lock) {
+                for (int16_t& c : p.offset) c = wide ? r.i16() : int16_t(int(int8_t(r.u8())) * kLockGrain);
+                if (positionsOnly) continue;
+                p.shape = r.u16();
+                if (owners) owner(p);
+                else {
+                    p.owner = shared.owner;
+                    p.harmless = shared.harmless;
+                }
             }
         }
         if (more & kMorePath) {
             s.pathTick = tick - r.u8();
-            for (int16_t& c : s.posStep) c = r.i16();
-            for (int16_t& c : s.rotStep) c = r.i16();
+            const uint8_t steps = r.u8();
+            for (size_t l = 0; l < 3; ++l) s.posStep[l] = (steps >> l & 1) ? r.i16() : int16_t(0);
+            for (size_t l = 0; l < 3; ++l) s.rotStep[l] = (steps >> (3 + l) & 1) ? r.i16() : int16_t(0);
+            s.fallStep = (steps & 0x40) ? r.i16() : int16_t(0);
         }
         changed[slot] = s;
     }
@@ -1065,7 +1219,7 @@ void NetStateClient::advance(uint32_t tick) {
         if (netSlotOnPath(o.slot)) {
             const int age = int(int32_t(tick - s.pathTick));
             for (size_t i = 0; i < 3; ++i) {
-                s.pos[i] = int16_t((int(s.pos[i]) * 16 + int(s.posStep[i]) * age) >> 4);
+                s.pos[i] = int16_t((int(s.pos[i]) * 16 + int(s.posStep[i]) * age + (i == 1 ? int(s.fallStep) * age * (age - 1) / 2 : 0)) >> 4);
                 s.rot[i] = int16_t(int(s.rot[i]) + int(s.rotStep[i]) * age);
             }
         } else if (o.samples.size() >= 2 && int32_t(tick - o.samples[0].tick) > 0) {
@@ -1169,7 +1323,16 @@ void PoolNetActors::effect(const NetEffect& e) {
     head.spawnByte = e.spawnByte;
     for (size_t i = 0; i < 4; ++i) head.params[i] = e.params[i];
     head.enterState(0);
-    if (parent) classState<FootstepDustFields>(asStatic(head)).parent = parent;
+    const auto handlerIs = [&](RoutineId id) {
+        const RoutineRef h = actorHandler(head, e.pool == kEffectClass
+                                                    ? ((e.loopFlags & kActorLateLoop) ? ActorPool::EffectsLate : ActorPool::Effects)
+                                                    : ((e.loopFlags & kActorLateLoop) ? ActorPool::StaticsLate : ActorPool::Statics), false);
+        return h && h.id() == id;
+    };
+    if (parent && e.pool == kEffectClass)
+        classState<GlowTrailFields>(asEffect(head)).parent = parent;
+    if (parent && e.pool == kStaticClass && handlerIs(RoutineId::FootstepDustUpdate))
+        classState<FootstepDustFields>(asStatic(head)).parent = parent;
     if (e.pool == kEffectClass) {
         EffectActor& fx = asEffect(head);
         fx.pos.x = e.pos[0];
@@ -1187,6 +1350,12 @@ void PoolNetActors::effect(const NetEffect& e) {
         s.velocity.x = e.velocity[0];
         s.velocity.y = e.velocity[1];
         s.velocity.z = e.velocity[2];
+        if (handlerIs(RoutineId::WaterSplashUpdate) && (e.variant >> 6) != 0) {
+            s.pos.y.frac = uint16_t(e.spare);
+            WaterSplashFields& splash = classState<WaterSplashFields>(s);
+            if ((e.variant >> 6) == 1) splash.followed = parent;
+            else if (parent && actorSlotClass(e.parent) == kPlayerClass) splash.point = &asPlayer(*parent).bonePoints[e.bone];
+        }
     }
     ++effectsStarted_;
 }
@@ -1213,6 +1382,10 @@ void PoolNetActors::tick(uint8_t slot, const NetActorState& state, const std::op
             mesh.scale.z = state.visual.scale[2];
         }
         if (state.told & kNetToldTint) mesh.tint = state.visual.tint;
+        if (state.told & kNetToldLook) {
+            mesh.scaleBytes = {state.visual.rootScale[0], state.visual.rootScale[1], state.visual.rootScale[2]};
+            mesh.semiTransparency = state.visual.semi;
+        }
         return;
     }
     if (!animates_[slot]) return;
@@ -1223,6 +1396,25 @@ void PoolNetActors::tick(uint8_t slot, const NetActorState& state, const std::op
         animated.scale.z = state.visual.scale[2];
     }
     if (state.told & kNetToldTint) animated.tint = state.visual.tint;
+    if (state.told & kNetToldLook) {
+        animated.rootScaleBytes = {state.visual.rootScale[0], state.visual.rootScale[1], state.visual.rootScale[2]};
+        animated.semiTransparency = state.visual.semi;
+        animated.runFlags = state.visual.boneScale ? uint8_t(animated.runFlags | kActorBoneScale) : uint8_t(animated.runFlags & ~kActorBoneScale);
+    }
+    // the parts as the class painted them; the others as the model binds them
+    for (int k = 0, next = 0; k < int(animated.partCount) && k < 32; ++k) {
+        BoneBlock* b = boneBlockOf(animated, k >> 2);
+        if (!b) break;
+        const size_t lane = size_t(k & 3);
+        if (next < int(state.paint.size()) && state.paint[size_t(next)].part == k) {
+            const NetPartPaint& p = state.paint[size_t(next++)];
+            b->colour(lane) = p.colour;
+            b->setScaleWord(lane, uint32_t(p.scale[0]) | uint32_t(p.scale[1]) << 8 | uint32_t(p.scale[2]) << 16 | uint32_t(p.semi) << 24);
+        } else {
+            b->colour(lane) = kTintNeutral;
+            b->setScaleWord(lane, uint32_t(kScaleByteOne) * 0x010101u);
+        }
+    }
     if (state.told & kNetToldParts) {
         const uint32_t slots = std::min<uint32_t>(animated.boneSlotCount, 24);
         for (uint32_t k = 0; k < slots; ++k) {
@@ -1337,12 +1529,21 @@ void poseRecord(std::FILE* file, uint32_t tick, const Actor& a, const AnimatedAc
     w.u16(animated && parts != 0 ? uint16_t((animated->animKeyAt.value() - animated->animScript.value()) / 4) : uint16_t(0));
     w.u8(animated ? uint8_t(animated->animKey.frame) : 0);
     w.u8(animated ? animated->animKey.ticks : 0);
+    uint32_t paint = 0x811c9dc5u;
+    const auto mix = [&](uint32_t v) { paint = (paint ^ v) * 0x01000193u; };
+    if (animated && parts != 0)
+        for (int k = 0; k < int(parts); ++k)
+            if (const BoneBlock* b = boneBlockOf(*animated, k >> 2)) {
+                mix(b->boneColour(size_t(k & 3)));
+                mix(b->semiBits(size_t(k & 3)));
+            }
     uint32_t hidden = 0;
     if (animated)
         for (uint32_t k = 0; k < std::min<uint32_t>(animated->boneSlotCount, 24); ++k)
             if (animated->parts[k].flags & kPartHidden) hidden |= 1u << k;
     w.u16(animated && parts != 0 ? animated->tint : uint16_t(0));
     w.u32(hidden);
+    w.u32(paint);
     w.i16(a.pos.x.whole);
     w.i16(a.pos.y.whole);
     w.i16(a.pos.z.whole);
@@ -1379,7 +1580,7 @@ void writeNetPoses(std::FILE* file, uint32_t tick, NetSlotFilter filter, bool cl
     StaticPool& statics = staticPool();
     for (size_t i = 0; i < StaticPool::size(); ++i)
         if ((statics[i].flags & kActorLive) && filter(statics[i].slot) &&
-            !(client ? (statics[i].runFlags & kActorRun) != 0 : staticIsEffect(statics[i])))
+            !(client ? (statics[i].runFlags & kActorRun) != 0 : staticIsEffect(statics[i]) || netClientKeepsActor(statics[i])))
             poseRecord(file, tick, statics[i], nullptr);
     ShotPool& shots = shotPool();
     for (size_t i = 0; i < ShotPool::size(); ++i)
@@ -1416,6 +1617,7 @@ std::vector<NetPoseRecord> readNetPoses(const std::filesystem::path& file) {
         p.ticksLeft = r.u8();
         p.tint = r.u16();
         p.hiddenParts = r.u32();
+        p.paint = r.u32();
         for (int16_t& v : p.pos) v = r.i16();
         for (int16_t& v : p.rot) v = r.i16();
         const uint16_t parts = r.u16();
