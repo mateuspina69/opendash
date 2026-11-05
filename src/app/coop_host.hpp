@@ -44,7 +44,7 @@ public:
     // the session whose clients come through here (none: a game on its own)
     void useSession(od::net::Session* session) { session_ = session; }
     void testClearFlag(uint32_t flag) { worlds_.testClearFlag(flag); }
-    void testClearFlagNow(uint32_t flag, uint8_t stage) { worlds_.testClearFlagNow(flag, stage); }
+    void testFlagNow(uint32_t flag, bool set, uint8_t stage) { worlds_.testFlagNow(flag, set, stage); }
     void testStory(uint8_t story) { worlds_.testStory(story); }
     void setGateTeleport(bool teleport) { worlds_.setGateTeleport(teleport); }
     // the host's game has written a save: a game over goes back to it

@@ -250,6 +250,19 @@ void WorldHost::moveTo(uint8_t playerId, const std::vector<uint8_t>& move) {
     netInbox_.at(playerId).push_back(std::move(m));
 }
 
+namespace {
+// the place of the k-th player arriving through one move: the first at it, each next one beside the one before, as a
+// joining player is placed beside the host
+std::vector<uint8_t> arrivalBeside(std::vector<uint8_t> move, size_t k) {
+    constexpr int kBeside = 0x80;
+    if (move.size() < 4 || k == 0) return move;
+    const int16_t x = int16_t(uint16_t(move[2] | move[3] << 8) + kBeside * int(k));
+    move[2] = uint8_t(x);
+    move[3] = uint8_t(uint16_t(x) >> 8);
+    return move;
+}
+} // namespace
+
 void WorldHost::gateNotice(const std::string& text) {
     for (uint8_t id = 0; id < kPlayers; ++id) {
         if (!playerRoom_[id]) continue;
@@ -308,8 +321,9 @@ void WorldHost::gateTurn(uint64_t nowNs) {
                             uint8_t(uint16_t(e.z) >> 8), uint8_t(e.yaw), uint8_t(uint16_t(e.yaw) >> 8), 2, 0x11});
             }
         } else { // through the door with who asked
+            size_t k = 0;
             for (uint8_t id = 0; id < kPlayers; ++id)
-                if (playerRoom_[id]) moveTo(id, g.move);
+                if (playerRoom_[id]) moveTo(id, arrivalBeside(g.move, k++));
             gate_.reset();
             return;
         }
@@ -321,11 +335,13 @@ void WorldHost::gateTurn(uint64_t nowNs) {
         } else if (g.mission && forced && playerRoom_[g.first]) {
             // a mission is one world: a forced start takes its whole room along
             const WorldRoom room = *playerRoom_[g.first];
+            size_t k = 0;
             for (uint8_t id = 0; id < kPlayers; ++id)
-                if (playerRoom_[id] == room) moveTo(id, g.move);
+                if (playerRoom_[id] == room) moveTo(id, arrivalBeside(g.move, k++));
         } else {
+            size_t k = 0;
             for (const uint8_t id : g.waiting)
-                if (playerRoom_[id]) moveTo(id, g.move);
+                if (playerRoom_[id]) moveTo(id, arrivalBeside(g.move, k++));
         }
         gate_.reset();
         return;
@@ -385,10 +401,11 @@ void WorldHost::poll(uint64_t nowNs) {
             if (m.type == WorldMessageType::NetWorldExit) {
                 // everyone in the room goes where the scene or the room's logic takes them
                 SDL_Log("coordinator: the world of ST%02X sub %d sends its players on", unsigned(it->first.stage), it->first.sub);
+                size_t k = 0;
                 for (const uint8_t id : world.players) {
                     WorldMessage move{WorldMessageType::NetMoveTo};
                     move.playerId = id;
-                    move.netState = m.netState;
+                    move.netState = arrivalBeside(m.netState, k++);
                     netInbox_[id].push_back(std::move(move));
                 }
                 continue;
@@ -501,10 +518,11 @@ void WorldHost::testClearFlag(uint32_t flag) {
     global_.merge(c);
 }
 
-void WorldHost::testClearFlagNow(uint32_t flag, uint8_t stage) {
+void WorldHost::testFlagNow(uint32_t flag, bool set, uint8_t stage) {
     od::port::GlobalChange c;
     c.stage = stage;
-    c.flags.push_back({uint16_t(flag >> 3), 0, uint8_t(1u << (flag & 7))});
+    const uint8_t bit = uint8_t(1u << (flag & 7));
+    c.flags.push_back({uint16_t(flag >> 3), set ? bit : uint8_t(0), set ? uint8_t(0) : bit});
     globalChanged(c, nullptr, std::nullopt);
 }
 
