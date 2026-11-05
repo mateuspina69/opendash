@@ -48,7 +48,8 @@ are used.
 
 ## Netplay
 
-See [netplay.md](netplay.md).
+See [netplay.md](netplay.md). A session (`net=host` or `net=join`) is co-op: the host's loaded game is the session's,
+and a client follows it with no save of its own.
 
 | Key | Values | Default |
 | --- | --- | --- |

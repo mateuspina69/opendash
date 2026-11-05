@@ -52,6 +52,7 @@ bool isReliable(WorldMessageType t) {
     case WorldMessageType::NetWarp:
     case WorldMessageType::NetGateGlow:
     case WorldMessageType::NetReload:
+    case WorldMessageType::NetAlert:
     case WorldMessageType::NetRoomPlayer: return true;
     default: return false;
     }
@@ -71,6 +72,25 @@ CoopHost::CoopHost(std::filesystem::path exe, std::filesystem::path storySave)
 }
 
 void CoopHost::hostSaved(std::span<const uint8_t> save) { save_.assign(save.begin(), save.end()); }
+
+void CoopHost::hostLoaded(std::span<const uint8_t> save, uint64_t nowNs) {
+    save_.assign(save.begin(), save.end());
+    {
+        std::ofstream out(lastSavePath_, std::ios::binary);
+        out.write(reinterpret_cast<const char*>(save_.data()), std::streamsize(save_.size()));
+    }
+    worlds_.reloadFrom(save_, lastSavePath_);
+    SDL_Log("coordinator: the session starts from the host's game (ST%02X sub %d)", unsigned(save_.size() > 0x129 ? save_[0x128] : 0),
+            int(save_.size() > 0x129 ? save_[0x129] : 0));
+    if (!session_) return;
+    for (const uint8_t id : told_) {
+        WorldMessage m{WorldMessageType::NetReload};
+        m.playerId = id;
+        session_->sendWorld(nowNs, id, true, encodeWorldMessage(m));
+        sendSave(id, nowNs);
+        placeNext_.insert(id);
+    }
+}
 
 std::optional<std::vector<uint8_t>> CoopHost::takeReload() { return std::exchange(reload_, std::nullopt); }
 
@@ -109,9 +129,10 @@ void CoopHost::fromClient(uint8_t id, const WorldMessage& m, uint64_t nowNs) {
     case WorldMessageType::NetEnter:
         if (m.netState.size() > 3) {
             const bool first = clients_.insert(id).second, stays = m.netState[2] != 0;
-            if (first) sendSave(id, nowNs);
+            if (told_.insert(id).second) sendSave(id, nowNs);
+            const bool place = first || placeNext_.erase(id) != 0;
             worlds_.enter(id, WorldRoom{m.netState[0], m.netState[1]}, std::vector<uint8_t>(m.netState.begin() + 3, m.netState.end()));
-            if (first && !stays) worlds_.placeNextToHost(id); // joining: next to the host's Mega Man
+            if (place && !stays) worlds_.placeNextToHost(id); // joining, or the session started over: next to the host
         }
         break;
     case WorldMessageType::NetJoin: worlds_.netJoin(id); break;
@@ -158,8 +179,15 @@ void CoopHost::poll(uint64_t nowNs) {
         if (const auto m = decodeWorldMessage(d.payload)) fromClient(d.fromId, *m, nowNs);
     // a client that has gone is out of its world
     const od::net::SessionStatus status = session_->status(nowNs);
-    for (const od::net::PlayerStatus& p : status.players)
+    for (const od::net::PlayerStatus& p : status.players) {
         if (p.playerId < WorldHost::kPlayers) worlds_.setPlayerName(p.playerId, p.name);
+        // a game that connects is told the session's save at once: at its title it starts from it
+        if (p.playerId != 0 && p.playerId < WorldHost::kPlayers && !save_.empty() && told_.insert(p.playerId).second)
+            sendSave(p.playerId, nowNs);
+    }
+    std::erase_if(told_, [&](uint8_t id) {
+        return std::none_of(status.players.begin(), status.players.end(), [&](const od::net::PlayerStatus& p) { return p.playerId == id; });
+    });
     for (auto it = clients_.begin(); it != clients_.end();) {
         const bool there = std::any_of(status.players.begin(), status.players.end(), [&](const od::net::PlayerStatus& p) { return p.playerId == *it; });
         if (there) {

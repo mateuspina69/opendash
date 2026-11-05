@@ -130,36 +130,51 @@ void App::parseArgs(int argc, char** argv) {
         else if (a == "--hd-text") messageUi.hdText = std::stoi(argv[++i]) != 0; // 0 = the PS1 bitmap font
         else if (a == "--hd-art") hdArtArg = std::stoi(argv[++i]) != 0; // 0 = the containers' pixel art
         else if (a == "--menu-snappy") od::port::setMenuSnappy(std::stoi(argv[++i]) != 0); // 0 = the PS1 cursor
-        else if (a == "--own-world") // a client of a world process of its own, from this save (app/own_world)
-            playerView.ownWorld = std::make_shared<OwnWorldClient>(std::filesystem::path(SDL_GetBasePath()) / "opendash.exe", argv[++i]);
-        else if (a == "--own-world-guest" && playerView.ownWorld && i + 2 < argc) { // test instrument: a second player at this offset
+        // the session's co-op (app/own_world) starts by itself in a netplay session; these are test instruments for it
+        else if (a == "--dev-world-alone" && i + 1 < argc) // dev: this game alone with a world process, from this save
+            devWorldSave = argv[++i];
+        else if (a == "--coop-guest" && i + 2 < argc) { // test instrument: a second player at this offset
             const int dx = std::stoi(argv[++i]), dz = std::stoi(argv[++i]);
-            playerView.ownWorld->addGuest(dx, dz);
+            coopSetup.push_back([=](OwnWorldClient& w) { w.addGuest(dx, dz); });
         }
-        else if (a == "--own-world-test-level" && playerView.ownWorld && i + 2 < argc) { // test instrument
+        else if (a == "--coop-test-level" && i + 2 < argc) { // test instrument
             const uint32_t tick = uint32_t(std::stoul(argv[++i]));
-            playerView.ownWorld->testLevelAt(tick, int8_t(std::stoi(argv[++i])));
+            const int8_t level = int8_t(std::stoi(argv[++i]));
+            coopSetup.push_back([=](OwnWorldClient& w) { w.testLevelAt(tick, level); });
         }
-        else if (a == "--own-world-test-life" && playerView.ownWorld && i + 2 < argc) { // test instrument
+        else if (a == "--coop-test-life" && i + 2 < argc) { // test instrument
             const uint32_t tick = uint32_t(std::stoul(argv[++i]));
-            playerView.ownWorld->testLifeAt(tick, int16_t(std::stoi(argv[++i])));
+            const int16_t life = int16_t(std::stoi(argv[++i]));
+            coopSetup.push_back([=](OwnWorldClient& w) { w.testLifeAt(tick, life); });
         }
-        else if (a == "--own-world-test-clear-flag" && playerView.ownWorld && i + 1 < argc) // test instrument
-            playerView.ownWorld->testClearFlag(uint32_t(std::stoul(argv[++i], nullptr, 16)));
-        else if ((a == "--own-world-test-clear-flag-at" || a == "--own-world-test-set-flag-at") && playerView.ownWorld && i + 2 < argc) { // test instrument
+        else if (a == "--coop-test-clear-flag" && i + 1 < argc) { // test instrument
+            const uint32_t flag = uint32_t(std::stoul(argv[++i], nullptr, 16));
+            coopSetup.push_back([=](OwnWorldClient& w) { w.testClearFlag(flag); });
+        }
+        else if ((a == "--coop-test-clear-flag-at" || a == "--coop-test-set-flag-at") && i + 2 < argc) { // test instrument
             const uint32_t tick = uint32_t(std::stoul(argv[++i]));
-            playerView.ownWorld->testFlagAt(tick, uint32_t(std::stoul(argv[++i], nullptr, 16)), a == "--own-world-test-set-flag-at");
+            const uint32_t flag = uint32_t(std::stoul(argv[++i], nullptr, 16));
+            const bool set = a == "--coop-test-set-flag-at";
+            coopSetup.push_back([=](OwnWorldClient& w) { w.testFlagAt(tick, flag, set); });
         }
-        else if (a == "--coop-gate" && playerView.ownWorld && i + 1 < argc)
-            playerView.ownWorld->setGateTeleport(std::string_view(argv[++i]) == "teleport");
-        else if (a == "--own-world-test-force" && playerView.ownWorld && i + 1 < argc) // test instrument
-            playerView.ownWorld->testForceAt(uint32_t(std::stoul(argv[++i])));
-        else if (a == "--own-world-test-boss-fight" && playerView.ownWorld) playerView.ownWorld->testBossFight(); // test instrument
-        else if (a == "--own-world-test-story" && playerView.ownWorld && i + 1 < argc) // test instrument
-            playerView.ownWorld->testStory(uint8_t(std::stoi(argv[++i])));
-        else if (a == "--own-world-stay" && playerView.ownWorld) playerView.ownWorld->stayOnJoin(); // test instrument
-        else if (a == "--own-world-test-weapon" && playerView.ownWorld && i + 1 < argc) // test instrument
-            playerView.ownWorld->testWeapon(std::stoi(argv[++i]));
+        else if (a == "--coop-gate" && i + 1 < argc) {
+            const bool teleport = std::string_view(argv[++i]) == "teleport";
+            coopSetup.push_back([=](OwnWorldClient& w) { w.setGateTeleport(teleport); });
+        }
+        else if (a == "--coop-test-force" && i + 1 < argc) { // test instrument
+            const uint32_t tick = uint32_t(std::stoul(argv[++i]));
+            coopSetup.push_back([=](OwnWorldClient& w) { w.testForceAt(tick); });
+        }
+        else if (a == "--coop-test-boss-fight") coopSetup.push_back([](OwnWorldClient& w) { w.testBossFight(); }); // test instrument
+        else if (a == "--coop-test-story" && i + 1 < argc) { // test instrument
+            const uint8_t story = uint8_t(std::stoi(argv[++i]));
+            coopSetup.push_back([=](OwnWorldClient& w) { w.testStory(story); });
+        }
+        else if (a == "--coop-stay") coopSetup.push_back([](OwnWorldClient& w) { w.stayOnJoin(); }); // test instrument
+        else if (a == "--coop-test-weapon" && i + 1 < argc) { // test instrument
+            const int weapon = std::stoi(argv[++i]);
+            coopSetup.push_back([=](OwnWorldClient& w) { w.testWeapon(weapon); });
+        }
         else if (a == "--classic") classicArg = std::stoi(argv[++i]) != 0; // the original tank controls (scripted runs)
         else if (a == "--precise-poses") od::precise::setEnabled(std::stoi(argv[++i]) != 0); // 0 = the PS1 rounded poses
         else if (a == "--flag") flagArgs.push_back(uint32_t(std::stoul(argv[++i], nullptr, 0)));
@@ -373,9 +388,21 @@ int App::init() {
             } catch (const std::invalid_argument& e) {
                 SDL_Log("netplay settings: %s (netplay off)", e.what());
             }
-            if (playerView.ownWorld) netplay.setWorldMode(true);
+            // a netplay session is co-op: the host's game runs the session's worlds (from the save it loads in game), a
+            // client follows the host's save and room
+            const std::filesystem::path self = std::filesystem::path(SDL_GetBasePath() ? SDL_GetBasePath() : "") / "opendash.exe";
+            gameDir = cfg.exePath.parent_path(); // the game's saves, for a save named by its slot
+            if (net.mode != NetMode::Off || !devWorldSave.empty()) {
+                playerView.ownWorld = std::make_shared<OwnWorldClient>(self, resolveSavePath(devWorldSave));
+                for (const auto& f : coopSetup) f(*playerView.ownWorld);
+                netplay.setWorldMode(true);
+            }
             netplay.start(net, mirrorArg, cfg.datDir, cfg.exePath, cfg.data == "disc" ? playerView.disc.get() : nullptr);
-            if (playerView.ownWorld) playerView.ownWorld->useSession(netplay.session(), net.mode == NetMode::Host);
+            if (playerView.ownWorld) {
+                playerView.ownWorld->useSession(netplay.session(), net.mode == NetMode::Host);
+                if (net.mode != NetMode::Off && !netplay.session()) // the session did not start: say so
+                    playerView.ownWorld->notice("Netplay did not start: " + netplay.error());
+            }
         }
         stages = scanStages();
         for (const auto& si : stages) playerView.stageSubs.emplace_back(si.stage, si.subs);
@@ -735,6 +762,22 @@ void App::setStorySave(const std::string& spec) {
     } catch (const std::exception& e) {
         SDL_Log("story save %s: %s (story 0)", p.string().c_str(), e.what());
     }
+}
+
+std::filesystem::path App::resolveSavePath(const std::string& name) const {
+    if (name.empty()) return {};
+    std::filesystem::path file = name;
+    if (name.size() <= 2 && std::all_of(name.begin(), name.end(), [](char c) { return c >= '0' && c <= '9'; })) {
+        char nm[24];
+        std::snprintf(nm, sizeof nm, "DASH2-%02d.DAT", std::stoi(name));
+        file = nm;
+    }
+    std::error_code ec;
+    const std::filesystem::path exeDir = SDL_GetBasePath() ? SDL_GetBasePath() : "";
+    for (const std::filesystem::path& p : {file, exeDir / "saves" / file, gameDir / file})
+        if (!p.empty() && std::filesystem::is_regular_file(p, ec)) return std::filesystem::absolute(p, ec);
+    SDL_Log("save %s: not found (as given, in saves/, next to dash2.exe)", name.c_str());
+    return {};
 }
 
 void App::loadSave(const std::filesystem::path& p) {

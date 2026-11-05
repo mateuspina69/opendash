@@ -398,6 +398,7 @@ int run(const WorldArgs& w) {
 
     view->stageSubs = stageSubRooms();
     view->modern = false; // no orbit camera drives the game's camera here: the game's own camera follows
+    view->headless = true;
     view->init(cfg);
     view->audioInit(cfg, false);
     view->langDir = cfg.langDir;
@@ -563,6 +564,9 @@ int run(const WorldArgs& w) {
                 if (!sceneMan && (id == client || !mirrors[id].heard || !od::port::playerPresent(id))) continue;
                 od::port::NetPlayerFields told = sceneMan ? sceneFields : mirrors[id].from.fields();
                 told.camera = {}; // an owner's camera is for their world only
+                if (!sceneMan) // the owner's ticks in this world's: the others' timelines run on this world's ticks
+                    for (od::port::NetPlayerChannel& c : told.channels)
+                        if (c.tick != od::port::kNetPlayerNoTick) c.tick = uint32_t(c.tick + (netTick - mirrors[id].ownerTick));
                 const std::vector<uint8_t> one = playerSenders[{client, id}].update(id, netTick, told);
                 m.netState.push_back(uint8_t(one.size()));
                 m.netState.insert(m.netState.end(), one.begin(), one.end());

@@ -1490,6 +1490,12 @@ bool PlayerView::startGameFromState(int stage, int sub) {
         if (!ok) throw std::runtime_error("no player data");
         od::port::GameState& game = od::port::gameState();
         const bool save = game.loadSave != 0;
+        // a session's host: the game it starts is the session's (the save it loads, or below the new game's state)
+        std::vector<uint8_t> sessionImage;
+        if (save && ownWorld && ownWorld->hosts()) {
+            const auto b = od::port::saveImageAt(od::port::kSaveBuf).bytes();
+            sessionImage.assign(b.begin(), b.end());
+        }
         gameModeInit();
         gameStarted = true;
         if (stage >= 0) { // a browsed room (F2 / --play): it, and no arrival request (placeInBrowsedRoom places)
@@ -1540,6 +1546,14 @@ bool PlayerView::startGameFromState(int stage, int sub) {
 
         beginPlay();
         snap = true;
+        if (ownWorld && ownWorld->hosts()) {
+            if (sessionImage.empty()) {
+                od::port::saveBuildImage(0);
+                const auto b = od::port::saveImageAt(od::port::kSaveBuf).bytes();
+                sessionImage.assign(b.begin(), b.end());
+            }
+            ownWorld->gameStarted(sessionImage);
+        }
     } catch (const std::exception& e) {
         playError = e.what();
         play = false;
@@ -1753,7 +1767,7 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
         if (afterFrame) afterFrame(); // FUN_005410b0 (the soft reset, game/title)
         od::port::messageTick(); // FUN_005578a0 (WinMain, after the game task): window logic + layout
         dcPrims.clear(); // the frame's draw commands (Maybe_ProcessDrawCommands 0x5f0580), before the buffer flip
-        dcStats = od::dc::decode(g_fxTextures, dcPrims);
+        if (!headless) dcStats = od::dc::decode(g_fxTextures, dcPrims);
         processDatQueue();
         logMessages();
         audioTick();
@@ -1764,7 +1778,7 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
         // sub-screen, Maybe_ProcessDrawCommands and the play time); the field picture stays the last frame's. Nor in
         // mode 1 (the stage's files loading): the pools still hold the last stage's actors, the class tables are
         // already the next stage's (a game over's way to the title backdrop, ST51)
-        if (game.gameMode() != od::port::GameMode::StatusMenu && game.gameMode() != od::port::GameMode::StageLoad) {
+        if (!headless && game.gameMode() != od::port::GameMode::StatusMenu && game.gameMode() != od::port::GameMode::StageLoad) {
             hud.tick(); // FUN_00415fe0 (presentation: own state, reads the game's)
             hud.tickEnemyGauges(); // its type-3 elements (boss gauges) live in the game state
             staffPicture = od::port::staffRollPictureTake();
@@ -1784,13 +1798,12 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
             // continued left / right of the 320-pixel frame for wider windows
             od::weather::collect(weather, std::max(0, int(std::ceil((240.0f * viewAspect - 320.0f) * 0.5f))));
             for (const od::weather::Quad& q : weather) od::weather::texture(g_fxTextures, q);
-            if (weather.size() != weatherLast) {
-                SDL_Log("weather: %zu quads (first: source %06x OT slot %u) ST%02X/%d", weather.size(),
-                        weather.empty() ? 0u : od::routineStateValue(weather[0].source),
-                        weather.empty() ? 0u : unsigned(weather[0].ot),
-                        unsigned(game.stage), int(game.room));
-                weatherLast = weather.size();
+            if (weather.empty() != (weatherLast == 0)) { // when it starts or stops
+                SDL_Log("weather: %s, %zu quads (first: source %06x OT slot %u) ST%02X/%d", weather.empty() ? "stops" : "starts",
+                        weather.size(), weather.empty() ? 0u : od::routineStateValue(weather[0].source),
+                        weather.empty() ? 0u : unsigned(weather[0].ot), unsigned(game.stage), int(game.room));
             }
+            weatherLast = weather.size();
             fxPrims.insert(fxPrims.end(), dcPrims.begin(), dcPrims.end());
         }
         if (dcStats.records != dcLast.records || dcStats.f8 != dcLast.f8 || dcStats.f4 != dcLast.f4 ||

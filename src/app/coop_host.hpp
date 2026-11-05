@@ -49,6 +49,8 @@ public:
     void setGateTeleport(bool teleport) { worlds_.setGateTeleport(teleport); }
     // the host's game has written a save: a game over goes back to it
     void hostSaved(std::span<const uint8_t> save);
+    // the host's game started from this save (a load, a new game): the session's worlds and clients start over from it
+    void hostLoaded(std::span<const uint8_t> save, uint64_t nowNs);
     // everyone was down: the host's game goes on from this save
     std::optional<std::vector<uint8_t>> takeReload();
 
@@ -67,6 +69,8 @@ private:
     std::vector<uint8_t> save_;
     od::net::Session* session_ = nullptr;
     std::set<uint8_t> clients_;
+    std::set<uint8_t> told_;      // the players told the session's save (on connecting, at the title or in a game)
+    std::set<uint8_t> placeNext_; // ... who come next to the host when they enter (the session started over)
     std::filesystem::path savePath_, lastSavePath_;
     std::optional<std::vector<uint8_t>> reload_;
 };

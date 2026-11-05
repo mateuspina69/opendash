@@ -250,7 +250,7 @@ struct PlayerView {
     // A client of a world (ADR 0006, "Client mode"): the room's files bound from the state of the story save, no actor
     // spawned and no world update; the actors come from the world (game/world_net_state)
     bool enterRoomAsClient(const RoomMesh& mesh);
-    // --own-world: this game is a client of a world process of its own (app/own_world); null otherwise
+    // a netplay session (or --dev-world-alone): this game is a client of the session's worlds (app/own_world); null otherwise
     std::shared_ptr<class OwnWorldClient> ownWorld;
     bool startFromStorySave = false; // the next enterPlay: from storySave, not the running game's state
     void leavePlay(); // F2 out of play: sessionSave from the live state, then play off
@@ -323,6 +323,7 @@ struct PlayerView {
     // is turned toward it (0x180 per tick) and the game gets "up", so run speed, animation, collision and
     // physics stay the game's. Outside plain locomotion the direction becomes body-relative d-pad.
     bool modern = true;
+    bool headless = false; // a world process: no screen, so no draw list is collected
     uint8_t steerStickX = 0x80, steerStickY = 0x80; // steer's analog pad for the game (jet skates; else centre)
     float orbitYaw = 0.0f, orbitPitch = 0.30f; // radians, port camera convention (forward = sin, cos)
     bool usingGameCamera = false;              // the last frame showed the game camera (see orbitCamera)

@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <deque>
 #include <filesystem>
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
@@ -100,6 +101,9 @@ struct App {
     bool hdArtArg = true;           // --hd-art 0: the containers' pixel art (F1 "paineis HD")
     bool classicArg = false;        // --classic 1: tank controls + the game's camera (as F1 "controles classicos")
     std::string storySaveArg;       // --story-save N|path|none (see PlayerView::storySave; read-only)
+    // a netplay session's co-op test instruments (applied once its world client exists) and the dev world alone's save
+    std::vector<std::function<void(class OwnWorldClient&)>> coopSetup;
+    std::string devWorldSave;
     std::vector<uint32_t> flagArgs;  // --flag N: event flags set after the start (dev: e.g. 0x6ff opens a shop)
     std::vector<uint32_t> flagClearArgs; // --clear-flag N: event flags cleared after the start (dev: 0x711 opens ST1E's door)
     bool teleportArg = false; // --teleport x y z (see PlayerView::teleport)
@@ -284,6 +288,9 @@ struct App {
     void refreshSaves();
     void setStorySave(const std::string& spec);
     void loadSave(const std::filesystem::path& p);
+    // a save named as the game's save loader names one: a path, else a file in saves/ next to opendash.exe, else next to
+    // dash2.exe (a slot number: DASH2-NN.DAT); an absolute path, empty when there is none
+    std::filesystem::path resolveSavePath(const std::string& name) const;
     void applyFlags();
     // F1 "Novo jogo" / "Carregar save" / F2 / the command line start play outside the title flow: stop the title / its game loop and
     // give the game its display mode back (Maybe_SetDisplayMode(0): mode 0, pace 2 = 30 / s) -- otherwise the

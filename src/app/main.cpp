@@ -99,6 +99,13 @@ void App::frame() {
                           : shotPath.empty() ? now - last : kSimStepNs / 2;
     dt = float(step) * 1e-9f;
     last = now;
+    if (playerView.ownWorld && !shotPath.empty()) {
+        // a --shot run's fixed clock, in a session: no faster than the wall clock, which the worlds run by (a wait
+        // here, between frames; a game tick itself never waits)
+        static uint64_t clockStart = now, clockNs = 0;
+        clockNs += step;
+        if (const uint64_t at = clockStart + clockNs; at > now) SDL_DelayNS(at - now);
+    }
 
     const uint64_t simAt = SDL_GetTicksNS();
     if (paced()) { // the title / game frames run when the exe's pacer has them due (app/game_pacer)

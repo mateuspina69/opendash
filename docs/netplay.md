@@ -1,8 +1,13 @@
-# Netplay (ghosts over the network)
+# Netplay (co-op)
 
-OpenDash players in the same room see each other's Mega Man as a **ghost**: the real model, look, animation and
-movement, smoothed over the network. A ghost changes nothing in your game: no collision, no damage, no shared enemies
-or story. Each player's game runs exactly as single player.
+A netplay session is co-op: everyone plays the host's game together, in the same rooms, with the same enemies and
+story. There is nothing extra to set besides the keys below.
+
+- **The host** loads a save from the title (or starts a new game). That game is the session's. Loading another save
+  later starts the session over from it.
+- **A client** needs no save. It follows the host: it starts from the host's game and arrives next to the host.
+- If something goes wrong (a world that stops, a session that does not start), a line says so on the screen and in
+  `opendash.log`.
 
 One player **hosts** and the others **join** the host's `ip:port` over UDP. Up to 8 players: the host and 7 others.
 Everyone talks only to the host, and the host forwards each player's state to the others.
@@ -66,8 +71,8 @@ the first time.
    too if the VPN adapter is classed as public. Joining players need no firewall rule (their traffic is an answer to
    what they send).
 4. **Same build, same files, same key:** see above.
-5. **Start:** the host starts OpenDash with `net=host`, then the friends start theirs with `net=join`. Load a game and
-   go to the same room (e.g. ST08 sub 2). Each sees the others.
+5. **Start:** the host starts OpenDash with `net=host` and loads a save from the title. The friends start theirs with
+   `net=join`; they come into the host's game next to the host.
 6. **Check:** press **F1 → Netplay**. It shows your role and port, then per player: id, name, round trip (RTT),
    loss of player states, time since last heard, and ghost slot. Under "fantasmas" it says why each ghost is or is
    not shown.

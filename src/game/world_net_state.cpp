@@ -488,17 +488,24 @@ template <class Pool> void captureMeshPool(NetWorldTable& table, Pool& pool, siz
             }
         }
         if constexpr (std::is_same_v<Pool, ShotPool>) {
-            // a blade's swing follows its owner's arm: each client runs it from its event
-            const RoutineRef h = actorHandler(a, ActorPool::Shots, false);
-            if (h && (h.id() == RoutineId::BladeArmShotUpdate || h.id() == RoutineId::ShiningLaserShotUpdate || h.id() == RoutineId::VacuumArmShotUpdate)) {
+            // a player's shot (the buster's, a blade's swing that follows its owner's arm): each client runs it from its
+            // event, its picture its class's draw; the world's copy hits, and its go ends the others'
+            if (actorHandler(a, ActorPool::Shots, false)) {
                 s.effect = true;
                 s.effectGoes = true;
                 s.effectStart.pool = uint8_t(kShotClass);
                 s.effectStart.type = a.type;
+                s.effectStart.subtype = a.subtype;
                 s.effectStart.variant = a.variant;
+                s.effectStart.spawnByte = a.spawnByte;
                 s.effectStart.loopFlags = a.loopFlags;
                 s.effectStart.flags = uint8_t(a.flags & (kActorLive | kActorDrawn));
                 s.effectStart.owner = a.ownerPlayer;
+                for (size_t i = 0; i < 4; ++i) s.effectStart.params[i] = a.params[i];
+                // what the fire aimed at (as a client's fire hands them to the world: remote_combat's NetFire)
+                const ShotActor& shot = static_cast<const ShotActor&>(a);
+                s.effectStart.trail = {shot.aimPoint.x, shot.aimPoint.y, shot.aimPoint.z, shot.aimPoint.spare, 0, 0, 0, 0};
+                s.effectStart.second = shot.target && (shot.target->flags & kActorLive) ? shot.target->slot : kNetNoParent;
             }
         }
         if (netSlotOnPath(slot)) {
@@ -1474,6 +1481,13 @@ void PoolNetActors::effect(const NetEffect& e) {
     }
     if (e.pool == kShotClass) {
         head.loopFlags = e.loopFlags;
+        ShotActor& shot = asShot(head);
+        shot.aimPoint.x = e.trail[0];
+        shot.aimPoint.y = e.trail[1];
+        shot.aimPoint.z = e.trail[2];
+        shot.aimPoint.spare = e.trail[3];
+        ActorHeader* target = e.second != kNetNoParent ? slotOf(e.second) : nullptr;
+        shot.target = target && (target->flags & kActorLive) ? target : nullptr;
         if (shotsInOwnSlots_) ownSlot_[e.slot] = address; // the world's go ends it
         ++effectsStarted_;
         return;
@@ -1637,7 +1651,10 @@ bool PoolNetActors::shotRunsFor(uint8_t tablePlayer) const {
     for (size_t i = kShotClass; i < kShotClass + ShotPool::size(); ++i) {
         if (ownSlot_[i] == 0) continue;
         const ActorHeader& h = actorHeaderAt(ownSlot_[i]);
-        if ((h.flags & kActorLive) && (h.runFlags & kActorRun) && h.ownerPlayer == tablePlayer) return true;
+        if (!(h.flags & kActorLive) || !(h.runFlags & kActorRun) || h.ownerPlayer != tablePlayer) continue;
+        const RoutineRef c = actorHandler(h, ActorPool::Shots, false); // a swing, a beam, a suction: held while it runs
+        if (c && (c.id() == RoutineId::BladeArmShotUpdate || c.id() == RoutineId::ShiningLaserShotUpdate || c.id() == RoutineId::VacuumArmShotUpdate))
+            return true;
     }
     return false;
 }

@@ -50,7 +50,9 @@ enum class WorldMessageType : uint8_t {
     // everyone is down: the host's last save is what the session goes on from, here its stage and room
     NetReload = 53,
     // a room's logic set this on its players (game/player/room_player_effects): field, value
-    NetRoomPlayer = 54
+    NetRoomPlayer = 54,
+    // what went wrong in the session (a world that stopped): a line on every player's screen
+    NetAlert = 55
 };
 
 // What a world says of its players to the coordinator

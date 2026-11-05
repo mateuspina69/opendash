@@ -278,6 +278,14 @@ void App::simStep(int gameFrames) {
         playscriptLog(); // --playscript trace / timeline / end (app/playthrough)
     }
     if (!netStepped) netplay.step(SDL_GetTicksNS(), ghosts); // outside play the session still runs (no ghost drawn)
+    if (!netStepped && playerView.ownWorld) { // away from a game: a client starts from the host's game once it has it
+        playerView.ownWorld->awayTurn(SDL_GetTicksNS());
+        if (auto save = playerView.ownWorld->takeHostSaveAway()) {
+            SDL_Log("own world: the host's game is on: this game starts from it");
+            leaveTitle();
+            playerView.startGame(&*save, 0);
+        }
+    }
     ++simTicks;
     // the room script sets its door locks on its first tick; a scripted --clear-flag run must clear after that
     if (simTicks == 2 && playerView.play && (!flagArgs.empty() || !flagClearArgs.empty())) applyFlags();

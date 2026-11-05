@@ -8,6 +8,7 @@
 #include <cstdio>
 
 #include "engine/config.hpp"
+#include "game/save_image.hpp"
 #include "game/camera_view.hpp"
 #include "game/actor_sweeps.hpp"
 #include "game/player/room_player_effects.hpp"
@@ -90,6 +91,25 @@ std::optional<std::vector<uint8_t>> OwnWorldClient::takeHostSave(const std::vect
     return hostSave_;
 }
 
+void OwnWorldClient::gameStarted(std::span<const uint8_t> image) {
+    if (!coordinator_) return;
+    coordinator_->hostLoaded(image, SDL_GetTicksNS());
+    joined_ = false; // its world starts over: this game enters it again
+}
+
+std::optional<std::vector<uint8_t>> OwnWorldClient::takeHostSaveAway() {
+    if (coordinator_ || !hostSaveWhole_ || hostSave_.size() != od::port::kSaveSize) return std::nullopt;
+    hostSaveWhole_ = false;
+    reloading_ = false;
+    return hostSave_;
+}
+
+void OwnWorldClient::notice(const std::string& text) {
+    SDL_Log("own world: %s", text.c_str());
+    alert_ = text;
+    alertUntilNs_ = SDL_GetTicksNS() + 10'000'000'000ull;
+}
+
 std::vector<uint8_t> OwnWorldClient::playerState() const {
     const od::port::RemotePlayerState s{od::port::ghostRoomOf(), 0, od::port::capturePlayerSnapshot(od::port::player())};
     return od::port::encodePlayerState(s);
@@ -151,15 +171,16 @@ void OwnWorldClient::joinRoom() {
     joined_ = true;
 }
 
+void OwnWorldClient::awayTurn(uint64_t nowNs) {
+    pipe_->poll(nowNs);
+    const std::optional<uint8_t> id = pipe_->playerId();
+    if (!id) return;
+    for (const WorldMessage& m : pipe_->take(*id))
+        if (m.type == WorldMessageType::NetSave || m.type == WorldMessageType::NetReload || m.type == WorldMessageType::NetAlert) handle(m, nowNs);
+}
+
 void OwnWorldClient::turn(uint64_t nowNs) {
     if (!room_) return;
-    // a tick never runs ahead of the world's clock (a scripted run renders as fast as it can)
-    constexpr uint64_t kTickNs = 1'000'000'000ull / 30;
-    nextTickNs_ = std::max(nextTickNs_ + kTickNs, nowNs);
-    if (nextTickNs_ > nowNs) {
-        SDL_DelayNS(nextTickNs_ - nowNs);
-        nowNs = nextTickNs_;
-    }
     pipe_->poll(nowNs);
     if (!joined_) {
         const std::optional<uint8_t> id = pipe_->playerId();
@@ -401,9 +422,16 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
                 od::port::st16ClientCatch(*carrier, m.netState[1], m.netState[2] != 0);
         }
         break;
+    case WorldMessageType::NetAlert:
+        notice(std::string(m.netState.begin(), m.netState.end()));
+        break;
     case WorldMessageType::NetSave:
+        if (std::exchange(saveEnded_, false)) { // the first chunk of another save
+            hostSave_.clear();
+            hostSaveWhole_ = false;
+        }
         hostSave_.insert(hostSave_.end(), m.netState.begin(), m.netState.end());
-        if (m.netState.size() < 1000) hostSaveWhole_ = true; // the last chunk is the short one
+        if (m.netState.size() < 1000) hostSaveWhole_ = saveEnded_ = true; // the last chunk is the short one
         break;
     default: break;
     }
@@ -663,10 +691,11 @@ void OwnWorldClient::downedTurn() {
 }
 
 void OwnWorldClient::drawNotice() const {
-    if (!room_) return;
+    char text[192] = "";
+    if (SDL_GetTicksNS() < alertUntilNs_) std::snprintf(text, sizeof text, "%s", alert_.c_str());
     const od::port::Player& p = od::port::player();
-    char text[96] = "";
-    if (od::port::playerIsDowned(p)) {
+    if (text[0] != 0 || !room_) {
+    } else if (od::port::playerIsDowned(p)) {
         if (downTicks_ < od::port::kRespawnAloneTicks) std::snprintf(text, sizeof text, "You are down. A teammate can revive you.");
         else std::snprintf(text, sizeof text, "You are down. Use: back next to a teammate.");
     } else if (reviving_) {

@@ -76,6 +76,8 @@ public:
     void testStory(uint8_t story);
     // The gates. Teleport: those far away are brought at once; else they are waited for
     void setGateTeleport(bool teleport) { gateTeleport_ = teleport; }
+    // what went wrong, in the log and on every player's screen
+    void alert(const std::string& text);
     void setPlayerName(uint8_t playerId, const std::string& name) { names_.at(playerId) = name; }
     void gateAsk(uint8_t playerId, const std::vector<uint8_t>& move);
     void gateLeave(uint8_t playerId);

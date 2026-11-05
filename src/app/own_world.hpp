@@ -1,6 +1,7 @@
-// The windowed game as a client of a world of its own, on one machine (--own-world <save>): the room's actors come from a world
-// process through app/world_host and game/world_net_state, as a remote client's would; the game runs only its own Mega Man
-// and what runs on a client (the effects). Off without the flag: single player never comes here.
+// The windowed game in a netplay session (co-op, always): the room's actors come from the session's world processes, which
+// the host's game runs (app/world_host) from the game the host starts, through game/world_net_state; the game runs only
+// its own Mega Man and what runs on a client (the effects). A client follows the host's save and room. Single player
+// (net=off) never comes here, except the dev switch --dev-world-alone <save> (this game alone with a world process).
 #pragma once
 
 #include <array>
@@ -35,6 +36,14 @@ public:
     std::optional<std::vector<uint8_t>> takeReload();
     // this game has written a save: on the host, it is what a game over goes back to
     void gameSaved(std::span<const uint8_t> image) { if (coordinator_) coordinator_->hostSaved(image); }
+    // this game started from this save (a load, a new game): on the host the session starts over from it
+    void gameStarted(std::span<const uint8_t> image);
+    // a client away from a game (at its title): the host's save once it has come whole
+    std::optional<std::vector<uint8_t>> takeHostSaveAway();
+    // the host's game: the session's coordinator runs here
+    bool hosts() const { return coordinator_ != nullptr; }
+    // what went wrong in the session: in the log and a line on the screen
+    void notice(const std::string& text);
 
     // the room's files are bound and its spawn has run: the local actors go, this room's world takes over
     void roomBound(int stage, int sub);
@@ -42,6 +51,8 @@ public:
     bool inWorld() const { return room_.has_value(); }
     // the turn before a tick: the player's state to the world, what the world sent, the timeline up to now
     void turn(uint64_t nowNs);
+    // a turn away from a game (the title, a load): the session's save and what it says; nothing of a room
+    void awayTurn(uint64_t nowNs);
     // the part of a frame's body that runs on a client (app/play_session's frame)
     void localActors(const od::port::PlayerEnv& env, od::port::ActorContext& context, bool late);
     // the end of the frame's body: the lock-on and the radar from the world's actors, this tick's shots to the world
@@ -102,7 +113,6 @@ private:
     od::port::NetPlayerReport reported_{};
     bool shownAny_ = false;
     uint32_t shown_ = 0;
-    uint64_t nextTickNs_ = 0;
     uint32_t localTick_ = 0;
     od::port::NetPlayerWatch watch_;
     od::port::NetPlayerSender uplink_, guestUplink_;
@@ -125,6 +135,9 @@ private:
     bool bossFight_ = false, testBossFight_ = false;
     std::string notice_;
     int noticeTicks_ = 0;
+    bool saveEnded_ = false;   // the last save that came is whole: a chunk now starts another
+    std::string alert_;        // what went wrong (notice), shown until alertUntilNs_
+    uint64_t alertUntilNs_ = 0;
     bool gateAsked_ = false;
     od::port::Fixed16Vec3 gatePlace_{};
     uint32_t testForceTick_ = 0;

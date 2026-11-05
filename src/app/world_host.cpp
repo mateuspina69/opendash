@@ -263,6 +263,17 @@ std::vector<uint8_t> arrivalBeside(std::vector<uint8_t> move, size_t k) {
 }
 } // namespace
 
+void WorldHost::alert(const std::string& text) {
+    SDL_Log("coordinator: %s", text.c_str());
+    for (uint8_t id = 0; id < kPlayers; ++id) {
+        if (id != 0 && !playerRoom_[id]) continue;
+        WorldMessage m{WorldMessageType::NetAlert};
+        m.playerId = id;
+        m.netState.assign(text.begin(), text.end());
+        netInbox_[id].push_back(std::move(m));
+    }
+}
+
 void WorldHost::gateNotice(const std::string& text) {
     for (uint8_t id = 0; id < kPlayers; ++id) {
         if (!playerRoom_[id]) continue;
@@ -456,7 +467,12 @@ void WorldHost::poll(uint64_t nowNs) {
             ++it;
             continue;
         }
-        SDL_Log("coordinator: world ST%02X sub %d ended on its own", unsigned(it->first.stage), it->first.sub);
+        {
+            char text[160];
+            std::snprintf(text, sizeof text, "The world of ST%02X sub %d stopped (opendash-world-ST%02X-%d.log)", unsigned(it->first.stage),
+                          it->first.sub, unsigned(it->first.stage), it->first.sub);
+            alert(text);
+        }
         for (uint8_t id : world.players) playerRoom_[id].reset();
         const int stage = it->first.stage;
         it = worlds_.erase(it);
