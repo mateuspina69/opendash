@@ -62,6 +62,8 @@ public:
     void testBossFight() { testBossFight_ = true; }
     void testStory(uint8_t story) { if (coordinator_) coordinator_->testStory(story); }
     void testClearFlag(uint32_t flag) { if (coordinator_) coordinator_->testClearFlag(flag); }
+    // test instrument: at this local tick the session clears this flag (what a room's logic does, as the session shares it)
+    void testClearFlagAt(uint32_t tick, uint32_t flag) { testClearTick_ = tick; testClearFlag_ = flag; }
     void stayOnJoin() { if (pipe_) pipe_->setStays(true); stays_ = true; }
     // test instrument: at this local tick the player's life is this
     void testLifeAt(uint32_t tick, int16_t life) { testLifeTick_ = tick; testLife_ = life; }
@@ -123,6 +125,7 @@ private:
     bool gateAsked_ = false;
     od::port::Fixed16Vec3 gatePlace_{};
     uint32_t testForceTick_ = 0;
+    uint32_t testClearTick_ = 0, testClearFlag_ = 0;
     void sceneTurn();
     void sceneEnd(const std::vector<uint8_t>& at);
     void movedTo(const std::vector<uint8_t>& to);

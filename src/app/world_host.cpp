@@ -271,11 +271,14 @@ void WorldHost::gateAsk(uint8_t playerId, const std::vector<uint8_t>& move) {
         gate_ = g;
     }
     gate_->waiting.insert(playerId);
+    SDL_Log("coordinator: player %u waits at the exit to ST%02X sub %u%s", unsigned(playerId), unsigned(gate_->move[0]),
+            unsigned(gate_->move[1]), gate_->mission ? " (a mission's)" : "");
 }
 
 void WorldHost::gateLeave(uint8_t playerId) {
     if (!gate_ || gate_->scene) return;
     gate_->waiting.erase(playerId);
+    SDL_Log("coordinator: player %u walked off the exit", unsigned(playerId));
     if (gate_->waiting.empty()) gate_.reset();
 }
 
@@ -315,6 +318,11 @@ void WorldHost::gateTurn(uint64_t nowNs) {
     if (here >= all || forced) {
         if (g.scene) {
             if (const auto it = worlds_.find(g.room); it != worlds_.end()) it->second->link.sendReliable({WorldMessageType::NetSceneGo});
+        } else if (g.mission && forced && playerRoom_[g.first]) {
+            // a mission is one world: a forced start takes its whole room along
+            const WorldRoom room = *playerRoom_[g.first];
+            for (uint8_t id = 0; id < kPlayers; ++id)
+                if (playerRoom_[id] == room) moveTo(id, g.move);
         } else {
             for (const uint8_t id : g.waiting)
                 if (playerRoom_[id]) moveTo(id, g.move);
@@ -491,6 +499,13 @@ void WorldHost::testClearFlag(uint32_t flag) {
     od::port::GlobalChange c;
     c.flags.push_back({uint16_t(flag >> 3), 0, uint8_t(1u << (flag & 7))});
     global_.merge(c);
+}
+
+void WorldHost::testClearFlagNow(uint32_t flag, uint8_t stage) {
+    od::port::GlobalChange c;
+    c.stage = stage;
+    c.flags.push_back({uint16_t(flag >> 3), 0, uint8_t(1u << (flag & 7))});
+    globalChanged(c, nullptr, std::nullopt);
 }
 
 void WorldHost::testStory(uint8_t story) {

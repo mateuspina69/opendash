@@ -146,6 +146,10 @@ void App::parseArgs(int argc, char** argv) {
         }
         else if (a == "--own-world-test-clear-flag" && playerView.ownWorld && i + 1 < argc) // test instrument
             playerView.ownWorld->testClearFlag(uint32_t(std::stoul(argv[++i], nullptr, 16)));
+        else if (a == "--own-world-test-clear-flag-at" && playerView.ownWorld && i + 2 < argc) { // test instrument
+            const uint32_t tick = uint32_t(std::stoul(argv[++i]));
+            playerView.ownWorld->testClearFlagAt(tick, uint32_t(std::stoul(argv[++i], nullptr, 16)));
+        }
         else if (a == "--coop-gate" && playerView.ownWorld && i + 1 < argc)
             playerView.ownWorld->setGateTeleport(std::string_view(argv[++i]) == "teleport");
         else if (a == "--own-world-test-force" && playerView.ownWorld && i + 1 < argc) // test instrument

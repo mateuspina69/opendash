@@ -73,15 +73,15 @@ void doorUpdate(StaticActor& actor) {
             if (d < 0) d = int(back) - int(facing);
             asked = asked || (d < kFacingWindow && p.talksTo(actor));
         });
-        if (asked && worldIsElsewhere() &&
+        const bool locked = storyFlag(uint32_t(int32_t(door.lock) + int32_t(kFlagLocked)));
+        if (asked && !locked && worldIsElsewhere() &&
             storyPlaceOf(gameState().stage, gameState().room, gameState().story) == StoryPlaceKind::Mission) {
-            // a mission: no dialog, the room changes when the group stands at the exit
+            // a mission: no dialog, the room changes when the group stands at the exit (a locked door says so)
             transitionRequest().kind = uint8_t(TransitionKind::DoorActor);
             setStoryFlag(kFlagTransitionArmed);
             break;
         }
         if (asked && eventState().active == 0) {
-            const bool locked = storyFlag(uint32_t(int32_t(door.lock) + int32_t(kFlagLocked)));
             const int8_t message = locked ? door.lockedMessage : door.message;
             eventStartAt(0, nullptr, 0, 0, uint16_t(int16_t(message))); // exe 0x543b40
             actor.state = uint8_t(DoorState::Talk);

@@ -70,6 +70,8 @@ public:
     void reloadFrom(const std::vector<uint8_t>& save, const std::filesystem::path& savePath);
     // test instrument: this flag is clear from the session's start, whatever the save says
     void testClearFlag(uint32_t flag);
+    // ... now, told to the worlds as a change of the session
+    void testClearFlagNow(uint32_t flag, uint8_t stage);
     // test instrument: the story's value from the session's start
     void testStory(uint8_t story);
     // The gates. Teleport: those far away are brought at once; else they are waited for
