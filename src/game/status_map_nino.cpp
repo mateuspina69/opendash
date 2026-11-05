@@ -1,13 +1,13 @@
 // The Nino map page's callback (see status_map_nino.hpp).
 #include "game/status_map_nino.hpp"
 
-#include "content/nino/minimaps.hpp"
 #include "engine/data_source.hpp"
 #include "game/display.hpp"
 #include "game/game_state.hpp"
 #include "game/loaded_data.hpp"
 #include "game/menu_draw.hpp"
 #include "game/minimap.hpp"
+#include "game/nino_map_sprites.hpp"
 #include "game/player/player_state.hpp"
 #include "game/status_map.hpp"
 #include "game/status_map_stage.hpp"
@@ -91,7 +91,7 @@ void statusMapNinoDraw() {
         m.scrollY = py;
         m.positioned = 1;
     }
-    if (m.area == 2) od::content::ninoMapTownSpritesUpdate();
+    if (m.area == 2) ninoMapTownSpritesUpdate();
     if (m.previewRecords) {
         m.scrollX = dataScalar<int8_t>(m.previewRecords + 2);
         m.scrollY = dataScalar<int8_t>(m.previewRecords + 3);
@@ -116,14 +116,14 @@ void statusMapNinoDraw() {
             l.cornerY = int16_t(y + row);
             otSprite(c, l.cornerX.get(), l.cornerY.get(), 0x7fc0c0e0, 0x20, 0x10);
         }
-    if (g.story >= 0xa || m.layer != 0) od::content::ninoMapSpriteListDraw(c, firstSprites.stateAddress());
+    if (g.story >= 0xa || m.layer != 0) ninoMapSpriteListDraw(c, firstSprites.stateAddress());
     if ((g.story >= 0xa && m.layer == 0) || (g.story < 0xa && m.layer == 2))
-        od::content::ninoMapSpriteListDraw(c, secondSprites.stateAddress());
+        ninoMapSpriteListDraw(c, secondSprites.stateAddress());
     for (uint32_t i = 0; i < 8; ++i) {
         if (!(mask & (1u << i))) continue;
         l.x = int16_t(x + positions[i].x);
         l.y = int16_t(y + positions[i].y);
-        od::content::ninoMapSpriteListDraw(c, spriteLists[i]);
+        ninoMapSpriteListDraw(c, spriteLists[i]);
     }
     if ((g.story >= 0xa && m.layer == 0) || (g.story >= 7 && m.layer == 2))
         minimapIcon(c, int16_t(x - 0x13), int16_t(y + 0x7a), 2);
