@@ -22,7 +22,8 @@
 //   age, u16 key, u8 ticks left, u8 held. Go: u8 slot. What a class changes of the model (scale, tint, hidden parts, aim)
 //   goes in the updates, against what the model binds: a client's bind gives the same.
 //   Effect: u8 pool, type, subtype, variant, spawn byte, loop flags, flags, parent, 4 parameters; i16 x, y, z; statics: i16 rotation
-//   and velocity x, y, z; effects: i16 the short after the position.
+//   and velocity x, y, z; effects: i16 the short after the position. Flash: u8 slot (a hit's one-tick white flash, which
+//   an update every other tick would miss; the updates' tint leaves it out).
 //
 // A shot or a projectile goes as a path: the client moves it by itself from a point and its steps, and the world sends a new
 // path only when the actor leaves the last one (a straight shot: once; a homing one or a falling one: as often as it turns).
@@ -170,6 +171,7 @@ struct NetWorldActor {
     uint8_t lastTicks = 0;
     std::array<int32_t, 3> lastPos{}; // an actor on a path: its 16.16 position and rotation on the last tick
     std::array<int16_t, 3> lastRot{};
+    uint32_t flashTick = 0;  // the newest tick its tint was a hit's flash (0: none)
     uint8_t owner = 0;       // ActorHeader::ownerPlayer: a shot's is told to the others only
     bool startedByShot = false; // ... and so is what a shot started
     bool effect = false;     // it runs on the client from an event
@@ -256,6 +258,7 @@ public:
 private:
     struct Known {
         bool told = false;      // the client was told of this occupant
+        uint32_t flashTold = 0; // the newest flash it was told of
         bool effect = false;    // ... which runs there by itself from its event
         uint32_t generation = 0;
         NetActorState acked;    // the state the client is known to hold
@@ -306,6 +309,8 @@ public:
     };
     // the actor's position and rotation on this tick, and its animation: this one started, or the current one stepped
     virtual void tick(uint8_t slot, const NetActorState& state, const std::optional<AnimStart>& start) = 0;
+    // after its tick: a hit flashes it white for this tick
+    virtual void flash(uint8_t slot) = 0;
 };
 
 // The render clock: the shown instant, in world ticks, steered toward the newest tick heard minus the delay
@@ -362,6 +367,7 @@ private:
         };
         std::deque<Start> starts;
         uint32_t startNoted = kNetNoAnimTick; // the tick of the newest one heard: an update repeats it until acknowledged
+        bool flashNow = false;                // a flash is due on the tick shown now
     };
     struct Due {
         uint32_t tick = 0;
@@ -370,6 +376,7 @@ private:
         std::optional<NetEffect> effect;
         std::optional<uint8_t> shift;
         std::optional<NetRoomPatch> patch;
+        bool flash = false;
     };
     void noteStart(Occupant& o, const NetActorState& s);
     std::optional<uint16_t> applyParsed(std::span<const uint8_t> bytes, uint32_t eventsThrough);
@@ -401,6 +408,7 @@ public:
     void coordinateShift(uint8_t shift) override;
     void roomPatch(const NetRoomPatch& patch) override;
     void tick(uint8_t slot, const NetActorState& state, const std::optional<AnimStart>& start) override;
+    void flash(uint8_t slot) override;
     // to run after a timeline's ticks: what went frees its slot
     void endTick();
     // the hit-list entries of the actors held here, for the game's lock-on selection
@@ -419,6 +427,7 @@ private:
     uint8_t ownPlayerId_ = 0;
     std::array<bool, kNetSlots> animates_{}, held_{};
     std::array<uint32_t, kNetSlots> ownSlot_{}; // a world's shot in a slot of the client's: its address
+    std::array<std::optional<uint16_t>, kNetSlots> flashed_{}; // flashed on the last tick: the tint it had before
     std::array<std::vector<NetLockPoint>, kNetSlots> lock_{};
     std::array<std::vector<NetSolid>, kNetSlots> solids_{};
     std::array<HitBoxHead, kHitListCapacity> lockBoxes_{}; // nothing reads their results: the world decides

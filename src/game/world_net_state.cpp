@@ -87,7 +87,7 @@ constexpr int kLockGrain = 4;   // the units a narrow lock offset counts in
 constexpr uint8_t kSolidHasParam = 0x80;
 constexpr int kLockTolerance = 4; // units a lock-on point may drift before the client is told
 constexpr size_t kMaxLockPoints = 8;
-constexpr uint8_t kEventAppear = 1, kEventGo = 2, kEventAppearStill = 3, kEventEffect = 4, kEventShift = 5, kEventRoomPatch = 6; // Still: no animation in play
+constexpr uint8_t kEventAppear = 1, kEventGo = 2, kEventAppearStill = 3, kEventEffect = 4, kEventShift = 5, kEventRoomPatch = 6, kEventFlash = 7; // Still: no animation in play
 constexpr size_t kBatchHeaderBytes = 8;
 constexpr size_t kAppearBytes = 26, kGoBytes = 2, kEffectBytes = 35 + 4 + 16 + 1;
 constexpr int kPathPosTolerance = 32; // 1/16 units an actor may leave its path by before the world sends a new one
@@ -143,7 +143,12 @@ void NetWorldTable::seen(uint8_t slot, const Seen& s) {
     a.state.rot = s.rot;
     a.state.anim = s.anim;
     a.state.shown = s.shown;
+    const uint16_t tintBefore = occupantChanged ? s.bound.tint : a.state.visual.tint;
     a.state.visual = s.visual;
+    if (s.visual.tint == kTintFlash) { // a hit's flash: its own event, so that it is seen however often the updates go
+        a.flashTick = tick;
+        a.state.visual.tint = tintBefore;
+    }
     a.state.aim = s.aim;
     a.state.paint = s.paint;
     a.owner = s.owner;
@@ -691,6 +696,13 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
                               ((slot >= kShotClass && slot < kShotClass + ShotPool::size()) || a.startedByShot);
         const bool live = a.live && !withheld;
         const bool same = k.told && live && a.generation == k.generation;
+        if (same && !k.effect && a.flashTick != k.flashTold) {
+            room(kGoBytes);
+            w.u8(kEventFlash);
+            w.u8(slot);
+            ++eventsSent_;
+            k.flashTold = a.flashTick;
+        }
         if (same) continue;
         // an effect ends by itself on the client; a shot run from its event ends with the world's
         if (k.told && k.effect && !(slot >= kShotClass && slot < kShotClass + ShotPool::size())) {
@@ -759,6 +771,7 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
         ++eventsSent_;
         k.told = true;
         k.generation = a.generation;
+        k.flashTold = a.flashTick;
         k.acked = a.state;
         k.acked.visual = a.bound; // a client's bind gives it; a class's change goes in an update
         k.acked.aim.clear();
@@ -1073,7 +1086,13 @@ bool NetStateClient::applyEvents(std::span<const uint8_t> bytes) {
             continue;
         }
         const uint8_t slot = r.u8();
-        if (kind == kEventGo) {
+        if (kind == kEventFlash) {
+            if (const std::shared_ptr<Occupant>& o = heardOf_[slot]) {
+                Due d{tick, false, o, std::nullopt, std::nullopt, std::nullopt};
+                d.flash = true;
+                due_.push_back(std::move(d));
+            }
+        } else if (kind == kEventGo) {
             if (std::shared_ptr<Occupant>& o = heardOf_[slot]) {
                 due_.push_back({tick, false, o, std::nullopt, std::nullopt, std::nullopt});
                 o = nullptr;
@@ -1311,6 +1330,10 @@ void NetStateClient::advance(uint32_t tick) {
             continue;
         }
         const uint8_t slot = d.occupant->slot;
+        if (d.flash) {
+            if (shown_[slot] == d.occupant) d.occupant->flashNow = true;
+            continue;
+        }
         if (d.appear) {
             if (shown_[slot]) actors_.go(slot);
             shown_[slot] = d.occupant;
@@ -1355,6 +1378,10 @@ void NetStateClient::advance(uint32_t tick) {
             o.starts.pop_front();
         }
         actors_.tick(o.slot, s, start);
+        if (o.flashNow) {
+            actors_.flash(o.slot);
+            o.flashNow = false;
+        }
     }
 }
 
@@ -1497,10 +1524,22 @@ void PoolNetActors::effect(const NetEffect& e) {
     ++effectsStarted_;
 }
 
+void PoolNetActors::flash(uint8_t slot) {
+    ActorHeader* head = slotOf(slot);
+    if (!head) return;
+    uint16_t& tint = actorSlotClass(slot) == kAnimatedClass ? asAnimated(actorLayoutOf(*head)).tint : meshActorAt(head->at).tint;
+    if (!flashed_[slot]) flashed_[slot] = tint;
+    tint = kTintFlash;
+}
+
 void PoolNetActors::tick(uint8_t slot, const NetActorState& state, const std::optional<AnimStart>& start) {
     ActorHeader* head = slotOf(slot);
     if (!head) return;
     Actor& a = actorLayoutOf(*head);
+    if (const std::optional<uint16_t> before = std::exchange(flashed_[slot], std::nullopt)) { // the flash was one tick
+        if (actorSlotClass(slot) == kAnimatedClass) asAnimated(a).tint = *before;
+        else meshActorAt(a.at).tint = *before;
+    }
     a.savePreviousPose(); // what the renderer interpolates from
     lock_[slot] = state.lock;
     solids_[slot] = state.solids;

@@ -67,6 +67,8 @@ struct Recorded : NetClientActors {
         last[slot] = state;
         if (start) starts.emplace_back(slot, *start);
     }
+    std::vector<uint8_t> flashes;
+    void flash(uint8_t slot) override { flashes.push_back(slot); }
 };
 
 constexpr size_t kHeader = 10;
@@ -251,7 +253,7 @@ void testVisualFields() {
     sender.acknowledge(*client.applyUpdate(sender.update(t))); // what the bind gives is not told
     t.tick = 2;
     s.visual.scale = {0x220, 0x1e0, 0x220};
-    s.visual.tint = 0x7fff;
+    s.visual.tint = 0x7c1f;
     s.visual.hiddenParts = 0x10004;
     s.aim = {{2, {0, 40, 0}}, {5, {7, 0, -3}}};
     t.seen(kSlotA, s);
@@ -262,7 +264,7 @@ void testVisualFields() {
     CHECK(seq.has_value());
     client.advance(2);
     const NetActorState& shown = rec.last[kSlotA];
-    CHECK(shown.visual.scale[1] == 0x1e0 && shown.visual.tint == 0x7fff && shown.visual.hiddenParts == 0x10004);
+    CHECK(shown.visual.scale[1] == 0x1e0 && shown.visual.tint == 0x7c1f && shown.visual.hiddenParts == 0x10004);
     CHECK(shown.told == (kNetToldScale | kNetToldTint | kNetToldParts));
     CHECK(shown.aim == s.aim);
     sender.acknowledge(*seq);
@@ -298,6 +300,37 @@ void testVisualFields() {
     CHECK(client.applyUpdate(sender.update(t)).has_value());
     client.advance(10);
     CHECK(rec.starts.size() == 1 && !rec.starts[0].second.held);
+}
+
+// a hit's one-tick flash goes as an event, on the tick it happened, however often the updates go; the updates leave it out
+void testHitFlash() {
+    NetWorldTable t;
+    NetStateSender sender;
+    Recorded rec;
+    NetStateClient client(rec);
+    NetWorldTable::Seen s = seenAt(100);
+    s.bound.tint = kTintNeutral;
+    s.visual = s.bound;
+    t.seen(kSlotA, s);
+    for (const auto& batch : sender.events(t)) CHECK(client.applyEvents(batch));
+    sender.acknowledge(*client.applyUpdate(sender.update(t)));
+    t.tick = 3; // between two updates
+    s.visual.tint = kTintFlash;
+    t.seen(kSlotA, s);
+    const auto batches = sender.events(t);
+    CHECK(batches.size() == 1 && batches[0].size() == 8 + 2);
+    for (const auto& batch : batches) CHECK(client.applyEvents(batch));
+    t.tick = 4;
+    s.visual.tint = kTintNeutral;
+    t.seen(kSlotA, s);
+    CHECK(sender.events(t).empty()); // told once
+    CHECK(sender.update(t).size() == kHeader); // the tint did not change for the updates
+    client.advance(2);
+    CHECK(rec.flashes.empty());
+    client.advance(3);
+    CHECK(rec.flashes.size() == 1 && rec.flashes[0] == kSlotA);
+    client.advance(4);
+    CHECK(rec.flashes.size() == 1);
 }
 
 // a shot moves by itself from a point and its steps; a new path only when it leaves that one
@@ -790,6 +823,7 @@ int main(int argc, char** argv) {
     testEventsFirstAndReuse();
     testFitsOneDatagram();
     testVisualFields();
+    testHitFlash();
     testPaths();
     testEffects();
     testLockPoints();
