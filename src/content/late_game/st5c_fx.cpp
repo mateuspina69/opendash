@@ -64,6 +64,7 @@
 #include "game/audio_logic.hpp"
 #include "game/draw_commands.hpp"
 #include "game/explosions.hpp"
+#include "game/player/players.hpp"
 #include "game/vectors.hpp"
 #include "game/game_state.hpp"
 #include "game/global_class_types.hpp"
@@ -115,8 +116,8 @@ void bonePointAt(const AnimatedActor& actor, uint32_t bone, int x, int y, int z,
     bonePointOffset(actor, bone, v, out);
 }
 // the player's 16.16 position with y - 0x80 (the exe's local target)
-void playerTarget(int32_t t[3]) {
-    const Player& p = player();
+void playerTarget(const Actor& actor, int32_t t[3]) {
+    const Player& p = nearestPlayer(actor.pos);
     t[0] = p.pos.x;
     t[1] = int32_t(uint32_t(p.pos.y) + 0xff800000u);
     t[2] = p.pos.z;
@@ -926,7 +927,7 @@ int stompShotStart(ProjectileActor& actor, StompShotFields& shot) {
     shot.travel.x = 0;
     const uint32_t v = actor.variant, j = v >> 4, k = v & 0xf;
     int32_t target[3];
-    playerTarget(target);
+    playerTarget(actor, target);
     const int ang = angleOf(target[0], target[2], actor.pos.x, actor.pos.z); // exe 0x5e3bc0
     shot.travel.z = 0;
     shot.travel.y = int16_t(uint32_t(ang) + (j << 8) + k * 0x70 - 0xf0u);
@@ -1001,7 +1002,7 @@ void ballStart(ProjectileActor& actor, BallFields& ball) {
     }
     pointAtWord(ball.boss, ball.spawnBoss);
     int32_t target[3];
-    playerTarget(target);
+    playerTarget(actor, target);
     const ShortVec4& p3 = bossBone(*ball.boss, 3);
     const ShortVec4& p6 = bossBone(*ball.boss, 6);
     actor.pos.x = int32_t(uint32_t(int32_t(p6.x) + int32_t(p3.x)) << 15);

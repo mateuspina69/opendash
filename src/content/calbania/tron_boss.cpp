@@ -112,8 +112,8 @@ void integerPoint(const ShortVec4& p, int16_t out[3]) {
     out[2] = p.z;
 }
 // the player's chest (0x80 above his position, or another height below him), as a 16.16 point
-void playerPoint(int32_t below, int32_t out[3]) {
-    const Player& p = player();
+void playerPoint(const Actor& actor, int32_t below, int32_t out[3]) {
+    const Player& p = nearestPlayer(actor.pos);
     out[0] = p.pos.x;
     out[1] = int32_t(uint32_t(p.pos.y) - uint32_t(below));
     out[2] = p.pos.z;
@@ -157,7 +157,7 @@ void dustTracks(AnimatedActor& actor, TronFields& f) {
 // kTronRear; the rear missiles add a random yaw), pitched toward the player's chest
 void missile(AnimatedActor& actor, TronFields& f) {
     int32_t target[3];
-    playerPoint(0x640000, target);
+    playerPoint(actor, 0x640000, target);
     int16_t rot[3] = {actor.rotation.x, 0, actor.rotation.z};
     int k;
     if (!(f.flags & kTronRear)) {
@@ -237,7 +237,7 @@ void bomb(AnimatedActor& actor, TronFields& f) {
     if (!address) return;
     const ShortVec4& b0 = bone(actor, 0);
     int32_t target[3];
-    playerPoint(0, target);
+    playerPoint(actor, 0, target);
     target[1] = int32_t(uint32_t(nearestPlayer(actor.pos).pos.y) + (r & 0x7f) * 0xffff0000u);
     ProjectileActor& e = projectileActorAt(address);
     BombParams params(e);
@@ -680,7 +680,7 @@ void idle(AnimatedActor& actor, TronFields& f) {
 void dying(TronFields& f) {
     if (f.timer == 5) soundPlayAtPos(0x188, kSoundAtListener);
     f.timer = int16_t(uint32_t(uint16_t(f.timer)) - 1u);
-    if (f.timer == 0 && player().hitPoints >= 0) setStoryFlag(kFlagTronDefeated);
+    if (f.timer == 0 && anyPlayer([](const Player& p) { return p.hitPoints >= 0; })) setStoryFlag(kFlagTronDefeated);
 }
 // the two missiles of a charge's turn (either side)
 void missilePair(AnimatedActor& actor, TronFields& f) {
@@ -1147,7 +1147,7 @@ void setUp(AnimatedActor& actor, TronFields& f) {
 // exe 0x46d990
 void fight(AnimatedActor& actor, TronFields& f) {
     int32_t chest[3]; // the player's chest (0x80 above his position)
-    playerPoint(0x800000, chest);
+    playerPoint(actor, 0x800000, chest);
     auto& w = f.w();
     actor.prevAnim = actor.anim;
     actor.savePreviousPose();

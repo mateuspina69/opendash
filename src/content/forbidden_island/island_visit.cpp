@@ -152,7 +152,9 @@ void st11FirstVisit() {
             r.handlerStep = kHandlerDone;
             return;
         }
-        const int16_t z = player().pos.z.whole;
+        // the players' greatest z: past a depth, or at the arrival's, when any of them is
+        int16_t z = INT16_MIN;
+        forEachPlayer([&](const Player& p) { z = p.pos.z.whole > z ? p.pos.z.whole : z; });
         if (z < 0x500) {
             // the depth thresholds of the four reaverbot records (exe data)
             const DataArray<int16_t> depths(stateAddress(TableId::IslandVisitSt11ReaverbotDepths));
@@ -219,9 +221,10 @@ void st1dFirstVisit() {
     } else if (s != 1) {
         return;
     }
-    const Fixed16Vec3& pos = player().pos;
-    if (!pointInCellBox(pos, kPackBoxes[0].column, kPackBoxes[0].row, kPackBoxes[0].columns, kPackBoxes[0].rows) &&
-        !pointInCellBox(pos, kPackBoxes[1].column, kPackBoxes[1].row, kPackBoxes[1].columns, kPackBoxes[1].rows))
+    if (!anyPlayer([](const Player& p) {
+            return pointInCellBox(p.pos, kPackBoxes[0].column, kPackBoxes[0].row, kPackBoxes[0].columns, kPackBoxes[0].rows) ||
+                   pointInCellBox(p.pos, kPackBoxes[1].column, kPackBoxes[1].row, kPackBoxes[1].columns, kPackBoxes[1].rows);
+        }))
         return;
     spawnRecords(stateAddress(TableId::IslandVisitSt1dReaverbotSpawns), 3);
     if (!storyFlag(kFlagSt1dPackMet)) spawnRecords(stateAddress(TableId::IslandVisitSt1dExitLightSpawns), 1);
@@ -339,10 +342,12 @@ constexpr int kPopOutReach = 0x400;
 void hiddenReaverbot(ControllerActor& c) {
     const RecordPointFields& rec = classState<RecordPointFields>(c);
     const int32_t x = rec.point.x, y = rec.point.y, z = rec.point.z;
-    const Player& p = player();
-    const int dx = int16_t(uint16_t(uint32_t(p.pos.x.whole - int16_t(x)))),
-              dz = int16_t(uint16_t(uint32_t(p.pos.z.whole - int16_t(z))));
-    if (isqrt(int32_t(uint32_t(dx * dx) + uint32_t(dz * dz))) > kPopOutReach) return;
+    if (!anyPlayer([&](const Player& p) {
+            const int dx = int16_t(uint16_t(uint32_t(p.pos.x.whole - int16_t(x)))),
+                      dz = int16_t(uint16_t(uint32_t(p.pos.z.whole - int16_t(z))));
+            return isqrt(int32_t(uint32_t(dx * dx) + uint32_t(dz * dz))) <= kPopOutReach;
+        }))
+        return;
     const uint32_t address = allocActor20(); // exe 0x5e1160
     if (!address) return;
     AnimatedActor& r = animatedActorAt(address);
@@ -385,8 +390,9 @@ void reaverbotPack(ControllerActor& c) {
         fields.tick = uint16_t(t + 1u);
         return;
     }
-    const Player& p = player();
-    if (uint32_t(int32_t(p.pos.z.whole) - 0x600) > 0x600u || uint32_t(int32_t(p.pos.x.whole) - 0x1000) > 0x1d00u)
+    if (!anyPlayer([](const Player& p) {
+            return uint32_t(int32_t(p.pos.z.whole) - 0x600) <= 0x600u && uint32_t(int32_t(p.pos.x.whole) - 0x1000) <= 0x1d00u;
+        }))
         return;
     ++fields.delayIndex;
     fields.tick = 0;

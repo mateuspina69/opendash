@@ -536,15 +536,16 @@ void blastRun(ProjectileActor& actor, BlastFields& blast) {
     blast.hitBox.result = 0;
     blast.hitBox.previousX = actor.pos.x.whole;
     blast.hitBox.previousZ = actor.pos.z.whole;
-    if (planarDistance(nearestPlayer(actor.pos).pos, actor.pos) < int(uint32_t(blast.radius) << 2)) { // exe 0x5e3b00
-        Player& p = player();
-        p.pulled = 1;
-        p.pullX = actor.pos.x.whole;
-        p.pullY = actor.pos.y.whole;
-        p.pullZ = actor.pos.z.whole;
-        p.pullStrength = 0x200;
-        p.pullRadius = int16_t(uint32_t(blast.radius) << 2);
-    }
+    forEachPlayer([&](Player& p) {
+        if (planarDistance(p.pos, actor.pos) < int(uint32_t(blast.radius) << 2)) { // exe 0x5e3b00
+            p.pulled = 1;
+            p.pullX = actor.pos.x.whole;
+            p.pullY = actor.pos.y.whole;
+            p.pullZ = actor.pos.z.whole;
+            p.pullStrength = 0x200;
+            p.pullRadius = int16_t(uint32_t(blast.radius) << 2);
+        }
+    });
 }
 void blastTick(ProjectileActor& actor) {
     BlastFields& blast = classState<BlastFields>(actor);

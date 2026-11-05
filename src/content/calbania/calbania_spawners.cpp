@@ -11,6 +11,7 @@
 #include "game/encounter.hpp"
 #include "game/game_state.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/script_state.hpp"
@@ -76,10 +77,11 @@ constexpr uint8_t kPairReleased = 3; // the state the pair's actors are put in w
 // the pair's room test of the waves: the player's integer x in [0x1377, 0x1677], z in [-0x300, 0x100] (u16
 // differences) and on the ground
 bool playerInPairRoom() {
-    const Player& p = player();
-    if (uint16_t(uint16_t(p.pos.x.whole) - 0x1377u) > 0x300) return false;
-    if (uint16_t(uint16_t(p.pos.z.whole) + 0x300u) > 0x400) return false;
-    return p.airborne == 0;
+    return anyPlayer([](const Player& p) {
+        if (uint16_t(uint16_t(p.pos.x.whole) - 0x1377u) > 0x300) return false;
+        if (uint16_t(uint16_t(p.pos.z.whole) + 0x300u) > 0x400) return false;
+        return p.airborne == 0;
+    });
 }
 
 // the pair's actor of slot id `slot` (by the exe's unchecked slot arithmetic: a slot 0 lands below the pool, as in the
@@ -195,9 +197,10 @@ void placePair(St1fSpawnerFields& f) {
 
 // the player's hands let go (the pair dropped): the interaction target and the carry cleared
 void playerLetGo() {
-    Player& p = player();
-    p.interactionTarget.clear();
-    p.carryFlags = 0;
+    forEachPlayer([](Player& p) {
+        p.interactionTarget.clear();
+        p.carryFlags = 0;
+    });
 }
 
 // the sub-state s at its first step

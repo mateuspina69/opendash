@@ -2344,8 +2344,8 @@ void blastAtScratch(uint16_t size) {
     params.attack = 0;
 }
 // the player's chest (its position 0x80 up), 16.16
-std::array<int32_t, 3> playerChest() {
-    const Player& p = player();
+std::array<int32_t, 3> playerChest(const Actor& a) {
+    const Player& p = nearestPlayer(a.pos);
     return {p.pos.x, int32_t(p.pos.y - 0x800000), p.pos.z};
 }
 void boulderSub(const PlayerEnv& env, ProjectileActor& a, BoulderFields& f) {
@@ -2380,7 +2380,7 @@ void boulderSub(const PlayerEnv& env, ProjectileActor& a, BoulderFields& f) {
         } else if (c == 1) {
             aim = true;
         } else if (c == 2) {
-            const auto p = playerChest();
+            const auto p = playerChest(a);
             const auto me = values(a.pos);
             const int16_t ang = toShort(angleOf(p[0], p[2], me[0], me[2]));
             const int d = angleDiff(f.aimYaw, ang);
@@ -2394,7 +2394,7 @@ void boulderSub(const PlayerEnv& env, ProjectileActor& a, BoulderFields& f) {
             }
         }
         if (aim) {
-            const auto p = playerChest();
+            const auto p = playerChest(a);
             const int pitch = pitchOf(p.data(), values(a.pos).data());
             const auto me = values(a.pos);
             const int ang = angleOf(p[0], p[2], me[0], me[2]);

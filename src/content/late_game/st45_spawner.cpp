@@ -7,6 +7,7 @@
 #include "game/actor_sweeps.hpp"
 #include "game/fade_state.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/story_flags.hpp"
 #include "game/transition.hpp"
@@ -73,7 +74,7 @@ void clearArenaAfterBoss(ControllerActor& actor, SpawnerFields& spawner) {
     case AftermathStep::FadeBack: uncoverTail(actor, spawner); return;
     case AftermathStep::Finish:
         if (fadeState().busy != 0) return;
-        player().immunity = 0;
+        forEachPlayer([](Player& p) { p.immunity = 0; });
         setStoryFlag(kAftermathDoneFlag);
         ++actor.subState;
         return;

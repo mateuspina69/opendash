@@ -1029,8 +1029,8 @@ void handsMid(const AnimatedActor& boss, int out[3]) {
     for (int k = 0; k < 3; ++k) out[k] = int(t16(a7[k] * 2 - a6[k])) + int(t16(a4[k] * 2 - a3[k]));
 }
 // the player's head (0x80 up) as a 16.16 point
-void playerHead(int32_t t[3]) {
-    const Player& p = player();
+void playerHead(const Actor& actor, int32_t t[3]) {
+    const Player& p = nearestPlayer(actor.pos);
     t[0] = p.pos.x;
     t[1] = int32_t(uint32_t(p.pos.y) - 0x800000u);
     t[2] = p.pos.z;
@@ -1042,7 +1042,7 @@ int pitchFrom(const int32_t t[3], const Actor& actor) {
 }
 void homeShot(ProjectileActor& actor, ShortVec4& travel, int step) { // exe 0x5ceab0: toward the player's head
     int32_t t[3];
-    playerHead(t);
+    playerHead(actor, t);
     const int yaw = angleOf(t[0], t[2], actor.pos.x, actor.pos.z);
     const int pitch = 0x800 - pitchFrom(t, actor);
     const int as = step >= 0 ? step : -step;
@@ -1072,7 +1072,7 @@ ShotResult homingShot(ProjectileActor& actor, HomingShotFields& shot) { // [0x8d
         actor.pos.y = int32_t(uint32_t(mid[1]) * 0x8000u);
         actor.pos.z = int32_t(uint32_t(mid[2]) * 0x8000u);
         int32_t t[3];
-        playerHead(t);
+        playerHead(actor, t);
         shot.travel.x = int16_t(0x800 - pitchFrom(t, actor));
         shot.travel.y = int16_t((int(actor.variant) - 2) * 0x200 + shot.boss->rotation.y);
         shot.travel.z = 0;
@@ -1693,7 +1693,7 @@ void fogLevel(const FogFields& f) {
     const int v = f.level;
     setFogColour(uint8_t(v * 2), uint8_t(v), uint8_t(v));
     setFogDistance((v + 0x50) * 0x10);
-    player().burden = int8_t(uint8_t(uint16_t(f.level) >> 1));
+    forEachPlayer([&](Player& p) { p.burden = int8_t(uint8_t(uint16_t(f.level) >> 1)); });
 }
 void fog(ControllerActor& actor) { // exe 0x427640: [0x88c020]
     FogFields& f = classState<FogFields>(actor);

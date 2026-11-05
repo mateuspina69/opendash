@@ -64,7 +64,7 @@ bool lineGate(ControllerActor& a, TriggerVariant flagVariant, TriggerVariant wea
     const TriggerVariant v = TriggerVariant(a.variant);
     const int32_t gate = f.args[1];
     if (v == flagVariant) return gate == kNoTriggerFlag || storyFlag(uint32_t(gate));
-    if (v == weaponVariant) return int32_t(player().specialWeapon) == gate;
+    if (v == weaponVariant) return anyPlayer([&](const Player& p) { return int32_t(p.specialWeapon) == gate; });
     return true;
 }
 
@@ -75,16 +75,17 @@ void triggerNear(ControllerActor& a, bool planar) {
         a.subState = kNearPlanarWaited;
         return;
     }
-    const Player& p = player();
-    const int32_t dx = int16_t(uint16_t(uint16_t(f.args[0]) - uint16_t(uint32_t(p.pos.x) >> 16)));
-    const int32_t dz = int16_t(uint16_t(uint16_t(f.args[2]) - uint16_t(uint32_t(p.pos.z) >> 16)));
-    uint32_t sq = uint32_t(dx) * uint32_t(dx) + uint32_t(dz) * uint32_t(dz);
-    if (!planar) { // exe 0x5e3a60: + dy
-        const int32_t dy = int16_t(uint16_t(uint16_t(f.args[1]) - uint16_t(p.pos.y.whole)));
-        sq = uint32_t(dx) * uint32_t(dx) + uint32_t(dy) * uint32_t(dy) + uint32_t(dz) * uint32_t(dz);
-    }
-    const int d = isqrt(int32_t(sq));
-    if (d > (int32_t(f.radius) << kRadiusShift)) freeActor(a);
+    const bool near = anyPlayer([&](const Player& p) {
+        const int32_t dx = int16_t(uint16_t(uint16_t(f.args[0]) - uint16_t(uint32_t(p.pos.x) >> 16)));
+        const int32_t dz = int16_t(uint16_t(uint16_t(f.args[2]) - uint16_t(uint32_t(p.pos.z) >> 16)));
+        uint32_t sq = uint32_t(dx) * uint32_t(dx) + uint32_t(dz) * uint32_t(dz);
+        if (!planar) { // exe 0x5e3a60: + dy
+            const int32_t dy = int16_t(uint16_t(uint16_t(f.args[1]) - uint16_t(p.pos.y.whole)));
+            sq = uint32_t(dx) * uint32_t(dx) + uint32_t(dy) * uint32_t(dy) + uint32_t(dz) * uint32_t(dz);
+        }
+        return isqrt(int32_t(sq)) <= (int32_t(f.radius) << kRadiusShift);
+    });
+    if (!near) freeActor(a);
     else triggerFire(a);
 }
 
@@ -92,8 +93,7 @@ void triggerNear(ControllerActor& a, bool planar) {
 void eventTrigger(ControllerActor& a) {
     EventTriggerFields& f = classState<EventTriggerFields>(a);
     if (TriggerVariant(a.variant) == TriggerVariant::Refill) {
-        Player& p = player();
-        p.hitPoints = p.maxHitPoints;
+        forEachPlayer([](Player& p) { p.hitPoints = p.maxHitPoints; });
         return;
     }
     switch (TriggerState(a.state)) {
@@ -111,34 +111,38 @@ void eventTrigger(ControllerActor& a) {
             freeActor(a);
             return;
         }
-        const Player& p = player();
-        const int16_t px = p.pos.x.whole, ppx = p.prevPos.x.whole, pz = p.pos.z.whole, ppz = p.prevPos.z.whole;
+        // a line crossed by any player
+        const auto crossed = [&](auto&& test) {
+            return anyPlayer([&](const Player& p) {
+                return test(p.pos.x.whole, p.prevPos.x.whole, p.pos.z.whole, p.prevPos.z.whole);
+            });
+        };
         switch (TriggerVariant(a.variant)) {
         case TriggerVariant::AtOnce: triggerFire(a); return;
         case TriggerVariant::NearPlanar: triggerNear(a, true); return;
         case TriggerVariant::Near: triggerNear(a, false); return;
         case TriggerVariant::CrossXUp:
         case TriggerVariant::CrossXUpArmed:
-            if (lineGate(a, TriggerVariant::CrossXUp, TriggerVariant::CrossXUpArmed) && px >= f.args[0] &&
-                ppx < f.args[0])
+            if (lineGate(a, TriggerVariant::CrossXUp, TriggerVariant::CrossXUpArmed) &&
+                crossed([&](int16_t px, int16_t ppx, int16_t, int16_t) { return px >= f.args[0] && ppx < f.args[0]; }))
                 triggerFire(a);
             return;
         case TriggerVariant::CrossXDown:
         case TriggerVariant::CrossXDownArmed:
-            if (lineGate(a, TriggerVariant::CrossXDown, TriggerVariant::CrossXDownArmed) && px <= f.args[0] &&
-                ppx > f.args[0])
+            if (lineGate(a, TriggerVariant::CrossXDown, TriggerVariant::CrossXDownArmed) &&
+                crossed([&](int16_t px, int16_t ppx, int16_t, int16_t) { return px <= f.args[0] && ppx > f.args[0]; }))
                 triggerFire(a);
             return;
         case TriggerVariant::CrossZUp:
         case TriggerVariant::CrossZUpArmed:
-            if (lineGate(a, TriggerVariant::CrossZUp, TriggerVariant::CrossZUpArmed) && pz >= f.args[2] &&
-                ppz < f.args[2])
+            if (lineGate(a, TriggerVariant::CrossZUp, TriggerVariant::CrossZUpArmed) &&
+                crossed([&](int16_t, int16_t, int16_t pz, int16_t ppz) { return pz >= f.args[2] && ppz < f.args[2]; }))
                 triggerFire(a);
             return;
         case TriggerVariant::CrossZDown:
         case TriggerVariant::CrossZDownArmed: // z <= line and the previous z < line, as the exe tests
-            if (lineGate(a, TriggerVariant::CrossZDown, TriggerVariant::CrossZDownArmed) && pz <= f.args[2] &&
-                ppz < f.args[2])
+            if (lineGate(a, TriggerVariant::CrossZDown, TriggerVariant::CrossZDownArmed) &&
+                crossed([&](int16_t, int16_t, int16_t pz, int16_t ppz) { return pz <= f.args[2] && ppz < f.args[2]; }))
                 triggerFire(a);
             return;
         case TriggerVariant::Flags: {
@@ -152,7 +156,7 @@ void eventTrigger(ControllerActor& a) {
             return;
         }
         case TriggerVariant::Weapon:
-            if (int16_t(player().specialWeapon) == f.args[0]) triggerFire(a);
+            if (anyPlayer([&](const Player& p) { return int16_t(p.specialWeapon) == f.args[0]; })) triggerFire(a);
             return;
         default: notPortedAt(kTriggersArea, "ST4A trigger variant", a.variant);
         }

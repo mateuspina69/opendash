@@ -152,7 +152,7 @@ FightRow fightRow(const AnimatedActor& actor, uint32_t table, bool second) {
 }
 
 bool secondFight() { return storyFlag(kFlagSecondFight); }
-bool playerIn(uint32_t box) { return pointInCellBox(player().pos, CellBox(box)); }
+bool playerIn(const Actor& actor, uint32_t box) { return pointInCellBox(nearestPlayer(actor.pos).pos, CellBox(box)); }
 int playerDistance(const AnimatedActor& actor) { return planarDistance(nearestPlayer(actor.pos).pos, actor.pos); }
 int angleToPlayer(const AnimatedActor& actor) { return angleOf(nearestPlayer(actor.pos).pos, actor.pos); }
 void ask(AnimatedActor& actor, BossFields& boss, uint8_t anim, uint8_t key = 0) {
@@ -227,15 +227,15 @@ uint8_t nearestPoint(const AnimatedActor& actor) {
 }
 // exe 0x4cb060: the arena point for the player's ninth of the arena (the cell boxes TableId::St45BossArenaCells): x / z the arena
 // edges, y the player's; no box (or box 0): the exe leaves its locals uninitialised (0 here)
-void arenaPoint(int32_t out[3]) {
+void arenaPoint(const Actor& actor, int32_t out[3]) {
+    const Player& p = nearestPlayer(actor.pos);
     int found = 0;
     for (int i = 0; i < 9; ++i)
-        if (pointInCellBox(player().pos, CellBox(stateAddress(TableId::St45BossArenaCells) + uint32_t(i) * 4))) {
+        if (pointInCellBox(p.pos, CellBox(stateAddress(TableId::St45BossArenaCells) + uint32_t(i) * 4))) {
             found = i;
             break;
         }
     int16_t x = 0, y = 0, z = 0;
-    const Player& p = player();
     const int16_t px = p.pos.x.whole, py = p.pos.y.whole, pz = p.pos.z.whole;
     switch (found - 1) {
     case 0: x = -0x900; y = py; z = -0xb00; break;
@@ -253,9 +253,9 @@ void arenaPoint(int32_t out[3]) {
     out[2] = int32_t(uint32_t(uint16_t(z)) << 16);
 }
 // the point x = z = -0x100 at the player's height (the exe's local; its fractions uninitialised, 0 here)
-void arenaCentre(int32_t out[3]) {
+void arenaCentre(const Actor& actor, int32_t out[3]) {
     out[0] = int32_t(0xff000000u);
-    out[1] = int32_t(uint32_t(uint16_t(player().pos.y.whole)) << 16);
+    out[1] = int32_t(uint32_t(uint16_t(nearestPlayer(actor.pos).pos.y.whole)) << 16);
     out[2] = int32_t(0xff000000u);
 }
 // exe 0x4cb2c0: kTurnLeft when turning toward the player (step 8) would lower the yaw, else 0 (the yaw kept)
@@ -567,7 +567,7 @@ void walk(AnimatedActor& actor, BossFields& boss) {
             next = stepBack();
             break;
         }
-        if (playerIn(stateAddress(TableId::St45BossArenaBox))) {
+        if (playerIn(actor, stateAddress(TableId::St45BossArenaBox))) {
             if (actor.animKey.events & kEventStill) break;
             if (playerDistance(actor) < 0xc00) {
                 if (facingPlayer(actor)) {
@@ -588,7 +588,7 @@ void walk(AnimatedActor& actor, BossFields& boss) {
             next = stalk();
             break;
         }
-        arenaPoint(target);
+        arenaPoint(actor, target);
         if (actor.animKey.events & kEventStill) break;
         if (playerDistance(actor) < 0xc00) {
             if (facingPlayer(actor)) {
@@ -647,7 +647,7 @@ void walk(AnimatedActor& actor, BossFields& boss) {
             break;
         }
         mouthShot(actor, boss);
-        if (playerIn(stateAddress(TableId::St45BossArenaBox))) {
+        if (playerIn(actor, stateAddress(TableId::St45BossArenaBox))) {
             if (facingPlayer(actor)) {
                 if (playerDistance(actor) < 0xc00 && !noFootDown(actor, boss, -1, 0)) {
                     pickAttack(actor, boss);
@@ -665,7 +665,7 @@ void walk(AnimatedActor& actor, BossFields& boss) {
             pickAttack(actor, boss);
             break;
         }
-        arenaPoint(target);
+        arenaPoint(actor, target);
         if (pointDistance(actor, target) > 0x600) {
             next = longStep();
             break;
@@ -686,12 +686,12 @@ void walk(AnimatedActor& actor, BossFields& boss) {
             next = stepBack();
             break;
         }
-        if (playerIn(stateAddress(TableId::St45BossArenaBox))) {
+        if (playerIn(actor, stateAddress(TableId::St45BossArenaBox))) {
             actor.step = uint8_t(WalkStep::Stalk);
             actor.stepCounter = 0;
             break;
         }
-        arenaPoint(target);
+        arenaPoint(actor, target);
         if (actor.animKey.events & kEventStill) break;
         turnToPlayer(actor, 0x10);
         if (!facingPlayer(actor)) break;
@@ -728,7 +728,7 @@ void walk(AnimatedActor& actor, BossFields& boss) {
         break;
     }
     case WalkStep::BackToArena:
-        arenaCentre(target);
+        arenaCentre(actor, target);
         if (actor.animKey.events & kEventStill) break;
         if (facingPoint(actor, target)) {
             integrateVelocity(actor, 0, 0, -0xb2);
@@ -838,7 +838,7 @@ void stomp(AnimatedActor& actor, BossFields& boss) {
     case StompStep::StepBack:
         if (actor.animEnded()) {
             actor.subState = uint8_t(BossMove::Walk);
-            actor.step = uint8_t(playerIn(stateAddress(TableId::St45BossRetreatBox)) ? WalkStep::Decide : WalkStep::Stalk);
+            actor.step = uint8_t(playerIn(actor, stateAddress(TableId::St45BossRetreatBox)) ? WalkStep::Decide : WalkStep::Stalk);
             actor.stepCounter = 0;
             ask(actor, boss, 0);
             break;
@@ -973,7 +973,7 @@ void retreat(AnimatedActor& actor, BossFields& boss) {
         // the exe fills its local point only when the key's still bit is clear (left as is otherwise; built always
         // here)
         int32_t target[3];
-        arenaCentre(target);
+        arenaCentre(actor, target);
         if (!(actor.animKey.events & kEventStill)) turnToPoint(actor, target, 8);
         if (facingPoint(actor, target) && !noFootDown(actor, boss, 1, 0)) actor.step = uint8_t(RetreatStep::Land);
         break;
@@ -1200,7 +1200,7 @@ void secondWalk(AnimatedActor& actor, BossFields& boss) {
             break;
         }
         bool volley = true;
-        if (playerIn(stateAddress(TableId::St45BossSecondArenaBox))) {
+        if (playerIn(actor, stateAddress(TableId::St45BossSecondArenaBox))) {
             if (!(actor.animKey.events & kEventStill)) {
                 if (playerDistance(actor) < 0xc00) {
                     const bool f = facingPlayer(actor);
@@ -1214,7 +1214,7 @@ void secondWalk(AnimatedActor& actor, BossFields& boss) {
                 integrateVelocity(actor, 0, 0, -0x2a4);
             }
         } else {
-            arenaPoint(target);
+            arenaPoint(actor, target);
             if (!(actor.animKey.events & kEventStill)) {
                 if (playerDistance(actor) < 0xc00) {
                     const bool f = facingPlayer(actor);
@@ -1267,10 +1267,10 @@ void secondWalk(AnimatedActor& actor, BossFields& boss) {
         if (f & kEventStill) actor.stepCounter = 1;
         if (f & kEventMoving) actor.stepCounter = 0;
         if (actor.stepCounter == 0) {
-            if (playerIn(stateAddress(TableId::St45BossSecondArenaBox))) {
+            if (playerIn(actor, stateAddress(TableId::St45BossSecondArenaBox))) {
                 turnToPlayer(actor, 8);
             } else {
-                arenaPoint(target);
+                arenaPoint(actor, target);
                 turnToPoint(actor, target, 0x10);
             }
             integrateVelocity(actor, 0, 0, -0x2a4);
@@ -1281,7 +1281,7 @@ void secondWalk(AnimatedActor& actor, BossFields& boss) {
     case SecondWalkStep::Step: endStep(); break;
     case SecondWalkStep::Stalk:
         mouthShot(actor, boss);
-        if (playerIn(stateAddress(TableId::St45BossSecondArenaBox))) {
+        if (playerIn(actor, stateAddress(TableId::St45BossSecondArenaBox))) {
             if (facingPlayer(actor)) {
                 if (playerDistance(actor) < 0xc00) {
                     if (actor.anim == 0x2c) {
@@ -1309,7 +1309,7 @@ void secondWalk(AnimatedActor& actor, BossFields& boss) {
             pickAttack(actor, boss);
             break;
         }
-        arenaPoint(target);
+        arenaPoint(actor, target);
         if (pointDistance(actor, target) > 0x600) {
             advance();
             break;
@@ -1405,7 +1405,7 @@ void secondStomp(AnimatedActor& actor, BossFields& boss) {
     case StompStep::Recover:
         if (!actor.animEnded()) break;
         actor.subState = uint8_t(BossMove::SecondWalk);
-        actor.step = uint8_t(playerIn(stateAddress(TableId::St45BossSecondRetreatBox)) ? SecondWalkStep::Decide : SecondWalkStep::Stalk);
+        actor.step = uint8_t(playerIn(actor, stateAddress(TableId::St45BossSecondRetreatBox)) ? SecondWalkStep::Decide : SecondWalkStep::Stalk);
         actor.stepCounter = 0;
         ask(actor, boss, 0xb);
         break;
@@ -1598,7 +1598,7 @@ void bossRun(const PlayerEnv& env, AnimatedActor& actor, BossFields& boss) { // 
                     if (actor.spawnByte != 0) {
                         countDefeat();
                         actor.state = uint8_t(BossState::Death);
-                        player().immunity = kImmuneHeld;
+                        forEachPlayer([](Player& p) { p.immunity = kImmuneHeld; }); // until the arena is cleared
                     } else if (secondFight()) {
                         setStoryFlag(kFlagSecondFightWon);
                         countDefeat();
@@ -1805,8 +1805,8 @@ void breathPuff(const PlayerEnv& env, ProjectileActor& actor) {
 }
 
 // the player's position 0x80 up (the exe's local copy)
-void playerChest(int32_t out[3]) {
-    const Player& p = player();
+void playerChest(const Actor& actor, int32_t out[3]) {
+    const Player& p = nearestPlayer(actor.pos);
     out[0] = p.pos.x;
     out[1] = int32_t(uint32_t(p.pos.y) + 0xff800000u);
     out[2] = p.pos.z;
@@ -1836,7 +1836,7 @@ void spitBlob(const PlayerEnv& env, ProjectileActor& actor) {
     switch (BlobState(actor.state)) {
     case BlobState::Start: { // exe 0x5ca0a0
         int32_t chest[3];
-        playerChest(chest);
+        playerChest(actor, chest);
         blob.distance = uint32_t(planarDistance(actor.pos, chest));
         blob.hitBox.result = 0;
         blob.life = 0x190;
@@ -1854,7 +1854,7 @@ void spitBlob(const PlayerEnv& env, ProjectileActor& actor) {
     }
     case BlobState::Fly: { // exe 0x5ca160
         int32_t chest[3];
-        playerChest(chest);
+        playerChest(actor, chest);
         actor.savePreviousPose();
         const uint16_t phase = uint16_t(int(blob.wobbleSpeed) + int16_t(blob.wobblePhase)) & 0xfff;
         blob.wobblePhase = phase;
