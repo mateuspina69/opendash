@@ -65,6 +65,8 @@ public:
     // test instrument: at this local tick the session sets or clears this flag (what a room's logic does, as the session
     // shares it)
     void testFlagAt(uint32_t tick, uint32_t flag, bool set) { testFlagTick_ = tick; testFlag_ = flag; testFlagSet_ = set; }
+    // a flag the game starts with (--flag, --clear-flag): the session's from the start, so a world started now has it
+    void startFlag(uint32_t flag, bool set, uint8_t stage) { if (coordinator_) coordinator_->testFlagNow(flag, set, stage); }
     void stayOnJoin() { if (pipe_) pipe_->setStays(true); stays_ = true; }
     // test instrument: at this local tick the player's life is this
     void testLifeAt(uint32_t tick, int16_t life) { testLifeTick_ = tick; testLife_ = life; }

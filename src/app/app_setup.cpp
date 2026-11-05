@@ -748,11 +748,13 @@ void App::applyFlags() {
     for (const uint32_t f : flagArgs) // --flag (FUN_00510e10)
         if (playerView.play && (f >> 3) < od::port::kStoryFlagBytes + od::port::kExtraFlagBytes) {
             od::port::setStoryFlag(f);
+            if (playerView.ownWorld) playerView.ownWorld->startFlag(f, true, od::port::gameState().stage);
             SDL_Log("flag 0x%x set", f);
         }
     for (const uint32_t f : flagClearArgs) // --clear-flag (dev: start with a door unlocked)
         if (playerView.play && (f >> 3) < od::port::kStoryFlagBytes + od::port::kExtraFlagBytes) {
             od::port::clearStoryFlag(f);
+            if (playerView.ownWorld) playerView.ownWorld->startFlag(f, false, od::port::gameState().stage);
             SDL_Log("flag 0x%x cleared", f);
         }
 }
