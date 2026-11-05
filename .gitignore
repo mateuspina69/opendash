@@ -21,3 +21,5 @@ __pycache__/
 .vs/
 Thumbs.db
 .DS_Store
+/docs/adr/
+/docs/superpowers/
