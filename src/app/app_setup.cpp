@@ -347,11 +347,11 @@ int App::init() {
             } catch (const std::invalid_argument& e) {
                 SDL_Log("netplay settings: %s (netplay off)", e.what());
             }
-            netplay.start(net, mirrorArg, cfg.datDir, cfg.exePath, cfg.data == "disc" ? playerView.disc.get() : nullptr);
-        }
             if (playerView.ownWorld) netplay.setWorldMode(true);
-        stages = scanStages();
+            netplay.start(net, mirrorArg, cfg.datDir, cfg.exePath, cfg.data == "disc" ? playerView.disc.get() : nullptr);
             if (playerView.ownWorld) playerView.ownWorld->useSession(netplay.session(), net.mode == NetMode::Host);
+        }
+        stages = scanStages();
         for (const auto& si : stages) playerView.stageSubs.emplace_back(si.stage, si.subs);
         playerView.init(cfg);
         playerView.audioLog = audioLogArg;
