@@ -1,6 +1,7 @@
 // The game camera: the tick, the view transform, the room setup, the talk camera and the shakes (see camera.hpp).
 #include "game/camera.hpp"
 #include "game/camera_state.hpp"
+#include "game/camera_view.hpp"
 
 #include <cstdlib>
 
@@ -22,22 +23,6 @@ namespace od::port {
 
 namespace {
 
-// The camera's model of exe 0x40bbb0 (a row of m times v / 4096, truncated): the exact integer sum of the three
-// products, divided by 4096 with truncation. The exe sums on the x87 at 24-bit precision (v / 4096, each product and
-// each partial sum rounded to a float mantissa), so the two differ when a rounding crosses an integer before the
-// truncation: an approximation, not a proven equivalence
-int32_t transformRow(const int16_t* row, const int32_t v[3]) {
-    const int64_t s = int64_t(row[0]) * v[0] + int64_t(row[1]) * v[1] + int64_t(row[2]) * v[2];
-    return int32_t(s / 4096);
-}
-
-// the rotated offset of the eye from the target at `dist` (yaw / pitch 12-bit), minus the target
-void eyeFromTarget(int dist, int yaw, int pitch, const int32_t target[3], int32_t out[3]) {
-    out[0] = ((fixedSin(yaw) * dist >> 12) * fixedCos(pitch) >> 12) - target[0];
-    out[1] = (fixedSin(pitch) * dist >> 12) - target[1];
-    out[2] = ((fixedCos(yaw) * dist >> 12) * fixedCos(pitch) >> 12) - target[2];
-}
-
 // exe 0x40de70(target, dist, yaw, pitch, roll): the view transform of the eye at `dist` from the target along yaw /
 // pitch: the angles kept in the block, the rotation Ry(yaw) Rx(-pitch) Rz(roll), its transpose and the translation
 // (in the stage's shifted units) into the view 0x6d0014, the eye (world units) into 0x6d0034 and the block, the
@@ -48,24 +33,22 @@ void buildViewTransform(int dist, int yaw, int pitch, uint16_t roll) {
     g_viewArgs = {dist, yaw, pitch, roll};
     CameraState& cam = cameraState();
     CameraTransform& tf = cameraTransform();
-    const int shift = stage().coordinateShift & 0x1f;
     cam.viewAngles.x = int16_t(-pitch & kAngleMask);
     cam.viewAngles.y = int16_t(yaw & kAngleMask);
     cam.viewAngles.z = int16_t(roll & kAngleMask);
     const Matrix3 r = rotationYXZ(cam.viewAngles.x, cam.viewAngles.y, cam.viewAngles.z);
     projectionScratch().transform.matrix = r;
-    Matrix3 t{}; // exe 0x40c170: the transpose
-    for (int i = 0; i < 3; ++i)
-        for (int j = 0; j < 3; ++j) t.e[i * 3 + j] = r.e[j * 3 + i];
-    tf.viewScratch.matrix = t;
     const int32_t target[3] = {cam.target.x, cam.target.y, cam.target.z};
-    const int32_t shiftedTarget[3] = {target[0] << shift, target[1] << shift, target[2] << shift};
-    int32_t shifted[3];
-    eyeFromTarget(dist << shift, yaw & kAngleMask, pitch & kAngleMask, shiftedTarget, shifted);
-    for (size_t i = 0; i < 3; ++i) tf.viewScratch.translation[i] = transformRow(t.e + i * 3, shifted);
+    setThisPlayerCamera({{wrap16(target[0]), wrap16(target[1]), wrap16(target[2])}, wrap16(dist),
+                         {uint16_t(yaw & kAngleMask), uint16_t(pitch & kAngleMask), uint16_t(roll & kAngleMask)}, true});
+    Matrix3 t{};
+    int32_t translation[3];
+    cameraViewOf(target, dist, yaw & kAngleMask, pitch & kAngleMask, r, t, translation);
+    tf.viewScratch.matrix = t;
+    for (size_t i = 0; i < 3; ++i) tf.viewScratch.translation[i] = translation[i];
     tf.view = tf.viewScratch;
     int32_t world[3];
-    eyeFromTarget(dist, yaw & kAngleMask, pitch & kAngleMask, target, world);
+    cameraEyeFromTarget(dist, yaw & kAngleMask, pitch & kAngleMask, target, world);
     cam.prevEye = cam.eye;
     tf.eyePoint.x = wrap16(-world[0]);
     cam.eye.x = tf.eyePoint.x;
@@ -73,7 +56,7 @@ void buildViewTransform(int dist, int yaw, int pitch, uint16_t roll) {
     cam.eye.y = tf.eyePoint.y;
     tf.eyePoint.z = wrap16(-world[2]);
     cam.eye.z = tf.eyePoint.z;
-    for (size_t i = 0; i < 3; ++i) tf.eyeOffset[i] = transformRow(t.e + i * 3, world);
+    for (size_t i = 0; i < 3; ++i) tf.eyeOffset[i] = cameraTransformRow(t.e + i * 3, world);
 }
 
 // exe 0x40e360(camera, player) (CameraMode::Follow): the pose from the room's base pose and the look pitch (by the

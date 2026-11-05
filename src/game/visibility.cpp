@@ -6,6 +6,7 @@
 #include "game/actor_movement.hpp"
 #include "game/visibility.hpp"
 
+#include "game/camera_view.hpp"
 #include "game/camera_state.hpp"
 #include "game/distances.hpp"
 #include "game/player/player_state.hpp"
@@ -30,10 +31,22 @@ bool onScreenInRange(const CameraPoint& cp) {
     return uint32_t(depth >> 2) < uint32_t(stage().depthRange);
 }
 
-// A session's world: a point a player's camera would show -- in front of the camera that follows them (behind them along
-// their facing, at the room's follow distance), within the screen's half width at the projection's focal length, nearer
-// than the far plane
+// A session's world: a point a player's camera shows -- the view their machine built, rebuilt here and tested as the
+// game tests its own (on screen, nearer than the draw range); before their camera has come, a point in front of a camera
+// that follows them (behind them along their facing, at the room's follow distance), within the screen's half width at
+// the projection's focal length, nearer than the far plane
 bool inPlayersView(const Player& p, const int16_t v[3]) {
+    if (const PlayerCamera& camera = worldPlayerCamera(playerId(p)); camera.known) {
+        Matrix3 m;
+        int32_t t[3];
+        playerCameraView(camera, m, t);
+        CameraPoint cp{};
+        const Projected r = projectThrough(m, t, v, cp.view);
+        cp.sx = r.sx;
+        cp.sy = r.sy;
+        cp.clipped = r.clipped;
+        return onScreenInRange(cp);
+    }
     constexpr int kUnit = 0x400;
     int16_t forward[3] = {0, 0, 0};
     moveAlongYaw16(forward, viewYawNear(p), 0, 0, kUnit);

@@ -7,6 +7,7 @@
 #include "game/event.hpp"
 #include "game/player/player_interaction.hpp"
 #include "game/world_net_state.hpp"
+#include "game/world_view.hpp"
 #include "game/geometry_scratch.hpp"
 #include "game/player/player_pose.hpp"
 #include "game/player/player_state.hpp"
@@ -29,6 +30,7 @@ void remotePlayerJoin(size_t id, const PlayerSnapshot& s) {
     const int16_t maxHitPoints = player().maxHitPoints;
     joinPlayer(id);
     g_remote[id] = true;
+    setWorldPlayerCamera(id, {});
     Player& p = playerById(id);
     p.enterState(PlayerState::Playing);
     p.collisionBox = box;
@@ -53,6 +55,7 @@ template <class Pool> void reassignOwner(Pool& pool, size_t from, size_t to) {
 
 void remotePlayerLeave(size_t id) {
     g_remote[id] = false;
+    setWorldPlayerCamera(id, {});
     leavePlayer(id);
     size_t heir = 0;
     while (heir < kPlayerSlots && !playerPresent(heir)) ++heir;

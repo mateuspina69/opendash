@@ -208,6 +208,13 @@ void App::simStep(int gameFrames) {
             playScriptTeleports.erase(tp);
         }
         if (playScriptPos < playScript.size()) ps1 = ptNextPad();
+        // the views due by now (a wait step moves on past its index inside ptNextPad)
+        while (!playScriptViews.empty() && playScriptViews.begin()->first <= playScriptPos) {
+            const int yaw = playScriptViews.begin()->second & 0xfff;
+            playerView.orbitYaw = float(yaw) * 6.2831853f / 4096.0f;
+            SDL_Log("playscript view at %zu: yaw %d", playScriptPos, yaw);
+            playScriptViews.erase(playScriptViews.begin());
+        }
         if (aimApproach) ps1 |= 0x10;
         if (aimBack) ps1 |= 0x40;
         ps1 |= aimSide;

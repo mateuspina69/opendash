@@ -112,6 +112,8 @@ struct App {
     // "tp X Y Z YAW" steps of --playscript: the player teleported (position + previous position, yaw) before the
     // script tick at that index
     std::map<size_t, std::array<int, 4>> playScriptTeleports;
+    // "view YAW" steps: the orbit camera turned to YAW (12-bit, the game camera's yaw) once the script reaches that index
+    std::map<size_t, int> playScriptViews;
     // dev bots (verification runs: the player turned / moved / buttons pressed as a player would; no game state cheats
     // beyond --god):
     // "aim N CLASS... [~HEX] [*]": N ticks of lock-on (R2) + buster taps (square; "*": the special weapon, triangle),

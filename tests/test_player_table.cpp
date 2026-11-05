@@ -5,6 +5,7 @@
 #include <stdexcept>
 
 #include "check.hpp"
+#include "data_source_binding.hpp"
 #include "game/actor_pools.hpp"
 #include "game/loaded_data.hpp"
 #include "game/player/player_state.hpp"
@@ -209,7 +210,8 @@ void testOwnerLeaves() {
     actorSystem().shotsLive = 0;
 }
 
-// a world without a screen: seen is near any player, and the view's direction is the player's
+// a world without a screen: seen is what a player's camera shows (before theirs has come, one behind them), and the view's
+// direction is the player's
 void testNoView() {
     resetPlayer();
     player().pos.x = 0;
@@ -238,7 +240,9 @@ void testRefusals() {
 
 } // namespace
 
-int main() {
+int main(int argc, char** argv) {
+    if (argc < 2) return 2;
+    od::bindTestDataSource(argv[1]); // the angles' tables
     testIdentity();
     testSlotsAlone();
     testJoinAndLeave();

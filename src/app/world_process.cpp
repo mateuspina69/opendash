@@ -548,6 +548,7 @@ int run(const WorldArgs& w) {
             for (size_t c = 0; c < 2; ++c) m.tracks[c].step(f.channels[c], f.stageAnims, m.ownerTick);
             od::port::remotePlayerState(id, od::port::netPlayerSnapshot(f, m.tracks));
             od::port::applyNetArm(od::port::playerById(id), f);
+            od::port::setWorldPlayerCamera(id, f.camera);
         }
     };
     const auto playersToOthers = [&](uint32_t netTick) {
@@ -560,7 +561,9 @@ int run(const WorldArgs& w) {
                 if (sceneOn && id != 0) continue;
                 const bool sceneMan = sceneOn && id == 0;
                 if (!sceneMan && (id == client || !mirrors[id].heard || !od::port::playerPresent(id))) continue;
-                const std::vector<uint8_t> one = playerSenders[{client, id}].update(id, netTick, sceneMan ? sceneFields : mirrors[id].from.fields());
+                od::port::NetPlayerFields told = sceneMan ? sceneFields : mirrors[id].from.fields();
+                told.camera = {}; // an owner's camera is for their world only
+                const std::vector<uint8_t> one = playerSenders[{client, id}].update(id, netTick, told);
                 m.netState.push_back(uint8_t(one.size()));
                 m.netState.insert(m.netState.end(), one.begin(), one.end());
             }

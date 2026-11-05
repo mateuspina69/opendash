@@ -20,9 +20,52 @@
 #include "game/event.hpp"
 #include "game/actor_pools.hpp"
 #include "game/camera.hpp"
+#include "game/camera_view.hpp"
+#include "game/projection_state.hpp"
+#include "game/stage_state.hpp"
+#include "game/visibility.hpp"
+#include "game/world_view.hpp"
 #include "game/player/player_state.hpp"
 
 namespace fs = std::filesystem;
+
+namespace {
+
+// A session's world sees through a player's camera as their game does: the points around the player on screen by the
+// game's camera, and by the same camera sent to a world (game/world_view's PlayerCamera), are the same; the points that
+// differ are counted
+int seenUnlikeTheGame() {
+    using namespace od::port;
+    ProjectionState& proj = projection(); // the play view's constants (app/play_session)
+    proj.focal = 0x180;
+    proj.nearDepth = 0xc0;
+    proj.centreX = 160;
+    proj.centreY = 120;
+    if (stage().depthRange == 0) stage().depthRange = 0x800;
+    const PlayerCamera camera = thisPlayerCamera();
+    if (!camera.known) return 1;
+    const Player& p = player();
+    int unlike = 0;
+    for (int dx = -0x1000; dx <= 0x1000; dx += 0x100)
+        for (int dz = -0x1000; dz <= 0x1000; dz += 0x100)
+            for (int dy = -0x200; dy <= 0x200; dy += 0x200) {
+                Fixed16Vec3 at{};
+                at.x.whole = int16_t(p.pos.x.whole + dx);
+                at.y.whole = int16_t(p.pos.y.whole + dy);
+                at.z.whole = int16_t(p.pos.z.whole + dz);
+                setWorldHasNoView(false);
+                const int32_t game = pointOnScreenUnrecorded(at);
+                setWorldHasNoView(true);
+                setWorldPlayerCamera(0, camera);
+                const int32_t world = pointOnScreenUnrecorded(at);
+                setWorldPlayerCamera(0, {});
+                setWorldHasNoView(false);
+                if (game != world) ++unlike;
+            }
+    return unlike;
+}
+
+} // namespace
 
 int main(int argc, char** argv) {
     od::content::registerAll(); // the game code dispatches into the content through its registry
@@ -71,7 +114,7 @@ int main(int argc, char** argv) {
     // the actor slot's rotation (+0x28: the translator's layout of game/actor_state Actor::rotation)
     constexpr uint32_t kActorRotationOffset = 0x28;
     const uint32_t kSpeakerStandIn = od::port::animatedPool()[od::port::kAnimatedFieldSlots - 1].at + kActorRotationOffset;
-    int bad = 0, reported = 0, skippedTicks = 0;
+    int bad = 0, reported = 0, skippedTicks = 0, unseen = 0;
     const Range* evt = nullptr;
     for (const Range& rg : ranges)
         if (rg.addr == 0xa5f280) evt = &rg;
@@ -105,6 +148,7 @@ int main(int argc, char** argv) {
             ++bad;
             continue;
         }
+        unseen += seenUnlikeTheGame();
         od::test::storeNativeState(m);
         int diffs = 0;
         for (uint32_t o = 0; o < cam->size; ++o) {
@@ -124,6 +168,8 @@ int main(int argc, char** argv) {
     }
     std::printf("%s: %u ticks (%d skipped: event started by an actor), %d with camera differences\n", name, count - 1, skippedTicks, bad);
     CHECK(bad == 0);
+    std::printf("%s: %d points a world sees unlike the game\n", name, unseen);
+    CHECK(unseen == 0);
     }
     return testResult("test_player_camera");
 }

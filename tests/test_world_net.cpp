@@ -497,6 +497,12 @@ void testPlayerState() {
     CHECK(receiver.apply(anim).has_value());
     CHECK(receiver.fields() == f);
     CHECK(!receiver.apply(moved).has_value()); // stale
+    sender.acknowledge(4); // the animation's update
+    f.camera = {{10, -20, 30}, 0x900, {0xabc, 0x123, 0xfed}, true}; // the owner's camera: 13 bytes, when it changes
+    const auto camera = sender.update(3, 6, f);
+    CHECK(camera.size() == 9 + 13);
+    CHECK(receiver.apply(camera).has_value());
+    CHECK(receiver.fields() == f);
 }
 
 void testLinkMessages() {

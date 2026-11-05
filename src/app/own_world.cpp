@@ -8,6 +8,7 @@
 #include <cstdio>
 
 #include "engine/config.hpp"
+#include "game/camera_view.hpp"
 #include "game/actor_sweeps.hpp"
 #include "game/player/room_player_effects.hpp"
 #include "game/fade_state.hpp"
@@ -177,7 +178,8 @@ void OwnWorldClient::turn(uint64_t nowNs) {
         p.hitPoints = testLife_;
         if (testLife_ < 0) p.moveToSub(od::port::PlayerSub::KnockDown, od::port::KnockDownStep::Thrown);
     }
-    const od::port::NetPlayerFields fields = watch_.see(od::port::player(), localTick_);
+    od::port::NetPlayerFields fields = watch_.see(od::port::player(), localTick_);
+    fields.camera = od::port::thisPlayerCamera(); // what the world counts as seen
     if (localTick_ % od::port::kNetDefaultUpdateTicks == 0) {
         // an update after its length byte, as the world's lists of them
         const auto listed = [](std::vector<uint8_t> one) {
@@ -189,6 +191,8 @@ void OwnWorldClient::turn(uint64_t nowNs) {
             od::port::NetPlayerFields shifted = fields;
             shifted.pos[0] = int16_t(shifted.pos[0] + guest_->first);
             shifted.pos[2] = int16_t(shifted.pos[2] + guest_->second);
+            shifted.camera.target[0] = int16_t(shifted.camera.target[0] + guest_->first);
+            shifted.camera.target[2] = int16_t(shifted.camera.target[2] + guest_->second);
             pipe_->sendLatest(kGuestId, WorldMessageType::NetPlayer, listed(guestUplink_.update(kGuestId, localTick_, shifted)));
         }
     }

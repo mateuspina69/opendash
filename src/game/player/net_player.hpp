@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "game/player/player_snapshot.hpp"
+#include "game/world_view.hpp"
 
 namespace od::port {
 
@@ -41,6 +42,7 @@ struct NetPlayerFields {
     uint8_t status = 0, charge = 0, specialFiring = 0; // what a client's rules for their markers and arms read
     uint8_t downed = 0; // down, for a teammate to revive
     uint8_t specialHeld = 0; // the special button held with the arm out: a swing, a beam, a suction goes on
+    PlayerCamera camera;     // the owner's camera, for what their world counts as seen (it goes no further)
     friend bool operator==(const NetPlayerFields&, const NetPlayerFields&) = default;
 };
 

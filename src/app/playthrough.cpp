@@ -76,6 +76,11 @@ void App::parsePlayScript(const std::string& text) {
             if (ss >> v[0] >> v[1] >> v[2] >> v[3]) playScriptTeleports[playScript.size()] = v;
             continue;
         }
+        if (w == "view") {
+            int yaw = 0;
+            if (ss >> yaw) playScriptViews[playScript.size()] = yaw;
+            continue;
+        }
         if (w == "goto") { // "goto N X Z [BUTTONS]": walk to (X, Z) (turned toward it every tick), BUTTONS held
             int n = 0;
             ss >> n;

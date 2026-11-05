@@ -16,7 +16,7 @@ namespace {
 
 constexpr uint32_t kKeyBytes = 4;
 constexpr uint16_t kX = 1 << 0, kY = 1 << 1, kZ = 1 << 2, kYaw = 1 << 3, kPitch = 1 << 4, kLean = 1 << 5, kFlags = 1 << 6, kLight = 1 << 7,
-                   kMaskStageAnims = 1 << 8, kFace = 1 << 9, kLook = 1 << 10, kChannel0 = 1 << 11, kChannel1 = 1 << 12, kFight = 1 << 13;
+                   kMaskStageAnims = 1 << 8, kFace = 1 << 9, kLook = 1 << 10, kChannel0 = 1 << 11, kChannel1 = 1 << 12, kFight = 1 << 13, kCamera = 1 << 14;
 constexpr uint8_t kChannelAge = 1, kChannelKey = 2, kChannelHeld = 4;
 
 struct Out {
@@ -72,6 +72,7 @@ uint16_t maskOf(const NetPlayerFields& n, const NetPlayerFields& o) {
     if (!(n.channels[0] == o.channels[0])) m |= kChannel0;
     if (!(n.channels[1] == o.channels[1])) m |= kChannel1;
     if (n.status != o.status || n.charge != o.charge || n.specialFiring != o.specialFiring || n.downed != o.downed || n.specialHeld != o.specialHeld) m |= kFight;
+    if (n.camera.known && !(n.camera == o.camera)) m |= kCamera;
     return m;
 }
 
@@ -226,6 +227,13 @@ std::vector<uint8_t> NetPlayerSender::update(uint8_t playerId, uint32_t tick, co
         o.u8(now.specialHeld);
         o.u8(now.specialFiring);
     }
+    if (mask & kCamera) { // the target, the distance, the three 12-bit angles in 36 bits
+        for (const int16_t v : now.camera.target) o.i16(v);
+        o.i16(now.camera.distance);
+        const std::array<uint16_t, 3>& a = now.camera.angles;
+        o.u32(uint32_t(a[0] & 0xfff) | uint32_t(a[1] & 0xfff) << 12 | uint32_t(a[2] & 0xff) << 24);
+        o.u8(uint8_t((a[2] & 0xfff) >> 8));
+    }
     inFlight_.push_back({sequence, now});
     while (inFlight_.size() > 64) inFlight_.pop_front();
     sent_ = now;
@@ -305,6 +313,14 @@ std::optional<NetPlayerHeard> NetPlayerReceiver::apply(std::span<const uint8_t> 
         f.downed = r.u8();
         f.specialHeld = r.u8();
         f.specialFiring = r.u8();
+    }
+    if (mask & kCamera) {
+        for (int16_t& v : f.camera.target) v = r.i16();
+        f.camera.distance = r.i16();
+        const uint32_t a = r.u32();
+        const uint8_t high = r.u8();
+        f.camera.angles = {uint16_t(a & 0xfff), uint16_t(a >> 12 & 0xfff), uint16_t((a >> 24) | uint32_t(high & 0xf) << 8)};
+        f.camera.known = true;
     }
     if (!r.ok || r.at != bytes.size()) return std::nullopt;
     fields_ = f;
