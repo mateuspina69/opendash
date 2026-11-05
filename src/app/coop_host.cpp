@@ -36,7 +36,13 @@ bool isReliable(WorldMessageType t) {
     case WorldMessageType::NetRespawnAt:
     case WorldMessageType::NetRevive:
     case WorldMessageType::NetRevived:
-    case WorldMessageType::NetGameOver: return true;
+    case WorldMessageType::NetGameOver:
+    case WorldMessageType::NetPresent:
+    case WorldMessageType::NetSceneStart:
+    case WorldMessageType::NetSceneEnd:
+    case WorldMessageType::NetScenePad:
+    case WorldMessageType::NetMoveTo:
+    case WorldMessageType::NetHold: return true;
     default: return false;
     }
 }
@@ -82,9 +88,11 @@ void CoopHost::sendSave(uint8_t id, uint64_t nowNs) {
 void CoopHost::fromClient(uint8_t id, const WorldMessage& m, uint64_t nowNs) {
     switch (m.type) {
     case WorldMessageType::NetEnter:
-        if (m.netState.size() > 2) {
-            if (clients_.insert(id).second) sendSave(id, nowNs);
-            worlds_.enter(id, WorldRoom{m.netState[0], m.netState[1]}, std::vector<uint8_t>(m.netState.begin() + 2, m.netState.end()));
+        if (m.netState.size() > 3) {
+            const bool first = clients_.insert(id).second, stays = m.netState[2] != 0;
+            if (first) sendSave(id, nowNs);
+            worlds_.enter(id, WorldRoom{m.netState[0], m.netState[1]}, std::vector<uint8_t>(m.netState.begin() + 3, m.netState.end()));
+            if (first && !stays) worlds_.placeNextToHost(id); // joining: next to the host's Mega Man
         }
         break;
     case WorldMessageType::NetJoin: worlds_.netJoin(id); break;
@@ -96,7 +104,8 @@ void CoopHost::fromClient(uint8_t id, const WorldMessage& m, uint64_t nowNs) {
     case WorldMessageType::NetUse:
     case WorldMessageType::NetEventEnd:
     case WorldMessageType::NetSpeaker:
-    case WorldMessageType::NetRevive: worlds_.netSend(id, m.type, m.netState); break;
+    case WorldMessageType::NetRevive:
+    case WorldMessageType::NetScenePad: worlds_.netSend(id, m.type, m.netState); break;
     case WorldMessageType::NetRespawnAsk: worlds_.respawnAsk(id); break;
     case WorldMessageType::GlobalChange: worlds_.globalFromPlayer(id, m.netState); break;
     case WorldMessageType::NetPlayer:
@@ -133,7 +142,7 @@ std::optional<uint8_t> SessionPipe::playerId() const {
 void SessionPipe::enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& state) {
     WorldMessage m{WorldMessageType::NetEnter};
     m.playerId = playerId;
-    m.netState = {uint8_t(room.stage), uint8_t(room.sub)};
+    m.netState = {uint8_t(room.stage), uint8_t(room.sub), uint8_t(stays_ ? 1 : 0)};
     m.netState.insert(m.netState.end(), state.begin(), state.end());
     session_.sendWorld(nowNs_, 0, true, encodeWorldMessage(m));
 }

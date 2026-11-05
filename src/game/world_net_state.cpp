@@ -1,4 +1,5 @@
 // The network state of a world's actors (see world_net_state.hpp).
+#include "game/presentation.hpp"
 #include "game/world_net_state.hpp"
 
 #include <algorithm>
@@ -1548,6 +1549,10 @@ void runLocalPool(const PlayerEnv& env, ActorContext& context, ActorPool pool, u
 
 void runNetLocalActors(const PlayerEnv& env, ActorContext& context, bool late, NetLocalRunFailures& failed) {
     ActorSystemState& s = actorSystem();
+    struct Muted { // the world plays what they play, and the client hears it from there
+        Muted() { setLocalEffectsMuted(true); }
+        ~Muted() { setLocalEffectsMuted(false); }
+    } muted;
     runLocalPool(env, context, late ? ActorPool::EffectsLate : ActorPool::Effects, s.effectCursor, failed);
     runLocalPool(env, context, late ? ActorPool::StaticsLate : ActorPool::Statics, s.staticCursor, failed);
 }

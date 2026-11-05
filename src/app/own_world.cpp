@@ -8,6 +8,9 @@
 #include <cstdio>
 
 #include "game/actor_sweeps.hpp"
+#include "game/script_state.hpp"
+#include "content/nino/st16_script33.hpp"
+#include "game/player/player_input.hpp"
 #include "game/distances.hpp"
 #include "game/player/player_downed.hpp"
 #include "game/transition_state.hpp"
@@ -44,6 +47,7 @@ void OwnWorldClient::useSession(od::net::Session* session, bool host) {
     }
     coordinator_ = nullptr;
     pipe_ = std::make_unique<SessionPipe>(*session);
+    pipe_->setStays(stays_);
 }
 
 std::optional<std::vector<uint8_t>> OwnWorldClient::takeHostSave(const std::vector<uint8_t>& current) {
@@ -89,6 +93,9 @@ void OwnWorldClient::roomBound(int stage, int sub) {
     reported_ = {};
     ownEvent_ = false;
     od::port::globalWatchRebase();
+    scene_ = false;
+    sceneViewHeard_ = false;
+    od::port::scriptState().flags &= uint8_t(~od::port::kScriptWatched);
 }
 
 void OwnWorldClient::joinRoom() {
@@ -147,8 +154,11 @@ void OwnWorldClient::turn(uint64_t nowNs) {
     pipe_->poll(nowNs);
     if (guest_ && coordinator_) (void)pipe_->take(kGuestId);
     for (const WorldMessage& m : pipe_->take(playerId_)) handle(m, nowNs);
-    // what happened in this game goes to the session; not what a stage's load does
-    if (const od::port::GameState& g = od::port::gameState(); int(g.stage) == room_->stage && g.gameMode() != od::port::GameMode::StageLoad) {
+    sceneTurn();
+    // what happened in this game goes to the session; not what a stage's load does; in a scene the world does it all
+    if (scene_) {
+        od::port::globalWatchRebase();
+    } else if (const od::port::GameState& g = od::port::gameState(); int(g.stage) == room_->stage && g.gameMode() != od::port::GameMode::StageLoad) {
         if (const od::port::GlobalChange change = od::port::globalWatchTake(uint8_t(room_->stage)); !change.empty())
             pipe_->sendReliable(playerId_, WorldMessageType::GlobalChange, od::port::encode(change));
     }
@@ -269,6 +279,32 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
         od::port::gameState().setMode(od::port::GameMode::GameOver);
         od::port::gameState().modeStep = 0;
         break;
+    case WorldMessageType::NetPresent:
+        if (fade_) od::port::applyPresentation(m.netState, *fade_, playerId_, scenePad_);
+        break;
+    case WorldMessageType::NetSceneStart:
+        if (!m.netState.empty()) {
+            scene_ = true;
+            sceneOwner_ = m.netState[0];
+            scenePad_ = sentPad_ = 0;
+            SDL_Log("own world: a scene starts, its owner is player %u", unsigned(sceneOwner_));
+        }
+        break;
+    case WorldMessageType::NetSceneView:
+        sceneViewHeard_ = od::port::decodeSceneView(m.netState, sceneView_);
+        break;
+    case WorldMessageType::NetSceneEnd:
+        sceneEnd(m.netState);
+        break;
+    case WorldMessageType::NetMoveTo:
+        pendingMove_ = m.netState;
+        break;
+    case WorldMessageType::NetHold:
+        if (m.netState.size() == 3) { // the box carrier holds this player, and only them
+            if (od::port::ActorHeader* carrier = actors_->mirrorOf(m.netState[0]))
+                od::port::st16ClientCatch(*carrier, m.netState[1], m.netState[2] != 0);
+        }
+        break;
     case WorldMessageType::NetSave:
         hostSave_.insert(hostSave_.end(), m.netState.begin(), m.netState.end());
         if (m.netState.size() < 1000) hostSaveWhole_ = true; // the last chunk is the short one
@@ -356,6 +392,78 @@ void OwnWorldClient::endFrame() {
             ownShots_[i].live = false;
         }
     }
+}
+
+void OwnWorldClient::sceneTurn() {
+    od::port::Player& p = od::port::player();
+    if (scene_) { // frozen and hidden: the scene has one Mega Man, and it plays in the world
+        od::port::scriptState().flags |= od::port::kScriptWatched;
+        p.inputMode |= od::port::kInputOff;
+        p.flags &= uint8_t(~od::port::kActorDrawn);
+        if (sceneOwner_ == playerId_) {
+            const uint16_t held = od::port::pad0().held;
+            if (held != sentPad_) {
+                sentPad_ = held;
+                pipe_->sendReliable(playerId_, WorldMessageType::NetScenePad, {uint8_t(held), uint8_t(held >> 8)});
+            }
+        }
+        return;
+    }
+    // a move the coordinator asked: once this game is playing
+    const od::port::GameState& g = od::port::gameState();
+    if (!pendingMove_.empty() && g.gameMode() == od::port::GameMode::Field && g.fieldStep() == od::port::FieldStep::Playing &&
+        od::port::transitionRequest().state == od::port::kTransitionNone && !hostSaveWhole_) {
+        movedTo(pendingMove_);
+        pendingMove_.clear();
+    }
+}
+
+void OwnWorldClient::movedTo(const std::vector<uint8_t>& to) {
+    if (to.size() != 12) return;
+    const auto half = [&](size_t at) { return int16_t(uint16_t(to[at] | to[at + 1] << 8)); };
+    const int16_t x = half(2), y = half(4), z = half(6), yaw = half(8);
+    od::port::Player& p = od::port::player();
+    if (to[0] == uint8_t(room_->stage) && to[1] == uint8_t(room_->sub)) {
+        p.pos.x = int32_t(uint32_t(int32_t(x)) << 16);
+        p.pos.y = int32_t(uint32_t(int32_t(y)) << 16);
+        p.pos.z = int32_t(uint32_t(int32_t(z)) << 16);
+        p.prevPos = p.pos;
+        p.rotation.y = yaw;
+        p.prevRotation.y = yaw;
+    } else {
+        od::port::requestTransition(od::port::kTransitionAccepted, to[0], to[1], x, y, z, yaw, to[10], to[11]);
+    }
+    SDL_Log("own world: moved to ST%02X sub %d at %d %d %d", unsigned(to[0]), int(to[1]), int(x), int(y), int(z));
+}
+
+void OwnWorldClient::sceneEnd(const std::vector<uint8_t>& at) {
+    scene_ = false;
+    od::port::scriptState().flags &= uint8_t(~od::port::kScriptWatched);
+    sceneViewHeard_ = false;
+    od::port::Player& p = od::port::player();
+    p.inputMode &= uint8_t(~od::port::kInputOff);
+    p.flags |= od::port::kActorLiveDrawn;
+    if (at.size() == 9) { // next to where the scene's Mega Man stands; its owner there
+        const auto half = [&](size_t i) { return int16_t(uint16_t(at[i] | at[i + 1] << 8)); };
+        constexpr int kBeside = 0x80;
+        const int16_t x = int16_t(half(0) + (playerId_ == at[8] ? 0 : kBeside)), y = half(2), z = half(4), yaw = half(6);
+        p.pos.x = int32_t(uint32_t(int32_t(x)) << 16);
+        p.pos.y = int32_t(uint32_t(int32_t(y)) << 16);
+        p.pos.z = int32_t(uint32_t(int32_t(z)) << 16);
+        p.prevPos = p.pos;
+        p.rotation.y = yaw;
+        p.prevRotation.y = yaw;
+    }
+    others_[playerId_] = Other{}; // this game's own entry was the scene's Mega Man
+    SDL_Log("own world: the scene ended");
+}
+
+void OwnWorldClient::overridePad(uint16_t& buttons) {
+    if (scene_ && sceneOwner_ != playerId_) buttons = scenePad_;
+}
+
+void OwnWorldClient::showSceneView() {
+    if (scene_ && sceneViewHeard_) od::port::sceneViewShow(sceneView_);
 }
 
 void OwnWorldClient::downedTurn() {

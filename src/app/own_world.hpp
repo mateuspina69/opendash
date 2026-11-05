@@ -14,6 +14,8 @@
 #include "app/world_host.hpp"
 #include "app/ghost_view.hpp"
 #include "game/event_state.hpp"
+#include "game/fade.hpp"
+#include "game/presentation.hpp"
 #include "game/ghost_buffer.hpp"
 #include "game/player/net_player.hpp"
 #include "game/player/remote_combat.hpp"
@@ -43,6 +45,13 @@ public:
     void addGuest(int dx, int dz);
     // what the session has to say to this player, over the picture (between ImGui's frame calls)
     void drawNotice() const;
+    // a scene watched here: the pad is the scene owner's; the view is the world's
+    void overridePad(uint16_t& buttons);
+    void showSceneView();
+    void setFade(od::port::FadeTask* fade) { fade_ = fade; }
+    // test instrument: on joining, stay where this game is
+    void testClearFlag(uint32_t flag) { if (coordinator_) coordinator_->testClearFlag(flag); }
+    void stayOnJoin() { if (pipe_) pipe_->setStays(true); stays_ = true; }
     // test instrument: at this local tick the player's life is this
     void testLifeAt(uint32_t tick, int16_t life) { testLifeTick_ = tick; testLife_ = life; }
     // test instruments: at this local tick the buster's attack level is this (an equipment change the world must wear); a
@@ -92,6 +101,17 @@ private:
     };
     void otherPlayerRules(uint8_t id, Other& o, const od::port::PlayerSnapshot& shown);
     void downedTurn();
+    void sceneTurn();
+    void sceneEnd(const std::vector<uint8_t>& at);
+    void movedTo(const std::vector<uint8_t>& to);
+    bool stays_ = false;
+    od::port::FadeTask* fade_ = nullptr;
+    bool scene_ = false;
+    uint8_t sceneOwner_ = 0;
+    uint16_t scenePad_ = 0, sentPad_ = 0;
+    od::port::SceneView sceneView_{};
+    bool sceneViewHeard_ = false;
+    std::vector<uint8_t> pendingMove_;
     uint32_t testLifeTick_ = 0;
     int16_t testLife_ = 0;
     int downTicks_ = 0;                  // this player has been down this long

@@ -1,4 +1,7 @@
 // The stage / room transitions (see transition.hpp).
+#include <functional>
+#include <utility>
+
 #include "game/world_view.hpp"
 #include "game/transition.hpp"
 
@@ -42,6 +45,7 @@ constexpr const char* kTransitionArea = "transition port"; // the area of its po
 // The running game task frame's context (set by each field mode tick; the script fades and the frame body use it)
 const PlayerEnv* gEnv = nullptr;
 TransitionHooks* gHooks = nullptr;
+std::function<void(const TransitionRequest&)> g_worldExit;
 FadeTask* gFade = nullptr;
 
 // story flags the field mode and the room scripts test
@@ -72,6 +76,12 @@ constexpr uint8_t kST26DoorStory = 0xd, kST29ShopStory = 0xc;
 // 0x413310 and the door actors) runs script 0 for the stages whose case tests it. The per-stage room handlers (tables
 // 0x8c5024 .., story x sub-room) are the host's hook (game/spawn; NPC / event logic).
 void roomScripts() {
+    if (worldHasNoView() && g_worldExit && storyFlag(kFlagTransitionArmed)) {
+        // a world holds its room: its players are moved by the coordinator
+        g_worldExit(transitionRequest());
+        clearStoryFlag(kFlagTransitionArmed);
+        return;
+    }
     if (scriptState().inUse()) return;
     const int st = gameState().stage, story = gameState().story;
     const uint8_t room = gameState().room;
@@ -259,6 +269,8 @@ void inStageWarp() {
 
 } // namespace
 
+void setWorldExitHook(std::function<void(const TransitionRequest&)> hook) { g_worldExit = std::move(hook); }
+
 void playTimeTick() {
     GameState& g = gameState();
     for (uint32_t* counter : {&g.playTime, &g.playTimeCopy}) {
@@ -339,7 +351,10 @@ void fieldMode(const PlayerEnv& env, TransitionHooks& hooks, FadeTask& fade) {
         return run();
     case FieldStep::Playing: {
         const uint8_t request = r.state;
-        if (request != kTransitionNone) {
+        if (request != kTransitionNone && request != kTransitionWarp && worldHasNoView() && g_worldExit) {
+            g_worldExit(r);
+            r.state = kTransitionNone;
+        } else if (request != kTransitionNone) {
             if (request == kTransitionWarp) inStageWarp();
             else g.modeStep = uint8_t(step + 1);
         }

@@ -16,6 +16,9 @@ void remotePlayerState(size_t id, const PlayerSnapshot& s);
 // the player of this id is out of the world
 void remotePlayerLeave(size_t id);
 bool playerIsRemote(size_t id);
+// A world's scene: player 0 is its Mega Man, simulated here from the scene owner's pad, and the others are out of the fight
+void remotePlayersSceneStart();
+void remotePlayersSceneEnd();
 // each remote player's pose and hit-list entry (after the local player's update, before the hit pass)
 void remotePlayersUpdate();
 // the owner pressed Use by nothing of theirs: this tick the classes see what it picks among the world's actors

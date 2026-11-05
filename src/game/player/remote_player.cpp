@@ -67,6 +67,20 @@ void remotePlayerLeave(size_t id) {
 
 bool playerIsRemote(size_t id) { return g_remote[id]; }
 
+namespace {
+bool g_scene = false;
+} // namespace
+
+void remotePlayersSceneStart() {
+    g_scene = true;
+    g_remote[0] = false;
+}
+
+void remotePlayersSceneEnd() {
+    g_scene = false;
+    g_remote[0] = playerPresent(0);
+}
+
 void remotePlayerUse(size_t id) {
     Player& p = playerById(id);
     if (pickTalkTargetFor(p, netClientKeepsAnyActor) != 0) setEventOwner(id);
@@ -88,7 +102,7 @@ void remotePlayersUpdate() {
         playerPose(p);
         geometryScratch() = scratch;
         poseStack() = stack;
-        if (p.hitPoints >= 0) playerSubmitHit(p); // one who is down is out of the fight
+        if (p.hitPoints >= 0 && !g_scene) playerSubmitHit(p); // one who is down is out of the fight
     }
 }
 

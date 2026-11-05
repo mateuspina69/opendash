@@ -1,5 +1,6 @@
 // The message windows (see message.hpp), transcribed from dash2.exe one function per exe function.
 #include "game/message.hpp"
+#include "game/presentation.hpp"
 #include "game/message_state.hpp"
 
 #include "game/audio_logic.hpp"
@@ -168,6 +169,7 @@ void messageTick() {
 }
 
 int windowOpen(int8_t n, uint32_t bankAddress, int16_t id) {
+    if (PresentationBatch* batch = presentationBatch()) batch->windowOpened(n, bankAddress, id);
     bankAddress = bankRedirect(bankAddress);
     if (display().drawingOff != 0 || n >= int8_t(kWindowCount) || bankAddress == 0) return -1;
     MessageSystem& m = messageSystem();
@@ -245,6 +247,7 @@ uint8_t windowStatus(uint8_t n) {
 
 void windowClose(int8_t n, WindowClose how) {
     if (n >= int8_t(kWindowCount) || n < 0) return;
+    if (PresentationBatch* batch = presentationBatch(); batch && (messageWindow(size_t(n)).flags & kWindowOpen)) batch->windowClosed(n, int(how));
     MessageWindow& w = messageWindow(size_t(n));
     if (w.flags & kWindowVoice) stopVoice(w);
     if (how == WindowClose::Gentle && (w.flags & kWindowFrameShown)) w.flags &= kWindowCloseKeeps;

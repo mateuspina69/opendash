@@ -1,4 +1,5 @@
 // The actor system's update loops, class dispatch and registry (see actors.hpp).
+#include "game/presentation.hpp"
 #include "game/actor_state.hpp"
 #include "game/actors.hpp"
 #include "game/player/player_state.hpp"
@@ -328,7 +329,9 @@ int updatePool(const PlayerEnv& env, ActorContext& ctx, ActorPool pool) {
         }
         try {
             const ScopedActingPlayer acting(actor.ownerPlayer);
+            if (pool == ActorPool::Shots) setSoundOwner(actor.ownerPlayer);
             fn(env, actor.at);
+            if (pool == ActorPool::Shots) setSoundOwner(kNoSoundOwner);
             ++n;
         } catch (const std::logic_error& e) {
             if (pool == ActorPool::Shots) actorSystem().shotCursor = 0;

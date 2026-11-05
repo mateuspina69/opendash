@@ -866,6 +866,7 @@ void App::present() {
             const od::port::Player& pl = od::port::player();
             SDL_Log("lock-on target slot %u actor %08x flags d3 %02x 144 %04x", unsigned(pl.lockTarget),
                     unsigned(od::port::slotIdentityWord(pl.lockedActor)), unsigned(pl.lockFlags), unsigned(pl.lockRequest));
+            SDL_Log("lock-on aim point %d %d %d", int(pl.lockAimPoint.x), int(pl.lockAimPoint.y), int(pl.lockAimPoint.z));
             const od::port::EventState& event = od::port::eventState();
             const od::port::CameraState& camera = od::port::cameraState();
             SDL_Log("event %d mode %d state %d window0 %08x windows1..4 %08x %08x %08x %08x camera mode %d/%d busy %d",

@@ -6,6 +6,7 @@
 // 0x512890), the frame body (exe 0x542280) and the play time. Bit-exact against tests/data/trans_*.bin.
 #pragma once
 
+#include <functional>
 #include <cstdint>
 #include <functional>
 
@@ -51,5 +52,9 @@ void stageLoaded();
 void playTimeTick();
 // exe 0x53f6b0 from a script step: the fade task of the running game task frame
 void scriptFade(uint32_t request, uint8_t param);
+
+// a session's world: a transition asked in it goes here instead of playing
+struct TransitionRequest;
+void setWorldExitHook(std::function<void(const TransitionRequest&)> hook);
 
 } // namespace od::port

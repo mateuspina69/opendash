@@ -1,5 +1,6 @@
 // The screen fades (see fade.hpp).
 #include "game/fade.hpp"
+#include "game/presentation.hpp"
 
 #include "game/display.hpp"
 #include "game/fade_state.hpp"
@@ -158,6 +159,7 @@ void approximatedSlideTick(FadeTask& fade) {
 void fadeStart(FadeTask& fade, uint32_t request, uint8_t param) {
     FadeState& f = fadeState();
     if (f.busy != 0 || request > kLastFadeRequest) return;
+    if (PresentationBatch* batch = presentationBatch()) batch->fadeStarted(request, param);
     const FadeSetup setup = kSetupOfRequest[request];
     uint32_t variantBits = 0;
     switch (setup) {

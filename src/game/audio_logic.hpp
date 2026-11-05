@@ -450,6 +450,8 @@ int soundUpdateLoopAtPlayer(uint32_t handle, uint16_t param);             // exe
 void soundStopLoop(uint32_t handle);                                      // exe 0x5d56f0
 int soundStopAllLoops();                                                    // exe 0x5d5760 (the stop-loops request)
 void soundQueueClear();                                                     // exe 0x5d51c0
+// a request that came from a session's world, to run here
+void soundRequestReplay(const SoundRequest& r);
 void soundQueuePopFront();                                                  // exe 0x5d4ec0
 // fades (mask = 1 << fade entry: 0..3 music channels, 4 = SFX group)
 int soundFadeOut(uint32_t mask, int16_t step, int16_t delay);             // exe 0x5d5780

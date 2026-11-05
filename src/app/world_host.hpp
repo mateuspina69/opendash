@@ -61,6 +61,10 @@ public:
     // one who is down asks to come back next to a standing teammate: told where, unless nobody stands or a story boss is
     // being fought where they are
     void respawnAsk(uint8_t playerId);
+    // a player who has just joined the session: told to come next to the host's Mega Man
+    void placeNextToHost(uint8_t playerId);
+    // test instrument: this flag is clear from the session's start, whatever the save says
+    void testClearFlag(uint32_t flag);
     // the turn between frames: the links, the worlds' reports, the keep-alives; a world that ended on its own is forgotten
     void poll(uint64_t nowNs);
 
@@ -95,6 +99,7 @@ private:
     std::array<std::optional<WorldBrief::Entry>, kPlayers> briefs_{};
     std::map<WorldRoom, bool> bossFight_;
     bool gameOverSent_ = false;
+    std::array<bool, kPlayers> joining_{}; // to be placed next to the host, as soon as the host's place is known
     void gameOverTurn();
 };
 

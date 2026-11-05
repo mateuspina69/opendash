@@ -141,7 +141,8 @@ void WorldHost::leave(uint8_t playerId) { removeFromWorld(playerId); }
 void WorldHost::netJoin(uint8_t client) {
     const std::optional<WorldRoom> room = playerRoom_.at(client);
     if (!room) return;
-    netInbox_.at(client).clear();
+    // what came from the room they left is over; where the coordinator sends them is not
+    std::erase_if(netInbox_.at(client), [](const WorldMessage& held) { return held.type != WorldMessageType::NetMoveTo; });
     WorldMessage m{WorldMessageType::NetJoin};
     m.playerId = client;
     worlds_.at(*room)->link.sendReliable(m);
@@ -250,10 +251,23 @@ void WorldHost::poll(uint64_t nowNs) {
                  m.type == WorldMessageType::NetHit || m.type == WorldMessageType::NetShotHit ||
                  m.type == WorldMessageType::NetPlayer || m.type == WorldMessageType::NetPlayerAck ||
                  m.type == WorldMessageType::NetGift || m.type == WorldMessageType::NetEventStart ||
-                 m.type == WorldMessageType::NetRevived) &&
+                 m.type == WorldMessageType::NetRevived || m.type == WorldMessageType::NetPresent ||
+                 m.type == WorldMessageType::NetSceneStart || m.type == WorldMessageType::NetSceneView ||
+                 m.type == WorldMessageType::NetSceneEnd || m.type == WorldMessageType::NetHold) &&
                 m.playerId < kPlayers &&
                 playerRoom_[m.playerId] == it->first)
                 netInbox_[m.playerId].push_back(m);
+            if (m.type == WorldMessageType::NetWorldExit) {
+                // everyone in the room goes where the scene or the room's logic takes them
+                SDL_Log("coordinator: the world of ST%02X sub %d sends its players on", unsigned(it->first.stage), it->first.sub);
+                for (const uint8_t id : world.players) {
+                    WorldMessage move{WorldMessageType::NetMoveTo};
+                    move.playerId = id;
+                    move.netState = m.netState;
+                    netInbox_[id].push_back(std::move(move));
+                }
+                continue;
+            }
             if (m.type == WorldMessageType::PlayerBrief) {
                 if (const auto brief = decodeBrief(m.netState)) {
                     bossFight_[it->first] = brief->bossFight;
@@ -298,6 +312,9 @@ void WorldHost::poll(uint64_t nowNs) {
         dropEmptiedStage(stage);
     }
     gameOverTurn();
+    if (briefs_[0])
+        for (uint8_t id = 1; id < kPlayers; ++id)
+            if (joining_[id]) placeNextToHost(id);
     std::erase_if(stopping_, [&](const std::unique_ptr<World>& world) {
         world->link.poll(nowNs); // the stop is resent until taken
         return SDL_WaitProcess(world->process, false, nullptr);
@@ -324,6 +341,29 @@ void WorldHost::gameOverTurn() {
         m.playerId = id;
         netInbox_[id].push_back(std::move(m));
     }
+}
+
+void WorldHost::testClearFlag(uint32_t flag) {
+    od::port::GlobalChange c;
+    c.flags.push_back({uint16_t(flag >> 3), 0, uint8_t(1u << (flag & 7))});
+    global_.merge(c);
+}
+
+void WorldHost::placeNextToHost(uint8_t playerId) {
+    if (playerId == 0) return;
+    if (!playerRoom_[0] || !briefs_[0]) {
+        joining_[playerId] = true;
+        return;
+    }
+    joining_[playerId] = false;
+    constexpr int kBeside = 0x80;
+    const WorldBrief::Entry& e = *briefs_[0];
+    WorldMessage move{WorldMessageType::NetMoveTo};
+    move.playerId = playerId;
+    const int16_t x = int16_t(e.x + kBeside);
+    move.netState = {uint8_t(playerRoom_[0]->stage), uint8_t(playerRoom_[0]->sub), uint8_t(x), uint8_t(uint16_t(x) >> 8), uint8_t(e.y), uint8_t(uint16_t(e.y) >> 8),
+                     uint8_t(e.z), uint8_t(uint16_t(e.z) >> 8), uint8_t(e.yaw), uint8_t(uint16_t(e.yaw) >> 8), 2, 0x11};
+    netInbox_[playerId].push_back(std::move(move));
 }
 
 void WorldHost::respawnAsk(uint8_t playerId) {

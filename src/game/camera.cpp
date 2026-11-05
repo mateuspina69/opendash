@@ -41,7 +41,10 @@ void eyeFromTarget(int dist, int yaw, int pitch, const int32_t target[3], int32_
 // pitch: the angles kept in the block, the rotation Ry(yaw) Rx(-pitch) Rz(roll), its transpose and the translation
 // (in the stage's shifted units) into the view 0x6d0014, the eye (world units) into 0x6d0034 and the block, the
 // unshifted translation into 0x6d003c
+CameraViewArgs g_viewArgs;
+
 void buildViewTransform(int dist, int yaw, int pitch, uint16_t roll) {
+    g_viewArgs = {dist, yaw, pitch, roll};
     CameraState& cam = cameraState();
     CameraTransform& tf = cameraTransform();
     const int shift = stage().coordinateShift & 0x1f;
@@ -386,5 +389,8 @@ void cameraShakeAt(uint32_t strength, uint32_t amount, uint32_t nearDistance, ui
 void cameraShakeAt(uint32_t strength, uint32_t amount, uint32_t nearDistance, uint32_t farDistance, const int16_t pos[3]) {
     shakeByDistance(strength, amount, nearDistance, farDistance, pos[0], pos[1], pos[2]);
 }
+
+CameraViewArgs cameraViewArgs() { return g_viewArgs; }
+void cameraBuildView(int dist, int yaw, int pitch, uint16_t roll) { buildViewTransform(dist, yaw, pitch, roll); }
 
 } // namespace od::port

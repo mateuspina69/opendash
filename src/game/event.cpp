@@ -14,6 +14,7 @@
 #include "game/message.hpp"
 #include "game/player/player_state.hpp"
 #include "game/port_gap.hpp"
+#include "game/script_state.hpp"
 
 namespace od::port {
 
@@ -266,7 +267,7 @@ void eventStart(const Fixed16Vec3* pos, ShortVec3* rot, uint32_t param, uint16_t
     const GameMode mode = gameState().gameMode();
     if (int8_t(mode) < int8_t(GameMode::Field) || int8_t(mode) > int8_t(GameMode::Pause)) return;
     EventState& ev = eventState();
-    if (g_ownerHook) {
+    if (g_ownerHook && !scriptState().inUse()) {
         size_t owner = g_owner;
         if (!playerPresent(owner)) {
             owner = 0;

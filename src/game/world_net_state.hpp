@@ -401,6 +401,8 @@ public:
     void endTick();
     // the hit-list entries of the actors held here, for the game's lock-on selection
     void submitLockPoints();
+    // the actor this machine holds for a world's slot (none: not here)
+    ActorHeader* mirrorOf(uint8_t slot) const { return slotOf(slot); }
     // the solids of the actors held here, for the actor collision pass
     void submitSolids();
     uint64_t effectsStarted() const { return effectsStarted_; }

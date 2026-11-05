@@ -865,6 +865,7 @@ void PlayerView::setupHooks() {
     od::port::setMessageFadeHook([this](uint8_t type) { od::port::fadeStart(fadeTask, type, 0); });
     // the talking NPC's save menu (Maybe_WriteSaveFile 0x5493b0): OpenDash's saves dir, never the game's
     od::port::setSaveWriteHook([this](uint8_t slot, std::span<const uint8_t> img) { return writeSaveSlot(slot, img); });
+    if (ownWorld) ownWorld->setFade(&fadeTask);
     hooks.frame = [this] { // FUN_00542280 after the script runner
         using od::port::ActorPool;
         if (ownWorld) { // a client: its Mega Man and the effects; the rest is the world's
@@ -876,6 +877,7 @@ void PlayerView::setupHooks() {
             od::port::remotePlayersUpdate(); // the others' bones, for what follows them here
             od::port::updatePool(env, actors, ActorPool::Shots);
             od::port::cameraUpdate();
+            ownWorld->showSceneView();
             ownWorld->localActors(env, actors, true);
             od::port::fieldHudFrame();
             ownWorld->endFrame();
@@ -1714,6 +1716,7 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
         // select held is the soft reset, FUN_005410b0)
         if ((ps1Buttons & 0x8) && !startWasDown && game.gameMode() == od::port::GameMode::Field) ps1Buttons |= 0x1;
         startWasDown = (ps1Buttons & 0x8) != 0;
+        if (ownWorld) ownWorld->overridePad(ps1Buttons);
         od::port::padUpdate(od::port::pad0(), ps1Buttons, stickX, stickY);
         if (afterPad) afterPad(); // the game loop's FUN_00542530 (the demo's pad replay, game/title)
         od::dc::resetCursor(); // 0x54a489: the draw-command cursor back to this frame's buffer

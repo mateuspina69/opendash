@@ -28,6 +28,7 @@ constexpr uint8_t kScriptUnskippable = 0x04;  // a requested skip is not taken
 constexpr uint8_t kScriptStepSkipped = 0x08;  // the step list was moved on (the next sequence tick only clears this)
 constexpr uint8_t kScriptSkipTaken = 0x10;    // the cutscene's skip was taken
 constexpr uint8_t kScriptSkipLocked = 0x20;   // start does not ask for the skip
+constexpr uint8_t kScriptWatched = 0x20;      // a session's game: a scene plays in the room's world (nothing runs here)
 constexpr uint8_t kScriptEnded = 0x40;        // the script ended this frame (cleared at the frame's end; the player's
                                               // input stays off for that frame)
 constexpr uint8_t kScriptCameraPaused = 0x80; // the camera script and the step list are held

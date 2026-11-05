@@ -1,6 +1,7 @@
 // The sound logic (see audio_logic.hpp), one routine per exe routine. The x87 steps (the pan ratio, the distance, the
 // angle, the loop voices' pitch) are evaluated as the game's single-precision FPU does: each arithmetic result rounded
 // to a float, integer loads exact, __ftol truncates.
+#include "game/presentation.hpp"
 #include "game/loaded_data.hpp"
 #include "game/audio_logic.hpp"
 
@@ -179,12 +180,16 @@ SoundDescriptor descriptor(uint32_t id) {
 }
 
 // exe 0x5d5220(kind): a free queue entry (the queue full: -1), its kind, the count + 1, the queue pending
+uint8_t g_soundOwner = kNoSoundOwner;
+bool g_localEffectsMuted = false;
+
 int queueAlloc(SoundRequestKind kind) {
     SoundQueue& q = soundQueue();
     const uint32_t n = q.count;
-    if (n == kQueueEntries) return -1;
+    if (n == kQueueEntries || g_localEffectsMuted) return -1;
     auto&& e = q.entries[n];
     e.kind = uint16_t(kind);
+    if (presentationBatch()) e.unread04 = g_soundOwner;
     q.count = q.count + 1;
     q.flags |= kQueuePending;
     return int(n);
@@ -1063,6 +1068,24 @@ void soundQueueClear() {
     q.flags &= ~kQueuePending;
 }
 
+void setSoundOwner(uint8_t owner) { g_soundOwner = owner; }
+void setLocalEffectsMuted(bool muted) { g_localEffectsMuted = muted; }
+
+void soundRequestReplay(const SoundRequest& r) {
+    SoundQueue& q = soundQueue();
+    if (q.count == kQueueEntries) return;
+    auto&& e = q.entries[q.count];
+    e.kind = r.kind;
+    e.id = r.id;
+    e.x = r.x;
+    e.y = r.y;
+    e.z = r.z;
+    e.mode = r.mode;
+    e.modeHigh = r.modeHigh;
+    q.count = q.count + 1;
+    q.flags |= kQueuePending;
+}
+
 void soundQueuePopFront() {
     SoundQueue& q = soundQueue();
     for (size_t i = 0; i + 1 < kQueueEntries; ++i) {
@@ -1462,6 +1485,10 @@ void soundUpdate() {
     voiceClipUpdate();
     while (q.entries[0].kind != 0) {
         ctx.request.copyFrom(q.entries[0]);
+        // a world's sounds are played by its players (the loops follow their actors: they are not sent)
+        if (PresentationBatch* batch = presentationBatch();
+            batch && (ctx.request.kind == uint16_t(SoundRequestKind::Sound) || ctx.request.kind == uint16_t(SoundRequestKind::Music)))
+            batch->sound(ctx.request, uint8_t(q.entries[0].unread04));
         soundQueuePopFront();
         if (dispatch(ctx.request.kind) != 0) break;
     }

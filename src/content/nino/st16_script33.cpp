@@ -9,11 +9,14 @@
 // vy -0x200 rising 0x40 a tick along the yaw) to the next step. The wrap-up: the player back at its start x / z,
 // knocked down (exe 0x572850(player, 1)), the damage of the carrier's strong attack (its stat row's), the
 // block ended, flag 0x26 cleared.
+#include <functional>
+#include <utility>
 #include "content/nino/st16_script33.hpp"
 #include "content/nino/st16_script33_state.hpp"
 
 #include "content/nino/field_enemies.hpp"
 
+#include "game/player/players.hpp"
 #include "game/actor_movement.hpp"
 #include "game/actor_pools.hpp"
 #include "game/actor_state.hpp"
@@ -170,6 +173,50 @@ void catchScript() {
 }
 
 } // namespace
+
+namespace {
+std::function<void(size_t, uint8_t, uint8_t, bool)> g_holdHook;
+AnimatedActor* g_heldBy = nullptr;
+size_t g_heldPlayer = 0;
+} // namespace
+
+void st16SetHoldHook(std::function<void(size_t, uint8_t, uint8_t, bool)> hook) { g_holdHook = std::move(hook); }
+
+void st16WorldCatch() {
+    clearStoryFlag(kFlagCatchScene);
+    uint32_t i = 0;
+    for (uint32_t mask = actorSystem().animatedLive; mask != 0; mask <<= 1, ++i) {
+        AnimatedActor& actor = animatedPool()[i];
+        if (int32_t(mask) >= 0 || actor.type != kBoxCarrierType) continue;
+        const auto& grip = classState<BoxCarrierGrip>(actor);
+        if (grip.gripPose == 0) continue;
+        g_heldBy = &actor;
+        g_heldPlayer = playerId(nearestPlayer(actor.pos));
+        if (g_holdHook) g_holdHook(g_heldPlayer, actor.slot, uint8_t(grip.gripPose), true);
+        return;
+    }
+}
+
+void st16WorldCatchTick() {
+    if (!g_heldBy) return;
+    const auto& grip = classState<BoxCarrierGrip>(*g_heldBy);
+    if (grip.carry & kCarrierHoldsPlayer) return;
+    if (g_holdHook) g_holdHook(g_heldPlayer, g_heldBy->slot, 0, false);
+    g_heldBy = nullptr;
+}
+
+void st16ClientCatch(ActorHeader& carrier, uint8_t gripPose, bool holds) {
+    AnimatedActor& actor = static_cast<AnimatedActor&>(actorLayoutOf(carrier));
+    auto&& grip = classState<BoxCarrierGrip>(actor);
+    if (holds) {
+        grip.gripPose = int8_t(gripPose);
+        grip.carry = kCarrierHoldsPlayer;
+        actor.type = kBoxCarrierType;
+        scriptRun(kScriptCatch);
+    } else {
+        grip.carry &= uint8_t(~kCarrierHoldsPlayer);
+    }
+}
 
 bool st16Script33Ported(uint8_t id) { return storyScriptHandler(id).id() == RoutineId::St16CatchScript; }
 

@@ -29,6 +29,11 @@ public:
     virtual void poll(uint64_t nowNs) = 0;
     // what came for this player since the last call
     virtual std::vector<WorldMessage> take(uint8_t playerId) = 0;
+    // test instrument: this player, on joining, stays where they are instead of coming next to the host
+    void setStays(bool stays) { stays_ = stays; }
+
+protected:
+    bool stays_ = false;
 };
 
 // The coordinator in the host's game: the worlds, this game's player directly, the session's clients routed
@@ -37,6 +42,7 @@ public:
     CoopHost(std::filesystem::path exe, std::filesystem::path storySave);
     // the session whose clients come through here (none: a game on its own)
     void useSession(od::net::Session* session) { session_ = session; }
+    void testClearFlag(uint32_t flag) { worlds_.testClearFlag(flag); }
 
     std::optional<uint8_t> playerId() const override { return uint8_t(0); }
     void enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& state) override;

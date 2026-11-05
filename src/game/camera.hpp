@@ -52,4 +52,12 @@ void cameraShakeAt(uint32_t strength, uint32_t amount, uint32_t nearDistance, ui
 // exe 0x40eb40: the same at an s16 point (taken as 16.16 with zero fractions)
 void cameraShakeAt(uint32_t strength, uint32_t amount, uint32_t nearDistance, uint32_t farDistance, const int16_t pos[3]);
 
+// the view last built, and one built from such values (a session's scene is watched through its world's)
+struct CameraViewArgs {
+    int distance = 0, yaw = 0, pitch = 0;
+    uint16_t roll = 0;
+};
+CameraViewArgs cameraViewArgs();
+void cameraBuildView(int dist, int yaw, int pitch, uint16_t roll);
+
 } // namespace od::port

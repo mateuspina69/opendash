@@ -3,6 +3,8 @@
 #include "content/nino/ch2_rooms.hpp"
 #include "content/nino/stage_light.hpp"
 
+#include "content/nino/st16_script33.hpp"
+#include "game/world_view.hpp"
 #include "game/loaded_data.hpp"
 #include "game/actor_pools.hpp"
 #include "game/actor_state.hpp"
@@ -147,6 +149,7 @@ bool ch2RoomCase() {
         break;
     default: break;
     }
+    if (st16 && storyFlag(kFlagCaught) && worldHasNoView()) st16WorldCatch(); // a session: for the one held only
     if (st16 && storyFlag(kFlagCaught) && noEvent() && transitionRequest().state == 0) scriptRun(kScriptCaught);
     return true;
 }
