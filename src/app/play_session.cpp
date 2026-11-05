@@ -869,6 +869,7 @@ void PlayerView::setupHooks() {
             ownWorld->localActors(env, actors, false);
             od::port::actorCollision();
             od::port::playerUpdate(env);
+            od::port::remotePlayersUpdate(); // the others' bones, for what follows them here
             od::port::updatePool(env, actors, ActorPool::Shots);
             od::port::cameraUpdate();
             ownWorld->localActors(env, actors, true);
@@ -1717,6 +1718,14 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
             if (auto hostSave = ownWorld->takeHostSave(storySave)) { // what exists is the host's
                 storySave = std::move(*hostSave);
                 if (room) enterPlay(*room);
+            }
+            if (const int weapon = ownWorld->takeTestWeapon(); weapon >= 0) { // a test instrument: a special weapon equipped
+                od::port::Player& p = od::port::player();
+                p.specialWeapon = int8_t(weapon);
+                p.activeSpecial = int8_t(weapon); p.specialAllowed = 1;
+                od::port::setupSpecialGauge(p, true);
+                playerFiles();
+                assetsDirty = true;
             }
             ownWorld->turn(SDL_GetTicksNS());
         }

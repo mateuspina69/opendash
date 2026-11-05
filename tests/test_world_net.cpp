@@ -360,7 +360,7 @@ void testEffects() {
     s.pos = {1, 2, 3};
     t.seen(0x61, s);
     auto batches = sender.events(t);
-    CHECK(batches.size() == 1 && batches[0].size() == 8 + 34);
+    CHECK(batches.size() == 1 && batches[0].size() == 8 + 35);
     for (const auto& batch : batches) CHECK(client.applyEvents(batch));
     CHECK(sender.update(t).size() == kHeader); // no state for it
     client.advance(0);

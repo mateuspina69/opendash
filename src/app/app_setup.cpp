@@ -136,6 +136,12 @@ void App::parseArgs(int argc, char** argv) {
             const int dx = std::stoi(argv[++i]), dz = std::stoi(argv[++i]);
             playerView.ownWorld->addGuest(dx, dz);
         }
+        else if (a == "--own-world-test-level" && playerView.ownWorld && i + 2 < argc) { // test instrument
+            const uint32_t tick = uint32_t(std::stoul(argv[++i]));
+            playerView.ownWorld->testLevelAt(tick, int8_t(std::stoi(argv[++i])));
+        }
+        else if (a == "--own-world-test-weapon" && playerView.ownWorld && i + 1 < argc) // test instrument
+            playerView.ownWorld->testWeapon(std::stoi(argv[++i]));
         else if (a == "--classic") classicArg = std::stoi(argv[++i]) != 0; // the original tank controls (scripted runs)
         else if (a == "--precise-poses") od::precise::setEnabled(std::stoi(argv[++i]) != 0); // 0 = the PS1 rounded poses
         else if (a == "--flag") flagArgs.push_back(uint32_t(std::stoul(argv[++i], nullptr, 0)));

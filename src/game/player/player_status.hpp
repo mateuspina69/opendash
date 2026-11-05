@@ -17,6 +17,8 @@ constexpr uint32_t kFlagSlowArmour = 0x404;
 // the slow and the orbit set the drag / spawn their markers, the timers run (shortened by moving: the pad's directions
 // pressed); without a status the light colour by the balance; in a wade the drag by its depth
 void updateStatusEffects(Player& p);
+// A client, for a player it only sees: that player's status markers started when their status shows and their marker is not up
+void showStatusMarkers(Player& p);
 
 // The floors that give the player a status while it stands on them (the stages call these on the player): its height
 // (the lower of its y and its ground, exe 0x40f190, asked twice as the exe does) below the floor's limit, not between

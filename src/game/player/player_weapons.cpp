@@ -789,6 +789,12 @@ void specialArmUpdate(Player& p) {
     for (size_t i = 0; i < shot.params.size(); ++i) shot.params[i] = 0;
 }
 
+void showChargeMarker(Player& p, uint8_t charge) {
+    if (charge != 0 && p.charge == 0 && chargeMarker(GlobalStaticType::ChargeMarker) != 0) p.charge = 1;
+    if (charge == 0) p.charge = 0;
+    p.gauge = p.gaugeMax = 0x7fff; // its energy is its owner's: the marker here never runs out
+}
+
 void setupSpecialGauge(bool refill) { setupSpecialGauge(player(), refill); }
 
 void setupSpecialGauge(Player& p, bool refill) {

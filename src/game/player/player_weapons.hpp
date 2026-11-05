@@ -27,6 +27,8 @@ enum class WeaponStat : uint8_t {
 // the stat's table value at the player's level of it (0 for weapon 0); WeaponStat::Extra has no table entry (a lookup
 // error)
 int weaponStat(const Player& p, int weapon, WeaponStat stat);
+// A client, for a player it only sees: the charge's marker while that player charges
+void showChargeMarker(Player& p, uint8_t charge);
 // the index of a weapon's stat level in Player::weaponLevels (weapon * 8 + the stat)
 constexpr size_t weaponLevelIndex(int weapon, WeaponStat stat) { return size_t(weapon) * 8 + size_t(stat); }
 // the weapons' maximum levels (exe table 0x8c4ad8, the levels' layout: 8 bytes by weapon, weaponLevelIndex)

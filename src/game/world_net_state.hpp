@@ -72,6 +72,7 @@ struct NetEffect {
     uint8_t pool = 0, type = 0, subtype = 0, variant = 0, spawnByte = 0, loopFlags = 0, flags = 0;
     uint8_t parent = kNetNoParent; // the slot of the actor it hangs from (a walker's foot dust, a glow, a splash)
     uint8_t bone = 0;              // the point of the player it follows (a splash at a player's bone)
+    uint8_t owner = 0;             // the player it belongs to (a blade's swing)
     std::array<uint8_t, 4> params{};
     std::array<int16_t, 3> pos{}, rot{}, velocity{};
     int16_t spare = 0;
@@ -387,6 +388,9 @@ class PoolNetActors : public NetClientActors {
 public:
     // shotsInOwnSlots: the client's own Mega Man has shots in that pool, so the world's take free slots there
     explicit PoolNetActors(bool shotsInOwnSlots = false) : shotsInOwnSlots_(shotsInOwnSlots) {}
+    // the table id on this machine of a world's player id (a client's game holds its own player at 0)
+    void setPlayerMap(uint8_t ownPlayerId) { ownPlayerId_ = ownPlayerId; }
+    uint8_t tableOfPlayer(uint8_t id) const { return id == ownPlayerId_ ? uint8_t(0) : id == 0 ? ownPlayerId_ : id; }
     void appear(uint8_t slot, const NetActorIdentity& identity, const NetActorState& state) override;
     void go(uint8_t slot) override;
     void effect(const NetEffect& start) override;
@@ -404,6 +408,7 @@ public:
 private:
     ActorHeader* slotOf(uint8_t slot) const;
     bool shotsInOwnSlots_;
+    uint8_t ownPlayerId_ = 0;
     std::array<bool, kNetSlots> animates_{}, held_{};
     std::array<uint32_t, kNetSlots> ownSlot_{}; // a world's shot in a slot of the client's: its address
     std::array<std::vector<NetLockPoint>, kNetSlots> lock_{};

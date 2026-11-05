@@ -40,6 +40,11 @@ public:
     void showPlayers(GhostView& ghosts, uint64_t localFingerprint, uint64_t nowNs);
     // test instrument: a second player in the world who follows this one at an offset (game units)
     void addGuest(int dx, int dz);
+    // test instruments: at this local tick the buster's attack level is this (an equipment change the world must wear); a
+    // special weapon equipped at the first tick
+    void testLevelAt(uint32_t tick, int8_t level) { testLevelTick_ = tick; testLevel_ = level; }
+    void testWeapon(int weapon) { testWeapon_ = weapon; }
+    int takeTestWeapon() { const int w = testWeapon_; testWeapon_ = -1; return w; }
 
 private:
     std::vector<uint8_t> playerState() const;
@@ -78,7 +83,12 @@ private:
         od::ghost::GhostBuffer buffer;
         std::array<od::port::NetPlayerTrack, 2> tracks{};
         int64_t stepped = -1;
+        bool joined = false;
     };
+    void otherPlayerRules(uint8_t id, Other& o, const od::port::PlayerSnapshot& shown);
+    uint32_t testLevelTick_ = 0;
+    int8_t testLevel_ = 0;
+    int testWeapon_ = -1;
     std::array<Other, 8> others_{};
 };
 

@@ -14,7 +14,7 @@ namespace {
 
 constexpr uint32_t kKeyBytes = 4;
 constexpr uint16_t kX = 1 << 0, kY = 1 << 1, kZ = 1 << 2, kYaw = 1 << 3, kPitch = 1 << 4, kLean = 1 << 5, kFlags = 1 << 6, kLight = 1 << 7,
-                   kMaskStageAnims = 1 << 8, kFace = 1 << 9, kLook = 1 << 10, kChannel0 = 1 << 11, kChannel1 = 1 << 12;
+                   kMaskStageAnims = 1 << 8, kFace = 1 << 9, kLook = 1 << 10, kChannel0 = 1 << 11, kChannel1 = 1 << 12, kFight = 1 << 13;
 constexpr uint8_t kChannelAge = 1, kChannelKey = 2, kChannelHeld = 4;
 
 struct Out {
@@ -69,6 +69,7 @@ uint16_t maskOf(const NetPlayerFields& n, const NetPlayerFields& o) {
     if (!(n.look == o.look)) m |= kLook;
     if (!(n.channels[0] == o.channels[0])) m |= kChannel0;
     if (!(n.channels[1] == o.channels[1])) m |= kChannel1;
+    if (n.status != o.status || n.charge != o.charge || n.specialFiring != o.specialFiring) m |= kFight;
     return m;
 }
 
@@ -92,6 +93,9 @@ NetPlayerFields NetPlayerWatch::see(const Player& p, uint32_t tick) {
     f.busterSlot = p.activeBuster;
     f.face = {p.idleFaces[0], p.idleFaces[1]};
     f.look = {p.type, uint8_t(p.helmetPart), uint8_t(p.legPart), p.specialWeapon};
+    f.status = uint8_t(p.status);
+    f.charge = uint8_t(p.charge);
+    f.specialFiring = uint8_t(p.specialFiring);
     const std::array<const AnimChannel*, 2> channels = {&p.body, &p.upper};
     for (size_t i = 0; i < 2; ++i) {
         const AnimChannel& ch = *channels[i];
@@ -198,6 +202,11 @@ std::vector<uint8_t> NetPlayerSender::update(uint8_t playerId, uint32_t tick, co
             o.u8(c.ticks);
         }
     }
+    if (mask & kFight) {
+        o.u8(now.status);
+        o.u8(now.charge);
+        o.u8(now.specialFiring);
+    }
     inFlight_.push_back({sequence, now});
     while (inFlight_.size() > 64) inFlight_.pop_front();
     sent_ = now;
@@ -270,6 +279,11 @@ std::optional<NetPlayerHeard> NetPlayerReceiver::apply(std::span<const uint8_t> 
             c.key = r.u8();
             c.ticks = r.u8();
         }
+    }
+    if (mask & kFight) {
+        f.status = r.u8();
+        f.charge = r.u8();
+        f.specialFiring = r.u8();
     }
     if (!r.ok || r.at != bytes.size()) return std::nullopt;
     fields_ = f;

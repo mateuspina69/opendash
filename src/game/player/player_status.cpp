@@ -87,6 +87,25 @@ void slipperyFloor(Player& p) {
     if (scriptState().flags == 0 && p.legPart != kLegsGrip) p.slippery = 1;
 }
 
+void showStatusMarkers(Player& p) {
+    const auto start = [&](uint16_t effect, uint16_t floor, GlobalStaticType type, uint8_t variant) {
+        if (!(p.status & (effect | floor)) || (p.status & (effect << kStatusMarkerShift))) return;
+        statusMarker(type, variant);
+        p.setStatusBits(uint16_t(effect << kStatusMarkerShift));
+    };
+    start(kStatusDrain, kStatusDrainFloor, GlobalStaticType::DrainBurnMarker, markerVariant(p, kMarkerOfDrain));
+    start(kStatusBurn, kStatusBurnFloor, GlobalStaticType::DrainBurnMarker, markerVariant(p, 0));
+    start(kStatusSlowed, kStatusSlowedFloor, GlobalStaticType::SlowMarker, 0);
+    if ((p.status & (kStatusOrbit | kStatusOrbitFloor)) && !(p.status & (kStatusOrbit << kStatusMarkerShift))) {
+        for (size_t i = 0; i < orbitMarkerPhases.size(); ++i) {
+            const uint32_t a = statusMarker(GlobalStaticType::SmokeColumn, kOrbitMarkerVariant);
+            if (!a) break;
+            staticActorAt(a).params[0] = orbitMarkerPhases[i];
+        }
+        p.setStatusBits(uint16_t(kStatusOrbit << kStatusMarkerShift));
+    }
+}
+
 void updateStatusEffects(Player& p) {
     if (storyFlag(kFlagBurnArmour)) p.status &= uint16_t(~kStatusBurn);
     if (storyFlag(kFlagSlowArmour)) p.status &= uint16_t(~kStatusSlowed);

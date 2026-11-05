@@ -38,6 +38,7 @@ struct NetPlayerFields {
     std::array<int8_t, 2> face{};
     PlayerLook look;
     std::array<NetPlayerChannel, 2> channels{};
+    uint8_t status = 0, charge = 0, specialFiring = 0; // what a client's rules for their markers and arms read
     friend bool operator==(const NetPlayerFields&, const NetPlayerFields&) = default;
 };
 

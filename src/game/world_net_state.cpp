@@ -20,6 +20,7 @@
 #include "game/water_splash_state.hpp"
 #include "game/hit_list.hpp"
 #include "game/room_grid.hpp"
+#include "game/shots/hyper_shell_state.hpp"
 #include "game/loaded_data.hpp"
 #include "game/model_data.hpp"
 #include "game/stage_state.hpp"
@@ -79,7 +80,7 @@ constexpr int kLockTolerance = 4; // units a lock-on point may drift before the 
 constexpr size_t kMaxLockPoints = 8;
 constexpr uint8_t kEventAppear = 1, kEventGo = 2, kEventAppearStill = 3, kEventEffect = 4, kEventShift = 5, kEventRoomPatch = 6; // Still: no animation in play
 constexpr size_t kBatchHeaderBytes = 8;
-constexpr size_t kAppearBytes = 26, kGoBytes = 2, kEffectBytes = 34;
+constexpr size_t kAppearBytes = 26, kGoBytes = 2, kEffectBytes = 35;
 constexpr int kPathPosTolerance = 32; // 1/16 units an actor may leave its path by before the world sends a new one
 constexpr int kPathRotTolerance = 16; // of a turn of 4096
 constexpr size_t kMaxInFlight = 64;
@@ -373,6 +374,7 @@ bool netEffectClass(RoutineId id) {
     case RoutineId::FootstepDustUpdate:
     case RoutineId::SparkEmitterUpdate:
     case RoutineId::MissileTrailUpdate:
+    case RoutineId::DarkTrailUpdate:
     case RoutineId::WaterSplashUpdate: return true;
     default: return false;
     }
@@ -450,8 +452,27 @@ template <class Pool> void captureMeshPool(NetWorldTable& table, Pool& pool, siz
                     if (parent) s.effectStart.parent = parent->slot;
                     else s.effectGoes = false;
                 }
+                if (h && h.id() == RoutineId::DarkTrailUpdate) {
+                    const auto* trail = heldClassStateOf<hyper_shell_state::DarkTrailFields>(a);
+                    if (trail && uint32_t(trail->parent) != 0) s.effectStart.parent = actorHeaderAt(trail->parent).slot;
+                    else s.effectGoes = false;
+                }
                 if (h && h.id() == RoutineId::WaterSplashUpdate)
                     noteSplashSource(const_cast<StaticActor&>(static_cast<const StaticActor&>(a)), s.effectStart, s.effectGoes);
+            }
+        }
+        if constexpr (std::is_same_v<Pool, ShotPool>) {
+            // a blade's swing follows its owner's arm: each client runs it from its event
+            const RoutineRef h = actorHandler(a, ActorPool::Shots, false);
+            if (h && h.id() == RoutineId::BladeArmShotUpdate) {
+                s.effect = true;
+                s.effectGoes = true;
+                s.effectStart.pool = uint8_t(kShotClass);
+                s.effectStart.type = a.type;
+                s.effectStart.variant = a.variant;
+                s.effectStart.loopFlags = a.loopFlags;
+                s.effectStart.flags = uint8_t(a.flags & (kActorLive | kActorDrawn));
+                s.effectStart.owner = a.ownerPlayer;
             }
         }
         if (netSlotOnPath(slot)) {
@@ -625,6 +646,7 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
             w.u8(e.flags);
             w.u8(e.parent);
             w.u8(e.bone);
+            w.u8(e.owner);
             for (const uint8_t p : e.params) w.u8(p);
             for (const int16_t v : e.pos) w.i16(v);
             w.i16(e.spare);
@@ -938,6 +960,7 @@ bool NetStateClient::applyEvents(std::span<const uint8_t> bytes) {
             e.flags = r.u8();
             e.parent = r.u8();
             e.bone = r.u8();
+            e.owner = r.u8();
             for (uint8_t& p : e.params) p = r.u8();
             for (int16_t& v : e.pos) v = r.i16();
             e.spare = r.i16();
@@ -1309,11 +1332,14 @@ void PoolNetActors::effect(const NetEffect& e) {
     // what it hangs from: an actor held here, or (a player's slot) this machine's Mega Man
     Actor* parent = nullptr;
     if (e.parent != kNetNoParent) {
-        ActorHeader& head = actorHeaderAt(actorBySlot(e.parent));
-        if (!(head.flags & kActorLive) && actorSlotClass(e.parent) != kPlayerClass) return;
-        parent = &actorLayoutOf(head);
+        // ... held in a slot of this client's, for a shot; a player's by this machine's table
+        ActorHeader* head = actorSlotClass(e.parent) == kPlayerClass ? &actorHeaderAt(playerAddress(tableOfPlayer(e.parent))) : slotOf(e.parent);
+        if (!head || (!(head->flags & kActorLive) && actorSlotClass(e.parent) != kPlayerClass)) return;
+        parent = &actorLayoutOf(*head);
     }
-    const uint32_t address = e.pool == kEffectClass ? allocActorA0(e.loopFlags) : allocActor60(e.loopFlags);
+    const uint32_t address = e.pool == kEffectClass ? allocActorA0(e.loopFlags)
+                             : e.pool == kShotClass ? allocActor10()
+                                                    : allocActor60(e.loopFlags);
     if (address == 0) return; // the pool is full here: this one is not seen
     ActorHeader& head = actorHeaderAt(address);
     head.flags = e.flags;
@@ -1323,6 +1349,12 @@ void PoolNetActors::effect(const NetEffect& e) {
     head.spawnByte = e.spawnByte;
     for (size_t i = 0; i < 4; ++i) head.params[i] = e.params[i];
     head.enterState(0);
+    head.ownerPlayer = tableOfPlayer(e.owner);
+    if (e.pool == kShotClass) {
+        head.loopFlags = e.loopFlags;
+        ++effectsStarted_;
+        return;
+    }
     const auto handlerIs = [&](RoutineId id) {
         const RoutineRef h = actorHandler(head, e.pool == kEffectClass
                                                     ? ((e.loopFlags & kActorLateLoop) ? ActorPool::EffectsLate : ActorPool::Effects)
@@ -1333,6 +1365,8 @@ void PoolNetActors::effect(const NetEffect& e) {
         classState<GlowTrailFields>(asEffect(head)).parent = parent;
     if (parent && e.pool == kStaticClass && handlerIs(RoutineId::FootstepDustUpdate))
         classState<FootstepDustFields>(asStatic(head)).parent = parent;
+    if (parent && e.pool == kStaticClass && handlerIs(RoutineId::DarkTrailUpdate))
+        classState<hyper_shell_state::DarkTrailFields>(asStatic(head)).parent = parent->at;
     if (e.pool == kEffectClass) {
         EffectActor& fx = asEffect(head);
         fx.pos.x = e.pos[0];

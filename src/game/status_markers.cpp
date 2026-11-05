@@ -36,20 +36,20 @@ constexpr uint8_t kMarkerFace = 4; // the player's idle faces while a marker is 
 constexpr uint32_t kNeutralAmbient = 0x808080; // the player model's light colour with no status tint
 
 // the player is drawn (the markers draw only then)
-bool playerDrawn() { return (player().flags & kActorDrawn) != 0; }
+bool playerDrawn() { return (actingPlayer().flags & kActorDrawn) != 0; }
 // the player shows the markers' face
 void markerFaces(uint8_t face) {
-    player().idleFaces[0] = int8_t(face);
-    player().idleFaces[1] = int8_t(face);
+    actingPlayer().idleFaces[0] = int8_t(face);
+    actingPlayer().idleFaces[1] = int8_t(face);
 }
 // the player can lose the status: alive and not knocked back / down
 bool playerSettled() {
-    const Player& p = player();
+    const Player& p = actingPlayer();
     return p.hitPoints >= 0 && p.sub() != PlayerSub::KnockBack && p.sub() != PlayerSub::KnockDown;
 }
 // the marker ended: its marker bit and the status's top nibble cleared (the word store), the faces back, freed
 void endMarker(StaticActor& actor, uint16_t statusEffect) {
-    player().status &= uint16_t(kStatusTickMask & ~uint16_t(statusEffect << kStatusMarkerShift));
+    actingPlayer().status &= uint16_t(kStatusTickMask & ~uint16_t(statusEffect << kStatusMarkerShift));
     markerFaces(0);
     freeActor(actor);
 }
@@ -85,7 +85,7 @@ uint16_t markedStatus(bool drain) {
 uint32_t stripCell(uint32_t i) { return ((uint32_t(gameState().frame) + i) << 5) & 0xe0; }
 // a particle reborn around the player with its full life
 void rebornAroundPlayer(DrainParticle& p) {
-    const Player& pl = player();
+    const Player& pl = actingPlayer();
     p.point.x = int16_t(uint16_t((rngStep() & 0x3f) + uint32_t(uint16_t(pl.pos.x.whole)) - 0x20u));
     p.point.y = int16_t(uint16_t(uint32_t(uint16_t(pl.pos.y.whole)) - (rngStep() & 0x7f) - 0x20u));
     p.point.z = int16_t(uint16_t((rngStep() & 0x3f) + uint32_t(uint16_t(pl.pos.z.whole)) - 0x20u));
@@ -93,8 +93,8 @@ void rebornAroundPlayer(DrainParticle& p) {
 
 // the player tint by the level n (exe 0x5684c0 / 0x568630)
 void drainBurnTint(bool drain, int n) {
-    if (drain) player().ambientColour = uint32_t(n) * kDrainTintStep + kDrainTintBase;
-    else player().ambientColour = kBurnTintBase - uint32_t(n) * kBurnTintStep;
+    if (drain) actingPlayer().ambientColour = uint32_t(n) * kDrainTintStep + kDrainTintBase;
+    else actingPlayer().ambientColour = kBurnTintBase - uint32_t(n) * kBurnTintStep;
 }
 // exe 0x5687f0(actor, b, drain): (while the player is drawn) the faces; one sprite on each bone of the level's row
 // (stopping at a negative entry, or at the shins / the feet when the player's box is low); then the particles rise and
@@ -103,7 +103,7 @@ void drainBurnTint(bool drain, int n) {
 void drainBurnDraw(StaticActor& actor, DrainBurnMarkerFields& m, bool drain) {
     if (!playerDrawn()) return;
     markerFaces(kMarkerFace);
-    const Player& pl = player();
+    const Player& pl = actingPlayer();
     const uint32_t rgb = drain ? kDrainSpriteRgb : kBurnSpriteRgb;
     const uint16_t clut = drain ? kDrainClut : kBurnClut;
     const size_t row = size_t(m.level >> 1) * kBoneRowSize;
@@ -191,7 +191,7 @@ void drainBurnStart(StaticActor& actor, DrainBurnMarkerFields& m) {
     const bool drain = (actor.variant & kMarkerOfDrain) != 0;
     drainBurnTint(drain, m.level);
     drainBurnDraw(actor, m, drain);
-    if (!(player().status & markedStatus(drain))) {
+    if (!(actingPlayer().status & markedStatus(drain))) {
         m.level = int16_t(kFadeStart - m.level);
         actor.state += 2u;
         return;
@@ -207,7 +207,7 @@ void drainBurnHold(StaticActor& actor, DrainBurnMarkerFields& m) {
     const bool drain = (actor.variant & kMarkerOfDrain) != 0;
     drainBurnTint(drain, m.level);
     drainBurnDraw(actor, m, drain);
-    if (!(player().status & markedStatus(drain)) && playerSettled()) {
+    if (!(actingPlayer().status & markedStatus(drain)) && playerSettled()) {
         m.level = int16_t(kFadeStart - m.level);
         actor.state += 1u;
     }
@@ -218,10 +218,10 @@ void drainBurnFade(StaticActor& actor, DrainBurnMarkerFields& m) {
     const bool drain = (actor.variant & kMarkerOfDrain) != 0;
     m.level += uint32_t(kFadeStep);
     const int n = m.level;
-    if (n <= kFadeEnd && !(player().status & markedStatus(drain))) {
+    if (n <= kFadeEnd && !(actingPlayer().status & markedStatus(drain))) {
         const int r = kFadeEnd - n;
-        if (drain) player().ambientColour = uint32_t(r) * kDrainTintStep + kNeutralAmbient;
-        else player().ambientColour = kNeutralAmbient - uint32_t(r) * kBurnTintStep;
+        if (drain) actingPlayer().ambientColour = uint32_t(r) * kDrainTintStep + kNeutralAmbient;
+        else actingPlayer().ambientColour = kNeutralAmbient - uint32_t(r) * kBurnTintStep;
         drainBurnDraw(actor, m, drain);
         return;
     }
@@ -250,7 +250,7 @@ enum class BoltsDrawn { Few = 0, Some = 1, Many = 2 };
 
 // the player's bone point k (camera-input units)
 void bonePoint(uint32_t k, int16_t out[3]) {
-    const ShortVec3& p = player().bonePoints[k];
+    const ShortVec3& p = actingPlayer().bonePoints[k];
     out[0] = p.x;
     out[1] = p.y;
     out[2] = p.z;
@@ -361,7 +361,7 @@ BoltsDrawn slowBolts(StaticActor& actor, SlowMarkerFields& m) {
 void slowSpark(StaticActor& actor) {
     const uint32_t bone = sparkBones[rngStep() & 7];
     const int sh = stage().coordinateShift;
-    const ShortVec3& b = player().bonePoints[bone];
+    const ShortVec3& b = actingPlayer().bonePoints[bone];
     int16_t p[3];
     p[0] = wrap16(int(int16_t(uint16_t(uint16_t(b.x) + (rngStep() & 0x1f) - 0x10))) << (sh & 0x1f));
     p[1] = wrap16(int(int16_t(uint16_t(uint16_t(b.y) + (rngStep() & 0x1f) - 0x10))) << (sh & 0x1f));
@@ -393,16 +393,16 @@ void slowSpark(StaticActor& actor) {
 }
 // the player tint by the bolts drawn (exe 0x568b60 / 0x568c10): neutral, kSlowTintSome, kSlowTintMany + the sound
 void slowTint(BoltsDrawn r) {
-    if (r == BoltsDrawn::Few) player().ambientColour = kNeutralAmbient;
-    else if (r == BoltsDrawn::Some) player().ambientColour = kSlowTintSome;
+    if (r == BoltsDrawn::Few) actingPlayer().ambientColour = kNeutralAmbient;
+    else if (r == BoltsDrawn::Some) actingPlayer().ambientColour = kSlowTintSome;
     else {
-        player().ambientColour = kSlowTintMany;
+        actingPlayer().ambientColour = kSlowTintMany;
         soundPlayAtPlayer(kSlowSound); // exe 0x5d53e0
     }
 }
 // another status's marker owns the tint
-bool otherStatusUp() { return (uint8_t(player().status) & kOtherStatuses) != 0; }
-bool slowStatusUp() { return (uint8_t(player().status) & kSlowStatus) != 0; }
+bool otherStatusUp() { return (uint8_t(actingPlayer().status) & kOtherStatuses) != 0; }
+bool slowStatusUp() { return (uint8_t(actingPlayer().status) & kSlowStatus) != 0; }
 // exe 0x568b60: the end angles at random, kBolts bolts; the tint; the status already gone -> Fade
 void slowStart(StaticActor& actor, SlowMarkerFields& m) {
     for (uint32_t k = 0; k < kBoltEnds; ++k) m.boltEnds[k] = uint8_t(rngStep() & 0x3f);
@@ -418,7 +418,7 @@ void slowHold(StaticActor& actor, SlowMarkerFields& m) {
     if (!otherStatusUp()) slowTint(r);
     if (r == BoltsDrawn::Many) slowSpark(actor);
     if (!slowStatusUp() && playerSettled()) {
-        if (!otherStatusUp()) player().ambientColour = kNeutralAmbient;
+        if (!otherStatusUp()) actingPlayer().ambientColour = kNeutralAmbient;
         actor.state += 1u;
     }
 }

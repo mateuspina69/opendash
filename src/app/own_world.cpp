@@ -7,6 +7,9 @@
 
 #include "game/actor_sweeps.hpp"
 #include "game/hit_list.hpp"
+#include "game/player/player_status.hpp"
+#include "game/player/player_weapons.hpp"
+#include "game/player/remote_player.hpp"
 #include "game/player/player_snapshot.hpp"
 #include "game/player/player_state.hpp"
 
@@ -56,6 +59,8 @@ void OwnWorldClient::roomBound(int stage, int sub) {
         if (od::port::controllerPool()[i].flags & od::port::kActorLive) od::port::freeActor(od::port::controllerPool()[i]);
     od::port::applyActorFrees();
     actors_ = std::make_unique<od::port::PoolNetActors>(true);
+    for (uint8_t id = 1; id < od::port::kPlayerSlots; ++id)
+        if (od::port::playerIsRemote(id)) od::port::remotePlayerLeave(id);
     state_ = std::make_unique<od::port::NetStateClient>(*actors_);
     clock_ = std::make_unique<od::port::NetRenderClock>();
     shownAny_ = false;
@@ -90,9 +95,14 @@ void OwnWorldClient::turn(uint64_t nowNs) {
         const std::optional<uint8_t> id = pipe_->playerId();
         if (!id) return; // the session has not welcomed this game yet
         playerId_ = *id;
+        actors_->setPlayerMap(playerId_);
         joinRoom();
     }
     ++localTick_;
+    if (testLevelTick_ != 0 && localTick_ == testLevelTick_) {
+        od::port::player().weaponLevels[od::port::weaponLevelIndex(od::port::player().busterWeapon, od::port::WeaponStat::Attack)] = testLevel_;
+        SDL_Log("own world: buster attack level set to %d at tick %u", int(testLevel_), localTick_);
+    }
     const od::port::NetPlayerFields fields = watch_.see(od::port::player(), localTick_);
     if (localTick_ % od::port::kNetDefaultUpdateTicks == 0) {
         // an update after its length byte, as the world's lists of them
@@ -190,6 +200,25 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
     }
 }
 
+// The other player in this machine's table: what the classes that follow them read (their bones, their arm)
+void OwnWorldClient::otherPlayerRules(uint8_t id, Other& o, const od::port::PlayerSnapshot& shown) {
+    const uint8_t table = actors_->tableOfPlayer(id);
+    if (table >= od::port::kPlayerSlots || table == 0) return;
+    if (!o.joined) {
+        od::port::remotePlayerJoin(table, shown);
+        o.joined = true;
+    } else {
+        od::port::remotePlayerState(table, shown);
+    }
+    od::port::Player& p = od::port::playerById(table);
+    const od::port::NetPlayerFields& f = o.from.fields();
+    p.status = uint16_t((p.status & od::port::kStatusMarkerMask) | f.status);
+    p.specialFiring = int8_t(f.specialFiring);
+    const od::port::ScopedActingPlayer acting(table);
+    od::port::showStatusMarkers(p);
+    od::port::showChargeMarker(p, f.charge);
+}
+
 void OwnWorldClient::showPlayers(GhostView& ghosts, uint64_t localFingerprint, uint64_t nowNs) {
     for (size_t id = 0, slot = 0; id < others_.size() && slot < size_t(od::ghost::kMaxGhosts); ++id) {
         Other& o = others_[id];
@@ -217,6 +246,7 @@ void OwnWorldClient::showPlayers(GhostView& ghosts, uint64_t localFingerprint, u
             shown->snapshot.blend[c * 2 + 1] = played.blend[c * 2 + 1];
         }
         shown->fingerprint = localFingerprint;
+        otherPlayerRules(uint8_t(id), o, shown->snapshot);
         ghosts.setRemote(int(slot++), *shown);
     }
 }
