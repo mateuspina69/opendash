@@ -365,7 +365,7 @@ NetWorldTable::Seen seenOf(const Actor& a, uint32_t model, uint32_t animTable) {
 // the classes a client runs from its own room setup, or for its own Mega Man (the markers of the charge and of a status)
 bool netClientKeepsClass(RoutineId id) {
     return id == RoutineId::ChargeMarkerUpdate || id == RoutineId::DrainBurnMarkerUpdate || id == RoutineId::SlowMarkerUpdate ||
-           id == RoutineId::DoorActorUpdate || id == RoutineId::DoorLeafHingedUpdate || id == RoutineId::DoorLeafDoubleUpdate ||
+           id == RoutineId::DoorActorUpdate || id == RoutineId::SnowUpdate || id == RoutineId::DoorLeafHingedUpdate || id == RoutineId::DoorLeafDoubleUpdate ||
            id == RoutineId::DoorLeafSlidingUpdate;
 }
 

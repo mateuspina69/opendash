@@ -99,7 +99,7 @@ void hitSparkUpdate(const PlayerEnv&, uint32_t address) {
 }
 
 void doorGlowAt(int16_t x, int16_t y, int16_t z) {
-    constexpr uint16_t kGlowSize = 0x180;
+    constexpr uint16_t kGlowSize = 0x60;
     constexpr int kGlowHeight = 0x80;
     const uint32_t slot = allocActorA0(0);
     if (!slot) return;

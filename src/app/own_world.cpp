@@ -60,6 +60,7 @@ void OwnWorldClient::useSession(od::net::Session* session, bool host) {
 
 namespace {
 constexpr uint32_t kReloadFade = 0x11; // to black, as the time trial's restart
+constexpr uint8_t kStageFadeOut = 0x11, kStageFadeIn = 2;
 } // namespace
 
 std::optional<std::vector<uint8_t>> OwnWorldClient::takeReload() {
@@ -99,6 +100,13 @@ void OwnWorldClient::roomBound(int stage, int sub) {
         return;
     }
     od::port::presentationLoopsClear();
+    if (od::port::storyStageRunsAlone(uint8_t(stage))) { // the race runs here, as in the game; out of the session's worlds
+        if (room_ && joined_) pipe_->sendReliable(playerId_, WorldMessageType::NetLeave, {});
+        room_.reset();
+        joined_ = false;
+        SDL_Log("own world: ST%02X runs on this machine alone", unsigned(stage));
+        return;
+    }
     // the room setup's actors go, but what a client keeps
     od::port::StaticPool& statics = od::port::staticPool();
     for (size_t i = 0; i < od::port::StaticPool::size(); ++i)
@@ -516,7 +524,11 @@ void OwnWorldClient::movedTo(const std::vector<uint8_t>& to) {
         p.rotation.y = yaw;
         p.prevRotation.y = yaw;
     } else {
-        od::port::requestTransition(od::port::kTransitionAccepted, to[0], to[1], x, y, z, yaw, to[10], to[11]);
+        // another stage loads its files behind a fade (a world's script may have switched in place, its files loaded there)
+        const bool otherStage = to[0] != uint8_t(od::port::gameState().stage);
+        const uint8_t fadeOut = otherStage && to[11] == od::port::kNoFade ? kStageFadeOut : to[11];
+        const uint8_t fadeIn = otherStage && to[10] == od::port::kNoFade ? kStageFadeIn : to[10];
+        od::port::requestTransition(od::port::kTransitionAccepted, to[0], to[1], x, y, z, yaw, fadeIn, fadeOut);
     }
     SDL_Log("own world: moved to ST%02X sub %d at %d %d %d", unsigned(to[0]), int(to[1]), int(x), int(y), int(z));
 }
@@ -556,7 +568,7 @@ void OwnWorldClient::gateTurn() {
     if (noticeTicks_ > 0) --noticeTicks_;
     if (gateGlow_) {
         if (--gateGlowTicks_ <= 0) gateGlow_.reset();
-        else if (gateGlowTicks_ % 8 == 0) od::port::doorGlowAt((*gateGlow_)[0], (*gateGlow_)[1], (*gateGlow_)[2]);
+        else if (gateGlowTicks_ % 20 == 0) od::port::doorGlowAt((*gateGlow_)[0], (*gateGlow_)[1], (*gateGlow_)[2]);
     }
     od::port::TransitionRequest& r = od::port::transitionRequest();
     const od::port::GameState& g = od::port::gameState();

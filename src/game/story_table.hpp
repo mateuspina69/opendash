@@ -22,5 +22,7 @@ bool storyDoorGated(uint8_t fromStage, uint8_t toStage, int toSub, uint8_t story
 bool storyOptionalStage(uint8_t stage);
 // this script advances the story's byte, or opens a story boss's fight: it waits for everyone. The others are optional
 bool storyScriptGated(uint8_t script);
+// the time trial's courses (ST59 / 5A / 5B): who goes in races alone on their own machine, the others stay free
+bool storyStageRunsAlone(uint8_t stage);
 
 } // namespace od::port

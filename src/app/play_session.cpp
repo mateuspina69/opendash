@@ -869,9 +869,9 @@ void PlayerView::setupHooks() {
     if (ownWorld) ownWorld->setFade(&fadeTask);
     hooks.frame = [this] { // FUN_00542280 after the script runner
         using od::port::ActorPool;
-        if (ownWorld) { // a client: its Mega Man and the effects; the rest is the world's
+        od::port::setWorldIsElsewhere(ownWorld && ownWorld->inWorld());
+        if (ownWorld && ownWorld->inWorld()) { // a client: its Mega Man and the effects; the rest is the world's
             od::port::playerInputAndDispatch(env);
-            od::port::setWorldIsElsewhere(true);
             ownWorld->localActors(env, actors, false);
             od::port::actorCollision();
             od::port::playerUpdate(env);
@@ -979,7 +979,7 @@ void PlayerView::setupHooks() {
     od::port::staffRollSetHost(std::move(staffHost));
     // Maybe_TickRoomScripts' per-stage handler (story spawns)
     hooks.roomHandler = [this] {
-        if (ownWorld) return; // the room's logic is its world's
+        if (ownWorld && ownWorld->inWorld()) return; // the room's logic is its world's
         od::port::RoomScriptState& roomScript = od::port::roomScriptState();
         const uint32_t before = roomScript.actorMask;
         if (!od::port::roomScriptHandler()) return;

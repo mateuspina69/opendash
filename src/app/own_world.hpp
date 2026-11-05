@@ -38,6 +38,8 @@ public:
 
     // the room's files are bound and its spawn has run: the local actors go, this room's world takes over
     void roomBound(int stage, int sub);
+    // the room's logic is this room's world's (else this game runs the room itself: a race of its own)
+    bool inWorld() const { return room_.has_value(); }
     // the turn before a tick: the player's state to the world, what the world sent, the timeline up to now
     void turn(uint64_t nowNs);
     // the part of a frame's body that runs on a client (app/play_session's frame)

@@ -54,7 +54,6 @@ constexpr std::array kPlaces = {
     StoryPlace{0x16, kAnySub, kAnyStory, K::Mission, kNoFlag},
     StoryPlace{0x17, kAnySub, kAnyStory, K::Mission, kNoFlag},
     StoryPlace{0x18, kAnySub, kAnyStory, K::Mission, kNoFlag},
-    StoryPlace{0x59, kAnySub, kAnyStory, K::Mission, kNoFlag}, // the race (content/late_game/st59)
 };
 
 // The scripts that advance the story's byte (exe 0x512800 in the script or at its start in the room script)
@@ -82,6 +81,8 @@ bool storyDoorGated(uint8_t fromStage, uint8_t toStage, int toSub, uint8_t story
         if (p.stage == toStage && p.sub == kAnySub) return fromStage != toStage;
     return true;
 }
+
+bool storyStageRunsAlone(uint8_t stage) { return stage >= 0x59 && stage <= 0x5b; }
 
 bool storyScriptGated(uint8_t script) { return std::find(kGatedScripts.begin(), kGatedScripts.end(), script) != kGatedScripts.end(); }
 
