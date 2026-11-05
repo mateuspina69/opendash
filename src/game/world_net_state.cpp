@@ -134,6 +134,7 @@ void NetWorldTable::seen(uint8_t slot, const Seen& s) {
         a.effect = s.effect;
         a.effectGoes = s.effectGoes;
         a.effectStart = s.effectStart;
+        a.effectStart.slot = slot;
     }
     const std::array<int16_t, 3> pathPos = a.state.pos, pathRot = a.state.rot;
     const uint8_t previousAnim = a.state.anim;

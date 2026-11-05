@@ -366,7 +366,9 @@ void testEffects() {
     for (const auto& batch : batches) CHECK(client.applyEvents(batch));
     CHECK(sender.update(t).size() == kHeader); // no state for it
     client.advance(0);
-    CHECK(rec.effects.size() == 1 && rec.effects[0] == s.effectStart);
+    NetEffect told = s.effectStart;
+    told.slot = 0x61; // the slot it ran in on the world
+    CHECK(rec.effects.size() == 1 && rec.effects[0] == told);
     CHECK(rec.live.empty());
     // it ends on the world: nothing to say. Another starts in the slot: one more event.
     t.tick = 1;
