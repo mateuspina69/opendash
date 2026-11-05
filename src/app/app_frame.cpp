@@ -704,6 +704,7 @@ void App::drawOverlays() {
     renderer->imguiNewFrame();
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
+    if (playerView.ownWorld) playerView.ownWorld->drawNotice();
     canvas.begin(float(width), float(height));
     menuPainter.art.enabled = titleScreen.painter.art.enabled = vectorUi.enabled = messageUi.vectorLines = hdArtArg;
     menuPainter.vector = titleScreen.painter.vector = &vectorUi;

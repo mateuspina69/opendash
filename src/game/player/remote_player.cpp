@@ -88,7 +88,7 @@ void remotePlayersUpdate() {
         playerPose(p);
         geometryScratch() = scratch;
         poseStack() = stack;
-        playerSubmitHit(p);
+        if (p.hitPoints >= 0) playerSubmitHit(p); // one who is down is out of the fight
     }
 }
 

@@ -36,7 +36,10 @@
 #include "game/global_state.hpp"
 #include "game/stage_record.hpp"
 #include "game/room_grid.hpp"
+#include "game/distances.hpp"
+#include "game/hud.hpp"
 #include "game/player/net_player.hpp"
+#include "game/player/player_downed.hpp"
 #include "game/player/player_snapshot.hpp"
 #include "game/player/remote_combat.hpp"
 #include "game/player/remote_player.hpp"
@@ -51,6 +54,7 @@ namespace {
 
 constexpr uint64_t kTickNs = 1'000'000'000ull / 30;
 constexpr uint64_t kStatsEvery = 150;
+constexpr uint64_t kBriefTicks = 15; // how often a world says where its players stand
 
 struct WorldArgs {
     int stage = -1, sub = 0;
@@ -650,6 +654,17 @@ int run(const WorldArgs& w) {
                 if (m.playerId < od::port::kPlayerSlots && od::port::playerIsRemote(m.playerId)) od::port::remotePlayerUse(m.playerId);
                 break;
             case WorldMessageType::NetEventEnd: od::port::eventOwnerEnded(); break;
+            case WorldMessageType::NetRevive: {
+                const uint8_t target = m.netState.empty() ? uint8_t(0xff) : m.netState[0];
+                if (target < od::port::kPlayerSlots && od::port::playerIsRemote(target) && m.playerId < od::port::kPlayerSlots &&
+                    od::port::playerIsRemote(m.playerId) &&
+                    od::port::distance3(od::port::playerById(target).pos, od::port::playerById(m.playerId).pos) < 2 * od::port::kReviveReach) {
+                    WorldMessage revived{WorldMessageType::NetRevived};
+                    revived.playerId = target;
+                    link->sendReliable(revived);
+                }
+                break;
+            }
             case WorldMessageType::NetSpeaker:
                 if (m.netState.size() == 1) od::port::eventState().speakerAnimation = m.netState[0];
                 break;
@@ -675,6 +690,18 @@ int run(const WorldArgs& w) {
             WorldMessage changed{WorldMessageType::GlobalChange};
             changed.netState = od::port::encode(change);
             link->sendReliable(changed);
+        }
+        if (tick % kBriefTicks == 0) {
+            WorldBrief brief;
+            brief.bossFight = od::port::hudBossGaugeShown();
+            for (uint8_t id = 0; id < od::port::kPlayerSlots; ++id) {
+                if (!od::port::playerPresent(id) || !od::port::playerIsRemote(id)) continue;
+                const od::port::Player& p = od::port::playerById(id);
+                brief.players.push_back({id, p.pos.x.whole, p.pos.y.whole, p.pos.z.whole, p.rotation.y, p.hitPoints, mirrors[id].from.fields().downed != 0});
+            }
+            WorldMessage briefMessage{WorldMessageType::PlayerBrief};
+            briefMessage.netState = encodeBrief(brief);
+            link->sendLatest(briefMessage);
         }
         WorldMessage report{WorldMessageType::Report};
         const od::port::WorldDigest digest = od::port::worldDigest();

@@ -1,4 +1,5 @@
 // The player's tick (see player_update.hpp).
+#include "game/player/player_downed.hpp"
 #include "game/player/player_update.hpp"
 
 #include <algorithm>
@@ -352,6 +353,10 @@ void deadState(const PlayerEnv& env, Player& p) {
     actorPushOut(env, p);
     p.prevPos = p.pos;
     if (p.subState == uint8_t(DeadStep::Enter)) {
+        if (playerDownsInstead()) { // a session: down, for a teammate to revive; the game goes on
+            p.subState = uint8_t(DeadStep::Downed);
+            return;
+        }
         gameState().setMode(GameMode::GameOver);
         gameState().modeStep = 0;
         p.subState = uint8_t(p.subState + 1u);

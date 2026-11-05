@@ -32,8 +32,24 @@ enum class WorldMessageType : uint8_t {
     NetEnter = 20, NetSave = 21, NetEquip = 22,
     // what the session shares (game/global_state), both ways; what a pickup or a chest gave a player; a player pressed Use by
     // nothing of their own; an event that runs on its player's machine, its end and the speaker's animation it asks
-    GlobalChange = 23, NetGift = 24, NetUse = 25, NetEventStart = 26, NetEventEnd = 27, NetSpeaker = 28
+    GlobalChange = 23, NetGift = 24, NetUse = 25, NetEventStart = 26, NetEventEnd = 27, NetSpeaker = 28,
+    // where the room's players stand, from each world to the coordinator (WorldBrief); one who is down asks to come back and
+    // is told where; a teammate has revived them; everyone is down
+    PlayerBrief = 29, NetRespawnAsk = 30, NetRespawnAt = 31, NetRevive = 32, NetRevived = 33, NetGameOver = 34
 };
+
+// What a world says of its players to the coordinator
+struct WorldBrief {
+    struct Entry {
+        uint8_t id = 0;
+        int16_t x = 0, y = 0, z = 0, yaw = 0, life = 0;
+        bool downed = false;
+    };
+    bool bossFight = false; // a story boss is being fought in this room
+    std::vector<Entry> players;
+};
+std::vector<uint8_t> encodeBrief(const WorldBrief& b);
+std::optional<WorldBrief> decodeBrief(std::span<const uint8_t> bytes);
 
 struct WorldMessage {
     WorldMessageType type = WorldMessageType::KeepAlive;

@@ -41,6 +41,10 @@ public:
     void showPlayers(GhostView& ghosts, uint64_t localFingerprint, uint64_t nowNs);
     // test instrument: a second player in the world who follows this one at an offset (game units)
     void addGuest(int dx, int dz);
+    // what the session has to say to this player, over the picture (between ImGui's frame calls)
+    void drawNotice() const;
+    // test instrument: at this local tick the player's life is this
+    void testLifeAt(uint32_t tick, int16_t life) { testLifeTick_ = tick; testLife_ = life; }
     // test instruments: at this local tick the buster's attack level is this (an equipment change the world must wear); a
     // special weapon equipped at the first tick
     void testLevelAt(uint32_t tick, int8_t level) { testLevelTick_ = tick; testLevel_ = level; }
@@ -87,6 +91,12 @@ private:
         bool joined = false;
     };
     void otherPlayerRules(uint8_t id, Other& o, const od::port::PlayerSnapshot& shown);
+    void downedTurn();
+    uint32_t testLifeTick_ = 0;
+    int16_t testLife_ = 0;
+    int downTicks_ = 0;                  // this player has been down this long
+    std::optional<uint8_t> reviving_;    // this player holds Use by this teammate
+    int reviveTicks_ = 0;
     bool ownEvent_ = false; // an event the world asked of this player runs here
     od::port::Fixed16Vec3 eventPoint_{};
     uint32_t testLevelTick_ = 0;

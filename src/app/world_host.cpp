@@ -92,6 +92,7 @@ void WorldHost::removeFromWorld(uint8_t playerId) {
     const std::optional<WorldRoom> was = playerRoom_.at(playerId);
     if (!was) return;
     playerRoom_[playerId].reset();
+    briefs_[playerId].reset();
     const auto it = worlds_.find(*was);
     if (it == worlds_.end()) return;
     World& world = *it->second;
@@ -248,10 +249,19 @@ void WorldHost::poll(uint64_t nowNs) {
             if ((m.type == WorldMessageType::NetEvents || m.type == WorldMessageType::NetUpdate ||
                  m.type == WorldMessageType::NetHit || m.type == WorldMessageType::NetShotHit ||
                  m.type == WorldMessageType::NetPlayer || m.type == WorldMessageType::NetPlayerAck ||
-                 m.type == WorldMessageType::NetGift || m.type == WorldMessageType::NetEventStart) &&
+                 m.type == WorldMessageType::NetGift || m.type == WorldMessageType::NetEventStart ||
+                 m.type == WorldMessageType::NetRevived) &&
                 m.playerId < kPlayers &&
                 playerRoom_[m.playerId] == it->first)
                 netInbox_[m.playerId].push_back(m);
+            if (m.type == WorldMessageType::PlayerBrief) {
+                if (const auto brief = decodeBrief(m.netState)) {
+                    bossFight_[it->first] = brief->bossFight;
+                    for (const WorldBrief::Entry& e : brief->players)
+                        if (e.id < kPlayers && playerRoom_[e.id] == it->first) briefs_[e.id] = e;
+                }
+                continue;
+            }
             if (m.type == WorldMessageType::GlobalChange) {
                 if (auto change = od::port::decodeGlobalChange(m.netState)) {
                     change->stage = uint8_t(it->first.stage);
@@ -287,10 +297,56 @@ void WorldHost::poll(uint64_t nowNs) {
         it = worlds_.erase(it);
         dropEmptiedStage(stage);
     }
+    gameOverTurn();
     std::erase_if(stopping_, [&](const std::unique_ptr<World>& world) {
         world->link.poll(nowNs); // the stop is resent until taken
         return SDL_WaitProcess(world->process, false, nullptr);
     });
+}
+
+void WorldHost::gameOverTurn() {
+    bool anyone = false, allDown = true;
+    for (uint8_t id = 0; id < kPlayers; ++id) {
+        if (!playerRoom_[id]) continue;
+        anyone = true;
+        allDown = allDown && briefs_[id] && briefs_[id]->downed;
+    }
+    if (!anyone || !allDown) {
+        gameOverSent_ = false;
+        return;
+    }
+    if (gameOverSent_) return;
+    gameOverSent_ = true;
+    SDL_Log("coordinator: everyone is down");
+    for (uint8_t id = 0; id < kPlayers; ++id) {
+        if (!playerRoom_[id]) continue;
+        WorldMessage m{WorldMessageType::NetGameOver};
+        m.playerId = id;
+        netInbox_[id].push_back(std::move(m));
+    }
+}
+
+void WorldHost::respawnAsk(uint8_t playerId) {
+    const std::optional<WorldRoom> room = playerRoom_.at(playerId);
+    if (!room) return;
+    if (const auto fight = bossFight_.find(*room); fight != bossFight_.end() && fight->second) return;
+    std::optional<uint8_t> beside;
+    for (uint8_t id = 0; id < kPlayers; ++id) {
+        if (id == playerId || !playerRoom_[id] || !briefs_[id] || briefs_[id]->downed) continue;
+        if (!beside || playerRoom_[id] == room) beside = id;
+        if (playerRoom_[id] == room) break;
+    }
+    if (!beside) return;
+    const WorldBrief::Entry& e = *briefs_[*beside];
+    const WorldRoom to = *playerRoom_[*beside];
+    WorldBrief where; // the teammate's place, in the form of an entry
+    where.players.push_back(e);
+    WorldMessage m{WorldMessageType::NetRespawnAt};
+    m.playerId = playerId;
+    m.netState = {uint8_t(to.stage), uint8_t(to.sub)};
+    const std::vector<uint8_t> place = encodeBrief(where);
+    m.netState.insert(m.netState.end(), place.begin(), place.end());
+    netInbox_[playerId].push_back(std::move(m));
 }
 
 std::optional<od::port::StageRecord> WorldHost::stageRecord(int stage) const {

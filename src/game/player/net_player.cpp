@@ -1,5 +1,6 @@
 // A player's state on the network (see net_player.hpp).
 #include "game/player/net_player.hpp"
+#include "game/player/player_downed.hpp"
 
 #include <algorithm>
 
@@ -69,7 +70,7 @@ uint16_t maskOf(const NetPlayerFields& n, const NetPlayerFields& o) {
     if (!(n.look == o.look)) m |= kLook;
     if (!(n.channels[0] == o.channels[0])) m |= kChannel0;
     if (!(n.channels[1] == o.channels[1])) m |= kChannel1;
-    if (n.status != o.status || n.charge != o.charge || n.specialFiring != o.specialFiring) m |= kFight;
+    if (n.status != o.status || n.charge != o.charge || n.specialFiring != o.specialFiring || n.downed != o.downed) m |= kFight;
     return m;
 }
 
@@ -95,6 +96,7 @@ NetPlayerFields NetPlayerWatch::see(const Player& p, uint32_t tick) {
     f.look = {p.type, uint8_t(p.helmetPart), uint8_t(p.legPart), p.specialWeapon};
     f.status = uint8_t(p.status);
     f.charge = uint8_t(p.charge);
+    f.downed = playerIsDowned(p) ? 1 : 0;
     f.specialFiring = uint8_t(p.specialFiring);
     const std::array<const AnimChannel*, 2> channels = {&p.body, &p.upper};
     for (size_t i = 0; i < 2; ++i) {
@@ -205,6 +207,7 @@ std::vector<uint8_t> NetPlayerSender::update(uint8_t playerId, uint32_t tick, co
     if (mask & kFight) {
         o.u8(now.status);
         o.u8(now.charge);
+        o.u8(now.downed);
         o.u8(now.specialFiring);
     }
     inFlight_.push_back({sequence, now});
@@ -283,6 +286,7 @@ std::optional<NetPlayerHeard> NetPlayerReceiver::apply(std::span<const uint8_t> 
     if (mask & kFight) {
         f.status = r.u8();
         f.charge = r.u8();
+        f.downed = r.u8();
         f.specialFiring = r.u8();
     }
     if (!r.ok || r.at != bytes.size()) return std::nullopt;

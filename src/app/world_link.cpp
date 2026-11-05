@@ -12,6 +12,42 @@ namespace {
 enum class Kind : uint8_t { Reliable = 1, Ack = 2, Latest = 3 };
 } // namespace
 
+std::vector<uint8_t> encodeBrief(const WorldBrief& b) {
+    od::net::ByteWriter w;
+    w.u8(b.bossFight ? 1 : 0);
+    w.u8(uint8_t(b.players.size()));
+    for (const WorldBrief::Entry& e : b.players) {
+        w.u8(e.id);
+        w.i16(e.x);
+        w.i16(e.y);
+        w.i16(e.z);
+        w.i16(e.yaw);
+        w.i16(e.life);
+        w.u8(e.downed ? 1 : 0);
+    }
+    return w.take();
+}
+
+std::optional<WorldBrief> decodeBrief(std::span<const uint8_t> bytes) {
+    od::net::ByteReader r(bytes);
+    WorldBrief b;
+    b.bossFight = r.u8() != 0;
+    const size_t n = r.u8();
+    for (size_t i = 0; i < n; ++i) {
+        WorldBrief::Entry e;
+        e.id = r.u8();
+        e.x = r.i16();
+        e.y = r.i16();
+        e.z = r.i16();
+        e.yaw = r.i16();
+        e.life = r.i16();
+        e.downed = r.u8() != 0;
+        b.players.push_back(e);
+    }
+    if (!r.done()) return std::nullopt;
+    return b;
+}
+
 std::vector<uint8_t> encodeWorldMessage(const WorldMessage& m) {
     od::net::ByteWriter w;
     w.u8(uint8_t(m.type));
@@ -52,6 +88,12 @@ std::vector<uint8_t> encodeWorldMessage(const WorldMessage& m) {
     case WorldMessageType::NetEventStart:
     case WorldMessageType::NetEventEnd:
     case WorldMessageType::NetSpeaker:
+    case WorldMessageType::PlayerBrief:
+    case WorldMessageType::NetRespawnAsk:
+    case WorldMessageType::NetRespawnAt:
+    case WorldMessageType::NetRevive:
+    case WorldMessageType::NetRevived:
+    case WorldMessageType::NetGameOver:
         w.u8(m.playerId);
         w.blob(m.netState);
         break;
@@ -64,7 +106,7 @@ std::optional<WorldMessage> decodeWorldMessage(std::span<const uint8_t> bytes) {
     od::net::ByteReader r(bytes);
     WorldMessage m;
     const uint8_t type = r.u8();
-    if (type < uint8_t(WorldMessageType::Hello) || type > uint8_t(WorldMessageType::NetSpeaker)) return std::nullopt;
+    if (type < uint8_t(WorldMessageType::Hello) || type > uint8_t(WorldMessageType::NetGameOver)) return std::nullopt;
     m.type = WorldMessageType(type);
     switch (m.type) {
     case WorldMessageType::Join:
@@ -103,6 +145,12 @@ std::optional<WorldMessage> decodeWorldMessage(std::span<const uint8_t> bytes) {
     case WorldMessageType::NetEventStart:
     case WorldMessageType::NetEventEnd:
     case WorldMessageType::NetSpeaker:
+    case WorldMessageType::PlayerBrief:
+    case WorldMessageType::NetRespawnAsk:
+    case WorldMessageType::NetRespawnAt:
+    case WorldMessageType::NetRevive:
+    case WorldMessageType::NetRevived:
+    case WorldMessageType::NetGameOver:
         m.playerId = r.u8();
         m.netState = r.blob();
         break;

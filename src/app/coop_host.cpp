@@ -31,7 +31,12 @@ bool isReliable(WorldMessageType t) {
     case WorldMessageType::NetUse:
     case WorldMessageType::NetEventStart:
     case WorldMessageType::NetEventEnd:
-    case WorldMessageType::NetSpeaker: return true;
+    case WorldMessageType::NetSpeaker:
+    case WorldMessageType::NetRespawnAsk:
+    case WorldMessageType::NetRespawnAt:
+    case WorldMessageType::NetRevive:
+    case WorldMessageType::NetRevived:
+    case WorldMessageType::NetGameOver: return true;
     default: return false;
     }
 }
@@ -52,6 +57,7 @@ void CoopHost::enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t
 void CoopHost::sendReliable(uint8_t playerId, WorldMessageType type, std::vector<uint8_t> bytes) {
     if (type == WorldMessageType::NetJoin) worlds_.netJoin(playerId);
     else if (type == WorldMessageType::GlobalChange) worlds_.globalFromPlayer(playerId, bytes);
+    else if (type == WorldMessageType::NetRespawnAsk) worlds_.respawnAsk(playerId);
     else worlds_.netSend(playerId, type, std::move(bytes));
 }
 
@@ -89,7 +95,9 @@ void CoopHost::fromClient(uint8_t id, const WorldMessage& m, uint64_t nowNs) {
     case WorldMessageType::NetEquip:
     case WorldMessageType::NetUse:
     case WorldMessageType::NetEventEnd:
-    case WorldMessageType::NetSpeaker: worlds_.netSend(id, m.type, m.netState); break;
+    case WorldMessageType::NetSpeaker:
+    case WorldMessageType::NetRevive: worlds_.netSend(id, m.type, m.netState); break;
+    case WorldMessageType::NetRespawnAsk: worlds_.respawnAsk(id); break;
     case WorldMessageType::GlobalChange: worlds_.globalFromPlayer(id, m.netState); break;
     case WorldMessageType::NetPlayer:
     case WorldMessageType::NetPlayerAck: worlds_.netSendLatest(id, m.type, m.netState); break;

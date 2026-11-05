@@ -58,6 +58,9 @@ public:
     void netSendLatest(uint8_t client, WorldMessageType type, std::vector<uint8_t> bytes);
     // what the session shares changed in this player's game
     void globalFromPlayer(uint8_t playerId, std::span<const uint8_t> bytes);
+    // one who is down asks to come back next to a standing teammate: told where, unless nobody stands or a story boss is
+    // being fought where they are
+    void respawnAsk(uint8_t playerId);
     // the turn between frames: the links, the worlds' reports, the keep-alives; a world that ended on its own is forgotten
     void poll(uint64_t nowNs);
 
@@ -89,6 +92,10 @@ private:
     std::map<int, od::port::StageRecord> stageRecords_;
     std::array<std::vector<WorldMessage>, kPlayers> netInbox_{};
     od::port::GlobalMaster global_;
+    std::array<std::optional<WorldBrief::Entry>, kPlayers> briefs_{};
+    std::map<WorldRoom, bool> bossFight_;
+    bool gameOverSent_ = false;
+    void gameOverTurn();
 };
 
 } // namespace od::app

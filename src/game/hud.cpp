@@ -690,6 +690,8 @@ void hudElementsInit() {
     gameState().enemyNear = 0;
 }
 
+bool hudBossGaugeShown() { return gaugesOfType(HudElementType::BossGauge) != 0; }
+
 void hudAddBossGauge(Actor& actor, uint8_t style, uint8_t shift, uint32_t colour) {
     if (gameState().frontEnd == kFrontEndDemo) return;
     if (gaugeShows(actor)) return;

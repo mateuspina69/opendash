@@ -8,11 +8,14 @@ namespace od::port {
 Player& nearestPlayer(const Fixed16Vec3& point) {
     Player* nearest = &player();
     int best = -1;
+    bool standing = false; // one who stands comes before anyone who is down
     forEachPlayer([&](Player& p) {
         const int d = planarDistance(point, p.pos);
-        if (best < 0 || d < best) {
+        const bool up = p.hitPoints >= 0;
+        if (best < 0 || (up && !standing) || (up == standing && d < best)) {
             best = d;
             nearest = &p;
+            standing = up;
         }
     });
     return *nearest;

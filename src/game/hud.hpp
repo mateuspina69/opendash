@@ -248,6 +248,8 @@ void hudElementsInit();
 // none twice for one actor): frame style 3 + `style`, its length the actor's maximum hit points >> shift, the bar's
 // colour (0xBBGGRR, each channel's low bit cleared)
 void hudAddBossGauge(Actor& actor, uint8_t style, uint8_t shift, uint32_t colour);
+// a boss's gauge is up
+bool hudBossGaugeShown();
 // exe 0x415e50(actor, style, shift, colour): a mission target's bar (frame style 7 + `style`) in the first free enemy
 // element, none twice for one actor
 void hudAddTargetGauge(Actor& actor, uint8_t style, uint8_t shift, uint32_t colour);

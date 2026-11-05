@@ -39,6 +39,7 @@ struct NetPlayerFields {
     PlayerLook look;
     std::array<NetPlayerChannel, 2> channels{};
     uint8_t status = 0, charge = 0, specialFiring = 0; // what a client's rules for their markers and arms read
+    uint8_t downed = 0; // down, for a teammate to revive
     friend bool operator==(const NetPlayerFields&, const NetPlayerFields&) = default;
 };
 

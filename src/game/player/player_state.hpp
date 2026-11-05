@@ -118,7 +118,7 @@ enum class LiftStep : uint8_t { Lift = 0, Lifting = 1 };
 enum class HeldStep : uint8_t { Grabbed = 0, Held = 1, Struggle = 2, GrabbedStruggling = 3, Struggling = 4 };
 enum class TalkingStep : uint8_t { Enter = 0, Turned = 1, Talking = 2, Closing = 3 };
 enum class EventPoseStep : uint8_t { Enter = 0, FirstPose = 1, Wait = 2, End = 3 };
-enum class DeadStep : uint8_t { Enter = 0, GameOver = 1 }; // the Dead state keeps its step in +9
+enum class DeadStep : uint8_t { Enter = 0, GameOver = 1, Downed = 2 }; // the Dead state keeps its step in +9
 
 // +0xee / +0xef: the move direction relative to the facing (the stick's quadrant)
 enum class MoveDir : int8_t { Forward = 0, Left = 1, Back = 2, Right = 3 };

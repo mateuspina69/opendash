@@ -140,6 +140,10 @@ void App::parseArgs(int argc, char** argv) {
             const uint32_t tick = uint32_t(std::stoul(argv[++i]));
             playerView.ownWorld->testLevelAt(tick, int8_t(std::stoi(argv[++i])));
         }
+        else if (a == "--own-world-test-life" && playerView.ownWorld && i + 2 < argc) { // test instrument
+            const uint32_t tick = uint32_t(std::stoul(argv[++i]));
+            playerView.ownWorld->testLifeAt(tick, int16_t(std::stoi(argv[++i])));
+        }
         else if (a == "--own-world-test-weapon" && playerView.ownWorld && i + 1 < argc) // test instrument
             playerView.ownWorld->testWeapon(std::stoi(argv[++i]));
         else if (a == "--classic") classicArg = std::stoi(argv[++i]) != 0; // the original tank controls (scripted runs)

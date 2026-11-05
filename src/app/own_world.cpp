@@ -2,10 +2,15 @@
 #include "app/own_world.hpp"
 
 #include <SDL3/SDL.h>
+#include <imgui.h>
 
 #include <algorithm>
+#include <cstdio>
 
 #include "game/actor_sweeps.hpp"
+#include "game/distances.hpp"
+#include "game/player/player_downed.hpp"
+#include "game/transition_state.hpp"
 #include "game/event.hpp"
 #include "game/game_state.hpp"
 #include "game/global_state.hpp"
@@ -24,6 +29,7 @@ OwnWorldClient::OwnWorldClient(std::filesystem::path exe, std::filesystem::path 
     auto coordinator = std::make_unique<CoopHost>(std::move(exe), std::move(storySave));
     coordinator_ = coordinator.get();
     pipe_ = std::move(coordinator);
+    od::port::setPlayerDownsInstead(true);
     // Use pressed by nothing of this machine's: the world looks among its actors
     od::port::setUseNothingHook([this] {
         if (room_ && joined_) pipe_->sendReliable(playerId_, WorldMessageType::NetUse, {});
@@ -113,6 +119,11 @@ void OwnWorldClient::turn(uint64_t nowNs) {
     if (testLevelTick_ != 0 && localTick_ == testLevelTick_) {
         od::port::player().weaponLevels[od::port::weaponLevelIndex(od::port::player().busterWeapon, od::port::WeaponStat::Attack)] = testLevel_;
         SDL_Log("own world: buster attack level set to %d at tick %u", int(testLevel_), localTick_);
+    }
+    if (testLifeTick_ != 0 && localTick_ == testLifeTick_) {
+        od::port::Player& p = od::port::player();
+        p.hitPoints = testLife_;
+        if (testLife_ < 0) p.moveToSub(od::port::PlayerSub::KnockDown, od::port::KnockDownStep::Thrown);
     }
     const od::port::NetPlayerFields fields = watch_.see(od::port::player(), localTick_);
     if (localTick_ % od::port::kNetDefaultUpdateTicks == 0) {
@@ -226,6 +237,38 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
             ownEvent_ = true;
         }
         break;
+    case WorldMessageType::NetRevived:
+        if (od::port::playerIsDowned(od::port::player())) {
+            SDL_Log("own world: revived");
+            od::port::playerRevive(od::port::player(), int16_t(od::port::player().maxHitPoints / 2));
+        }
+        break;
+    case WorldMessageType::NetRespawnAt:
+        if (od::port::playerIsDowned(od::port::player()) && m.netState.size() > 2) {
+            const auto brief = decodeBrief(std::span<const uint8_t>(m.netState).subspan(2));
+            if (brief && brief->players.size() == 1) {
+                const WorldBrief::Entry& e = brief->players[0];
+                od::port::Player& p = od::port::player();
+                SDL_Log("own world: back next to a teammate, ST%02X sub %d", unsigned(m.netState[0]), int(m.netState[1]));
+                od::port::playerRevive(p, 0); // the game's danger state: alive, the next hit downs them
+                constexpr int kBeside = 0x80;
+                const int16_t x = int16_t(e.x + kBeside);
+                if (m.netState[0] == uint8_t(room_->stage) && m.netState[1] == uint8_t(room_->sub)) {
+                    p.pos.x = int32_t(uint32_t(int32_t(x)) << 16);
+                    p.pos.y = int32_t(uint32_t(int32_t(e.y)) << 16);
+                    p.pos.z = int32_t(uint32_t(int32_t(e.z)) << 16);
+                    p.prevPos = p.pos;
+                } else {
+                    od::port::requestTransition(od::port::kTransitionAccepted, m.netState[0], m.netState[1], x, e.y, e.z, e.yaw, 2, 0x11);
+                }
+            }
+        }
+        break;
+    case WorldMessageType::NetGameOver:
+        SDL_Log("own world: everyone is down");
+        od::port::gameState().setMode(od::port::GameMode::GameOver);
+        od::port::gameState().modeStep = 0;
+        break;
     case WorldMessageType::NetSave:
         hostSave_.insert(hostSave_.end(), m.netState.begin(), m.netState.end());
         if (m.netState.size() < 1000) hostSaveWhole_ = true; // the last chunk is the short one
@@ -300,6 +343,7 @@ void OwnWorldClient::endFrame() {
             ownEvent_ = false;
         }
     }
+    downedTurn();
     actors_->submitLockPoints();
     od::port::hitListLockOnOnly();
     for (size_t i = 0; i < ownShots_.size(); ++i) {
@@ -312,6 +356,58 @@ void OwnWorldClient::endFrame() {
             ownShots_[i].live = false;
         }
     }
+}
+
+void OwnWorldClient::downedTurn() {
+    od::port::Player& p = od::port::player();
+    if (od::port::playerIsDowned(p)) {
+        reviving_.reset();
+        reviveTicks_ = 0;
+        ++downTicks_;
+        if (downTicks_ >= od::port::kRespawnAloneTicks && p.pressedNow(od::port::PlayerButton::Use))
+            pipe_->sendReliable(playerId_, WorldMessageType::NetRespawnAsk, {});
+        return;
+    }
+    downTicks_ = 0;
+    // a teammate down within reach, Use held: about 3 s and they are up
+    std::optional<uint8_t> by;
+    if (p.holds(od::port::PlayerButton::Use) && p.hitPoints >= 0) {
+        for (uint8_t id = 0; id < others_.size() && !by; ++id) {
+            const od::port::NetPlayerFields& f = others_[id].from.fields();
+            if (id == playerId_ || f.downed == 0) continue;
+            od::port::Fixed16Vec3 at;
+            at.x.whole = f.pos[0];
+            at.y.whole = f.pos[1];
+            at.z.whole = f.pos[2];
+            if (od::port::distance3(at, p.pos) < od::port::kReviveReach) by = id;
+        }
+    }
+    if (by != reviving_) reviveTicks_ = 0;
+    reviving_ = by;
+    if (!by) return;
+    if (++reviveTicks_ == od::port::kReviveTicks) {
+        pipe_->sendReliable(playerId_, WorldMessageType::NetRevive, {*by});
+        reviveTicks_ = 0;
+    }
+}
+
+void OwnWorldClient::drawNotice() const {
+    if (!room_) return;
+    const od::port::Player& p = od::port::player();
+    char text[96] = "";
+    if (od::port::playerIsDowned(p)) {
+        if (downTicks_ < od::port::kRespawnAloneTicks) std::snprintf(text, sizeof text, "You are down. A teammate can revive you.");
+        else std::snprintf(text, sizeof text, "You are down. Use: back next to a teammate.");
+    } else if (reviving_) {
+        std::snprintf(text, sizeof text, "Reviving: %d%%", reviveTicks_ * 100 / od::port::kReviveTicks);
+    }
+    if (text[0] == 0) return;
+    const ImGuiViewport* view = ImGui::GetMainViewport();
+    const ImVec2 size = ImGui::CalcTextSize(text);
+    const ImVec2 at(view->Pos.x + (view->Size.x - size.x) / 2, view->Pos.y + view->Size.y * 0.15f);
+    ImDrawList* draw = ImGui::GetForegroundDrawList();
+    draw->AddRectFilled(ImVec2(at.x - 8, at.y - 4), ImVec2(at.x + size.x + 8, at.y + size.y + 4), IM_COL32(0, 0, 0, 170), 4.0f);
+    draw->AddText(at, IM_COL32_WHITE, text);
 }
 
 void OwnWorldClient::localActors(const od::port::PlayerEnv& env, od::port::ActorContext& context, bool late) {
