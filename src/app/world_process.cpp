@@ -178,13 +178,17 @@ struct LocalFile {
 class NetStats {
 public:
     static constexpr int kAckLagUpdates = 4;
+    static constexpr uint32_t kSettledTick = 30; // the room's first spawns are over: what a client that joined then is told
+    static constexpr uint32_t kJoinTick = 150;   // a client joins here: what it is told at once
     NetStats(std::string path, int every) : path_(std::move(path)), every_(every) {}
 
     void tick(const od::port::NetWorldTable& table, uint32_t tick) {
         for (Run& r : runs_) {
-            for (const auto& batch : r.sender.events(table)) {
-                r.eventBytes += batch.size();
-                (tick == 0 ? r.joinEventBytes : r.laterEventBytes) += batch.size();
+            for (const auto& batch : r.sender.events(table))
+                if (tick >= kSettledTick) r.laterEventBytes += batch.size();
+            if (tick == kJoinTick) {
+                od::port::NetStateSender joining(r.filter);
+                for (const auto& batch : joining.events(table)) r.joinEventBytes += batch.size();
             }
             if (int(tick) % every_ != 0) continue;
             const std::vector<uint8_t> update = r.sender.update(table);
@@ -215,17 +219,18 @@ public:
 private:
     struct Run {
         const char* name;
+        od::port::NetSlotFilter filter;
         od::port::NetStateSender sender;
         std::vector<uint32_t> updates{};
-        uint64_t eventBytes = 0, joinEventBytes = 0, laterEventBytes = 0;
+        uint64_t joinEventBytes = 0, laterEventBytes = 0;
         uint16_t lastSequence = 0;
     };
     std::string path_;
     int every_;
     size_t maxLive_ = 0;
     uint64_t occupants_ = 0;
-    std::array<Run, 2> runs_{Run{"visible", od::port::NetStateSender(od::port::netSlotVisible)},
-                             Run{"withShots", od::port::NetStateSender(od::port::netSlotVisibleOrShot)}};
+    std::array<Run, 2> runs_{Run{"visible", od::port::netSlotVisible, od::port::NetStateSender(od::port::netSlotVisible)},
+                             Run{"withShots", od::port::netSlotVisibleOrShot, od::port::NetStateSender(od::port::netSlotVisibleOrShot)}};
 };
 
 // The receiver of a world's network state: the room's files and each actor's animation, no world update
