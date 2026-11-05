@@ -201,7 +201,7 @@ void droneChase(const PlayerEnv& env, StaticActor& a, DroneFields& f) {
         if (a.step != 0) e = -e;
         f.heightOffset = int16_t(e);
     }
-    const int dy = (f.heightOffset - a.pos.y.whole + player().pos.y.whole - 0x64) >> 2;
+    const int dy = (f.heightOffset - a.pos.y.whole + carrierOrNearest(a).pos.y.whole - 0x64) >> 2;
     turnYawTo(a.rotation.y, uint32_t(angleOf(nearestPlayer(a.pos).pos, a.pos)), 0x10); // exe 0x5e3bc0 / 0x5e3df0
     integrateVelocity(a, 0, dy, -0xa0);
     droneCollide(env, a);
@@ -424,7 +424,7 @@ void hatchOpen(AnimatedActor& a, HatchFields& f) {
     f.releaseTimer = uint16_t(t - 1u);
     if (t == 0) {
         f.releaseTimer = kReleaseTicks;
-        const Player& p = player();
+        const Player& p = carrierOrNearest(a);
         const int px = (p.pos.x.whole + 0x8000) >> 9, pz = (p.pos.z.whole + 0x8000) >> 9;
         ExamDroneCount& count = examDroneCount();
         if (f.cellX0 <= px && f.cellX1 >= px && f.cellZ0 <= pz && f.cellZ1 >= pz && count.alive < kMaxDrones) {
@@ -629,9 +629,9 @@ void mineGlowsOff(MineFields& f) {
 }
 // exe 0x592dc0: the player within 0x140 in height and faced / near (exe 0x5e5a90(actor, player, 0x500, 0x600) == 0)
 bool mineNear(const StaticActor& a) {
-    const int dy = std::abs(int(player().pos.y.whole) - a.pos.y.whole);
+    const int dy = std::abs(int(carrierOrNearest(a).pos.y.whole) - a.pos.y.whole);
     if (dy > 0x140) return false;
-    return facingAndRange(a, player(), 0x500, 0x600) == 0;
+    return facingAndRange(a, carrierOrNearest(a), 0x500, 0x600) == 0;
 }
 // exe 0x592e10: its hit entry (unseen: no lock-on until the player faces it within 0x200 / 0xa00)
 void mineHit(StaticActor& a, MineFields& f) {
@@ -641,7 +641,7 @@ void mineHit(StaticActor& a, MineFields& f) {
     f.hitBox.previousZ = a.pos.z.whole;
     f.hitBox.result = 0;
     if (f.flags & kMineUnseen) {
-        if (facingAndRange(player(), a, 0x200, 0xa00) != 0) unseen = kHitNoLockOn;
+        if (facingAndRange(carrierOrNearest(a), a, 0x200, 0xa00) != 0) unseen = kHitNoLockOn;
         else f.flags &= uint8_t(~kMineUnseen);
     }
     hitListSubmit(p, f.hitBox, hitOwner(a.slot) | unseen | hitGroup(kHitGroupBodies) | hitRadius(0x28),
@@ -1111,7 +1111,7 @@ bool playerBehind(const AnimatedActor& a) {
     const int ang = angleOf(a.pos, nearestPlayer(a.pos).pos);
     const uint16_t c = uint16_t((uint32_t(ang) - uint16_t(a.rotation.y) - 0x600) & kAngleMask);
     if (int16_t(c) > 0x400) return false;
-    const uint16_t d = uint16_t((uint32_t(ang) - uint16_t(player().rotation.y) + 0x200) & kAngleMask);
+    const uint16_t d = uint16_t((uint32_t(ang) - uint16_t(carrierOrNearest(a).rotation.y) + 0x200) & kAngleMask);
     return int16_t(d) <= 0x400;
 }
 // a turn of 0x200 or more toward the player -> the turn sub-state (animation 0xd / 0xe)
@@ -1139,7 +1139,7 @@ void diggerHidden(const PlayerEnv& env, AnimatedActor& a, DiggerFields& f) {
         const int lim = (f.flags & kDiggerSurfaceNear) ? 1 : 7;
         int8_t bl = int8_t(rngStep() & uint32_t(lim));
         int8_t cnt = 0;
-        const Player& p = player();
+        const Player& p = carrierOrNearest(a);
         for (;;) {
             const int idx = bl;
             const uint32_t ang = (uint32_t(diggerSurfaceAngles[size_t(idx)]) + uint16_t(cameraState().viewAngles.y)) &
@@ -1878,12 +1878,12 @@ void flyerHover(AnimatedActor& a, FlyerFields& f) {
             a.step = 2;
             return;
         }
-        if (facingWithin(a, player().pos.x, player().pos.z, 0x40)) {
+        if (facingWithin(a, carrierOrNearest(a).pos.x, carrierOrNearest(a).pos.z, 0x40)) {
             if (a.keyIndex == 4) flyerShots(a);
         } else {
             turnYawTo(a.rotation.y, uint32_t(angleOfFlyerToPlayer(a)), 0x20);
         }
-        if (uint8_t(player().status) & (kStatusSlowed | kStatusSlowedFloor)) {
+        if (uint8_t(carrierOrNearest(a).status) & (kStatusSlowed | kStatusSlowedFloor)) {
             a.subState = uint8_t(FlyerSub::Dive);
             a.step = 0;
         }
@@ -1916,7 +1916,7 @@ void flyerDive(const PlayerEnv& env, AnimatedActor& a, FlyerFields& f) {
         if (a.velocity.z > 0x200) a.velocity.z = int16_t(uint16_t(a.velocity.z) - uint16_t(a.acceleration.z));
         else a.velocity.z = -0x200;
         flyForward(a, f);
-        if (!facingWithin(a, player().pos.x, player().pos.z, 0x80)) {
+        if (!facingWithin(a, carrierOrNearest(a).pos.x, carrierOrNearest(a).pos.z, 0x80)) {
             ++a.step;
             f.timer = 0x14;
         }

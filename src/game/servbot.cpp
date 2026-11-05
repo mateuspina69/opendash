@@ -18,6 +18,7 @@
 #include "game/hit_list.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/actors.hpp"
@@ -661,7 +662,7 @@ int collide(AnimatedActor& actor, ServbotFields& bot) {
 // exe 0x462af0: the talk and hit tests, the sub-state, the head, the collision (the ground lost -> fall / bounce),
 // the player's lift
 void servbotMain(AnimatedActor& actor, ServbotFields& bot) {
-    if (!(bot.bits & kServbotNoTalk) && player().talksTo(actor) && eventState().active == 0) {
+    if (!(bot.bits & kServbotNoTalk) && carrierOrNearest(actor).talksTo(actor) && eventState().active == 0) {
         npcStartTalk(actor, bot.behaviour, bot.message);
         actor.subState = uint8_t(ServbotSub::Talk);
         actor.step = 0;
@@ -747,7 +748,7 @@ void liftedInHands(AnimatedActor& actor, ServbotFields& bot) {
         bot.bits = kDroppedBits;
     }
     actor.acceleration.y = kGravity;
-    actor.rotation.y = player().rotation.y;
+    actor.rotation.y = carrierOrNearest(actor).rotation.y;
     actor.airborne = 1;
     carryDropFromPlayer(actor); // exe 0x573990
     setTextureCell(actor, kDizzyCell);

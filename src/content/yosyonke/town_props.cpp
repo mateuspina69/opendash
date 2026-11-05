@@ -41,7 +41,7 @@ constexpr uint32_t kPropTalkEventParam = 0x12; // the talk event's mode / flags 
 // event's end goes back (0); a stand-on solid every tick
 void talkProp(StaticActor& actor, uint16_t message) {
     if (actor.subState == 0) {
-        if (player().talksTo(actor) && eventState().active == 0) {
+        if (carrierOrNearest(actor).talksTo(actor) && eventState().active == 0) {
             eventStartAt(0, nullptr, kPropTalkEventParam, 0, message);
             actor.subState = 1;
         }
@@ -169,7 +169,7 @@ void st09Kicked(const PlayerEnv& env, StaticActor& actor, St09PropFields& prop) 
             balanceAdd(kBalanceLoss);
             prop.flags |= kPropFlying;
             prop.timer = kKickTicks;
-            prop.travelYaw = player().rotation.y;
+            prop.travelYaw = carrierOrNearest(actor).rotation.y;
             actor.velocity.y = kKickUp;
             actor.velocity.z = kKickSpeed;
             if (cameraState().lookPitch > 0) actor.velocity.y = int16_t(kKickUp - int32_t(cameraState().lookPitch));

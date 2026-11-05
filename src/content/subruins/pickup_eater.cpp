@@ -307,7 +307,7 @@ void loops(AnimatedActor& a, EaterFields& f) {
         f.loopPhase = 0;
     }
     if (findPickup(a) != 0) toSub(a, EaterSub::Shies); // exe 0x4abb30
-    const Player& p = player();
+    const Player& p = carrierOrNearest(a);
     if (planarDistance(a.pos, p.pos) < 0x400 && // exe 0x5e3b00
         uint32_t(int(a.pos.y.whole) - int(p.pos.y.whole) + 0x20) < 0x40u)
         toSub(a, EaterSub::Shies);
@@ -652,7 +652,7 @@ void inHands(const PlayerEnv& env, AnimatedActor& a, EaterFields& f) {
         f.bits = kEaterBounces;
     }
     a.acceleration.y = 0x40;
-    a.rotation.y = int16_t(uint16_t(uint16_t(player().rotation.y) + 0x800u));
+    a.rotation.y = int16_t(uint16_t(uint16_t(carrierOrNearest(a).rotation.y) + 0x800u));
     a.airborne = 1;
     a.hitPoints = 1;
     carryDropFromPlayer(a); // exe 0x573990

@@ -19,6 +19,7 @@
 #include "game/event_state.hpp"
 #include "game/keyframe_tracks.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/script_state.hpp"
 
@@ -65,7 +66,7 @@ void setSub(AnimatedActor& a, RuinRollSub s) {
 }
 // the player's talk with her starts her message (her look parameter: the event's flags)
 void talkCheck(AnimatedActor& a, RuinRollFields& f) {
-    if ((f.talking & kTalkingBit) || !player().talksTo(a) || eventState().active != 0) return;
+    if ((f.talking & kTalkingBit) || !nearestPlayer(a.pos).talksTo(a) || eventState().active != 0) return;
     const uint8_t param = uint8_t(((f.lookParam & 0x97u) | 0x10u) >> 3);
     eventStartAtActor(a, param, 0, f.message);
     setSub(a, RuinRollSub::Talk);
@@ -261,7 +262,7 @@ void ruinRoll(const PlayerEnv& env, AnimatedActor& a) {
     } else if (look == kLookNone) {
         ruinRollHead(a, f, nullptr);
     } else {
-        ruinRollHead(a, f, &player().pos);
+        ruinRollHead(a, f, &nearestPlayer(a.pos).pos);
     }
     animPose(a);
     actorCollisionSubmitSolid(a, SolidType::StandOn, kNoBone, 0);

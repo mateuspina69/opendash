@@ -358,7 +358,7 @@ void approach(const PlayerEnv& env, AnimatedActor& actor, BossFields& boss) {
     }
     default: provokable = false; break;
     }
-    if (provokable && facingWithin(actor, player().pos, 0x80) && playerDistance(actor) < 0x1000 && boss.bombOut == 0)
+    if (provokable && facingWithin(actor, carrierOrNearest(actor).pos, 0x80) && playerDistance(actor) < 0x1000 && boss.bombOut == 0)
         boss.status |= kProvoked; // 0x4cdc7d
     if (boss.inBox == 0) return;
     int32_t point[3];
@@ -424,7 +424,7 @@ void carried(const PlayerEnv& env, AnimatedActor& actor, BossFields& boss) {
         actor.velocity.z = int16_t(aim[2]);
     }
     actor.acceleration.y = 0x40;
-    actor.rotation.y = player().rotation.y;
+    actor.rotation.y = carrierOrNearest(actor).rotation.y;
     actor.rotation.z = 0;
     actor.rotation.x = 0;
     actor.airborne = 0;
@@ -614,7 +614,7 @@ void charge(const PlayerEnv& env, AnimatedActor& actor, BossFields& boss) {
     switch (step) {
     case 0:
         turnYawTo(actor.rotation.y, uint32_t(angleToPlayer(actor)), 0x60);
-        if (facingWithin(actor, player().pos, 0x80) && uint16_t(actor.pos.y.whole) == boss.groundNow) {
+        if (facingWithin(actor, carrierOrNearest(actor).pos, 0x80) && uint16_t(actor.pos.y.whole) == boss.groundNow) {
             setAnim(actor, BossAnim::ChargeStart);
             actor.step = 1;
             boss.pose = kPoseSpinning;
@@ -644,7 +644,7 @@ void charge(const PlayerEnv& env, AnimatedActor& actor, BossFields& boss) {
         return;
     case 3:
         spinCount(boss);
-        if (facingWithin(actor, player().pos, 0x200) && actor.stepCounter == 0) {
+        if (facingWithin(actor, carrierOrNearest(actor).pos, 0x200) && actor.stepCounter == 0) {
             if (playerDistance(actor) > 0x400) turnYawTo(actor.rotation.y, uint32_t(angleToPlayer(actor)), 0x20);
             if (actor.velocity.z < -0x400) actor.velocity.z = int16_t(0xfc00);
             else actor.velocity.z = int16_t(uint16_t(uint16_t(actor.acceleration.z) + uint16_t(actor.velocity.z)));
@@ -689,7 +689,7 @@ void charge(const PlayerEnv& env, AnimatedActor& actor, BossFields& boss) {
         }
         spinCount(boss);
         turnYawTo(actor.rotation.y, uint32_t(angleToPlayer(actor)), 0x60);
-        if (facingWithin(actor, player().pos, 0x80)) {
+        if (facingWithin(actor, carrierOrNearest(actor).pos, 0x80)) {
             actor.step = 3;
             actor.stepCounter = 0;
             actor.velocity.z = 0;
@@ -816,7 +816,7 @@ void bombAttack(const PlayerEnv& env, AnimatedActor& actor, BossFields& boss, bo
     switch (step) {
     case 0:
         turnYawTo(actor.rotation.y, uint32_t(angleToPlayer(actor)), 0x60);
-        if (facingWithin(actor, player().pos, 0x80)) {
+        if (facingWithin(actor, carrierOrNearest(actor).pos, 0x80)) {
             setAnim(actor, pair ? BossAnim::ThrowPair : BossAnim::Throw);
             actor.step = 1;
             boss.timer = 0x14;
@@ -894,7 +894,7 @@ void lob(const PlayerEnv& env, AnimatedActor& actor, BossFields& boss) {
             actor.acceleration.y = 0x18;
             return;
         }
-        if (facingWithin(actor, player().pos, 0x80)) {
+        if (facingWithin(actor, carrierOrNearest(actor).pos, 0x80)) {
             actor.step = 1;
             boss.count = 7;
             boss.status &= uint8_t(~kChargeUsed);

@@ -9,6 +9,7 @@
 #include "game/encounter.hpp"
 #include "game/field_alias.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/story_flags.hpp"
 

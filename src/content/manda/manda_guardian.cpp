@@ -454,7 +454,7 @@ void turnHead(const AnimatedActor& a, GuardianFields& f) {
     const int s = f.headTurn;
     uint32_t u = 0;
     if (!(f.flags & kNoHeadTurn)) {
-        const ShortVec3& target = player().bonePoints[1];
+        const ShortVec3& target = carrierOrNearest(a).bonePoints[1];
         const int16_t to[3] = {target.x, target.y, target.z};
         int16_t from[3];
         bonePosition(a, kHeadBone, from);
@@ -811,7 +811,7 @@ void bladeArenaReappear(AnimatedActor& a, GuardianFields& f) {
         if (a.hitPoints < (a.maxHitPoints >> 1) && f.retreats != 0) --f.retreats;
         fadeStartLow(a, f); // exe 0x4867d0
         if (f.retreats != 0) {
-            const Player& p = player();
+            const Player& p = carrierOrNearest(a);
             const int ang = angleOf(p.pos.x, p.pos.z, kCentreX, kCentreZ); // exe 0x5e3bc0
             const int32_t centre[3] = {kCentreX, 0, kCentreZ};
             const int d = planarDistance(p.pos, centre); // exe 0x5e3b00
@@ -982,7 +982,7 @@ void bladeArenaJump(AnimatedActor& a, GuardianFields& f) {
         int v;
         if (d > 0x200) {
             a.velocity.z = -0x200;
-            v = launchSpeed(a.pos, player().pos, 0x200, 0x40, 0x400); // exe 0x5e3ee0
+            v = launchSpeed(a.pos, carrierOrNearest(a).pos, 0x200, 0x40, 0x400); // exe 0x5e3ee0
         } else if (d < 0x100) {
             a.velocity.z = 0;
             a.velocity.y = -0x400;
@@ -990,7 +990,7 @@ void bladeArenaJump(AnimatedActor& a, GuardianFields& f) {
             return;
         } else {
             a.velocity.z = -0xa0;
-            v = launchSpeed(a.pos, player().pos, 0xa0, 0x40, 0x200);
+            v = launchSpeed(a.pos, carrierOrNearest(a).pos, 0xa0, 0x40, 0x200);
         }
         a.velocity.y = int16_t(v);
         a.enterStep(4);
@@ -2334,7 +2334,7 @@ void hopperHeld(const PlayerEnv& env, AnimatedActor& a, HopperFields& f) {
     const CarryRelease r = carryReleased(); // exe 0x573950
     if (r == CarryRelease::Held) return;
     f.flags &= uint8_t(~kHopperHeld);
-    f.heading = player().rotation.y;
+    f.heading = carrierOrNearest(a).rotation.y;
     if (r != CarryRelease::Thrown) {
         a.velocity.y = 0x300;
         a.velocity.z = -0x40;

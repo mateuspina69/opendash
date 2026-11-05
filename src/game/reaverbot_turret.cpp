@@ -94,7 +94,7 @@ void toSub(AnimatedActor& a, uint8_t s) {
 bool attackLocked() { return (encounterState().attackLocksRecent() & kAttackLockAttack) != 0; }
 // exe 0x4597b0 (and its inline copies): the planar distance to the player by 32-bit differences of the integer parts
 int playerDistance(const AnimatedActor& a) {
-    const Player& p = player();
+    const Player& p = nearestPlayer(a.pos);
     const int dx = int(p.pos.x.whole) - int(a.pos.x.whole), dz = int(p.pos.z.whole) - int(a.pos.z.whole);
     return isqrt(int32_t(uint32_t(dz * dz) + uint32_t(dx * dx)));
 }
@@ -111,7 +111,7 @@ bool playerInBox(const AnimatedActor& a, const TurretFields& f, const TurretBox&
 }
 // exe 0x4596a0(actor, block, box): the same from the point the walk-out distance ahead along the reference
 bool playerInBoxAhead(const AnimatedActor& a, const TurretFields& f, const TurretBox& box) {
-    const Player& p = player();
+    const Player& p = nearestPlayer(a.pos);
     const uint32_t yu = f.yawReference & kAngleMask;
     const int d = f.travelled;
     const int16_t hx = wrap16(a.pos.x.whole + wrap16(int(fixedSin(int(yu))) * d >> 12));

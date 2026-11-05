@@ -96,7 +96,7 @@ void home(ProjectileActor& actor, BombFields& bomb, const int32_t target[3]) {
         actor.rotation.x = int16_t(uint16_t(uint16_t(actor.rotation.x) + (d > 0 ? 0x10u : 0xfff0u)));
     };
     const uint32_t bearing = uint32_t(angleOf(target[0], target[2], actor.pos.x, actor.pos.z));
-    if (facingWithin(actor, player().pos, 0x20)) {
+    if (facingWithin(actor, carrierOrNearest(actor).pos, 0x20)) {
         if (planarDistance(nearestPlayer(actor.pos).pos, actor.pos) > 0x200) {
             turnYawTo(actor.rotation.y, bearing, 0x20);
             bomb.travelYaw = actor.rotation.y;
@@ -204,7 +204,7 @@ void carried(const PlayerEnv& env, ProjectileActor& actor, BombFields& bomb) {
         actor.velocity.z = int16_t(aim[2]);
     }
     actor.acceleration.y = 0x40;
-    actor.rotation.y = player().rotation.y;
+    actor.rotation.y = carrierOrNearest(actor).rotation.y;
     actor.rotation.z = 0;
     actor.rotation.x = 0;
     actor.airborne = 0;

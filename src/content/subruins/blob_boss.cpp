@@ -38,6 +38,7 @@
 #include "game/hud.hpp"
 #include "game/message.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/player/player_status.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
@@ -335,7 +336,7 @@ void lobBlob(const AnimatedActor& a, BlobFields& f, BlobFightBlock& w) {
     s.pos.x = a.pos.x;
     s.pos.y = int32_t(uint32_t(a.pos.y) - (uint32_t(int32_t(w.topHeight)) << 17));
     s.pos.z = a.pos.z;
-    const Player& p = player();
+    const Player& p = nearestPlayer(a.pos);
     const int32_t target[3] = {p.pos.x, int32_t(uint32_t(p.pos.y) + 0xffc00000u), p.pos.z};
     int d = int(f.aimYaw) - w.lastAimYaw;
     if (d < -0x800) d += 0x1000;
@@ -420,7 +421,7 @@ int16_t aimHead(AnimatedActor& a, BlobFields& f, BlobFightBlock& w, bool relativ
     if (w.height < 0x40) w.height = 0x40;
     f.reach = int16_t((int32_t(a.scale.x) * 0x160) >> 9);
     const ShortVec4& bone = bonePoint(a, 0, kStoryPort); // exe 0x5e1810(a, 0)
-    const Player& player0 = player();
+    const Player& player0 = nearestPlayer(a.pos);
     int32_t from[3];
     auto fromPlayer = [&] {
         from[0] = player0.pos.x;
@@ -746,7 +747,7 @@ void fightShoot(AnimatedActor& a, BlobFields& f, BlobFightBlock& w) { // exe 0x4
         }
         return;
     case 2:
-        if (player().pos.y.whole > -0x300 || int32_t(a.hitPoints) < int32_t(a.maxHitPoints) / 5) {
+        if (nearestPlayer(a.pos).pos.y.whole > -0x300 || int32_t(a.hitPoints) < int32_t(a.maxHitPoints) / 5) {
             next();
             return;
         }
@@ -1321,7 +1322,7 @@ void fight(const PlayerEnv& env, AnimatedActor& a, BlobFields& f) { // exe 0x4d6
     if (f.flags & kBlobHealing) {
         ++a.hitPoints;
         if (a.hitPoints > a.maxHitPoints) a.hitPoints = a.maxHitPoints;
-        drainFloor(env, player(), -0x300); // exe 0x572090
+        drainFloor(env, nearestPlayer(a.pos), -0x300); // exe 0x572090
     }
     submitHits(a, f, w);
     if (a.spawnByte != 0) return;

@@ -49,7 +49,7 @@ void bind(ProjectileActor& actor, ShotFields& shot) {
     const int speed = 0x5a0 / (8 - (d >> 8)) + 0x1e0;
     actor.velocity.x = 0;
     actor.velocity.z = int16_t(-speed);
-    actor.velocity.y = int16_t(launchSpeed(actor.pos, player().pos, speed, 0x40, 0xffffffffu)); // exe 0x5e3ee0
+    actor.velocity.y = int16_t(launchSpeed(actor.pos, nearestPlayer(actor.pos).pos, speed, 0x40, 0xffffffffu)); // exe 0x5e3ee0
 }
 // exe 0x5ca630: a hit or a wall push of bits 0x3f00 -> the burst (true); else its hit box cleared
 bool collide(const PlayerEnv& env, ProjectileActor& actor, ShotFields& shot) {

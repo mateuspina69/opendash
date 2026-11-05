@@ -23,6 +23,7 @@
 #include "game/hit_list.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/shadows.hpp"
@@ -200,7 +201,7 @@ void runs(AnimatedActor& a, DownFields& f) {
         return;
     }
     if (f.contact == 0 && (a.actorHit & 0xf00) == 0) {
-        const Player& p = player();
+        const Player& p = carrierOrNearest(a);
         const int ang = angleOf(p.pos.x, p.pos.z, a.pos.x, a.pos.z); // exe 0x5e3bc0(player, actor)
         turnToward(a.rotation.y, int(uint32_t(int(a.spin.y) + ang)), 0x20); // exe 0x5e3db0
     } else if (!(a.variant & kDownHops)) {
@@ -377,8 +378,8 @@ void inHands(const PlayerEnv& env, AnimatedActor& a, DownFields& f) { // exe 0x4
         soundPlayAtPos(kSoundKnockHard, a.pos);
     }
     a.acceleration.y = 0x40;
-    a.rotation.y = player().rotation.y;
-    f.heading = player().rotation.y;
+    a.rotation.y = carrierOrNearest(a).rotation.y;
+    f.heading = carrierOrNearest(a).rotation.y;
     a.airborne = 1;
     a.hitPoints = 1;
     carryDropFromPlayer(a); // exe 0x573990
@@ -443,7 +444,7 @@ void down(const PlayerEnv& env, AnimatedActor& a) { // exe 0x492330
         break;
     default: notPortedAt(kDownPort, "class 0x492330 state", a.state);
     }
-    const Player& p = player();
+    const Player& p = carrierOrNearest(a);
     const int far = int(uint32_t(stage().depthRange) << 2);
     if ((f.contact & kBirdbotInWater) && distance3(a.pos, p.pos) > far) {
         freeActor(a);

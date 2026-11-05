@@ -23,6 +23,7 @@
 #include "game/hit_list.hpp"
 #include "game/hit_points.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/stage_smoke.hpp"
@@ -147,7 +148,7 @@ void aim(AnimatedActor& actor, TurretFields& f) {
     f.timer = uint16_t(t - 1u);
     if (t != 0) return;
     f.timer = uint16_t((crtRand() & 3) + 4);
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     if (planarDistance(p.pos, actor.pos) > kAimRange) return;
     actor.enterStep(uint8_t(AimStep::Hold));
     f.timer = 0xf;

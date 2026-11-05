@@ -275,7 +275,7 @@ void fireGun(const StaticActor& actor, int gun, int low) {
     shot.pos.x = int32_t(uint32_t(actor.pos.x) + uint32_t(o[0]));
     shot.pos.y = int32_t(uint32_t(actor.pos.y) - 0xaa0000u);
     shot.pos.z = int32_t(uint32_t(actor.pos.z) + uint32_t(o[2]));
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     int32_t py = p.pos.y;
     const uint32_t yaw = uint32_t(int(g.yaw) + int(actor.rotation.y));
     int d = angleDiff(yaw, uint32_t(angleOf(p.pos, shot.pos)));

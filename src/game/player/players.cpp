@@ -18,4 +18,9 @@ Player& nearestPlayer(const Fixed16Vec3& point) {
     return *nearest;
 }
 
+Player& carrierOrNearest(const Actor& actor) {
+    Player& owner = playerById(actor.ownerPlayer);
+    return owner.interactionTarget.is(actor, kInteractLiftMode) ? owner : nearestPlayer(actor.pos);
+}
+
 } // namespace od::port

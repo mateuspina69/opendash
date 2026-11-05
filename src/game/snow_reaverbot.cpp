@@ -334,7 +334,7 @@ void groundTail(AnimatedActor& a, int r, bool facing) {
         a.velocity.z = kBounceSpeed;
         a.anim = 5;
         a.enterStep(0);
-        a.subState = uint8_t(facingAndRange(a, player(), 0x180, kChaseDistance) == kFacingOff ? SnowSub0::Bounced
+        a.subState = uint8_t(facingAndRange(a, nearestPlayer(a.pos), 0x180, kChaseDistance) == kFacingOff ? SnowSub0::Bounced
                                                                                             : SnowSub0::BouncedAway);
         bumpShake(a);
         return;
@@ -519,7 +519,7 @@ void lunge(const PlayerEnv& env, AnimatedActor& a, SnowReaverbotFields& f) { // 
         break;
     case 4:
         move(a);
-        if (facingAndRange(a, player(), 0x180, kChaseDistance) == kFacingOff) {
+        if (facingAndRange(a, nearestPlayer(a.pos), 0x180, kChaseDistance) == kFacingOff) {
             f.timer = 0;
             ++a.step;
         }

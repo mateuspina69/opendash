@@ -94,7 +94,7 @@ void ringTick(ProjectileActor& s, ShockwaveFields& f) {
     r.phase = f.phase;
     const uint32_t owner = hitOwner(s.slot);
     if (f.hitMode == kShockHitEdge) {
-        if (player().airborne == 0) {
+        if (nearestPlayer(s.pos).airborne == 0) {
             // the ring's point toward the player: Ry(the angle of the player from the shock) (0, 0, radius) (the matrix
             // 0x6d00c0, the point 0x6d0120, the view 0x6d0160: render-side scratch, not written), its height by the
             // phase

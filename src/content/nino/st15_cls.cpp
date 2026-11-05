@@ -1143,7 +1143,7 @@ void carried(const PlayerEnv& env, AnimatedActor& actor, MemberFields& member) {
         member.behaviour = kMemberBounces | kMemberKeepsOn;
     }
     actor.acceleration.y = kGravity;
-    const int16_t yaw = player().rotation.y;
+    const int16_t yaw = carrierOrNearest(actor).rotation.y;
     actor.rotation.y = yaw;
     member.flightYaw = yaw;
     actor.rotation.x = 0;

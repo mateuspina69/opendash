@@ -350,7 +350,7 @@ void shoot(AnimatedActor& actor, BurrowerFields& b) {
             spit.velocity.setXY(0, 0);
             spit.velocity.z = int16_t(0xfd00);
             // the player, 100 up
-            const Player& p = player();
+            const Player& p = nearestPlayer(actor.pos);
             const int16_t target[3] = {p.pos.x.whole, int16_t(uint16_t(p.pos.y.whole - 0x64)), p.pos.z.whole};
             if (pointVisibleOrNear(actor.pos, 0) == 0) { // exe 0x5e59a0
                 spit.rotation.x = int16_t(pitchOf(spit.pos, target) + 0x800);
@@ -376,7 +376,7 @@ void shoot(AnimatedActor& actor, BurrowerFields& b) {
         turnTowardPlayer(actor);
         if (b.flags & kBurrowerSway) { // its head sways toward the player's bone point 1
             const ShortVec4& head = bone(actor, 2);
-            const int to = pitchOf(head, player().bonePoints[1]) + 0x800;
+            const int to = pitchOf(head, nearestPlayer(actor.pos).bonePoints[1]) + 0x800;
             const int diff = angleDiff(uint32_t(int32_t(b.headSway)), uint32_t(to));
             if (diff + 0x20 > 0x40) b.headSway = int16_t(uint16_t(uint16_t(b.headSway) + (diff > 0 ? 0x20u : uint32_t(-0x20))));
             else b.headSway = int16_t(to);

@@ -27,6 +27,7 @@
 #include "game/hit_points.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/room_scripts.hpp"
 #include "game/story.hpp"
@@ -200,8 +201,8 @@ void potCarried(const PlayerEnv& env, StaticActor& actor, PotFields& pot) {
         pot.potFlags = 0;
     }
     actor.acceleration.y = kPotGravity;
-    actor.rotation.y = player().rotation.y;
-    pot.rotationSpare = player().rotation.y;
+    actor.rotation.y = carrierOrNearest(actor).rotation.y;
+    pot.rotationSpare = carrierOrNearest(actor).rotation.y;
     actor.airborne = 1;
     actor.actorHit = 0;
     carryDropFromPlayer(actor); // exe 0x573990

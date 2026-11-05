@@ -419,7 +419,7 @@ void fightCruise(StaticActor& actor, FightGunshipFields& ship) {
     default: break;
     }
     // exe 0x59f850(actor, the player's position copied on the stack, 0x180, 0x10)
-    if ((ship.behaviour & kBehaveStraight) || steerToward(actor, player().pos, 0x180, 0x10) == 0)
+    if ((ship.behaviour & kBehaveStraight) || steerToward(actor, nearestPlayer(actor.pos).pos, 0x180, 0x10) == 0)
         steerDamp(actor, 0x10);
     if (stepTowardLimit(actor.velocity.z, uint16_t(actor.acceleration.z), 0x400) != 0) actor.velocity.z = -0x400;
     integrateVelocity(actor, 0, actor.velocity.y, actor.velocity.z);

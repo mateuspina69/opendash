@@ -215,7 +215,7 @@ void crystalFloat(StaticActor& a) {
 }
 // exe 0x590490: talked to by the player -> flag 0x681; a solid
 void pedestalUse(StaticActor& a) {
-    if (a.subState == 0 && player().talksTo(a)) setStoryFlag(kFlagCrystalTaken);
+    if (a.subState == 0 && nearestPlayer(a.pos).talksTo(a)) setStoryFlag(kFlagCrystalTaken);
     actorCollisionSubmitSolid(a, SolidType::PushOutAligned, kNoBone, 0);
 }
 // exe 0x590260: the previous rotation; the routine [[0x8cdce8 + variant * 4] + state * 4] (the source names it)
@@ -969,7 +969,7 @@ void throwRock(AnimatedActor& a, BossFields& f) {
         s.pos.x = from[0];
         s.pos.y = from[1];
         s.pos.z = from[2];
-        const Player& p = player();
+        const Player& p = nearestPlayer(a.pos);
         const uint32_t px = uint32_t(p.pos.x), py = uint32_t(p.pos.y) - 0x800000u, pz = uint32_t(p.pos.z);
         int hx, hy, sp2, u;
         r = rngStep();
@@ -1888,7 +1888,7 @@ void boss(const PlayerEnv& env, AnimatedActor& a) {
     }
     f.flags = uint32_t(planarDistance(a.pos, arenaCentre())) < 0xb00 ? f.flags & ~kBossFarFromCentre
                                                                      : f.flags | kBossFarFromCentre;
-    f.flags = uint32_t(planarDistance(arenaCentre(), player().pos)) < 0xb00 ? f.flags | kBossPlayerNearCentre
+    f.flags = uint32_t(planarDistance(arenaCentre(), nearestPlayer(a.pos).pos)) < 0xb00 ? f.flags | kBossPlayerNearCentre
                                                                             : f.flags & ~kBossPlayerNearCentre;
     f.distance = uint32_t(planarDistance(a.pos, nearestPlayer(a.pos).pos));
     f.playerAngle = int16_t(uint32_t(angleOf(nearestPlayer(a.pos).pos, a.pos)));
@@ -2514,7 +2514,7 @@ void boulder(const PlayerEnv& env, ProjectileActor& a) {
         }
         if (st == BoulderState::Run) { // exe 0x5c7c50: the ring grows 0x50 a tick; the player on the ground in its band is hit
             f.ringRadius += 0x50u;
-            const Player& p = player();
+            const Player& p = nearestPlayer(a.pos);
             if (p.airborne == 0 && int(a.pos.y.whole) - int(p.pos.y.whole) < 0x81 &&
                 uint32_t(f.ringRadius) - uint32_t(planarDistance(a.pos, p.pos)) < 0x201) {
                 f.hit.previousX = a.prevPos.x.whole; // exe 0x5c7d00

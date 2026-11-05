@@ -134,7 +134,7 @@ void bombBlast(StaticActor& actor, BombFields& bomb) {
         blast.pos.z = actor.pos.z;
     }
     if (bomb.behaviour & kBombHurtsPlayer) {
-        const Player& p = player();
+        const Player& p = carrierOrNearest(actor);
         const int16_t at[3] = {p.pos.x.whole, int16_t(p.pos.y.whole - kPlayerHitHeight), p.pos.z.whole};
         hitListSubmit(at, bomb.hitBox,
                       hitOwner(actor.slot) | hitGroup(kHitGroupBodies) | kHitNoLockOn | hitRadius(0x80),
@@ -267,7 +267,7 @@ void bombInHands(StaticActor& actor, BombFields& bomb) {
         bomb.behaviour = kBombBounces;
     }
     actor.acceleration.y = kGravity;
-    actor.rotation.y = player().rotation.y;
+    actor.rotation.y = carrierOrNearest(actor).rotation.y;
     actor.airborne = 1;
     carryDropFromPlayer(actor);
     actor.subState = uint8_t(CarriedSub::Flying);

@@ -10,6 +10,7 @@
 #include "game/draw_commands.hpp"
 #include "game/game_state.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 
@@ -65,10 +66,10 @@ void dustStart(const PlayerEnv& env, StaticActor& actor, FootstepDustFields& dus
 void puffStart(const PlayerEnv& env, const StaticActor& actor, const Actor& walker, bool isPlayer, int16_t p[3]) {
     if (actor.variant == kDustAtFoot) {
         if (isPlayer) {
-            const int16_t g = int16_t(actorGround(env, player())); // exe 0x40f190
-            p[0] = player().pos.x.whole;
+            const int16_t g = int16_t(actorGround(env, nearestPlayer(actor.pos))); // exe 0x40f190
+            p[0] = nearestPlayer(actor.pos).pos.x.whole;
             p[1] = g;
-            p[2] = player().pos.z.whole;
+            p[2] = nearestPlayer(actor.pos).pos.z.whole;
         } else {
             const ShortVec4& foot = bonePoint(animatedActorAt(walker.at), kFootBone, kDustArea); // exe 0x5e1810
             p[0] = foot.x;
@@ -76,9 +77,9 @@ void puffStart(const PlayerEnv& env, const StaticActor& actor, const Actor& walk
             p[2] = foot.z;
         }
     } else if (isPlayer) {
-        p[0] = player().pos.x.whole;
+        p[0] = nearestPlayer(actor.pos).pos.x.whole;
         p[1] = 0;
-        p[2] = player().pos.z.whole;
+        p[2] = nearestPlayer(actor.pos).pos.z.whole;
     } else {
         p[0] = actor.pos.x.whole;
         p[1] = actor.pos.y.whole;
@@ -90,10 +91,10 @@ void puffStart(const PlayerEnv& env, const StaticActor& actor, const Actor& walk
 // until kDustPuffs or the walker stops; each puff ages kDustPuffAge frames as two billboards (the frame by its growth,
 // the size growing) drifting apart with RNG jitter; the last puff's end frees the actor
 void dustRun(const PlayerEnv& env, StaticActor& actor, FootstepDustFields& dust) {
-    const bool isPlayer = dust.parent.get() == &player();
+    const bool isPlayer = dust.parent.get() == &nearestPlayer(actor.pos);
     Actor& walker = *dust.parent;
     if (isPlayer) {
-        if (!(player().status & kStatusBurnFloor)) dust.stopped = 1;
+        if (!(nearestPlayer(actor.pos).status & kStatusBurnFloor)) dust.stopped = 1;
     } else if (walker.flags == 0 || DustWalkerFields(walker).stopWord != 0) {
         dust.stopped = 1;
     }

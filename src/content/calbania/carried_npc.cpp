@@ -24,6 +24,7 @@
 #include "game/rewards.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/actors.hpp"
@@ -471,7 +472,7 @@ void cast4(AnimatedActor& actor, CarriedNpcFields& npc) {
         }
         return;
     case 2: // the player's hand-over animation reaches its step 4
-        if (player().body.anim == kPlayerAnimGive && uint8_t(player().body.key.frame) == kPlayerAnimGiveStep) {
+        if (carrierOrNearest(actor).body.anim == kPlayerAnimGive && uint8_t(carrierOrNearest(actor).body.key.frame) == kPlayerAnimGiveStep) {
             actor.subState = uint8_t(s + 1u);
             npc.timer = 4;
             actor.anim = 0x19;

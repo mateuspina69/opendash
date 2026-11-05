@@ -305,7 +305,7 @@ void circle(AnimatedActor& a, WalkerFields& f) { // exe 0x4522b0: around the pla
     integrateVelocity(a, 0, 0, a.velocity.z);
     int found = int(neighbourFind(a, f.neighbour, 0));
     if (found != 0) toSub(a, WalkerSub::GiveWay);
-    const Player& p = player();
+    const Player& p = carrierOrNearest(a);
     const int dist = planarDistance(p.pos, a.pos);
     if (f.cooldown != 0) --f.cooldown;
     if (f.cooldown == 0) {
@@ -444,7 +444,7 @@ void hop(AnimatedActor& a, WalkerFields& f) { // exe 0x452850: wait 0x1e ticks f
     case 2: {
         a.enterStep(3);
         a.anim = 2;
-        const Player& p = player();
+        const Player& p = carrierOrNearest(a);
         const int yaw = angleOf(p.pos, a.pos);
         a.velocity.setXY(0, 0);
         a.rotation.y = int16_t(yaw);
@@ -925,7 +925,7 @@ void inHands(const PlayerEnv& env, AnimatedActor& a, WalkerFields& f) { // exe 0
     if (r == CarryRelease::Held) return;
     f.bits &= int8_t(~kWalkerNoHitEntry);
     a.runFlags &= uint8_t(~kActorRunMarked);
-    f.heading = player().rotation.y;
+    f.heading = carrierOrNearest(a).rotation.y;
     if (r != CarryRelease::Thrown) {
         a.velocity.y = -0x300;
         a.velocity.z = -0x40;

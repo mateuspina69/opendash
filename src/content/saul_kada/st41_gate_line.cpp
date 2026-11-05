@@ -12,6 +12,7 @@
 #include "game/audio_logic.hpp"
 #include "game/distances.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/story_flags.hpp"
 
 namespace od::port {

@@ -15,6 +15,7 @@
 #include "game/field_alias.hpp"
 #include "game/game_state.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/story.hpp"
 
@@ -91,7 +92,7 @@ void glowing(StaticActor& actor, GlowFields& glow) {
     actor.rotation.y = int16_t(actor.rotation.y + 0x80);
     actor.tint = greyTint(glow);
     const ActorHeader& owner = *slotByIdentityWord<ActorHeader>(GlowParams(actor).owner);
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     const uint32_t dx = (uint32_t(int32_t(p.pos.x.whole)) & 0xfffffe00u) -
                         (uint32_t(int32_t(actor.pos.x.whole)) & 0xfffffe00u) + 0x200u;
     const uint32_t dz = (uint32_t(int32_t(p.pos.z.whole)) & 0xfffffe00u) -

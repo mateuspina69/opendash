@@ -12,6 +12,7 @@
 #include "game/event.hpp"
 #include "game/game_state.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/story_flags.hpp"
@@ -94,7 +95,7 @@ void remark(AnimatedActor& a, uint16_t message) { eventStartAtActor(a, 0, 0, mes
 
 // exe 0x41b0b0 (ST08): Roll by the player's arrival point; 1..4 = the known entrances, 5 = elsewhere
 int placeST08(AnimatedActor& a) {
-    const int16_t x = player().pos.x.whole, z = player().pos.z.whole;
+    const int16_t x = nearestPlayer(a.pos).pos.x.whole, z = nearestPlayer(a.pos).pos.z.whole;
     if (x == 0) {
         if (z == 0xa00) {
             place(a, 0, 0x980, 0x800);
@@ -120,7 +121,7 @@ int placeST08(AnimatedActor& a) {
 // exe 0x41b270 (ST09): Roll by the player's arrival point and her remark (messages 0x47..0x4c) when he comes out of a
 // house; the entrance (0 = none of them)
 int placeST09(AnimatedActor& a) {
-    const int16_t x = player().pos.x.whole, z = player().pos.z.whole;
+    const int16_t x = nearestPlayer(a.pos).pos.x.whole, z = nearestPlayer(a.pos).pos.z.whole;
     int k = 0;
     int16_t message = -1;
     if (x == 0) {
@@ -164,7 +165,7 @@ int placeST09(AnimatedActor& a) {
         message = 0x4c;
     }
     if (message >= 0) remark(a, uint16_t(message));
-    if (player().pos.x.whole == 0 && player().pos.z.whole == 0x700) {
+    if (nearestPlayer(a.pos).pos.x.whole == 0 && nearestPlayer(a.pos).pos.z.whole == 0x700) {
         place(a, 0, 0x6a0, 0x800);
         k = 8;
         remark(a, 0x4b);

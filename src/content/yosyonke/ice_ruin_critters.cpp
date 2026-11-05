@@ -207,7 +207,7 @@ void sceneCue(AnimatedActor& actor) { // exe 0x4d5110: the scene's cue 2 -> the 
 // exe 0x4d44e0: the player within 0xa0 in height: it faces the player within 0x200 -> startled (stunned), within
 // 0x600 -> the leap
 void notice(AnimatedActor& actor, CritterFields& f) {
-    const Player& p = player();
+    const Player& p = carrierOrNearest(actor);
     const int py = p.pos.y.whole, ay = actor.pos.y.whole;
     const int d = py - ay;
     if ((d >= 0 ? d : ay - py) > 0xa0) return;
@@ -258,7 +258,7 @@ enum class HopStep : uint8_t {
     Start = 0, TowardPlayer = 1, Wander = 2, Turn = 4, TurnFast = 5, Run = 7, Brake = 0xa, TurnAway = 0xb,
 };
 void hop(const PlayerEnv& env, AnimatedActor& actor, CritterFields& f, const DataTable<ScalarTable<int8_t, 0x10>>& table) {
-    const Player& p = player();
+    const Player& p = carrierOrNearest(actor);
     switch (HopStep(actor.step)) {
     case HopStep::Start: {
         actor.velocity.y = 0;
@@ -543,7 +543,7 @@ void critterHitEntry(AnimatedActor& actor, CritterFields& f) {
     f.hit.result = 0;
     f.hit.previousZ = actor.prevPos.z.whole;
     if (f.bits & kCritterWatched) {
-        if (facingAndRange(player(), actor, 0x200, 0xc00) == 0) f.bits &= uint8_t(~kCritterWatched);
+        if (facingAndRange(carrierOrNearest(actor), actor, 0x200, 0xc00) == 0) f.bits &= uint8_t(~kCritterWatched);
         else watched = 0x80000;
     }
     if (f.bits & kCritterLifted) return;
@@ -824,7 +824,7 @@ void carriedHeld(const PlayerEnv& env, AnimatedActor& actor, CritterFields& f) {
         actor.velocity.y = int16_t(0xfe00);
         actor.velocity.z = int16_t(0xff00);
     }
-    actor.rotation.y = player().rotation.y;
+    actor.rotation.y = carrierOrNearest(actor).rotation.y;
     actor.airborne = 1;
     carryDropFromPlayer(actor); // exe 0x573990
     actor.subState = uint8_t(CarriedSub::Flying);
@@ -858,7 +858,7 @@ void catchableCritter(const PlayerEnv& env, AnimatedActor& actor) { // 0x4d3240
             actor.enterState(uint8_t(CatchableState::Carried));
             f.bits |= kCritterLifted;
         }
-        if (player().talksTo(actor) && eventState().active == 0) {
+        if (carrierOrNearest(actor).talksTo(actor) && eventState().active == 0) {
             uint32_t n = storyFlag(kFlagCaughtFirst) ? 1 : 0;
             if (storyFlag(kFlagCaughtSecond)) ++n;
             eventStartAtActor(actor, kCaughtEventParam, 0, uint16_t(n + kCaughtMessage)); // exe 0x543af0

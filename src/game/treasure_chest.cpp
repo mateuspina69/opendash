@@ -125,7 +125,7 @@ void chestClosed(AnimatedActor& actor, const ChestFields& chest) {
     actor.interaction = uint32_t(d + kFrontHalfWindow) < uint32_t(2 * kFrontHalfWindow + 1) ? kInteractTalk : 0;
     switch (ChestSub(actor.subState)) {
     case ChestSub::Wait:
-        if (player().talksTo(actor) && eventState().active == 0) actor.subState = uint8_t(ChestSub::StartEvent);
+        if (nearestPlayer(actor.pos).talksTo(actor) && eventState().active == 0) actor.subState = uint8_t(ChestSub::StartEvent);
         return;
     case ChestSub::StartEvent: {
         // exe 0x543b40(&{x, y, z} (the 16.16 position's integer halves), 0, 0x40023, 0, message): event mode 4

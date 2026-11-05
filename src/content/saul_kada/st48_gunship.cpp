@@ -280,7 +280,7 @@ void cruise(StaticActor& actor, ShipFields& ship) {
         [[fallthrough]];
     }
     case 1:
-        if (facingAndRange(actor, player(), 0x180, 3000) == 0) {
+        if (facingAndRange(actor, nearestPlayer(actor.pos), 0x180, 3000) == 0) {
             soundPlayAtPos(kEngineSound, actor.pos); // exe 0x5d5380
             if (int32_t(0x28000u << (rngStep() & 0x1f)) < 0) actor.enterStep(2);
         }
@@ -341,7 +341,7 @@ void strafe(StaticActor& actor, ShipFields& ship) {
     case 1:
         if (ship.cooldown != 0) {
             ship.cooldown -= 1u;
-        } else if (facingAndRange(actor, player(), 0x200, 3000) == 0) {
+        } else if (facingAndRange(actor, nearestPlayer(actor.pos), 0x200, 3000) == 0) {
             if (int32_t(0x28000u << (rngStep() & 0x1f)) < 0) actor.enterStep(2);
         }
         break;
@@ -421,7 +421,7 @@ void swingRound(StaticActor& actor, ShipFields& ship) {
         actor.enterStep(1);
     }
     const int z = (ship.flags & kShipAhead) ? 0x5780 : -0x5780;
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     int32_t o[3];
     rotateByYaw(p.rotation.y, 0, 0, z, o); // exe 0x5e38d0
     const int32_t point[3] = {int32_t(uint32_t(p.pos.x) + uint32_t(o[0])), int32_t(uint32_t(p.pos.y) + uint32_t(o[1])),
@@ -475,7 +475,7 @@ void climbOver(StaticActor& actor, ShipFields& ship) {
         actor.acceleration.z = -0x18;
         actor.enterStep(1);
     }
-    const int above = (actor.pos.y.whole - player().pos.y.whole) + 1000;
+    const int above = (actor.pos.y.whole - nearestPlayer(actor.pos).pos.y.whole) + 1000;
     const int s = stoppingDistance(actor.velocity.y, -int(actor.acceleration.y));
     if (forwardToward(actor, 0) != 0) actor.velocity.z = 0;
     if (above <= (s >> 16)) {
@@ -850,7 +850,7 @@ void fire(const StaticActor& actor, int side, int lim) {
     shot.pos.x = int32_t(uint32_t(actor.pos.x) + uint32_t(o[0]));
     shot.pos.y = int32_t(uint32_t(actor.pos.y) + uint32_t(o[1]));
     shot.pos.z = int32_t(uint32_t(actor.pos.z) + uint32_t(o[2]));
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     const int16_t aim[3] = {p.pos.x.whole, int16_t(p.pos.y.whole - 0x40), p.pos.z.whole};
     const int16_t from[3] = {shot.pos.x.whole, shot.pos.y.whole, shot.pos.z.whole};
     int dy = yawTo(actor, angleOf(p.pos, shot.pos));

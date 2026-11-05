@@ -113,7 +113,7 @@ int takeHit(AnimatedActor& actor, TurretFields& turret) {
 // exe 0x46c440: the gun turns toward the player (pitch 0x20 / yaw 0x40 a tick; the pitch held within 0x200 up /
 // 0xe00 down); true once both are on target
 bool aim(const AnimatedActor& actor, TurretFields& turret) {
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     // the exe's stack points: the gun (0x100 above the turret), the player's chest (0x80 above him)
     const int32_t gun[3] = {actor.pos.x, int32_t(uint32_t(actor.pos.y) - 0x1000000u), actor.pos.z};
     const int32_t chest[3] = {p.pos.x, int32_t(uint32_t(p.pos.y) + 0xff800000u), p.pos.z};

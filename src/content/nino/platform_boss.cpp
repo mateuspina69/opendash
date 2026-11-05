@@ -38,6 +38,7 @@
 #include "game/hit_list.hpp"
 #include "game/hit_points.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/player/player_weapons.hpp"
 #include "game/port_gap.hpp"
 #include "game/projection.hpp"
@@ -806,7 +807,7 @@ void sparkFire(StaticActor& spark, SparkFields& fields) {
                 shot.velocity.setXY(0, 0);
                 shot.velocity.z = -0x500;
                 // aimed at the player's point 0x80 up (the pitch from the integer parts, the yaw from the 16.16 x / z)
-                const Player& p = player();
+                const Player& p = nearestPlayer(spark.pos);
                 const int16_t from[3] = {spark.pos.x.whole, spark.pos.y.whole, spark.pos.z.whole};
                 const int16_t to[3] = {p.pos.x.whole, int16_t(uint16_t(p.pos.y.whole) - 0x80u), p.pos.z.whole};
                 shot.rotation.x = int16_t(pitchOf(from, to) + 0x800);

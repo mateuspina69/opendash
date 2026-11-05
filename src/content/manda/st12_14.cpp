@@ -24,6 +24,7 @@
 #include "game/hit_points.hpp"
 #include "game/pickups.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/story.hpp"
@@ -906,7 +907,7 @@ void turnHead(TurretFields& f) {
 void turretRun(AnimatedActor& a, TurretFields& f) {
     const AnimatedActorStats stats = turretStats(a);
     const ShortVec4& bone = bonePoint(a, 1, kStoryPort); // exe 0x5e1810
-    const Player& p = player();
+    const Player& p = nearestPlayer(a.pos);
     const int32_t aimed[3] = {p.pos.x, int32_t(uint32_t(p.pos.y) + uint32_t(kAimAbovePlayer)), p.pos.z};
     const int32_t from[3] = {int32_t(uint32_t(int32_t(bone.x)) << 16), int32_t(uint32_t(int32_t(bone.y)) << 16),
                              int32_t(uint32_t(int32_t(bone.z)) << 16)};

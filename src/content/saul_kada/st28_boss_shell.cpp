@@ -12,6 +12,7 @@
 #include "game/field_alias.hpp"
 #include "game/hit_list.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/story.hpp"
 
@@ -79,7 +80,7 @@ void bossShell(const PlayerEnv& env, ProjectileActor& actor) { // exe 0x5ca770: 
 } // namespace
 
 void lobBossShell(const AnimatedActor& boss, bool nearShot) { // exe 0x5ca900
-    const Player& p = player();
+    const Player& p = nearestPlayer(boss.pos);
     const int32_t target[3] = {p.pos.x, p.pos.y, p.pos.z};
     const uint32_t slot = allocActor40(kActorStageClass); // exe 0x5e1280
     if (!slot) return;

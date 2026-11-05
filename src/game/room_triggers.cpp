@@ -12,6 +12,7 @@
 #include "game/message.hpp"
 #include "game/event.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/player/player_status.hpp"
 #include "game/player/player_weapons.hpp"
 #include "game/stage_state.hpp"
@@ -59,7 +60,7 @@ uint32_t scanTriggers(const PlayerEnv& env, const Actor& actor) {
     TriggerHit hit;
     const uint32_t r = withCollisionState([&](CollisionState& st) {
         return triggerScan(env.room, st, {actor.pos.x.whole, actor.pos.y.whole, actor.pos.z.whole}, actor.rotation.y,
-                           player().rotation.y, hit);
+                           nearestPlayer(actor.pos).rotation.y, hit);
     });
     TriggerRecord& t = trigger();
     t.type = hit.type;

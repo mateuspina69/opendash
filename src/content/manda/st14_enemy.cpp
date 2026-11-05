@@ -407,7 +407,7 @@ void dive(AnimatedActor& a, HoverFields& f) {
         break;
     case DiveStep::Aim: {
         if (!a.animEnded()) break;
-        const Player& p = player();
+        const Player& p = carrierOrNearest(a);
         f.target.x = p.pos.x.whole;
         f.target.y = int16_t(uint16_t(p.pos.y.whole) - uint16_t(kDiveAbovePlayer));
         f.target.z = p.pos.z.whole;
@@ -658,7 +658,7 @@ void held(const PlayerEnv& env, AnimatedActor& a, HoverFields& f) {
         a.velocity.z = -0x80;
         f.mode = kHoverBounces;
     }
-    a.rotation.y = player().rotation.y;
+    a.rotation.y = carrierOrNearest(a).rotation.y;
     carryDropFromPlayer(a); // exe 0x573990
     thrown(env, a, f);      // exe 0x44e0c0
 }

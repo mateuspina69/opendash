@@ -24,6 +24,7 @@
 #include "game/hit_list.hpp"
 #include "game/hit_points.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/story.hpp"
 #include "game/story_flags.hpp"
@@ -139,7 +140,7 @@ bool approachAndGrab(const PlayerEnv& env, AnimatedActor& actor, PartnerFields& 
 // -0x140) until his z is within 0x14 of 0, then brakes to a stop -> the chase
 void walkIn(AnimatedActor& actor) {
     if (!storyFlag(kFlagMissionAccepted)) {
-        actor.pos.x.whole = player().pos.x.whole;
+        actor.pos.x.whole = nearestPlayer(actor.pos).pos.x.whole;
         return;
     }
     // the exe's stack point: his integer x, y = z = 0 (the planar distance: |z|)
@@ -251,9 +252,9 @@ void carryAndThrow(const PlayerEnv& env, AnimatedActor& actor, PartnerFields& bo
     const uint8_t toPlayer = bon.flags & kPartnerThrowAtPlayer;
     int32_t goal[3];
     if (toPlayer) {
-        goal[0] = player().pos.x;
-        goal[1] = player().pos.y;
-        goal[2] = player().pos.z;
+        goal[0] = nearestPlayer(actor.pos).pos.x;
+        goal[1] = nearestPlayer(actor.pos).pos.y;
+        goal[2] = nearestPlayer(actor.pos).pos.z;
     } else {
         goal[0] = kLavaX;
         goal[1] = kLavaY;

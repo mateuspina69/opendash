@@ -90,7 +90,7 @@ void fallStep(AnimatedActor& actor) {
 // exe 0x50aa60(actor, add, step): turned (by step, exe 0x5e3df0) toward the player offset by its aim; the signed yaw
 // difference to that point (exe 0x5e3d80) + add
 uint32_t aimAt(AnimatedActor& actor, const GunnerFields& gunner, uint32_t add, int step) {
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     const int32_t targetX =
         int32_t((uint32_t(p.pos.x) & 0xffffu) | uint32_t(uint16_t(uint16_t(p.pos.x.whole) + gunner.aimX)) << 16);
     const int32_t targetZ =

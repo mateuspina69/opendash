@@ -403,7 +403,7 @@ void chargedShot(const PlayerEnv& env, ProjectileActor& shot) {
 void fireShot(const AnimatedActor& shooter) {
     int32_t v[3];
     rotateVector(shooter.rotation, 0, kHandY, kHandZ, v); // exe 0x5e3970
-    const Player& p = player();
+    const Player& p = carrierOrNearest(shooter);
     const int16_t pl[3] = {p.pos.x.whole, int16_t(uint16_t(uint16_t(p.pos.y.whole) - 0x5au)), p.pos.z.whole};
     const uint32_t e = allocActor40(kActorStageClass); // exe 0x5e1280
     if (!e) return;
@@ -617,7 +617,7 @@ void carriedHeld(const PlayerEnv& env, AnimatedActor& actor, ShooterFields& f) {
     actor.velocity.y = int16_t(v[1]);
     actor.velocity.z = int16_t(v[2]);
     actor.acceleration.y = kLowGravity;
-    actor.rotation.y = player().rotation.y;
+    actor.rotation.y = carrierOrNearest(actor).rotation.y;
     actor.rotation.z = 0;
     actor.rotation.x = 0;
     actor.airborne = 0;

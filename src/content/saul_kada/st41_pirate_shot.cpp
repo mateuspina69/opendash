@@ -140,7 +140,7 @@ void homingStart(ProjectileActor& actor, ShotFields& shot, int16_t vy, uint16_t 
     actor.velocity.y = vy;
     actor.rotation.y = int16_t(uint16_t((r & 0xff) << 4));
     shot.life = 0xf0;
-    shot.levelY = int16_t(uint16_t(player().pos.y.whole) - 0x64u);
+    shot.levelY = int16_t(uint16_t(nearestPlayer(actor.pos).pos.y.whole) - 0x64u);
     shot.turnDelay = 0x3c;
     shot.clut = clut;
 }

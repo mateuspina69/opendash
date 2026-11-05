@@ -13,6 +13,7 @@
 #include "game/event_state.hpp"
 #include "game/player/player_hang.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/projection_state.hpp"
 #include "game/story.hpp"
@@ -46,7 +47,7 @@ constexpr uint8_t kInteractBar = 0x08;        // the bar's interaction byte (its
 // exe 0x58dd90: "use" starts the prop's message; the step back once the event ended
 void propTalk(StaticActor& actor, uint8_t message) {
     if (TalkStep(actor.step) == TalkStep::Waiting) {
-        if (!player().talksTo(actor) || eventState().active != 0) return;
+        if (!nearestPlayer(actor.pos).talksTo(actor) || eventState().active != 0) return;
         eventStartAtActor(actor, kTalkEvent, 0, message); // exe 0x543af0
         ++actor.step;
     } else if (eventState().active == 0) {

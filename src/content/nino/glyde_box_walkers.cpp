@@ -431,7 +431,7 @@ int headTurnToPlayer(const AnimatedActor& actor, WalkerFields& w) {
 void aim(const AnimatedActor& actor, WalkerFields& w) {
     int d = planarDistance(actor.pos, nearestPlayer(actor.pos).pos) - 0xc8;
     if (d < 0) d = 1;
-    const int16_t dy = int16_t(uint16_t(0xff42u - uint16_t(player().pos.y.whole)));
+    const int16_t dy = int16_t(uint16_t(0xff42u - uint16_t(nearestPlayer(actor.pos).pos.y.whole)));
     const int p = atanAngle(float(t16(d)), float(dy)) & 0xfff; // exe 0x5e3c50({0, 0}, {d, dy})
     w.gunPitch = int16_t(angleDiff(0x400, uint32_t(p)));
     const int q = atanAngle(float(-0x8c), float(t16(d))) & 0xfff; // exe 0x5e3c50({0x8c, 0}, {0, d})
@@ -873,7 +873,7 @@ void routeWalk(AnimatedActor& actor, WalkerFields& w) {
             w.lastCell = int16_t(cellWord(w));
         }
         if (!nearCentre(actor)) return;
-        int r = lineClear(w, uint16_t(actor.rotation.y), player().pos.x.whole, player().pos.z.whole);
+        int r = lineClear(w, uint16_t(actor.rotation.y), nearestPlayer(actor.pos).pos.x.whole, nearestPlayer(actor.pos).pos.z.whole);
         if (r > 0) {
             enterSub(actor, WalkerSub::Charge);
             w.ticks = int16_t(r);

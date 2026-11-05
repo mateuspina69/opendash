@@ -146,7 +146,7 @@ int beamStart(ProjectileActor& actor, BeamFields& beam) {
     }
     pointAtWord(beam.boss, beam.spawnBoss);
     beamAtBone(actor, beam);
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     const int32_t from[3] = {actor.pos.x, actor.pos.y, actor.pos.z};
     const int32_t floorPoint[3] = {p.pos.x, 0, p.pos.z}; // the player's x / z on the floor (the exe's local)
     actor.rotation.x = int16_t((uint32_t(pitchOf(from, floorPoint)) - 0x7e0u) & 0xfff); // exe 0x5e3ca0
@@ -188,7 +188,7 @@ void laySegment(const ProjectileActor& actor, ProjectileActor& s, const int32_t 
 int beamSweep(const PlayerEnv& env, ProjectileActor& actor, BeamFields& beam) {
     if (actor.variant != 0) return 2;
     beamAtBone(actor, beam);
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     int32_t nw[3] = {p.pos.x, 0, p.pos.z}; // the player's floor point, then the last laid point (the exe's local)
     int32_t cur[3] = {actor.pos.x, actor.pos.y, actor.pos.z};
     actor.rotation.x = int16_t(uint16_t(actor.rotation.x) - 1u);

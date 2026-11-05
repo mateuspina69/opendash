@@ -138,7 +138,7 @@ int damage(StaticActor& actor, TrapFields& fields) {
             case 2: ax = int16_t(x - 0x180); az = int16_t(z + leg - 0x980); break;
             default: ax = int16_t(x + leg - 0x980); az = int16_t(z - 0x980); break;
             }
-            const Player& p = player();
+            const Player& p = nearestPlayer(actor.pos);
             if (uint32_t(int32_t(p.pos.x.whole) - ax) < 0xb00u &&
                 uint32_t(int32_t(p.pos.z.whole) - az) < 0xb00u) {
                 actor.subState = uint8_t(TrapSub::Attack);

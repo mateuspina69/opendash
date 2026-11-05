@@ -163,7 +163,7 @@ void lunge(StaticActor& actor, PodFields& pod) {
         pod.timer = uint8_t(t);
         pod.amplitude = uint8_t(t);
         const int y = actor.pos.y.whole + 0x6e;
-        const Player& p = player();
+        const Player& p = nearestPlayer(actor.pos);
         int dx = actor.pos.x.whole - p.pos.x.whole;
         int dz = actor.pos.z.whole - p.pos.z.whole;
         bool off = false; // the player too far along the carrier's facing

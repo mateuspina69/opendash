@@ -24,6 +24,7 @@
 #include "game/hit_list.hpp"
 #include "game/matrix.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/projection.hpp"
 #include "game/stage_state.hpp"
@@ -124,7 +125,7 @@ void rayDots(const ProjectileActor& actor, BeamOwnFields& beam) {
 }
 // exe 0x5c9800: the player (0x64 above his feet) inside the ray's box -> the signal to fire, freed; else its dots
 void rayAim(ProjectileActor& actor, BeamOwnFields& beam) {
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     const int16_t target[3] = {p.pos.x.whole, int16_t(uint16_t(p.pos.y.whole - 0x64)), p.pos.z.whole};
     const int16_t from[3] = {actor.pos.x.whole, actor.pos.y.whole, actor.pos.z.whole};
     const Actor& boss = bossOf(actor);
@@ -154,7 +155,7 @@ void shotStart(ProjectileActor& actor, BeamOwnFields& beam) {
 // exe 0x5c9920: homing at the player 0x5a above his feet (its yaw / pitch snapped), forward by its speed; a hit -> the
 // player caught (hidden, 0x258 ticks of the effect); a wall -> the signal, freed; else its capsule +-0x40 across its yaw
 void shotFlight(const PlayerEnv& env, ProjectileActor& actor, BeamOwnFields& beam) {
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     const int32_t target[3] = {p.pos.x, int32_t((uint32_t(p.pos.y) & 0xffffu) | uint32_t(uint16_t(uint16_t(p.pos.y.whole) - 0x5au)) << 16),
                                p.pos.z};
     actor.rotation.y = int16_t(uint16_t(uint16_t(actor.rotation.y) +
@@ -203,7 +204,7 @@ void shotFlight(const PlayerEnv& env, ProjectileActor& actor, BeamOwnFields& bea
 // from the wrong words of the first packet (two of its colours, the DR_MODE tag, 0: not screen points; not drawn by the
 // port); the chain linked into OT entry 1
 void caughtEffect(const ProjectileActor& actor) {
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     const int16_t point[3] = {p.pos.x.whole, int16_t(uint16_t(p.pos.y.whole - 0x5a)), p.pos.z.whole};
     const CameraPoint c = cameraPoint(point); // exe 0x40c3c0 / 0x40c3e0 / 0x40c6a0 / 0x40c800 / 0x40caa0 / 0x40cae0
     if (c.view[2] > int32_t(uint32_t(uint16_t(stage().effectsFar)) * 4) || c.view[2] < 0x30) return;

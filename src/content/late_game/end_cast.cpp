@@ -43,6 +43,7 @@
 #include "game/keyframe_tracks.hpp"
 #include "game/matrix.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/projection.hpp"
 #include "game/projection_state.hpp"

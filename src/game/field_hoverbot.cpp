@@ -112,7 +112,7 @@ int hurt(AnimatedActor& a, FieldHoverbotFields& f) {
 // exe 0x44d140: the height toward the player's by an eighth of the gap, at most 0x20 a tick
 void followPlayerHeight(AnimatedActor& a) {
     const int16_t y = a.pos.y.whole;
-    int d = (int(player().pos.y.whole) - y) >> 3;
+    int d = (int(carrierOrNearest(a).pos.y.whole) - y) >> 3;
     if (d >= 0x21) {
         a.pos.y.whole = wrap16(y + 0x20);
         return;
@@ -225,7 +225,7 @@ void appearStart(AnimatedActor& a, FieldHoverbotFields& f) { // exe 0x44c140 (va
 }
 // exe 0x44c1a0 (variant 0): kept around the player (its place offsets settling) until on the screen
 void follow(AnimatedActor& a, FieldHoverbotFields& f) {
-    const Player& p = player();
+    const Player& p = carrierOrNearest(a);
     if (p.rotation.x > 0) {
         a.rotation.y = int16_t(uint16_t(p.rotation.y) - uint16_t(p.directionOffset.y));
         f.radius -= 8u;
@@ -360,7 +360,7 @@ void circle(AnimatedActor& a, FieldHoverbotFields& f) {
     EncounterState& enc = encounterState();
     if (enc.attackLocksRecent() & kAttackLockLunge) return;
     if (!((1u << (rngStep() & 0xf)) & 0x590u)) return;
-    const Player& p = player();
+    const Player& p = carrierOrNearest(a);
     const int d = distance3(a.pos, p.pos); // exe 0x5e3a10
     if (d <= 0x320 || d >= 0x4b0) return;
     const int ang = angleOf(a.pos, p.pos);
@@ -459,7 +459,7 @@ void shoot(AnimatedActor& a, FieldHoverbotFields& f) {
             s.velocity.z = -0x300;
             s.pos.z = a.pos.z;
             // the target: the player's position with y - 100 (integer part)
-            const Player& p = player();
+            const Player& p = carrierOrNearest(a);
             const int16_t target[3] = {p.pos.x.whole, wrap16(p.pos.y.whole - 100), p.pos.z.whole};
             s.rotation.x = int16_t(pitchOf(a.pos, target) + 0x800); // exe 0x5e3ca0
             s.rotation.y = f.aimYaw;
@@ -567,7 +567,7 @@ void inHands(const PlayerEnv& env, AnimatedActor& a, FieldHoverbotFields& f) { /
     carryAtHands(a, 0, 0, 0);               // exe 0x573ab0
     const CarryRelease r = carryReleased(); // exe 0x573950
     if (r == CarryRelease::Held) return;
-    f.aimYaw = player().rotation.y;
+    f.aimYaw = carrierOrNearest(a).rotation.y;
     f.hitBox.result = 0;
     a.subState = uint8_t(HoverCarriedSub::Flying);
     a.enterStep(0);

@@ -36,6 +36,7 @@
 #include "game/matrix.hpp"
 #include "game/message.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/story_flags.hpp"
@@ -237,7 +238,7 @@ void bomb(AnimatedActor& actor, TronFields& f) {
     const ShortVec4& b0 = bone(actor, 0);
     int32_t target[3];
     playerPoint(0, target);
-    target[1] = int32_t(uint32_t(player().pos.y) + (r & 0x7f) * 0xffff0000u);
+    target[1] = int32_t(uint32_t(nearestPlayer(actor.pos).pos.y) + (r & 0x7f) * 0xffff0000u);
     ProjectileActor& e = projectileActorAt(address);
     BombParams params(e);
     e.flags = kActorLive;
@@ -657,7 +658,7 @@ void idle(AnimatedActor& actor, TronFields& f) {
             g = 0x20;
             sp = 0x580;
         }
-        f.jumpSpeed = int16_t(launchSpeed(actor.pos, player().pos, sp, g, 0xffffffffu));
+        f.jumpSpeed = int16_t(launchSpeed(actor.pos, nearestPlayer(actor.pos).pos, sp, g, 0xffffffffu));
         enterSub(actor, TronSub::Jump);
         return;
     }

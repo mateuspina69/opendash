@@ -259,7 +259,7 @@ void aimed(AnimatedActor& actor, BossFields& boss) {
     case 3: {
         int32_t point[3], target[3];
         muzzle(actor, boss, point);
-        positionValues(player().pos, target);
+        positionValues(nearestPlayer(actor.pos).pos, target);
         int16_t vy, vz;
         lobVelocity(point, target, boss.pitch, 0x20, 0xffffffffu, vy, vz);
         fireShell(actor, boss, point, vy, vz, CannonShellVariant::Aimed);
@@ -317,7 +317,7 @@ void volley(AnimatedActor& actor, BossFields& boss) {
                 actor.restartStep();
             }
         }
-        if (player().pos.x.whole >= -0x400) {
+        if (nearestPlayer(actor.pos).pos.x.whole >= -0x400) {
             actor.subState = uint8_t(BossSub::Aimed);
             actor.restartStep();
         }
@@ -346,7 +346,7 @@ void lob(AnimatedActor& actor, BossFields& boss) {
     case 3: {
         int32_t point[3], target[3];
         muzzle(actor, boss, point);
-        positionValues(player().pos, target);
+        positionValues(nearestPlayer(actor.pos).pos, target);
         int16_t vy, vz;
         lobVelocity(point, target, boss.pitch, 0x20, 0x960, vy, vz);
         fireShell(actor, boss, point, vy, vz, CannonShellVariant::High);

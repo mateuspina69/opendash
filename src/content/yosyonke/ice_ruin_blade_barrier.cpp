@@ -15,6 +15,7 @@
 #include "game/hit_list.hpp"
 #include "game/matrix.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/story.hpp"
@@ -251,7 +252,7 @@ void segment(StaticActor& actor, BarrierFields& fields) {
 // 0x5ac7a7: the blocker follows the player while the hub's quadrant toward them holds a segment
 void blocker(StaticActor& actor) {
     const StaticActor& hub = *classState<BarrierFields>(actor).hub;
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     const uint16_t py = uint16_t(uint16_t(p.pos.y.whole) - kBlockerHeight);
     if (uint16_t(uint16_t(hub.pos.y.whole) - py + 0x100u) > 0x200) return;
     uint16_t ax, bx; // the pairs A = (ax, hub y), B = (bx, player y - 0x5a)

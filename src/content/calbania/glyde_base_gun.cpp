@@ -30,6 +30,7 @@
 #include "game/lobbed_shot.hpp"
 #include "game/pickups.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/story_flags.hpp"
@@ -134,7 +135,7 @@ int allyDistance(AnimatedActor& actor, GunFields& f, const Actor& ally, uint8_t 
 // exe 0x4c0dc0(actor, out): the nearest target -> out (the player / the actor of the Appo slot / of the Dah slot), its
 // planar distance returned; the target's kind kept, the countdown reset when it changed
 int nearestTarget(AnimatedActor& actor, GunFields& f, uint32_t& out) {
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     int toPlayer, toAppo, toDah;
     if (f.arc & kArcMask) {
         auto inArc = [&](int ang) { return ang > f.arcMin && ang < f.arcMax; };

@@ -359,7 +359,7 @@ void circle(AnimatedActor& a, FieldReaverbotFields& f) { // exe 0x450980: around
     integrateVelocity(a, 0, 0, a.velocity.z);
     int found = int(neighbourFind(a, f.neighbour, 0)); // exe 0x5e5e00
     if (found != 0) toSub(a, FieldSub::GiveWay);
-    const Player& p = player();
+    const Player& p = carrierOrNearest(a);
     const int dist = planarDistance(p.pos, a.pos); // exe 0x5e3b00
     if (f.cooldown != 0) --f.cooldown;
     if (f.cooldown == 0 && ((1u << (rngStep() & 0xf)) & 0x2c0u)) {
@@ -488,7 +488,7 @@ void hop(AnimatedActor& a, FieldReaverbotFields& f) { // exe 0x450f20: wait 0x1e
     case 2: {
         a.enterStep(3);
         a.anim = 2;
-        const Player& p = player();
+        const Player& p = carrierOrNearest(a);
         const int yaw = angleOf(p.pos, a.pos);
         a.velocity.setXY(0, 0);
         a.rotation.y = int16_t(yaw);
@@ -779,7 +779,7 @@ void inHands(const PlayerEnv& env, AnimatedActor& a, FieldReaverbotFields& f) { 
     if (r == CarryRelease::Held) return;
     f.bits &= uint8_t(~kFieldNoHitEntry);
     a.runFlags &= uint8_t(~kActorRunMarked);
-    f.heading = player().rotation.y;
+    f.heading = carrierOrNearest(a).rotation.y;
     if (r != CarryRelease::Thrown) {
         a.velocity.y = -0x300;
         a.velocity.z = -0x40;

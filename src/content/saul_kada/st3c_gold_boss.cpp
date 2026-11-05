@@ -270,7 +270,7 @@ void throwGold(const AnimatedActor& actor) {
     gold.pos.x = actor.pos.x;
     gold.pos.y = int32_t(uint32_t(actor.pos.y) - 0x1000000u);
     gold.pos.z = actor.pos.z;
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     int32_t target[3];
     int32_t dz;
     if (actor.runFlags & kActorOffScreen) {
@@ -509,7 +509,7 @@ void pickRingMove(const PlayerEnv& env, AnimatedActor& actor, BossBlock& b) {
         enterSub(actor, TwoSub::Chase);
         return;
     }
-    if (ground(env, player()) == -0x100) {
+    if (ground(env, nearestPlayer(actor.pos)) == -0x100) {
         b.ring = kNoRing;
         b.hitMode = uint8_t(HitMode::Low);
         setAnim(actor, BossAnim::Walk);
@@ -575,7 +575,7 @@ void chaseTimeout(const PlayerEnv& env, AnimatedActor& actor, BossBlock& b) {
         b.targetAngle = uint16_t(angleOf(actor.pos, nearestPlayer(actor.pos).pos));
         scratchRadius(b.targetAngle, pickRadii[b.radiusPick]);
     }
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     const ProjectionScratch& s = projectionScratch();
     const int32_t ring[3] = {int32_t(uint32_t(p.pos.x) + uint32_t(s.transformed[0].get())),
                              int32_t(stateAddress(TableId::St3cGoldBossFloorY16)),
@@ -919,7 +919,7 @@ void startTwo(AnimatedActor& actor, BossBlock& b) {
         [[fallthrough]];
     case 1:
         if (!actor.animEnded()) return;
-        b.targetAngle = player().pos.z.whole < 0 ? 0x800 : 0;
+        b.targetAngle = nearestPlayer(actor.pos).pos.z.whole < 0 ? 0x800 : 0;
         actor.step += 2u;
         setAnim(actor, BossAnim::Turn);
         return;
@@ -970,7 +970,7 @@ void leap(const PlayerEnv& env, AnimatedActor& actor, BossBlock& b) {
             scratchAhead(uint16_t(actor.rotation.y), 0x100);
             shockwaveAhead(actor, 0);
             const LaneVec4 p = projectionScratch().point;
-            const Player& pl = player();
+            const Player& pl = nearestPlayer(actor.pos);
             soundPlayAtXyz(0x2f0, int16_t(p.x + pl.pos.x.whole), pl.pos.y.whole, int16_t(p.z + pl.pos.z.whole));
         } else if (key == 0x16) {
             scratchAhead(uint16_t(actor.rotation.y), 0xa0);
@@ -1517,7 +1517,7 @@ void animate(AnimatedActor& actor) {
 void watchPlayer(const PlayerEnv& env, const AnimatedActor& actor, BossBlock& b) {
     b.distance = uint32_t(planarDistance(actor.pos, nearestPlayer(actor.pos).pos));
     b.playerAngle = uint16_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos));
-    if (ground(env, player()) < 0) setFlags(b, kPlayerGrounded);
+    if (ground(env, nearestPlayer(actor.pos)) < 0) setFlags(b, kPlayerGrounded);
     else clearFlags(b, kPlayerGrounded);
 }
 // its hit entries, or its boxes cleared while they are off

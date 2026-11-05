@@ -515,7 +515,7 @@ void leap(AnimatedActor& a, FighterFields& fields) {
         a.velocity.x = 0;
         a.velocity.z = -0x800;
         a.acceleration.y = kHopGravity;
-        const uint16_t v = uint16_t(launchSpeed(a.pos, player().pos, 0x800, 0x100, 0x400)); // exe 0x5e3ee0
+        const uint16_t v = uint16_t(launchSpeed(a.pos, nearestPlayer(a.pos).pos, 0x800, 0x100, 0x400)); // exe 0x5e3ee0
         a.velocity.y = int16_t(v);
         if (v <= 63999) a.velocity.y = -0x100;
         ++a.step;

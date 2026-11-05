@@ -15,6 +15,7 @@
 #include "game/cutscene_actor.hpp"
 #include "game/field_alias.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/story.hpp"
 
@@ -80,7 +81,7 @@ void headNpc(const PlayerEnv& env, AnimatedActor& actor) {
     int target = 0;
     if (HeadTarget(params.headTarget.get()) == HeadTarget::Player) {
         const int d = angleDiff(uint16_t(actor.rotation.y),
-                                uint32_t(angleBetween(player().pos.x.whole, player().pos.z.whole, actor.pos.x.whole,
+                                uint32_t(angleBetween(nearestPlayer(actor.pos).pos.x.whole, nearestPlayer(actor.pos).pos.z.whole, actor.pos.x.whole,
                                                       actor.pos.z.whole)));
         target = d > kPlayerReach ? kPlayerReach : d < -kPlayerReach ? -kPlayerReach : d;
     } else if (HeadTarget(params.headTarget.get()) != HeadTarget::Straight) {

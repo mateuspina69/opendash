@@ -293,7 +293,7 @@ void deathExplosion(const AnimatedActor& actor) {
     boom.pos.x.whole = int16_t(uint16_t(uint32_t(uint16_t(actor.pos.x.whole)) - (rngStep() & 0xff) + 0x80u));
     const uint32_t r = rngStep();
     boom.pos.y.whole = int16_t(uint16_t(uint32_t(uint16_t(actor.pos.y.whole)) - ((r >> 2) & 0xff) -
-                                        (player().inWater != 0 ? 0u : 0x90u) + 0x80u));
+                                        (nearestPlayer(actor.pos).inWater != 0 ? 0u : 0x90u) + 0x80u));
     const uint32_t r2 = rngStep();
     params.spread = 0x30;
     params.flashes = 1;
@@ -304,7 +304,7 @@ void deathExplosion(const AnimatedActor& actor) {
 void gaugeDown(const PlayerEnv& env, AnimatedActor& actor, GaugeFields& fields) {
     GaugeParams params(actor);
     actor.tint = kTintFlash;
-    const bool water = player().inWater == 1;
+    const bool water = nearestPlayer(actor.pos).inWater == 1;
     switch (DownPhase(actor.step)) {
     case DownPhase::Start:
         actor.step = uint8_t(DownPhase::Fall);
@@ -326,7 +326,7 @@ void gaugeDown(const PlayerEnv& env, AnimatedActor& actor, GaugeFields& fields) 
     default: break;
     }
     if (fields.ticks & 3) deathExplosion(actor);
-    if (player().inWater == 1 && !(gameState().frame & 0xf)) soundPlayAtPos(kDownWaterSound, actor.pos);
+    if (nearestPlayer(actor.pos).inWater == 1 && !(gameState().frame & 0xf)) soundPlayAtPos(kDownWaterSound, actor.pos);
     if (fields.ticks & 1) actor.tint = glowTint(fields.glow);
     const int16_t t = fields.ticks;
     if (t < 0x19) fields.mode |= kGaugeDying;
@@ -359,7 +359,7 @@ void gaugeInit(const PlayerEnv& env, AnimatedActor& actor, GaugeFields& fields) 
     const int16_t hp = hasAnimatedStats(actor.type) ? int16_t(uint32_t(gaugeStats(actor).hitPoints) << 4) : 0;
     actor.maxHitPoints = hp;
     actor.hitPoints = hp;
-    if (player().inWater == 1) {
+    if (nearestPlayer(actor.pos).inWater == 1) {
         actor.anim = 0;
         actor.semiTransparency = kSemiAdditive;
         actor.collisionBox.pointAt(swimBox.stateAddress());
@@ -439,7 +439,7 @@ void swimCircle(AnimatedActor& actor, GaugeFields& fields) {
     } else {
         fields.ticks -= 1;
     }
-    if (player().status & (kStatusSlowed | kStatusSlowedFloor)) enterSub(actor, uint8_t(SwimSub::KeepAway));
+    if (nearestPlayer(actor.pos).status & (kStatusSlowed | kStatusSlowedFloor)) enterSub(actor, uint8_t(SwimSub::KeepAway));
     if (params.othersLeft == 0) actor.enterState(uint8_t(GaugeState::Walk));
 }
 // exe 0x4fbc60: it turns to the player, dashes forward (0x40 ticks or a wall), recovers
@@ -515,7 +515,7 @@ void swimKeepAway(AnimatedActor& actor, GaugeFields& fields) {
     }
     turnYawTo(actor.rotation.y, uint32_t(angleFromPlayer(actor)), 0x40);
     moveAlongYaw(actor.pos, angleOf(target, at) + off + 0x400, 0, 0, actor.velocity.z);
-    if (!(player().status & (kStatusSlowed | kStatusSlowedFloor))) enterSub(actor, uint8_t(SwimSub::Circle));
+    if (!(nearestPlayer(actor.pos).status & (kStatusSlowed | kStatusSlowedFloor))) enterSub(actor, uint8_t(SwimSub::Circle));
 }
 // exe 0x4fbfe0 / 0x4fcc50: a hit taken: no damage while the animation plays
 void hurt(AnimatedActor& actor, GaugeFields& fields, uint8_t anim) {
@@ -613,10 +613,10 @@ void walkCircle(AnimatedActor& actor, GaugeFields& fields) {
         actor.step = uint8_t(WalkCirclePhase::Watch);
         [[fallthrough]];
     case WalkCirclePhase::Watch:
-        if (player().velocity.z != 0) actor.step = uint8_t(WalkCirclePhase::PlayerMoves);
+        if (nearestPlayer(actor.pos).velocity.z != 0) actor.step = uint8_t(WalkCirclePhase::PlayerMoves);
         break;
     case WalkCirclePhase::PlayerMoves:
-        if (player().velocity.z == 0) actor.step = uint8_t(WalkCirclePhase::TakeAngle);
+        if (nearestPlayer(actor.pos).velocity.z == 0) actor.step = uint8_t(WalkCirclePhase::TakeAngle);
         break;
     default: break;
     }
@@ -1084,7 +1084,7 @@ void castSwimmer(AnimatedActor& cast, CastFields& fields) {
         fields.velocitySpare = 0;
         CastParams(cast).afloat = 1;
         cast.velocity.z = -0x80;
-        if (player().inWater == 1) cast.semiTransparency = kSemiAdditive; // exe 0x5e1a00(a, 1, 1)
+        if (nearestPlayer(cast.pos).inWater == 1) cast.semiTransparency = kSemiAdditive; // exe 0x5e1a00(a, 1, 1)
         return;
     case CastState::Wait:
         if (s.state != 0) cast.state = uint8_t(CastState::Act);

@@ -48,6 +48,7 @@
 #include "game/hud.hpp"
 #include "game/player/player_input.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/player/player_weapons.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
@@ -188,7 +189,7 @@ void lobBomb(AnimatedActor& a, TurretFields& f, int8_t k) {
         e.pos.y.whole = p.v[1];
         e.pos.z.whole = p.v[2];
         // the player's 16.16 position, its integer x / z jittered by (rng & 0x7f) - 0x3f
-        const Player& pl = player();
+        const Player& pl = nearestPlayer(a.pos);
         int32_t to[3];
         const uint32_t r1 = rngStep();
         to[0] = int32_t((uint32_t(uint16_t(pl.pos.x.whole + int((r1 & 0x7f)) - 0x3f)) << 16) | pl.pos.x.frac);
@@ -236,15 +237,15 @@ void aimCannon(AnimatedActor& a, TurretFields& f, uint32_t k) {
     const uint32_t bone = k ? 4 : 2;
     const BonePoint p = bonePointAt(a, bone, 0, 0, 0x93);
     int32_t o[3];
-    rotateByYaw(player().rotation.y, k ? 0x400 : -0x400, 0, 0, o); // exe 0x5e36f0 on a copy of the player's position
-    const uint32_t qx = uint32_t(player().pos.x) + uint32_t(o[0]);
-    const uint32_t qz = uint32_t(player().pos.z) + uint32_t(o[2]);
+    rotateByYaw(nearestPlayer(a.pos).rotation.y, k ? 0x400 : -0x400, 0, 0, o); // exe 0x5e36f0 on a copy of the player's position
+    const uint32_t qx = uint32_t(nearestPlayer(a.pos).pos.x) + uint32_t(o[0]);
+    const uint32_t qz = uint32_t(nearestPlayer(a.pos).pos.z) + uint32_t(o[2]);
     int16_t& yaw = f.cannonYaw[k];
     aimStep(a, yaw,
             angleOf(int32_t(qx), int32_t(qz), int32_t(uint32_t(int32_t(p.v[0])) << 16),
                     int32_t(uint32_t(int32_t(p.v[2])) << 16)));
     const BonePoint q = bonePointAt(a, bone, 0, 0, 0x93);
-    const int16_t t[3] = {player().pos.x.whole, t16(player().pos.y.whole - 0x78), player().pos.z.whole};
+    const int16_t t[3] = {nearestPlayer(a.pos).pos.x.whole, t16(nearestPlayer(a.pos).pos.y.whole - 0x78), nearestPlayer(a.pos).pos.z.whole};
     f.cannonPitch[k] = t16(0x800 - pitchOf(q.v, t));
 }
 // exe 0x505d80(actor, k): a cannon shot (pool 0x40 type 0x2e, variant 0x81, life 0x50, damage the row's strong attack)
@@ -398,7 +399,7 @@ void beam(AnimatedActor& a, TurretFields& f) {
         const uint16_t yaw = uint16_t(a.rotation.y);
         a.rotation.y = int16_t(yaw + f.beamAim);
         f.beamYaw = f.beamAim;
-        if (facesAwayFrom(a, player().pos, 0x100)) {
+        if (facesAwayFrom(a, nearestPlayer(a.pos).pos, 0x100)) {
             ++f.beamStep;
             blk.sweep = 0;
             blk.sweepSpeed = 0;

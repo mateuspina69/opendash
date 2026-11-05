@@ -206,12 +206,12 @@ void dormant(AnimatedActor& actor, SentryFields& sentry) {
     const uint8_t variant = actor.variant;
     if (variant == 3) {
         if (enemyGroupMarks(sentry.group, EnemyGroupMarks::LastTick) != 0) wake = true;
-        else if (player().talksTo(actor)) enemyGroupMark(sentry.group, 1);
+        else if (nearestPlayer(actor.pos).talksTo(actor)) enemyGroupMark(sentry.group, 1);
     } else if (variant == 4) {
         if (enemyGroupMarks(sentry.group, EnemyGroupMarks::LastTick) != 0) wake = true;
         else if (uint32_t(distance3(actor.pos, nearestPlayer(actor.pos).pos)) < 0x400) enemyGroupMark(sentry.group, 1);
     } else {
-        wake = player().talksTo(actor);
+        wake = nearestPlayer(actor.pos).talksTo(actor);
     }
     if (wake) {
         actor.restartStep();

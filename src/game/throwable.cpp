@@ -14,6 +14,7 @@
 #include "game/hit_list.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/table_records.hpp"
@@ -224,8 +225,8 @@ void heldCarried(const PlayerEnv& env, StaticActor& actor, ThrowableFields& f) {
         actor.velocity.y = kDropFallSpeed;
         actor.velocity.z = kDropForwardSpeed;
     }
-    actor.rotation.y = player().rotation.y;
-    f.travelYaw = player().rotation.y;
+    actor.rotation.y = carrierOrNearest(actor).rotation.y;
+    f.travelYaw = carrierOrNearest(actor).rotation.y;
     f.hitBox.result = 0;
     actor.airborne = kAirborneFalling;
     carryDropFromPlayer(actor); // exe 0x573990

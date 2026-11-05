@@ -922,7 +922,7 @@ void orbitPos(ProjectileActor& actor, OrbitShotFields& shot) { // exe 0x5cd030: 
 }
 // exe 0x5cd0a0: yaw / pitch toward a point around the player's head
 void homeOrbit(ProjectileActor& actor, OrbitShotFields& shot, int step) {
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     const uint32_t ang = uint16_t(shot.travel.y) & 0xfff;
     const int32_t t[3] = {int32_t(uint32_t(fixedCos(int(ang)) * 0x800) + uint32_t(p.pos.x)),
                           int32_t(uint32_t(p.pos.y) + uint32_t(actor.variant) * 0xfff00000u - 0x400000u),
@@ -1128,7 +1128,7 @@ void boltAim(ProjectileActor& actor, BoltFields& bolt) {
         int32_t((uint32_t(fixedSin(int(yaw)) - fixedSin(int(side))) & 0xffff0u) * 0x1000u + uint32_t(int32_t(bp.x) << 16)),
         int32_t(uint32_t(int32_t(bp.y) - 0x80 + int32_t(bolt.rise)) << 16),
         int32_t((uint32_t(fixedCos(int(yaw)) - fixedCos(int(side))) & 0xffff0u) * 0x1000u + uint32_t(int32_t(bp.z) << 16))};
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     const int16_t from[3] = {p.pos.x.whole, 0, p.pos.z.whole};
     const int16_t to[3] = {wholeOf(pt[0]), wholeOf(pt[1]), wholeOf(pt[2])};
     bolt.travel.x = int16_t(-pitchOf(from, to));

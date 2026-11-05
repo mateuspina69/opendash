@@ -27,6 +27,7 @@
 #include "game/hud.hpp"
 #include "game/lift_box.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/spawn.hpp"

@@ -16,6 +16,7 @@
 #include "game/matrix.hpp"
 #include "game/pickups.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/vectors.hpp"
 
 namespace od::port {
@@ -292,7 +293,7 @@ void gunshipFire(const StaticActor& actor, int side, int lim, GunshipGun gun) {
     shot.pos.x = int32_t(uint32_t(actor.pos.x) + uint32_t(o[0]));
     shot.pos.y = int32_t(uint32_t(actor.pos.y) + uint32_t(o[1]));
     shot.pos.z = int32_t(uint32_t(actor.pos.z) + uint32_t(o[2]));
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     int16_t aim[3] = {p.pos.x.whole, p.pos.y.whole, p.pos.z.whole};
     aim[1] = int16_t(aim[1] - 0x40);
     const int16_t from[3] = {shot.pos.x.whole, shot.pos.y.whole, shot.pos.z.whole};

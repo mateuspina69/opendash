@@ -88,7 +88,7 @@ AnimatedActorStats tankStats(const AnimatedActor& actor) { return animatedStats(
 bool onScreenOrNear(const AnimatedActor& actor) { return pointVisibleOrNear(actor.pos, 0) == 0; } // exe 0x5e59a0
 // exe 0x59beb0: the player standing on it
 bool ridden(const AnimatedActor& actor) {
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     return p.onPlatform != 0 && ((slotIdentityWord(p.platform) ^ slotIdentityWord(actor)) & kRiderMatch) == 0;
 }
 int turretAngle(const AnimatedActor& actor, const TankFields& tank) { return int(tank.turretYaw) + int(actor.rotation.y); }
@@ -164,7 +164,7 @@ void fireBullet(const AnimatedActor& actor, const TankFields& tank, int yaw) {
     bullet.pos.x = int32_t(uint32_t(actor.pos.x) + uint32_t(o[0]));
     bullet.pos.y = int32_t(uint32_t(actor.pos.y) - 0x1400000u);
     bullet.pos.z = int32_t(uint32_t(actor.pos.z) + uint32_t(o[2]));
-    bullet.rotation.x = int16_t(0x800 - yaw - pitchOf(player().pos, bullet.pos)); // exe 0x5e3ca0(player, bullet)
+    bullet.rotation.x = int16_t(0x800 - yaw - pitchOf(nearestPlayer(actor.pos).pos, bullet.pos)); // exe 0x5e3ca0(player, bullet)
     bullet.rotation.z = 0;
     shot.ticks = 0x2d;
     bullet.rotation.y = int16_t(uint16_t(uint16_t(tank.turretYaw) + uint16_t(actor.rotation.y) + 0x800u));
@@ -176,7 +176,7 @@ void fireBullet(const AnimatedActor& actor, const TankFields& tank, int yaw) {
 void fireShell(const AnimatedActor& actor, const TankFields& tank, int8_t nearLob) {
     int32_t o[3];
     muzzle(actor, tank, -0x1000, -0xe00, o);
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     int32_t target[3] = {p.pos.x, int32_t((uint32_t(p.pos.y) & 0xffffu) | uint32_t(uint16_t(uint16_t(p.pos.y.whole) - 0x5au)) << 16),
                          p.pos.z};
     const uint32_t slot = allocActor40(kActorStageClass); // exe 0x5e1280

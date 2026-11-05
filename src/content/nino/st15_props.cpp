@@ -53,6 +53,7 @@
 #include "game/hit_list.hpp"
 #include "game/hit_points.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/script_state.hpp"
@@ -442,7 +443,7 @@ void machineAlive(StaticActor& actor, HoverMachineFields& machine) {
         actor.acceleration.y = 2;
     }
     actor.pos.y = int32_t(uint32_t(actor.pos.y) + uint32_t(int32_t(actor.velocity.y) * 0x1000));
-    const Fixed16Vec3& p = player().pos;
+    const Fixed16Vec3& p = nearestPlayer(actor.pos).pos;
     if (machine.dead != 0 && (p.x < kArenaMinX || p.x > kArenaMaxX || p.z < kArenaMinZ || p.z > kArenaMaxZ))
         actor.enterState(uint8_t(HoverMachineState::Dying));
 }

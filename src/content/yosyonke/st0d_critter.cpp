@@ -289,7 +289,7 @@ void liftedInHands(const PlayerEnv& env, AnimatedActor& a, CritterFields& f) {
     const CarryRelease r = carryReleased(); // exe 0x573950
     if (r == CarryRelease::Held) return;
     f.behaviour &= uint8_t(~kCritterNoHitEntry);
-    f.turn = player().rotation.y;
+    f.turn = carrierOrNearest(a).rotation.y;
     if (r == CarryRelease::Thrown) {
         int32_t aim[3];
         playerAimVector(0, kThrowUp, kThrowForward, aim); // exe 0x5e3e50

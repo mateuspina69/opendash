@@ -193,7 +193,7 @@ void postPoint(const AnimatedActor& actor, uint32_t k, int32_t out[3]) {
 // exe 0x4a9480(actor, tol, dist): a pen post ahead within tol of the yaw and nearer than dist (than 0x480 when the
 // player, watched within 0x40 ahead and not above, is nearer than dist) -> 1
 int blocked(const AnimatedActor& actor, const HerdFields& f, int tol, int dist) {
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     for (uint32_t k = 0; k < kPostCount; ++k) {
         int32_t post[3];
         postPoint(actor, k, post);
@@ -258,7 +258,7 @@ void groundTail(AnimatedActor& actor, int r, bool bounce, bool facing) {
         actor.anim = 8;
         actor.restartStep();
         actor.subState = uint8_t(!facing ? Herd::Bounced
-                                         : (facingAndRange(actor, player(), 0x180, 0xa00) == 1 ? Herd::Bounced
+                                         : (facingAndRange(actor, nearestPlayer(actor.pos), 0x180, 0xa00) == 1 ? Herd::Bounced
                                                                                                 : Herd::BouncedRunAgain));
         cameraShakeAt(0x6000, 0x500, 0, 0x600, actor.pos); // exe 0x40eab0
         return;
@@ -417,7 +417,7 @@ void chase(const PlayerEnv& env, AnimatedActor& actor, HerdFields& f) { // 0x4a8
         forward(actor);
         if (blocked(actor, f, 0x180, 0x700) != 0) {
             stop(actor);
-        } else if (facingAndRange(actor, player(), 0x180, 0xa00) == 1) {
+        } else if (facingAndRange(actor, nearestPlayer(actor.pos), 0x180, 0xa00) == 1) {
             f.timer = 0;
             ++actor.step;
         }

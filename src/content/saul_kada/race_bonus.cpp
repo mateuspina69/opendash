@@ -12,6 +12,7 @@
 #include "game/audio_logic.hpp"
 #include "game/distances.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/stage_state.hpp"
 #include "game/story.hpp"
@@ -64,7 +65,7 @@ void floating(StaticActor& actor, BonusFields& bonus) {
     actor.pos.y = int32_t((uint32_t(int32_t(fixedSin(int(uint8_t(bonus.tick) & 0x7f) << 5))) << 8) +
                           uint32_t(bonus.restY));
     ++bonus.tick;
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     // the exe's stack point: the player's position raised 0x80
     const int32_t head[3] = {p.pos.x, int32_t(uint32_t(p.pos.y) + 0xff800000u), p.pos.z};
     if (uint32_t(distance3(actor.pos, head)) >= kPickReach) return;
@@ -93,7 +94,7 @@ void picked(StaticActor& actor, BonusFields& bonus) {
     bonus.rise += 4u;
     --bonus.tick;
     actor.rotation.y = int16_t((uint16_t(actor.rotation.y) + 0x80u) & 0xfff);
-    actor.pos = player().pos;
+    actor.pos = nearestPlayer(actor.pos).pos;
     actor.pos.y.whole = int16_t(uint16_t(actor.pos.y.whole) + uint16_t(0xff80u - bonus.rise));
 }
 

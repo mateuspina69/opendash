@@ -738,7 +738,7 @@ void held(const PlayerEnv& env, AnimatedActor& a, Fields& f) {
     if (r == CarryRelease::Held) return;
     f.mode &= uint8_t(~kModeNoHitEntry);
     a.runFlags &= uint8_t(~kActorRunMarked);
-    f.turn = player().rotation.y;
+    f.turn = carrierOrNearest(a).rotation.y;
     if (r == CarryRelease::Thrown) {
         int32_t v[3];
         playerAimVector(0, -0x200, -0x380, v); // exe 0x5e3e50
@@ -1401,15 +1401,15 @@ void held(const PlayerEnv& env, AnimatedActor& a, Fields& f) {
         resetModelScale(a);
         f.shell = 0;
         a.rotation.x = 0;
-        f.bouncesLeft = player().inWater == 1 ? 1 : 3;
+        f.bouncesLeft = carrierOrNearest(a).inWater == 1 ? 1 : 3;
     }
     carryAtHands(a, 0, 0, 0);               // exe 0x573ab0
     const CarryRelease r = carryReleased(); // exe 0x573950
     if (r == CarryRelease::Held) return;
     f.mode &= uint8_t(~kModeNoHitEntry);
     a.runFlags &= uint8_t(~kActorRunMarked);
-    f.targetYaw = player().rotation.y;
-    const bool inWater = player().inWater == 1;
+    f.targetYaw = carrierOrNearest(a).rotation.y;
+    const bool inWater = carrierOrNearest(a).inWater == 1;
     if (r == CarryRelease::Thrown) {
         int32_t v[3];
         if (inWater) playerAimVector(0, -0x100, -0x140, v); // exe 0x5e3e50
@@ -1425,7 +1425,7 @@ void held(const PlayerEnv& env, AnimatedActor& a, Fields& f) {
         a.velocity.y = -0x180;
         a.velocity.z = -0x20;
     }
-    if (player().inWater != 1) {
+    if (carrierOrNearest(a).inWater != 1) {
         a.acceleration.y = 0x40;
         a.spin.x = 0x70;
     } else {
@@ -1452,7 +1452,7 @@ void roll(const PlayerEnv& env, AnimatedActor& a, Fields& f) {
     }
     int v;
     const int cv0 = fixedCos(int(uint16_t(a.rotation.x)));
-    if (player().inWater != 1) {
+    if (carrierOrNearest(a).inWater != 1) {
         v = cv0 < 0 ? -(cv0 >> 5) : (cv0 >> 5);
         if (v < 0x40) v = 0x40;
         else if (v > 0xff) v = 0xff;
@@ -1810,7 +1810,7 @@ bool playerArmUp() { return (uint8_t(player().armFlags) & kArmUp) != 0; }
 // exe 0x44fb20: the player behind its shield side and attacking -> the guard
 bool dodge(AnimatedActor& a, Fields& f) {
     if (f.mode & kShieldLost) return false;
-    const Player& p = player();
+    const Player& p = carrierOrNearest(a);
     const int d = angleDiff(uint32_t(int32_t(a.rotation.y)), uint32_t(int(p.rotation.y) - int(p.directionOffset.y)));
     if (uint32_t(d + 0x400) >= 0x800 && playerArmUp()) {
         enter(a, Sub::Guard);
@@ -1820,16 +1820,16 @@ bool dodge(AnimatedActor& a, Fields& f) {
 }
 // exe 0x44fb80: facing the player and near -> stand facing, else stand
 void rethink(AnimatedActor& a) {
-    enter(a, facingAndRange(a, player(), 0xc0, 0x384) == 0 ? Sub::StandFacing : Sub::Stand);
+    enter(a, facingAndRange(a, carrierOrNearest(a), 0xc0, 0x384) == 0 ? Sub::StandFacing : Sub::Stand);
 }
 // exe 0x44fac0: off-facing -> the turn, far -> the far wait
 int retarget(AnimatedActor& a) {
     int k = 0;
-    if (facingAndRange(a, player(), 0xc0, 0x708) & 1) {
+    if (facingAndRange(a, carrierOrNearest(a), 0xc0, 0x708) & 1) {
         enter(a, Sub::Turn);
         k = 1;
     }
-    if (facingAndRange(a, player(), 0x180, 0x708) & 2) {
+    if (facingAndRange(a, carrierOrNearest(a), 0x180, 0x708) & 2) {
         enter(a, Sub::Far);
         ++k;
     }
@@ -2008,7 +2008,7 @@ void wake(AnimatedActor& a, Fields& f) {
         return;
     case 2:
         if (f.mode & kUnseen) return;
-        if (facingAndRange(a, player(), 0x100, 0x5dc) == 0) {
+        if (facingAndRange(a, carrierOrNearest(a), 0x100, 0x5dc) == 0) {
             a.anim = 0;
             a.enterStep(3);
         }
@@ -2033,7 +2033,7 @@ void stand(AnimatedActor& a, Fields& f) {
         setMode(f, 0);
         f.mayFall = 1;
     }
-    const int r = facingAndRange(a, player(), 0xc0, 0x384);
+    const int r = facingAndRange(a, carrierOrNearest(a), 0xc0, 0x384);
     if (r == 0) enter(a, Sub::StandFacing);
     if (r < 0x3e8) enter(a, Sub::Attack);
     dodge(a, f);
@@ -2245,7 +2245,7 @@ void holdGuard(AnimatedActor& a, Fields& f) {
         f.counter = c;
         if (c == 0) enter(a, Sub::LowerGuard);
     }
-    if (facingAndRange(a, player(), 0xc0, 0x708) & 1) enter(a, Sub::Turn);
+    if (facingAndRange(a, carrierOrNearest(a), 0xc0, 0x708) & 1) enter(a, Sub::Turn);
 }
 void lowerGuard(AnimatedActor& a, Fields& f) {
     if (a.step == 0) {
@@ -2300,7 +2300,7 @@ void waitFar(AnimatedActor& a, Fields& f) {
             f.counter = c;
             if (c == 0) enter(a, Sub::Wake);
         }
-        if (facingAndRange(a, player(), 0x200, 0x708) == 0) a.enterStep(2);
+        if (facingAndRange(a, carrierOrNearest(a), 0x200, 0x708) == 0) a.enterStep(2);
     } else if (s == 2) {
         if (a.animEnded()) enter(a, Sub::Turn);
     }
@@ -2542,7 +2542,7 @@ void held(const PlayerEnv& env, AnimatedActor& a, Fields& f) {
     carryDropFromPlayer(a); // exe 0x573990
     a.acceleration.y = 0x40;
     a.rotation.x = -0x480;
-    const int16_t yaw = player().rotation.y;
+    const int16_t yaw = carrierOrNearest(a).rotation.y;
     a.pos.y.whole = int16_t(uint16_t(a.pos.y.whole) - 0x60u);
     a.rotation.y = yaw;
     f.flightYaw = yaw;

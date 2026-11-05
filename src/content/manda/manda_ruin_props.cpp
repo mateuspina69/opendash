@@ -153,7 +153,7 @@ void platformInit(const PlayerEnv& env, StaticActor& actor) {
 }
 // exe 0x59beb0: the player stands on this platform
 bool playerOnBoard(const StaticActor& actor) {
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     return p.onPlatform != 0 && ((slotIdentityWord(p.platform) ^ slotIdentityWord(actor)) & kOnBoardMask) == 0;
 }
 // exe 0x59be10: the scale 1.0 on the three axes

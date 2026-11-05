@@ -236,7 +236,7 @@ void guideStart(AnimatedActor& actor, GuideFields& f) {
 int playerBehind(const AnimatedActor& actor, const GuideFields& f) {
     const NodePoint g = nodePoint(actor, f, f.lastNode);
     const int d1 = planarDistanceTo(actor.pos, g); // exe 0x5e3b00
-    const int d2 = planarDistanceTo(player().pos, g);
+    const int d2 = planarDistanceTo(carrierOrNearest(actor).pos, g);
     return d2 - d1;
 }
 // exe 0x4c4cf0 (state 1 sub 1): runs (animation 2) node to node ahead of the player
@@ -270,7 +270,7 @@ void guideRun(AnimatedActor& actor, GuideFields& f) {
         return;
     }
     case RunStep::Return: { // back toward the player until within 0x1200
-        const NodePoint p{player().pos.x.whole, player().pos.z.whole};
+        const NodePoint p{carrierOrNearest(actor).pos.x.whole, carrierOrNearest(actor).pos.z.whole};
         turnYawTo(actor.rotation.y, uint32_t(angleFromPoint(p, actor)), 0x40);
         integrateVelocity(actor, 0, 0, actor.velocity.z);
         if (planarDistance(nearestPlayer(actor.pos).pos, actor.pos) < 0x1200) enterSub(actor, GuideSub::WaitForPlayer);
@@ -640,7 +640,7 @@ void guideHeld(AnimatedActor& actor, GuideFields& f) {
     const int r = int(carryReleased()); // exe 0x573950
     if (r == 0) return;
     f.flags &= uint8_t(~kGuideNoHitEntry);
-    f.knockYaw = uint16_t(player().rotation.y);
+    f.knockYaw = uint16_t(carrierOrNearest(actor).rotation.y);
     if (r == 1) {
         int32_t v[3];
         playerAimVector(0, -0x100, -0x380, v); // exe 0x5e3e50

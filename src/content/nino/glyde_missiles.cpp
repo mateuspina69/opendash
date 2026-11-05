@@ -31,6 +31,7 @@
 #include "game/matrix.hpp"
 #include "game/missile_trail.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/story.hpp"
@@ -198,7 +199,7 @@ StaticActorStats missileStats(const StaticActor& actor) { return staticStats(act
 void missileTarget(const StaticActor& actor, int32_t out[3]) {
     switch (actor.variant) {
     case 0: { // the player, 0x8c above his feet
-        const Player& p = player();
+        const Player& p = carrierOrNearest(actor);
         out[0] = p.pos.x;
         out[1] = int32_t(uint32_t(p.pos.y) + uint32_t(kAboveFeet));
         out[2] = p.pos.z;

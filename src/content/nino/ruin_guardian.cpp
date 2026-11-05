@@ -136,7 +136,7 @@ int ease(int16_t& field, int d, int step) {
 }
 // exe 0x4b2450: the head aims at the player (the pitch toward its chest, the yaw toward where it moves to); 0 = on target
 int aimHead(const AnimatedActor& g, GuardianFields& fields) {
-    const Player& p = player();
+    const Player& p = nearestPlayer(g.pos);
     int32_t target[3] = {p.pos.x, p.pos.y, p.pos.z};
     const ShortVec4& head = bonePoint(g, 7, kStoryPort); // exe 0x5e1810
     // the head as a 16.16 point (its fractions: the exe's stale stack, 0 here)
@@ -190,7 +190,7 @@ void choose(AnimatedActor& g, GuardianFields& fields) {
         return;
     case 2:
         if (g.variant == 0) {
-            if ((uint8_t(player().status) & kSlowedStatus) && g.hitPoints >= g.maxHitPoints / 3) {
+            if ((uint8_t(nearestPlayer(g.pos).status) & kSlowedStatus) && g.hitPoints >= g.maxHitPoints / 3) {
                 attack(g, GuardianSub::Volley);
                 return;
             }
@@ -329,7 +329,7 @@ void orbs(const PlayerEnv& env, AnimatedActor& g, GuardianFields& fields) {
     case 2:
         if (!g.animEnded()) return;
         g.step += 1u;
-        if (g.hitPoints < g.maxHitPoints / 3 && (crtRand() & 1) && (uint8_t(player().status) & kSlowedStatus)) {
+        if (g.hitPoints < g.maxHitPoints / 3 && (crtRand() & 1) && (uint8_t(nearestPlayer(g.pos).status) & kSlowedStatus)) {
             g.anim = 7;
             g.velocity.y = -0x100;
             g.acceleration.y = 0x15;
@@ -712,7 +712,7 @@ void guardianBeam(StaticActor& beam) {
 // exe 0x4b21b0: the two beams: each one's length to the first wall along it, its sway, its pitch toward the player,
 // its origin 0x300 in front of the guardian
 void steerBeams(const PlayerEnv& env, const AnimatedActor& g, const GuardianFields& fields) {
-    const Player& p = player();
+    const Player& p = nearestPlayer(g.pos);
     for (size_t i = 0; i < 2; ++i) {
         const int8_t slot = fields.beams[i];
         if (slot < 0) return;
@@ -1049,7 +1049,7 @@ void driftOrb(const PlayerEnv& env, ProjectileActor& orb, OrbFields& fields) {
             orb.subState += 1u;
             fields.ticks = 0x1e;
         }
-        const int y = (player().pos.y.whole - orb.pos.y.whole - 0x64) >> 2;
+        const int y = (nearestPlayer(orb.pos).pos.y.whole - orb.pos.y.whole - 0x64) >> 2;
         turnYawTo(orb.rotation.y, uint32_t(angleOf(nearestPlayer(orb.pos).pos, orb.pos)), 0x20);
         integrateVelocity(orb, 0, y, -0x190);
         break;
@@ -1219,7 +1219,7 @@ void ringOrb(const PlayerEnv& env, ProjectileActor& orb, OrbFields& fields) {
 // exe 0x5cdd20 (variant 4): the mine -- it drops and slows, drifts to a random point ahead and bobs; near the player it
 // marks its group entry; once the guardian's entry is marked it jumps at the player, then runs on
 void mine(const PlayerEnv& env, ProjectileActor& orb, OrbFields& fields) {
-    const Player& p = player();
+    const Player& p = nearestPlayer(orb.pos);
     switch (orb.subState) { // [0x8d1768]
     case 0: // exe 0x5cddb0: the drop, slowing
         switch (orb.step) {

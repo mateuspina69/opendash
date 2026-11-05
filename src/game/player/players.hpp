@@ -11,6 +11,9 @@ namespace od::port {
 // the player in the session nearest to a point on the ground plane; of two as near, the lower id
 Player& nearestPlayer(const Fixed16Vec3& point);
 
+// the player an actor a player can carry asks about: its carrier while carried, else the nearest
+Player& carrierOrNearest(const Actor& actor);
+
 // `f(player)` for each player in the session, by id
 template <class F> void forEachPlayer(F&& f) {
     for (size_t id = 0; id < kPlayerSlots; ++id)

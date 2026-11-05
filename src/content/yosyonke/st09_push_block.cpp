@@ -16,6 +16,7 @@
 #include "game/event_state.hpp"
 #include "game/hit_list.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/story.hpp"
 
@@ -66,7 +67,7 @@ const DataTable<InteractionBoxRecord> blockLiftBox{TableId::St09PushBlockLiftBox
 
 // exe 0x59beb0: the player stands on the block
 bool ridden(const StaticActor& actor) {
-    return player().onPlatform != 0 && ((slotIdentityWord(player().platform) ^ slotIdentityWord(actor)) & kRidingMask) == 0;
+    return nearestPlayer(actor.pos).onPlatform != 0 && ((slotIdentityWord(nearestPlayer(actor.pos).platform) ^ slotIdentityWord(actor)) & kRidingMask) == 0;
 }
 
 // exe 0x5b57f0: the hit the box took: the kick with damage -> the push yaw = the player's yaw, 1; a bump -> the same,
@@ -75,11 +76,11 @@ int hitDirection(StaticActor& actor) {
     BlockFields& f = classState<BlockFields>(actor);
     const uint32_t v = f.box.result;
     if ((v & kKickHit) && (v & kHitDamageMask)) {
-        f.pushYaw = uint16_t(uint16_t(player().rotation.y) & kAngleMask);
+        f.pushYaw = uint16_t(uint16_t(nearestPlayer(actor.pos).rotation.y) & kAngleMask);
         return 1;
     }
     if (v & kBumpHit) {
-        f.pushYaw = uint16_t(uint16_t(player().rotation.y) & kAngleMask);
+        f.pushYaw = uint16_t(uint16_t(nearestPlayer(actor.pos).rotation.y) & kAngleMask);
         return -1;
     }
     return 0;
@@ -431,7 +432,7 @@ void pushBlock(const PlayerEnv& env, StaticActor& actor) {
             if (mode & kModePlayerSide) {
                 hitListSubmit(pos, f.box, id | hitGroup(kHitGroupPlayerAttacks) | kHitNoLockOn | hitRadius(0x20),
                               kHitAttackHarmless | kHitAttackBump);
-            } else if (player().body.anim != 0) { // the player is not idle: the lift box and the bump box
+            } else if (nearestPlayer(actor.pos).body.anim != 0) { // the player is not idle: the lift box and the bump box
                 hitListSubmit(pos, f.box, id | hitGroup(kHitGroupLiftable) | kHitNoLockOn | hitRadius(0x48),
                               (0x80000000u >> kHitGroupPlayerAttacks) | kHitAttackHarmless | kHitAttackBump);
                 hitListSubmit(pos, f.box, id | hitGroup(kHitGroupLiftable) | kHitNoLockOn | hitRadius(0x30),

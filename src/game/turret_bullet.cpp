@@ -126,7 +126,7 @@ void homing(const PlayerEnv& env, ProjectileActor& a, TurretBulletFields& f) { /
                     uint8_t((uint16_t(cos64((ph >> 1) & 0x3f)) >> 7) + 0x50),
                     uint8_t((uint16_t(trig64Tables().sine[ph >> 2]) >> 7) + 0x50));
         // the aim point: the player 0x80 up, wobbling by the sine / cosine of the phase >> the wobble shift
-        s.aim = player().pos;
+        s.aim = nearestPlayer(a.pos).pos;
         const uint32_t i = (uint32_t(a.step) >> (f.wobbleShift & 0x1f)) & 0x3f;
         s.aim.y.whole = int16_t(uint16_t(s.aim.y.whole) - 0x80u);
         s.aim.x.whole = int16_t(uint16_t(wrap16(cos64(i) >> 6)) + uint16_t(s.aim.x.whole));

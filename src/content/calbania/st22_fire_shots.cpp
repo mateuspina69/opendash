@@ -168,7 +168,7 @@ void homingLob(ProjectileActor& actor, FireShotFields& f) {
         actor.velocity.z = int16_t(0xe000);
         actor.acceleration.y = kGravity;
         actor.velocity.y = int16_t(uint32_t(
-            (int32_t(player().pos.y.whole - actor.pos.y.whole) * 16 - ((n * n * 0x20) >> 1)) / n));
+            (int32_t(nearestPlayer(actor.pos).pos.y.whole - actor.pos.y.whole) * 16 - ((n * n * 0x20) >> 1)) / n));
     }
     soundUpdateLoop(f.loopSound, actor.pos, 0); // exe 0x5d55c0
     turnToPlayer(actor, 1);

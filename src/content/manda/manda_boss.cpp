@@ -33,6 +33,7 @@
 #include "game/pickups.hpp"
 #include "game/player/player_input.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/player/player_weapons.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
@@ -995,7 +996,7 @@ int8_t playerQuadrant(int16_t x, int16_t y, int16_t z) {
 // pose (with the beam's aim), the two hit entries; the guardian out of hit points -> gone
 void fight(const PlayerEnv& env, AnimatedActor& a, GuardianFields& f) {
     const ShortVec4& bone0 = bonePoint(a, 0, kStoryPort); // exe 0x5e1810
-    const Player& p = player();
+    const Player& p = nearestPlayer(a.pos);
     const int32_t chest[3] = {p.pos.x, int32_t(uint32_t(p.pos.y) - 0x800000u), p.pos.z};
     const int32_t from[3] = {int32_t(uint32_t(int32_t(bone0.x)) << 16), int32_t(uint32_t(int32_t(bone0.y)) << 16),
                              int32_t(uint32_t(int32_t(bone0.z)) << 16)};
@@ -1273,7 +1274,7 @@ void floaterFloat(const PlayerEnv& env, AnimatedActor& a, FloaterFields& f) {
     a.tint = kTintNeutral;
     a.savePreviousPose();
     const int16_t me[3] = {a.pos.x.whole, a.pos.y.whole, a.pos.z.whole};
-    const Player& p = player();
+    const Player& p = nearestPlayer(a.pos);
     const int16_t pl[3] = {p.pos.x.whole, p.pos.y.whole, p.pos.z.whole};
     f.playerDistance = distance3(me, pl);                           // exe 0x5e3ab0
     f.centreDistance = int16_t(planarDistance16(me, kArenaCentre)); // exe 0x5e3b40

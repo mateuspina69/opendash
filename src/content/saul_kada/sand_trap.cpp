@@ -20,6 +20,7 @@
 #include "game/hit_points.hpp"
 #include "game/player/player_carry.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/skid_sparks.hpp"
@@ -109,7 +110,7 @@ void hidden(AnimatedActor& actor) {
     }
     if (playerGrab(actor, kGrabRange, 1)) { // exe 0x573e20
         soundPlayAtPos(kGrabSound, actor.pos); // exe 0x5d5380
-        actor.rotation.y = player().rotation.y;
+        actor.rotation.y = nearestPlayer(actor.pos).rotation.y;
         enterSub(actor, TrapSub::Rise);
     }
 }
@@ -141,7 +142,7 @@ void rise(AnimatedActor& actor, TrapFields& trap) {
 // exe 0x4e7910
 void wait(AnimatedActor& actor) {
     if (actor.step == 0) {
-        const PlayerSub sub = player().sub();
+        const PlayerSub sub = nearestPlayer(actor.pos).sub();
         if (sub == PlayerSub::Held) return;
         if (sub != PlayerSub::KnockBack && sub != PlayerSub::KnockDown) {
             actor.step = 1;
@@ -154,7 +155,7 @@ void wait(AnimatedActor& actor) {
             enterSub(actor, TrapSub::Hold);
             return;
         }
-        if (player().airborne != 0) return;
+        if (nearestPlayer(actor.pos).airborne != 0) return;
     }
     enterSub(actor, TrapSub::Sink);
 }

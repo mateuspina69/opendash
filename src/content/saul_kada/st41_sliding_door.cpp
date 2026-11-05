@@ -13,6 +13,7 @@
 #include "game/breakable_walls.hpp"
 #include "game/field_alias.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/story.hpp"
 #include "game/story_flags.hpp"
@@ -75,8 +76,8 @@ void start(StaticActor& actor) {
 // exe 0x5ba780: the player in the 0x800 x 0x200 box in front of it (its axes by the yaw's bit 0x400)
 void wait(StaticActor& actor) {
     const DoorParams params(actor);
-    const int32_t dx = int32_t(actor.pos.x.whole) - int32_t(player().pos.x.whole);
-    const int32_t dz = int32_t(actor.pos.z.whole) - int32_t(player().pos.z.whole);
+    const int32_t dx = int32_t(actor.pos.x.whole) - int32_t(nearestPlayer(actor.pos).pos.x.whole);
+    const int32_t dz = int32_t(actor.pos.z.whole) - int32_t(nearestPlayer(actor.pos).pos.z.whole);
     const bool across = (uint16_t(actor.rotation.y) & 0x400) != 0;
     const int32_t along = across ? dx : dz, side = across ? dz : dx;
     if (uint32_t(along + 0x400) < 0x800 && uint32_t(side + 0x100) < 0x200) {

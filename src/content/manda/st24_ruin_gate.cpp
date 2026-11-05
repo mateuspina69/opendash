@@ -21,6 +21,7 @@
 #include "game/global_class_types.hpp"
 #include "game/player/player_script_control.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/script_engine.hpp"
 #include "game/script_state.hpp"
@@ -235,7 +236,7 @@ void turnHead(AnimatedActor& a, GateGuardianFields& f) {
     const int s = f.headTurn;
     uint32_t u = 0;
     if (!(f.flags & kNoHeadTurn)) {
-        const ShortVec3& target = player().bonePoints[1];
+        const ShortVec3& target = nearestPlayer(a.pos).bonePoints[1];
         const int16_t to[3] = {target.x, target.y, target.z};
         const ShortVec4& head = bonePoint(a, 1, kStoryPort); // exe 0x5e1810
         const int16_t from[3] = {head.x, head.y, head.z};

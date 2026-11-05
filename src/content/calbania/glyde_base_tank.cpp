@@ -175,7 +175,7 @@ void shoot(AnimatedActor& actor, GlydeTankFields& f, int spread, bool aimed) {
     s.pos.x.whole = out[0];
     s.pos.y.whole = out[1];
     s.pos.z.whole = out[2];
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     uint16_t yaw;
     if (aimed) {
         const uint32_t r = rngStep();
@@ -388,7 +388,7 @@ void chase(AnimatedActor& actor, GlydeTankFields& f) {
         keepGait(f, false);
         actor.enterStep(1);
     }
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     const int ang = angleOf(p.pos, actor.pos);
     const int dist = planarDistance(p.pos, actor.pos);
     turnYawTo(actor.rotation.y, uint32_t(ang), 0x18);
@@ -403,7 +403,7 @@ void circle(AnimatedActor& actor, GlydeTankFields& f) {
         keepGait(f, false);
         actor.enterStep(1);
     }
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     int ang = angleOf(p.pos, actor.pos);
     const int dist = planarDistance(p.pos, actor.pos);
     if (dist < 0x300) {
@@ -573,7 +573,7 @@ bool gaitStep(AnimatedActor& actor, GlydeTankFields& f) {
 // argument to 0x5e55a0), else 0 (the territory's 0x5e6ab0 saved ebx, the tank's zero register). With kTankNoTerritory
 // the x fraction is the state handler's frame, not modelled: taken as 0 (the yaw may differ by one there)
 void aimTurret(AnimatedActor& actor, GlydeTankFields& f, bool gaitAsked) {
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     const uint16_t px = uint16_t(uint32_t(uint16_t(p.pos.x.whole)) * 17u - (uint32_t(uint16_t(p.prevPos.x.whole)) << 4));
     const uint16_t pz = uint16_t(uint32_t(uint16_t(p.pos.z.whole)) * 17u - (uint32_t(uint16_t(p.prevPos.z.whole)) << 4));
     const uint32_t self = actor.at & 0xffff;

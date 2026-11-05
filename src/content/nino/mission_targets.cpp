@@ -25,6 +25,7 @@
 #include "game/message.hpp"
 #include "game/message_state.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/story.hpp"
 #include "game/story_flags.hpp"
@@ -165,7 +166,7 @@ void targetMain(StaticActor& actor, TargetFields& target) {
     actor.subState = uint8_t(TargetSub::Damaged);
     setStoryFlag(row.damagedFlag);
     windowClose(kTargetWindow, WindowClose::Force); // exe 0x5576b0
-    if (player().hitPoints >= 0) windowOpen(kTargetWindow, kMessageBank, row.damagedMessage); // exe 0x557390
+    if (nearestPlayer(actor.pos).hitPoints >= 0) windowOpen(kTargetWindow, kMessageBank, row.damagedMessage); // exe 0x557390
 }
 
 // exe 0x5abc50: the 8 smoke columns started (staggered by 4 ticks); state 1

@@ -19,6 +19,7 @@
 #include "game/hit_list.hpp"
 #include "game/player/player_input.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 
 namespace od::port {
@@ -213,7 +214,7 @@ void lightColumn(StaticActor& actor) { // exe 0x598460
         } else {
             r = f.radius;
             // exe 0x598680(actor, block, r): render output
-            const Player& p = player();
+            const Player& p = nearestPlayer(actor.pos);
             const uint32_t i = (uint32_t(uint16_t(p.rotation.y)) - uint32_t(uint16_t(p.directionOffset.y))) & kAngleMask;
             x = uint16_t(actor.pos.x.whole);
             z = uint16_t(actor.pos.z.whole);

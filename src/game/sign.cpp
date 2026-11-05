@@ -14,6 +14,7 @@
 #include "game/message.hpp"
 #include "game/event.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/actor_movement.hpp"
 #include "game/story_flags.hpp"
@@ -89,7 +90,7 @@ void signStates(StaticActor& actor) {
         case SignSub::Idle:
             if (sign.dropFlag != kNoFlag && storyFlag(sign.dropFlag) && (sign.hitBox.result & kDropHit))
                 actor.subState = uint8_t(SignSub::Drop);
-            if (player().talksTo(actor) && eventState().active == 0) {
+            if (nearestPlayer(actor.pos).talksTo(actor) && eventState().active == 0) {
                 eventStartAt(0, nullptr, kSignEventParam, 0, sign.message);
                 actor.subState = uint8_t(SignSub::Talking);
             }

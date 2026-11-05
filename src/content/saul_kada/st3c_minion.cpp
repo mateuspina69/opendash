@@ -184,7 +184,7 @@ void wideDust(const PlayerEnv& env, const AnimatedActor& actor) { dustPuff(env, 
 void dust(const PlayerEnv& env, const AnimatedActor& actor) { dustPuff(env, actor, 0x10, 0xf, 0x40); }      // 0x500a90
 // the target of the charge / the leap: the player, offset at random when it is off screen
 void chargeTarget(const AnimatedActor& actor, int32_t out[3]) {
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     if (actor.runFlags & kActorOffScreen) {
         const uint32_t r = rngStep();
         out[0] = int32_t(uint32_t(p.pos.x) + (((r & 0x1ff) - 0x100u) << 16));
@@ -350,7 +350,7 @@ void bob(const PlayerEnv& env, AnimatedActor& actor, MinionFields& minion) {
         if (minion.timer != 0) minion.timer -= 1u;
         if (c <= actor.spin.y && minion.timer == 0) {
             actor.pos.y = int32_t(uint32_t(ground(env, actor)) << 16);
-            if (ground(env, player()) < 0) enterSub(actor, MinionSub::Leap); // exe 0x40f190 on the player
+            if (ground(env, nearestPlayer(actor.pos)) < 0) enterSub(actor, MinionSub::Leap); // exe 0x40f190 on the player
             else enterSub(actor, MinionSub::Charge);
         }
         break;
@@ -434,7 +434,7 @@ void leap(const PlayerEnv& env, AnimatedActor& actor, MinionFields& minion) {
         }
         if (step != 3) { // exe 0x5003ee (step 2, and step 0 falls into it): aimed at the player
             int32_t target[3];
-            const Player& p = player();
+            const Player& p = nearestPlayer(actor.pos);
             if (actor.runFlags & kActorOffScreen) {
                 const uint32_t r = rngStep();
                 target[0] = int32_t(uint32_t(p.pos.x) + (((r & 0x1ff) - 0x100u) << 16));

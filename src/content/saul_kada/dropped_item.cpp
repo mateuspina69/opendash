@@ -15,6 +15,7 @@
 #include "game/distances.hpp"
 #include "game/event.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/story.hpp"
@@ -128,7 +129,7 @@ void bind(StaticActor& actor) {
 void run(const PlayerEnv& env, StaticActor& actor, ItemFields& item) {
     if (ItemSub(actor.subState) == ItemSub::Toss) toss(env, actor, item);
     else if (ItemSub(actor.subState) == ItemSub::Float) floatAround(actor, item);
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     if (p.carryFlags != 0 || (p.wasAirborne | p.airborne) != 0) return;
     // exe 0x5e3a60(point, player): the integer parts, the item's point raised by its variant's height
     const ItemTouch touch = itemTouches[actor.variant];

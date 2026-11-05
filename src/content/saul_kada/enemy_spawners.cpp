@@ -20,6 +20,7 @@
 #include "game/global_class_types.hpp"
 #include "game/hit_list.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/room_grid.hpp"
 #include "game/room_records.hpp"

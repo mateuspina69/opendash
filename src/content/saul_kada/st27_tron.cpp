@@ -25,6 +25,7 @@
 #include "game/hit_list.hpp"
 #include "game/hit_points.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/story.hpp"
 #include "game/story_flags.hpp"
@@ -335,9 +336,9 @@ void carryAndThrow(const PlayerEnv& env, AnimatedActor& actor, PartnerFields& tr
     const uint8_t flags0 = tron.flags;
     int32_t goal[3];
     if (flags0 & kPartnerThrowAtPlayer) {
-        goal[0] = player().pos.x;
-        goal[1] = player().pos.y;
-        goal[2] = player().pos.z;
+        goal[0] = nearestPlayer(actor.pos).pos.x;
+        goal[1] = nearestPlayer(actor.pos).pos.y;
+        goal[2] = nearestPlayer(actor.pos).pos.z;
     } else {
         goal[0] = kLavaX;
         goal[1] = kLavaY;

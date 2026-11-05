@@ -40,6 +40,7 @@
 #include "game/matrix.hpp"
 #include "game/missile_trail.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/story.hpp"
@@ -99,7 +100,7 @@ bool crateHit(StaticActor& a, const HitBoxHead& box) {
 void crateTarget(const StaticActor& a, int32_t out[3]) {
     switch (a.variant) {
     case 0: {
-        const Player& p = player();
+        const Player& p = carrierOrNearest(a);
         out[0] = p.pos.x;
         out[1] = int32_t(uint32_t(p.pos.y) - 0x8c0000u);
         out[2] = p.pos.z;
@@ -285,7 +286,7 @@ void crateLifted(const PlayerEnv& env, StaticActor& a, CrateFields& f) { // exe 
     carryAtHands(a, 0, -0x10, 0); // exe 0x573ab0
     const CarryRelease r = carryReleased(); // exe 0x573950
     if (r == CarryRelease::Held) return;
-    const Player& p = player();
+    const Player& p = carrierOrNearest(a);
     if (r != CarryRelease::Thrown) {
         f.kind = 0;
         a.rotation.x = -0x400;

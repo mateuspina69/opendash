@@ -997,8 +997,8 @@ void flungCarried(const PlayerEnv& env, AnimatedActor& a, FlungFields& f) { // e
         f.behaviour = kFlungBounces;
     }
     a.acceleration.y = 0x40;
-    a.rotation.y = player().rotation.y;
-    f.flightYaw = player().rotation.y;
+    a.rotation.y = carrierOrNearest(a).rotation.y;
+    f.flightYaw = carrierOrNearest(a).rotation.y;
     a.airborne = 1;
     a.hitPoints = 1;
     carryDropFromPlayer(a); // exe 0x573990

@@ -14,6 +14,7 @@
 #include "game/event_state.hpp"
 #include "game/fixed_point.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 
 namespace od::port {
@@ -70,7 +71,7 @@ void deviceInit(AnimatedActor& actor, FloatingDeviceFields& f) { // exe 0x4f2d30
 
 void deviceWait(AnimatedActor& actor, FloatingDeviceFields& f) { // exe 0x4f2df0: the examine
     if (f.talking != 0) return;
-    if (!player().talksTo(actor) || eventState().active != 0) return;
+    if (!nearestPlayer(actor.pos).talksTo(actor) || eventState().active != 0) return;
     if (f.leadsOut != 0) {
         // exe 0x543b40(&{x, y, z}, 0, mode 4, 0, message): the s16 point as 16.16 in the event's start point
         EventState& ev = eventState();

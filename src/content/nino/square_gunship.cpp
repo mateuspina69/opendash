@@ -147,7 +147,7 @@ void squareGunshipCollide(const PlayerEnv& env, StaticActor& actor, SquareGunshi
 // exe 0x59ff00 (variant 3, the tail of 0x59fc00): facing the player within +-0x280, nearer than 0x709 and the cooldown
 // out -> 0x10 ticks of bombs (one every 4th); then the cooldown 0xf0, the straight run off
 void bombRun(StaticActor& actor, SquareGunshipFields& ship) {
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     const int dist = planarDistance(actor.pos, p.pos);
     const int d = angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angleOf(p.pos, actor.pos)));
     const uint8_t c = ship.burst;
@@ -245,7 +245,7 @@ void fly(StaticActor& actor, SquareGunshipFields& ship) {
     }
     default: break;
     }
-    if ((ship.behaviour & kBehaveStraight) || steerToward(actor, player().pos, 0x240, 0x18) == 0) steerDamp(actor, 0x18);
+    if ((ship.behaviour & kBehaveStraight) || steerToward(actor, nearestPlayer(actor.pos).pos, 0x240, 0x18) == 0) steerDamp(actor, 0x18);
     holdAltitude(actor, ship);
     if (ship.cooldown == 0 && dist > kDiveFar) {
         actor.subState = uint8_t(SquareGunshipSub::Dive);
@@ -272,7 +272,7 @@ void dive(StaticActor& actor, SquareGunshipFields& ship) {
     case DiveStep::Level:
         actor.velocity.z = int16_t(actor.velocity.z + 0x20);
         if (actor.velocity.z > 0) actor.velocity.z = 0;
-        if (steerToward(actor, player().pos, 0x240, 0x18) == 0) {
+        if (steerToward(actor, nearestPlayer(actor.pos).pos, 0x240, 0x18) == 0) {
             steerDamp(actor, 0x18);
             if (actor.velocity.z == 0) actor.enterStep(uint8_t(DiveStep::Aim));
         }
@@ -282,14 +282,14 @@ void dive(StaticActor& actor, SquareGunshipFields& ship) {
     case DiveStep::Aim:
         ship.pitchTarget = kLevelPitch;
         ship.divePitch = 0;
-        ship.diveHeight = int16_t(player().pos.y.whole - 0xb4);
+        ship.diveHeight = int16_t(nearestPlayer(actor.pos).pos.y.whole - 0xb4);
         actor.enterStep(uint8_t(DiveStep::Plunge));
         soundPlayFlat(kDiveSound);
         [[fallthrough]];
     case DiveStep::Plunge: {
         actor.velocity.z = int16_t(actor.velocity.z - 0x50);
         if (actor.velocity.z < -0x500) actor.velocity.z = -0x500;
-        const Player& p = player();
+        const Player& p = nearestPlayer(actor.pos);
         int16_t to[3] = {p.pos.x.whole, p.pos.y.whole, p.pos.z.whole};
         to[1] = ship.diveHeight;
         turnYawTo(actor.rotation.y, uint32_t(angleOf(p.pos, actor.pos)), 0x18); // exe 0x5a0710

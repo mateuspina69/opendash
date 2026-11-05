@@ -36,6 +36,7 @@
 #include "game/hit_points.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/story.hpp"
@@ -220,7 +221,7 @@ void decideHunter(AnimatedActor& actor, HopFields& hop) {
     Actor* other = nullptr;
     for (int8_t c = 0; c < tries; ++c) {
         if (HopSub(actor.subState) == HopSub::Hop) {
-            if (c == 0) other = &player();
+            if (c == 0) other = &carrierOrNearest(actor);
             else if (c == 1) other = tron;
             else if (c == 2) other = bon;
         } else {
@@ -332,7 +333,7 @@ void carried(const PlayerEnv& env, AnimatedActor& actor, HopFields& hop) {
         actor.velocity.z = 0;
     }
     actor.acceleration.y = 0x40;
-    actor.rotation.y = player().rotation.y;
+    actor.rotation.y = carrierOrNearest(actor).rotation.y;
     actor.rotation.z = 0;
     actor.rotation.x = 0;
     actor.airborne = 0;
@@ -659,7 +660,7 @@ void grabbed(const PlayerEnv& env, AnimatedActor& actor, HopFields& hop) {
         if (handling & kHandlingThrown) {
             if (handling & kHandlingAtPlayer) { // at the player (exe 0x5e3ee0 on a stack copy of its position)
                 actor.velocity.x = 0;
-                actor.velocity.y = int16_t(launchSpeed(actor.pos, player().pos, 0x600, 0x40, 0xffffffffu));
+                actor.velocity.y = int16_t(launchSpeed(actor.pos, carrierOrNearest(actor).pos, 0x600, 0x40, 0xffffffffu));
                 actor.velocity.z = int16_t(0xfa00);
             } else {
                 int32_t v[3];
@@ -730,7 +731,7 @@ void bind(const PlayerEnv& env, AnimatedActor& actor, HopFields& hop) {
         hop.homeZ = uint16_t(actor.pos.z.whole);
     }
     actor.pos.y.whole = int16_t(actorGround(env, actor)); // exe 0x40f190
-    hop.target = &player();
+    hop.target = &carrierOrNearest(actor);
     registerEnemy(actor.slot, 0);
 }
 // exe 0x4eb000: the hits, the lift, the sub-state, the hit-list entry

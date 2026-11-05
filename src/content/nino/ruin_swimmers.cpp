@@ -162,7 +162,7 @@ void lungeVy(AnimatedActor& actor) {
         actor.velocity.y = 0;
         return;
     }
-    const int16_t vy = t16(((int(actor.pos.y.whole) - int(player().pos.y.whole) + 0x80) / q) << 4);
+    const int16_t vy = t16(((int(actor.pos.y.whole) - int(carrierOrNearest(actor).pos.y.whole) + 0x80) / q) << 4);
     actor.velocity.y = vy;
     if (std::abs(int(vy)) > 0x80) actor.velocity.y = vy <= 0 ? int16_t(-0x80) : int16_t(0x80);
 }
@@ -192,7 +192,7 @@ void deathExplosion(const AnimatedActor& actor) {
 void swimmerDown(const PlayerEnv& env, AnimatedActor& actor, int16_t& ticks, uint8_t& mode,
                  uint8_t& contact, bool withOrder, bool waterSound) {
     actor.tint = kTintFlash;
-    const bool water = player().inWater == 1;
+    const bool water = carrierOrNearest(actor).inWater == 1;
     if (actor.step == 0) {
         actor.step = 1;
         if (!water) {
@@ -211,7 +211,7 @@ void swimmerDown(const PlayerEnv& env, AnimatedActor& actor, int16_t& ticks, uin
         countGroupDown(actor, withOrder);
     }
     if (ticks & 3) deathExplosion(actor);
-    if (waterSound && player().inWater == 1 && !(gameState().frame & 0xf)) soundPlayAtPos(0x1d5, actor.pos);
+    if (waterSound && carrierOrNearest(actor).inWater == 1 && !(gameState().frame & 0xf)) soundPlayAtPos(0x1d5, actor.pos);
     if (ticks & 1) actor.tint = kTintDying;
     const int16_t c = ticks;
     if (c < 5) mode |= kSwimmerNoLockOn;
@@ -316,7 +316,7 @@ void bigSwimmerInit(AnimatedActor& actor, BigSwimmerFields& fields) {
     fields.hit.result = 0;
     fields.startKey = 0;
     fields.groundY = actor.pos.y.whole;
-    actor.enterState(uint8_t(player().inWater == 1 ? SwimmerState::Swim : SwimmerState::Hop));
+    actor.enterState(uint8_t(carrierOrNearest(actor).inWater == 1 ? SwimmerState::Swim : SwimmerState::Hop));
     registerEnemy(actor.slot, 0);
     resetModelScale(actor); // exe 0x4e5cd0
 }
@@ -342,7 +342,7 @@ void bigWander(AnimatedActor& actor, BigSwimmerFields& fields) {
         int e = int(uint16_t(actor.rotation.y) & 0xfff) - (angleFromPlayer(actor) & 0xfff);
         if (uint32_t(e + 0x800) > 0x1000u) e = int((uint32_t(-e) ^ 0xfffu) + 1u);
         if (uint32_t(e + 0x200) < 0x400u && uint32_t(playerDistance(actor) - 0x80) < 0x400u) {
-            const Player& p = player();
+            const Player& p = carrierOrNearest(actor);
             if (std::abs(int(p.velocity.z)) > 0x60 || p.airborne != 0) {
                 orderGroup(actor, false); // exe 0x4fe720
                 attack = true;
@@ -736,7 +736,7 @@ void smallSwimmerInit(AnimatedActor& actor, SmallSwimmerFields& fields) {
     fields.hit.result = 0;
     fields.startKey = 0;
     fields.groundY = actor.pos.y.whole;
-    actor.enterState(uint8_t(player().inWater == 1 ? SwimmerState::Swim : SwimmerState::Hop));
+    actor.enterState(uint8_t(carrierOrNearest(actor).inWater == 1 ? SwimmerState::Swim : SwimmerState::Hop));
     registerEnemy(actor.slot, 0);
     actor.scale.x = kSmallScale;
     actor.scale.y = kSmallScale;
@@ -994,11 +994,11 @@ void torpedoFly(const PlayerEnv& env, ProjectileActor& torpedo, TorpedoFields& f
         default: notPortedAt(kStoryPort, "0x5cac60 flight sub (table 0x8d15f0)", torpedo.subState);
         }
         int g = actorGround(env, torpedo); // exe 0x40f190
-        if (g > player().pos.y.whole) g = player().pos.y.whole;
+        if (g > carrierOrNearest(torpedo).pos.y.whole) g = carrierOrNearest(torpedo).pos.y.whole;
         const int d = g - torpedo.pos.y.whole - kHoverHeight;
         if (uint32_t(d + 10) > 0x14u) integrateVelocity(torpedo, 0, d < 0 ? -0x60 : 0x60, 0);
     }
-    if (player().inWater == 0) {
+    if (carrierOrNearest(torpedo).inWater == 0) {
         int16_t v[3] = {torpedo.pos.x.whole, torpedo.pos.y.whole, torpedo.pos.z.whole};
         moveAlongYaw16(v, torpedo.rotation.y, 0, 0, kExhaustAhead); // exe 0x5e3750
         const uint8_t k = fields.exhaustTick;
@@ -1043,7 +1043,7 @@ void torpedoCarried(const PlayerEnv& env, ProjectileActor& torpedo, TorpedoField
         if (release == CarryRelease::Thrown) {
             torpedo.velocity.y = -0x200;
             torpedo.velocity.z = -0x380;
-            torpedo.rotation = player().rotation;
+            torpedo.rotation = carrierOrNearest(torpedo).rotation;
         } else {
             torpedo.velocity.y = -0x1e0;
             torpedo.velocity.z = -0x40;

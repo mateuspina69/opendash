@@ -114,7 +114,7 @@ void bind(AnimatedActor& actor, FlyerFields& flyer) {
 }
 // exe 0x46c960: behind the player (3 x 0x7ff0 back, 0x2000 up), facing him; freed over a cell that is no plain floor
 void appear(AnimatedActor& actor, FlyerFields& flyer) {
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     int32_t pos[3] = {p.pos.x, p.pos.y, p.pos.z};
     for (int i = 0; i < 3; ++i) { // exe 0x5e36f0
         int32_t d[3];

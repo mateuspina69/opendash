@@ -406,7 +406,7 @@ void jumpAtPlayer(AnimatedActor& actor, DroneFields& drone) { // exe 0x49fec0: f
         setAnim(actor, DroneAnim::Jump);
         return;
     case 3:
-        actor.velocity.y = wrap16(actor.velocity.y + (player().velocity.y < 0 ? -kJumpFollow : kJumpFollow));
+        actor.velocity.y = wrap16(actor.velocity.y + (carrierOrNearest(actor).velocity.y < 0 ? -kJumpFollow : kJumpFollow));
         [[fallthrough]];
     case 4:
         if (airStep(actor, drone)) {
@@ -873,7 +873,7 @@ void carriedHands(const PlayerEnv& env, AnimatedActor& actor, DroneFields& drone
     const CarryRelease r = carryReleased();
     if (r == CarryRelease::Held) return;
     drone.behaviour &= uint8_t(~kBehaveNoHitEntry);
-    drone.flightYaw = uint16_t(player().rotation.y);
+    drone.flightYaw = uint16_t(carrierOrNearest(actor).rotation.y);
     if (r == CarryRelease::Thrown) {
         int32_t v[3];
         playerAimVector(0, kThrowUp, kThrowForward, v); // exe 0x5e3e50

@@ -14,6 +14,7 @@
 #include "game/carry.hpp"
 #include "game/field_alias.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/story.hpp"
@@ -117,7 +118,7 @@ void start(const PlayerEnv& env, StaticActor& actor, CrumbleFields& crumble) {
 }
 // the player standing on it (his platform its slot)
 bool playerOnIt(const StaticActor& actor) {
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     return p.onPlatform != 0 && ((slotIdentityWord(p.platform) ^ slotIdentityWord(actor)) & kRiderMatch) == 0;
 }
 // exe 0x5a4d50

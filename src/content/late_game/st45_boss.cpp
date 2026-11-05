@@ -372,7 +372,7 @@ void mouthShot(AnimatedActor& actor, BossFields& boss) {
         shot.pos.z.whole = out[2];
         shot.velocity.setXY(0, 0);
         shot.velocity.z = int16_t(0xfb00);
-        const Player& p = player();
+        const Player& p = nearestPlayer(actor.pos);
         const int32_t chest[3] = {p.pos.x, int32_t(uint32_t(p.pos.y) - 0x640000u), p.pos.z};
         int16_t to[3];
         wholes(chest, to);
@@ -396,7 +396,7 @@ void mouthShot(AnimatedActor& actor, BossFields& boss) {
 void headPitchToPlayer(AnimatedActor& actor, BossFields& boss) {
     int16_t out[3], p[3];
     bonePt(actor, 3, 0, 0, -0x100, out);
-    wholes(player().pos, p);
+    wholes(nearestPlayer(actor.pos).pos, p);
     const int16_t want = t16(pitchOf(out, p) + 0x800);
     const int16_t d = t16(angleDiff(uint32_t(int32_t(boss.headPitch)), uint32_t(int32_t(want))));
     if (d + 0x20 > 0x40) boss.headPitch += (d > 0 ? 0x20u : 0xffe0u);
@@ -1112,9 +1112,9 @@ void quake(AnimatedActor& actor, BossFields& boss) {
             debris.rotation.y = 0x800;
             uint32_t r = rngStep();
             debris.pos.y.whole = int16_t(0xf800);
-            debris.pos.x.whole = int16_t((r & 0x3ff) + uint16_t(player().pos.x.whole) - 0x1ffu);
+            debris.pos.x.whole = int16_t((r & 0x3ff) + uint16_t(nearestPlayer(actor.pos).pos.x.whole) - 0x1ffu);
             r = rngStep();
-            debris.pos.z.whole = int16_t((r & 0x3ff) + uint16_t(player().pos.z.whole) - 0x1ffu);
+            debris.pos.z.whole = int16_t((r & 0x3ff) + uint16_t(nearestPlayer(actor.pos).pos.z.whole) - 0x1ffu);
         }
         boss.timer = 5;
         boss.counter -= 1u;
@@ -2160,7 +2160,7 @@ void waveHit(const StaticActor& actor, WaveFields& wave) {
     p1[0] = int16_t(wave.rayPoint.x + dx);
     p1[1] = wave.rayPoint.y;
     p1[2] = int16_t(wave.rayPoint.z + dz);
-    wholes(player().pos, p2);
+    wholes(nearestPlayer(actor.pos).pos, p2);
     if (int16_t((uint32_t(angleOf(p1, p2)) - ca - 0x400) & 0xfff) <= 0x800) return; // exe 0x5e3c00
     const int32_t r = int32_t(wave.reach) << 2;
     if (r - 0x300 <= 0) return;
@@ -2168,16 +2168,16 @@ void waveHit(const StaticActor& actor, WaveFields& wave) {
     p1[0] = int16_t(wave.rayPoint.x + dx);
     p1[1] = wave.rayPoint.y;
     p1[2] = int16_t(wave.rayPoint.z + dz);
-    wholes(player().pos, p2);
+    wholes(nearestPlayer(actor.pos).pos, p2);
     if (int16_t((uint32_t(angleOf(p1, p2)) - uint16_t(wave.startYaw) - 0x400) & 0xfff) > 0x800) return;
-    wholes(player().pos, p2);
+    wholes(nearestPlayer(actor.pos).pos, p2);
     const int16_t origin[3] = {wave.origin.x, wave.origin.y, wave.origin.z};
     const int yaw = angleOf(origin, p2);
     const int32_t spread0 = 0x1000 - int32_t(uint32_t(uint16_t(wave.startYaw) - uint16_t(wave.arms[0].yaw)) & 0xfff);
     const int32_t spread = spread0 + t16(spread0) / 4;
     const int32_t d = int32_t(uint32_t(spread - int32_t(ca) + yaw - 0x800) & 0xfff);
     if (d > int32_t(t16(spread)) * 2) return;
-    const int32_t dy = int32_t(p1[1]) - int32_t(player().pos.y.whole);
+    const int32_t dy = int32_t(p1[1]) - int32_t(nearestPlayer(actor.pos).pos.y.whole);
     if ((dy < 0 ? -dy : dy) >= wave.rayHeight) return;
     p2[1] = int16_t(uint16_t(p2[1]) - 0x40u);
     hitListSubmit(p2, wave.hitBox, hitOwner(actor.slot) | hitGroup(kHitGroupBodies) | kHitNoLockOn | hitRadius(0x200),

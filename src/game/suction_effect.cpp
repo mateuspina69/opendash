@@ -10,6 +10,7 @@
 #include "game/game_state.hpp"
 #include "game/matrix.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/projection.hpp"
 #include "game/random.hpp"
@@ -55,7 +56,7 @@ void rebirth(SuctionParticles& p, uint32_t k) {
 }
 // the effect at the player's hand
 void atHand(EffectActor& effect) {
-    const ShortVec3& hand = player().bonePoints[kLeftHandBone];
+    const ShortVec3& hand = actingPlayer().bonePoints[kLeftHandBone];
     effect.pos.x = hand.x;
     effect.pos.y = hand.y;
     effect.pos.z = hand.z;
@@ -80,7 +81,7 @@ void drawSuction(const EffectActor& effect, SuctionParticles& particles) {
                           wrap16(int(uint32_t(int32_t(effect.pos.z)) << (sh & 0x1f)))};
     const CameraPoint c = cameraPoint(v);
     if (!effectDepthVisible(c) || !effectOnScreen(c)) return;
-    const Player& p = player();
+    const Player& p = actingPlayer();
     const uint32_t scale = uint32_t(int32_t(fields.rangeLevel) + 2) << ((sh + 9) & 0x1f);
     const uint32_t aim = uint32_t(int32_t(p.rotation.x) + kQuarterTurn) | uint32_t(int32_t(p.rotation.y)) << 16;
     Matrix3 r = rotationZYX(int16_t(aim), int16_t(aim >> 16), 0); // exe 0x40c070
@@ -164,7 +165,7 @@ void suctionStart(EffectActor& effect, SuctionParticles& particles) {
 
 void suctionHold(EffectActor& effect, SuctionParticles& particles) {
     auto&& fields = classState<SuctionFields>(effect);
-    if (!(player().suction & kSuctionPulls)) {
+    if (!(actingPlayer().suction & kSuctionPulls)) {
         soundPlayAtPlayer(kStopSound);
         ++effect.state;
         drawSuction(effect, particles);

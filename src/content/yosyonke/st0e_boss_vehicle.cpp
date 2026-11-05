@@ -254,7 +254,7 @@ void fireball(AnimatedActor& a, VehicleFields& f) {
     }
     const uint32_t xy = a.rotation.xyWord(), zSpare = a.rotation.zSpareWord();
     a.rotation.y = int16_t(a.rotation.y + f.fireballAim);
-    if (facesAwayFrom(a, player().pos, 0x100)) {
+    if (facesAwayFrom(a, nearestPlayer(a.pos).pos, 0x100)) {
         if (!(f.flags & kVehicleChargeBroken)) {
             f.flags |= kVehicleCharging;
             blk.chargeTicks = 0x3c;
@@ -263,7 +263,7 @@ void fireball(AnimatedActor& a, VehicleFields& f) {
             a.rotation.setWords(xy, zSpare);
             return;
         }
-    } else if (facesAwayFrom(a, player().pos, 0x300) && !(f.flags & kVehicleVoice27eSaid)) {
+    } else if (facesAwayFrom(a, nearestPlayer(a.pos).pos, 0x300) && !(f.flags & kVehicleVoice27eSaid)) {
         vehicleVoice(0x27e);
         f.flagsHigh |= uint8_t(kVehicleVoice27eSaid >> 8);
     }
@@ -752,11 +752,11 @@ void ballFly(const PlayerEnv& env, StaticActor& a, FireballFields& f) {
         end();
         return;
     }
-    if (facesAwayFrom(a, player().pos, 0x400)) {
+    if (facesAwayFrom(a, nearestPlayer(a.pos).pos, 0x400)) {
         if (planarDistance(nearestPlayer(a.pos).pos, a.pos) >= 0x201) {
             turnYawTo(a.rotation.y, uint32_t(int32_t(t16(angleOf(nearestPlayer(a.pos).pos, a.pos)))), 0x20); // exe 0x5e3df0
             int16_t p = a.rotation.x;
-            if (t16((0x800 - pitchOf(player().pos, a.pos)) - p) >= 1) p = t16(p + 0x10);
+            if (t16((0x800 - pitchOf(nearestPlayer(a.pos).pos, a.pos)) - p) >= 1) p = t16(p + 0x10);
             else p = t16(p - 0x10);
             a.rotation.x = p;
         }

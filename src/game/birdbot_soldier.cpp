@@ -768,8 +768,8 @@ void dead(AnimatedActor& a, SoldierFields& f) { // exe 0x495860: the remains (a 
 }
 void mainState(const PlayerEnv& env, AnimatedActor& a, SoldierFields& f) { // exe 0x494100
     if ((f.range & kSoldierRangeMask) == 0) {
-        f.targetX = uint16_t(player().pos.x.whole);
-        f.targetZ = uint16_t(player().pos.z.whole);
+        f.targetX = uint16_t(carrierOrNearest(a).pos.x.whole);
+        f.targetZ = uint16_t(carrierOrNearest(a).pos.z.whole);
     }
     if (a.actorHit != 0) birdbotContactHits(a, f);
     if (a.wasOnPlatform != 0 && a.onPlatform == 0 && !(f.bits & kSoldierNoFall)) toSub(a, SoldierSub::Fall);
@@ -843,7 +843,7 @@ void inHands(const PlayerEnv& env, AnimatedActor& a, SoldierFields& f) { // exe 
         soundPlayAtPos(kSoundKnockHard, a.pos);
     }
     a.acceleration.y = kGravity;
-    a.rotation.y = player().rotation.y;
+    a.rotation.y = carrierOrNearest(a).rotation.y;
     a.airborne = 1;
     carryDropFromPlayer(a); // exe 0x573990
     a.subState = uint8_t(SoldierCarriedSub::Flying);
@@ -1020,7 +1020,7 @@ void soldier(const PlayerEnv& env, AnimatedActor& a) { // exe 0x493a60
     const uint8_t b = f.bits;
     if ((gameState().frame & 1) && f.hurt != 0) --f.hurt;
     if (f.chase != 0) --f.chase;
-    const Player& p = player();
+    const Player& p = carrierOrNearest(a);
     const uint16_t depthRange = stage().depthRange;
     if (!(b & kSoldierStays)) {
         if ((f.contact & kBirdbotInWater) &&

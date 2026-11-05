@@ -1183,7 +1183,7 @@ void liftedCarried(AnimatedActor& actor, AppoDahFightFields& f) {
     if (const int rel = int(carryReleased())) { // exe 0x573950
         f.flags &= uint8_t(~kFightNoHitEntry);
         f.carried = 0;
-        f.knockYaw = uint16_t(player().rotation.y);
+        f.knockYaw = uint16_t(carrierOrNearest(actor).rotation.y);
         if (rel == 1) {
             int32_t v[3];
             playerAimVector(0, -0x100, -0x380, v); // exe 0x5e3e50

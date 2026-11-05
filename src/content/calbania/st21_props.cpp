@@ -29,6 +29,7 @@
 #include "game/hit_list.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/script_state.hpp"
@@ -178,7 +179,7 @@ void lureCarried(StaticActor& actor, LurePieceFields& f) {
         actor.velocity.z = int16_t(v[2]);
         f.pieceFlags |= kPieceThrown;
     }
-    actor.rotation.y = player().rotation.y;
+    actor.rotation.y = carrierOrNearest(actor).rotation.y;
     actor.airborne = 1;
     carryDropFromPlayer(actor); // exe 0x573990
     f.life = kLurePieceLife;

@@ -490,7 +490,7 @@ void critterHands(const PlayerEnv& env, AnimatedActor& actor, CritterFields& cri
     }
     actor.anim = kAnimDrop;
     actor.acceleration.y = kGravity;
-    const int16_t yaw = player().rotation.y;
+    const int16_t yaw = carrierOrNearest(actor).rotation.y;
     actor.rotation.y = yaw;
     critter.flightYaw = yaw;
     actor.rotation.x = 0;
@@ -1127,7 +1127,7 @@ void stalkTimers(AnimatedActor& actor, CarrierFields& carrier) {
 // exe 0x4d20e0: follows the player's point raised by 0x190 (variant 1: 0x258); near it, in view and grippable: reaches
 // for it (a miss: a shrug), the grab
 void stalk(AnimatedActor& actor, CarrierFields& carrier) {
-    const Player& p = player();
+    const Player& p = carrierOrNearest(actor);
     const int32_t pt[3] = {p.pos.x,
                            int32_t(uint32_t(p.pos.y) +
                                    (actor.variant != 1 ? (uint32_t(uint16_t(kStalkRaise)) << 16)
@@ -1404,7 +1404,7 @@ void boxCarrier(const PlayerEnv& env, AnimatedActor& actor) {
     if ((f & kCarrierBox) && (carriedBox(carrier).flags & kActorLive))
         holdBetweenHands(actor, carriedBox(carrier), dataRecord<BoneOffset>(stateAddress(TableId::FieldEnemiesHoldOffsets), BoneOffset::kBytes));
     if (f & kCarrierHoldsPlayer)
-        holdBetweenHands(actor, player(), dataRecord<BoneOffset>(uint32_t(stateAddress(TableId::FieldEnemiesHoldOffsets) + int32_t(carrier.gripPose.get()) * 8), BoneOffset::kBytes));
+        holdBetweenHands(actor, carrierOrNearest(actor), dataRecord<BoneOffset>(uint32_t(stateAddress(TableId::FieldEnemiesHoldOffsets) + int32_t(carrier.gripPose.get()) * 8), BoneOffset::kBytes));
     carrier.hitBox.result = 0;
     carrier.hitBox.previousX = actor.prevPos.x.whole;
     carrier.hitBox.previousZ = actor.prevPos.z.whole;

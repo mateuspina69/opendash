@@ -444,7 +444,7 @@ bool birdFollowCheck(AnimatedActor& actor, TownBirdFields& f) {
 }
 // exe 0x45eca0: the player in view (+-0x580) within 0x400 -> turn away
 void birdPlayerNear(AnimatedActor& actor) {
-    if (facingAndRange(actor, player(), 0x580, 0x400) == 0 && actor.variant != kVariantTame)
+    if (facingAndRange(actor, carrierOrNearest(actor), 0x580, 0x400) == 0 && actor.variant != kVariantTame)
         birdSub(actor, BirdSub::TurnAway);
 }
 // exe 0x45dc30: what next (follow, idle, wander, wander a while turned round)
@@ -708,7 +708,7 @@ void birdKnockedHard(AnimatedActor& actor, TownBirdFields& f) {
         actor.velocity.x = 0;
         actor.velocity.z = int16_t(0xff00);
         actor.anim = kAnimBirdTumble;
-        actor.velocity.y = int16_t(uint16_t(uint16_t(player().velocity.z >> 2) - 0x100));
+        actor.velocity.y = int16_t(uint16_t(uint16_t(carrierOrNearest(actor).velocity.z >> 2) - 0x100));
         f.heading = int16_t(uint16_t(f.hitBox.contact.x) & 0xfffu);
         f.animKey = 0;
         ++actor.step;
@@ -848,7 +848,7 @@ void birdHitEntry(AnimatedActor& actor, TownBirdFields& f) {
         b = 0x80000;
     }
     if (f.bits & kBirdWatched) {
-        if (facingAndRange(player(), actor, 0x200, 0xc00) == 0) f.bits &= uint8_t(~kBirdWatched);
+        if (facingAndRange(carrierOrNearest(actor), actor, 0x200, 0xc00) == 0) f.bits &= uint8_t(~kBirdWatched);
         else b |= 0x80000;
     }
     const uint8_t bits = f.bits;
@@ -921,7 +921,7 @@ void birdFree(AnimatedActor& actor, TownBirdFields& f) {
         actor.enterState(uint8_t(BirdState::Lifted));
         f.bits |= kBirdLifted;
     }
-    if (player().talksTo(actor) && eventState().active == 0) { // exe 0x573fa0
+    if (carrierOrNearest(actor).talksTo(actor) && eventState().active == 0) { // exe 0x573fa0
         eventStart(&actor.pos, &actor.rotation, 0x10000, 0, 0xffff); // exe 0x543af0(actor, 0x10000, 0, -1)
         actor.enterState(uint8_t(BirdState::Vanish));
     }
@@ -956,7 +956,7 @@ void birdHeld(AnimatedActor& actor, TownBirdFields& f) {
         actor.velocity.y = int16_t(0xfe00);
         actor.velocity.z = int16_t(0xff00);
     }
-    actor.rotation.y = player().rotation.y;
+    actor.rotation.y = carrierOrNearest(actor).rotation.y;
     actor.airborne = 1;
     carryDropFromPlayer(actor); // exe 0x573990
     birdAnim(actor, f, kAnimBirdTumble);
@@ -1068,12 +1068,12 @@ void standingCast(AnimatedActor& actor) {
         } else {
             f.animKey = 0;
             int32_t o[3];
-            rotateByYaw(player().rotation.y, 0, 0, kInFrontOfPlayer, o); // exe 0x5e38d0
-            actor.pos = player().pos;
+            rotateByYaw(carrierOrNearest(actor).rotation.y, 0, 0, kInFrontOfPlayer, o); // exe 0x5e38d0
+            actor.pos = carrierOrNearest(actor).pos;
             actor.pos.y.whole = int16_t(uint16_t(uint16_t(actor.pos.y.whole) - 0x73));
             actor.pos.x = int32_t(uint32_t(actor.pos.x) + uint32_t(o[0]));
             actor.pos.z = int32_t(uint32_t(actor.pos.z) + uint32_t(o[2]));
-            actor.rotation.y = int16_t(uint16_t((uint16_t(player().rotation.y) - 0x800) & 0xfff));
+            actor.rotation.y = int16_t(uint16_t((uint16_t(carrierOrNearest(actor).rotation.y) - 0x800) & 0xfff));
         }
         ++actor.state;
     } else if (v > 1) {

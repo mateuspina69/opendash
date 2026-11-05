@@ -29,6 +29,7 @@
 #include "game/light_column.hpp"
 #include "game/message.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/script_state.hpp"
@@ -670,7 +671,7 @@ void keepDistance(AnimatedActor& actor, BossFields& boss, int lim) {
     const int32_t k1 = int32_t(uint32_t(d - lim) << 8) / d;
     const int32_t k0 = int32_t(uint32_t(lim) << 8) / d;
     Fixed16* const own[3] = {&actor.pos.x, &actor.pos.y, &actor.pos.z};
-    const Fixed16* const target[3] = {&player().pos.x, &player().pos.y, &player().pos.z};
+    const Fixed16* const target[3] = {&nearestPlayer(actor.pos).pos.x, &nearestPlayer(actor.pos).pos.y, &nearestPlayer(actor.pos).pos.z};
     for (int i = 0; i < 3; ++i) {
         const int32_t p = int32_t(*own[i]) >> 8, q = int32_t(*target[i]) >> 8;
         *own[i] = int32_t(uint32_t(p) * uint32_t(k0) + uint32_t(q) * uint32_t(k1));
@@ -1005,7 +1006,7 @@ void hover(AnimatedActor& actor, BossFields& boss) {
             actor.subState = uint8_t(BossMove::Bank);
             if (actor.spawnByte == 0 && tauntWindowFree()) taunt(boss);
         } else if (d > 0x1a00) {
-            if ((boss.flags & kBossHalfLife) && player().hitPoints >= 0) setStoryFlag(kFlagHalfLifeSeen);
+            if ((boss.flags & kBossHalfLife) && nearestPlayer(actor.pos).hitPoints >= 0) setStoryFlag(kFlagHalfLifeSeen);
             if (!(boss.flags & kBossRolled)) {
                 boss.flags |= kBossRolled;
                 if (rngStep() & 1) {
@@ -1226,7 +1227,7 @@ void death(AnimatedActor& actor, BossFields& boss) {
         boss.timer -= 1u;
         const int16_t t = boss.timer;
         if (t < 0x20 ? (t & 3) == 0 : (t & 7) == 0) smokeBlast(actor);
-        if (boss.timer == 0 && player().hitPoints >= 0) {
+        if (boss.timer == 0 && nearestPlayer(actor.pos).hitPoints >= 0) {
             setStoryFlag(kFlagBossDefeated); // exe 0x510e10
             ++actor.step;
         }
@@ -1284,7 +1285,7 @@ void bossRun(AnimatedActor& actor, BossFields& boss) { // exe 0x4b8ec0
     auto& work = boss.work();
     int32_t target[3]; // the exe's stack points (16.16)
     if (!(boss.flags & kBossFalling)) {
-        const Player& p = player();
+        const Player& p = nearestPlayer(actor.pos);
         target[0] = p.pos.x;
         target[1] = int32_t(uint32_t(p.pos.y) + 0xff800000u);
         target[2] = p.pos.z;

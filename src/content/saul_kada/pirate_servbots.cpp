@@ -638,7 +638,7 @@ void carried(const PlayerEnv& env, AnimatedActor& actor, ServbotFields& servbot)
         servbot.flags = kServbotTumbling | kServbotNoHitEntry;
     }
     actor.acceleration.y = kGravity;
-    actor.rotation.y = player().rotation.y;
+    actor.rotation.y = carrierOrNearest(actor).rotation.y;
     actor.airborne = 1;
     carryDropFromPlayer(actor); // exe 0x573990
     servbot.ledge = uint8_t(LedgeAction::None);
@@ -969,7 +969,7 @@ void lobVolley(AnimatedActor& actor, BomberFields& bomber) {
             angleVector(actor.rotation.y, lobDistances[rngStep() & 3], dx, dz);
             dy = 0;
         }
-        const Player& p = player();
+        const Player& p = carrierOrNearest(actor);
         const int32_t target[3] = {int32_t((uint32_t(int32_t(dx)) << 16) + uint32_t(p.pos.x)),
                                    int32_t((uint32_t(int32_t(dy)) << 16) + uint32_t(p.pos.y)),
                                    int32_t((uint32_t(int32_t(dz)) << 16) + uint32_t(p.pos.z))};

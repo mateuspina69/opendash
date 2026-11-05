@@ -328,7 +328,7 @@ void boxInHands(StaticActor& actor, LiftBoxFields& box) {
         box.behaviour = kBoxBounces | kBoxMover | kBoxNoPush;
     }
     actor.acceleration.y = kGravity;
-    const int16_t yaw = player().rotation.y;
+    const int16_t yaw = carrierOrNearest(actor).rotation.y;
     actor.rotation.y = yaw;
     box.travelYaw = yaw;
     actor.airborne = 1;

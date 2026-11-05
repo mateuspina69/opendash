@@ -165,7 +165,7 @@ void fireBomb(AnimatedActor& actor, TurretFields& turret) {
                                int32_t(uint32_t(int32_t(muzzlePoint[2])) << 16)};
     // the exe's stack target: the low half of its y is never written (0 here; the lob reads the integer parts)
     int32_t target[3];
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     if (planarDistance(actor.pos, p.pos) > kNearDistance) {
         target[0] = p.pos.x;
         target[2] = p.pos.z;

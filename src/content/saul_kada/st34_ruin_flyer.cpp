@@ -74,7 +74,7 @@ void sound(uint16_t id, const AnimatedActor& actor) { soundPlayAtPos(id, actor.p
 int angleToPlayer(const AnimatedActor& actor) { return angleOf(nearestPlayer(actor.pos).pos, actor.pos); } // exe 0x5e3bc0(player, it)
 void turnTo(AnimatedActor& actor, int angle) { turnYawTo(actor.rotation.y, uint32_t(angle), 0x20); } // exe 0x5e3df0
 bool facingPlayerWithin(const AnimatedActor& actor, int tolerance) {
-    return facingWithin(actor, player().pos.x, player().pos.z, tolerance);
+    return facingWithin(actor, carrierOrNearest(actor).pos.x, carrierOrNearest(actor).pos.z, tolerance);
 }
 // its home as a 16.16 point (the exe's stack copy)
 void homePoint(const FlyerFields& flyer, int32_t out[3]) {
@@ -218,7 +218,7 @@ void hover(AnimatedActor& actor, FlyerFields& flyer) {
             } else {
                 turnTo(actor, angleToPlayer(actor));
             }
-            if (uint8_t(player().status) & (kStatusSlowed | kStatusSlowedFloor)) {
+            if (uint8_t(carrierOrNearest(actor).status) & (kStatusSlowed | kStatusSlowedFloor)) {
                 actor.subState = uint8_t(FlyerSub::Dive);
                 actor.step = 0;
                 flyer.alerted = 0;

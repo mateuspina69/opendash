@@ -22,6 +22,7 @@
 #include "game/hit_list.hpp"
 #include "game/player/player_input.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 
@@ -91,7 +92,7 @@ void figurePose(AnimatedActor& a) {
 void figureWatching(AnimatedActor& a) {
     WatchingFigureFields& f = classState<WatchingFigureFields>(a);
     const ShortVec4& bone = bonePoint(a, kHeadBone, kFiguresArea); // exe 0x5e1810
-    const Player& p = player();
+    const Player& p = nearestPlayer(a.pos);
     const int32_t eye[3] = {p.pos.x, int32_t(uint32_t(p.pos.y) + kHeadAboveFeet), p.pos.z};
     const int32_t head[3] = {int32_t(uint32_t(int32_t(bone.x)) << 16), int32_t(uint32_t(int32_t(bone.y)) << 16),
                              int32_t(uint32_t(int32_t(bone.z)) << 16)};

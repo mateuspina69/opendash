@@ -31,6 +31,7 @@
 #include "game/event_state.hpp"
 #include "game/hit_list.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/story.hpp"
@@ -434,7 +435,7 @@ void bind(AnimatedActor& actor, TownNpcFields& npc) {
 // exe 0x4443b0: the talk, the sub-state, the head
 void run(AnimatedActor& actor, TownNpcFields& npc) {
     if (!(npc.bits & kNpcNoTalk)) {
-        if (player().talksTo(actor) && eventState().active == 0) { // exe 0x573fa0
+        if (nearestPlayer(actor.pos).talksTo(actor) && eventState().active == 0) { // exe 0x573fa0
             const uint32_t param = uint32_t(int32_t(int8_t(npc.behaviour)) & kNpcEventFlag) >> 2;
             eventStart(&actor.pos, &actor.rotation, param, 0, npc.message); // exe 0x543af0
             actor.subState = uint8_t(RouteNpcSub::Talk);

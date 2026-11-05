@@ -125,7 +125,7 @@ void throwShots(const AnimatedActor& actor) {
     const int16_t rot[3] = {actor.rotation.x, actor.rotation.y, actor.rotation.z};
     int32_t o[3];
     rotateVector(rot, 0, -0x300, -0x200, o); // exe 0x5e3970
-    const Player& p = player();
+    const Player& p = carrierOrNearest(actor);
     const int32_t target[3] = {p.pos.x, int32_t((uint32_t(p.pos.y) & 0xffffu) | uint32_t(uint16_t(uint16_t(p.pos.y.whole) - 0x5au)) << 16),
                                p.pos.z};
     for (int k = -1; k < 2; ++k) {
@@ -289,7 +289,7 @@ void idle(AnimatedActor& actor, HelperFields& helper) {
         enterSub(actor, HelperSub::Return);
         return;
     }
-    if (distanceTo(actor, player().pos) < 0x600) {
+    if (distanceTo(actor, carrierOrNearest(actor).pos) < 0x600) {
         helper.counter += 1u;
         if (helper.counter > 0x5a) {
             enterSub(actor, HelperSub::Throw);
@@ -332,7 +332,7 @@ void attackStart(AnimatedActor& actor) {
 void attackRun(AnimatedActor& actor) {
     faceSide(actor);
     moveAlongYaw(actor.pos, actor.rotation.y, 0, 0, actor.velocity.z); // exe 0x5e36f0
-    if (distanceTo(actor, player().pos) < 0x100) {
+    if (distanceTo(actor, carrierOrNearest(actor).pos) < 0x100) {
         actor.step = uint8_t(AttackStep::Throw);
         actor.stepCounter = 0;
     }
@@ -364,7 +364,7 @@ void attackThrow(AnimatedActor& actor, HelperFields& helper) {
             timers.alertedTicks = 0;
             return;
         }
-        if (distanceTo(actor, player().pos) < 0x100) {
+        if (distanceTo(actor, carrierOrNearest(actor).pos) < 0x100) {
             actor.prevAnim = 0xff;
             actor.stepCounter = 0;
             return;
@@ -395,7 +395,7 @@ void carried(const PlayerEnv& env, AnimatedActor& actor, HelperFields& helper) {
     actor.velocity.y = int16_t(aim[1]);
     actor.velocity.z = int16_t(aim[2]);
     actor.acceleration.y = 0x40;
-    actor.rotation.y = player().rotation.y;
+    actor.rotation.y = carrierOrNearest(actor).rotation.y;
     actor.rotation.z = 0;
     actor.rotation.x = 0;
     actor.airborne = 1;

@@ -11,6 +11,7 @@
 #include "game/event_state.hpp"
 #include "game/game_state.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/script_state.hpp"
 #include "game/story_flags.hpp"

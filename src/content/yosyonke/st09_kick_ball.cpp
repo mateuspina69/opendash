@@ -80,7 +80,7 @@ void ballRolling(const PlayerEnv& env, StaticActor& actor) {
         soundPlayAtPos(kKickSound, actor.pos); // exe 0x5d5380
         f.flags |= kBallRolling;
         f.timer = kKickCoolDown;
-        f.heading = player().rotation.y;
+        f.heading = nearestPlayer(actor.pos).rotation.y;
         ++f.kicks;
         actor.velocity.y = int16_t(0x280u - uint16_t(cameraState().lookPitch));
         actor.velocity.z = 0x300;

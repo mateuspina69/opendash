@@ -93,7 +93,7 @@ ShortVec4& bone(const AnimatedActor& actor, uint32_t b) { return bonePoint(actor
 int ground(const AnimatedActor& actor) { return actorGround(*E, actor); } // exe 0x40f190
 // exe 0x40b980(dz * dz + dx * dx) of the player's integer x / z against the actor's
 int playerDistance(const AnimatedActor& actor) {
-    const int dx = int(player().pos.x.whole) - actor.pos.x.whole, dz = int(player().pos.z.whole) - actor.pos.z.whole;
+    const int dx = int(nearestPlayer(actor.pos).pos.x.whole) - actor.pos.x.whole, dz = int(nearestPlayer(actor.pos).pos.z.whole) - actor.pos.z.whole;
     return isqrt(int32_t(uint32_t(dz * dz) + uint32_t(dx * dx)));
 }
 int angleFromPlayer(const AnimatedActor& actor) { return angleOf(nearestPlayer(actor.pos).pos, actor.pos); }

@@ -697,7 +697,7 @@ void fire(AnimatedActor& a, BurrowerFields& f) {
             s.pos.z.whole = int16_t(s.pos.z.whole - int16_t((int32_t(cos64(i)) << 6) >> 12));
             s.velocity.setXY(0, 0);
             s.velocity.z = -0x300;
-            s.rotation.x = int16_t(pitchOf(s.pos, player().pos) + kHalfTurn);
+            s.rotation.x = int16_t(pitchOf(s.pos, carrierOrNearest(a).pos) + kHalfTurn);
             s.rotation.y = a.rotation.y;
             s.rotation.z = 0;
             GuardShotParams params(s);
@@ -852,7 +852,7 @@ void inHands(const PlayerEnv& env, AnimatedActor& a, BurrowerFields& f) {
     const CarryRelease r = carryReleased();   // exe 0x573950
     if (r == CarryRelease::Held) return;
     f.mode &= uint8_t(~kBurrowerNoHitEntry);
-    f.savedYaw = player().rotation.y;
+    f.savedYaw = carrierOrNearest(a).rotation.y;
     if (r != CarryRelease::Thrown) {
         a.velocity.y = -0x300;
         a.velocity.z = -0x40;

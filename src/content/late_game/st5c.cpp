@@ -378,7 +378,7 @@ void placeOnCircle(AnimatedActor& actor) {
 void circleAttack(AnimatedActor& actor, BossFields& boss) {
     const uint32_t f = BossAttack(actor.subState) != BossAttack::CircleRight ? 1u : 0u;
     auto soundCheck = [&actor] { // the yaw against the player's: sound 0x2cf while within the turn speed
-        const int c = actor.rotation.y, p = player().rotation.y;
+        const int c = actor.rotation.y, p = nearestPlayer(actor.pos).rotation.y;
         const int e = c - p - 0x800;
         const int v = (e >= 0 ? e : p - c + 0x800) & 0xfff;
         if (int16_t(v) < actor.spin.y) soundPlayAtPos(0x2cf, actor.pos);
@@ -722,7 +722,7 @@ void rocksAttack(AnimatedActor& actor, BossFields& boss) {
         if (boss.timerB != 0) break;
         if (const uint32_t slot = allocActor20()) { // exe 0x5e1160
             AnimatedActor& rock = animatedActorAt(slot);
-            const Player& p = player();
+            const Player& p = nearestPlayer(actor.pos);
             rock.flags = kRockFlags;
             rock.loopFlags |= kActorSweepGroup2;
             rock.type = kRockType;

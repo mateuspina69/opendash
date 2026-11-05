@@ -28,6 +28,7 @@
 #include "game/camera.hpp"
 #include "game/hit_list.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/room_grid.hpp"
 #include "game/spark_emitter.hpp"
@@ -221,7 +222,7 @@ void walk(AnimatedActor& actor, GiantFields& giant) {
             const CellBox box(stateAddress(TableId::WindowGiantSideBoxes) + uint32_t(giant.side) * 4);
             if (!pointInCellBox(actor.pos, box)) {
                 giant.seen = 0;
-            } else if (giant.seen != 0 || pointInCellBox(player().pos, box)) {
+            } else if (giant.seen != 0 || pointInCellBox(nearestPlayer(actor.pos).pos, box)) {
                 actor.step = uint8_t(WalkStep::Approach);
             } else {
                 giant.seen = 1;

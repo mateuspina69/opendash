@@ -13,6 +13,7 @@
 #include "game/field_alias.hpp"
 #include "game/hit_list.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/story.hpp"
 #include "game/story_flags.hpp"
@@ -63,7 +64,7 @@ void pedestalItem(StaticActor& item) {
         }
         return;
     case ItemState::Wait: { // exe 0x5b14c0
-        if (player().talksTo(item) && eventState().active == 0) { // exe 0x573fa0
+        if (nearestPlayer(item.pos).talksTo(item) && eventState().active == 0) { // exe 0x573fa0
             eventStartAtActor(item, kTakeEventParam, kTakeWindow, kTakeMessage); // exe 0x543af0
             setStoryFlag(fields.flag);
             item.enterState(uint8_t(ItemState::Taken));

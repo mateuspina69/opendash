@@ -20,6 +20,7 @@
 #include "game/hit_list.hpp"
 #include "game/hit_points.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/story.hpp"
@@ -115,7 +116,7 @@ bool slide(const PlayerEnv& env, StaticActor& actor, BlockFields& block) {
             return false;
         }
     }
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     if (planarDistance(actor.pos, p.pos) < kFollowReach) { // exe 0x5e3b00
         const uint16_t yaw = uint16_t(actor.rotation.y);
         if (!(yaw & 0x800)) follow(actor.pos.x, actor.pos.x.whole, p.pos.x.whole, p.pos.x, actor.velocity.x);

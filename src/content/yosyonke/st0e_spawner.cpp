@@ -7,6 +7,7 @@
 #include "game/actor_state.hpp"
 #include "game/encounter.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 
 namespace od::port {

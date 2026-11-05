@@ -75,7 +75,7 @@ int playerFromHome(const GuardFields& guard) {
 // home by more than 0x200 (by the heading's side), or in its lane
 int laneOf(const AnimatedActor& actor, const GuardFields& guard) {
     const int r = actor.variant != 0 ? 0xc00 : 0x1600;
-    const Player& p = player();
+    const Player& p = nearestPlayer(actor.pos);
     const int px = p.pos.x.whole, pz = p.pos.z.whole;
     const int hx = int16_t(guard.homeX), hz = int16_t(guard.homeZ);
     switch (guard.heading) {

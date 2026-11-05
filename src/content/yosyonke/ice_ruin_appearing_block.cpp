@@ -13,6 +13,7 @@
 #include "game/breakable_walls.hpp"
 #include "game/field_alias.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/story.hpp"
 #include "game/story_flags.hpp"
@@ -63,7 +64,7 @@ void appearingBlock(StaticActor& actor) {
         return;
     case BlockState::Run: // 0x5a50d0
         if (BlockSub(actor.subState) == BlockSub::Hidden) {
-            if (!storyFlag(appearFlags[actor.variant]) || player().pos.y.whole > kAppearBelowY) return;
+            if (!storyFlag(appearFlags[actor.variant]) || nearestPlayer(actor.pos).pos.y.whole > kAppearBelowY) return;
             actor.subState = uint8_t(BlockSub::FadeIn);
             actor.flags |= kActorDrawn;
             block.fade = kFadeStart;

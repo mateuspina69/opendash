@@ -155,7 +155,7 @@ void fight(const PlayerEnv& env, AnimatedActor& actor, ShellFields& shell) {
         integrateVelocity(actor, 0, 0, -0x22);
         if (playerDistance(actor) < 0x400) {
             ++actor.step;
-            if (facingWithin(actor, player().pos, 0x40)) {
+            if (facingWithin(actor, carrierOrNearest(actor).pos, 0x40)) {
                 setAnim(actor, ShellAnim::Aim);
                 break;
             }
@@ -173,7 +173,7 @@ void fight(const PlayerEnv& env, AnimatedActor& actor, ShellFields& shell) {
         break;
     case 3:
         if (playerDistance(actor) < 0x600) {
-            if (!facingWithin(actor, player().pos, 0x40)) {
+            if (!facingWithin(actor, carrierOrNearest(actor).pos, 0x40)) {
                 turnYawTo(actor.rotation.y, angleToPlayer(actor), 0x40);
             } else {
                 setAnim(actor, ShellAnim::Aim);
@@ -278,7 +278,7 @@ void carried(const PlayerEnv& env, AnimatedActor& actor, ShellFields& shell) {
         actor.velocity.z = 0;
     }
     actor.acceleration.y = 0x40;
-    actor.rotation.y = player().rotation.y;
+    actor.rotation.y = carrierOrNearest(actor).rotation.y;
     actor.rotation.z = 0;
     actor.rotation.x = 0;
     actor.airborne = 0;

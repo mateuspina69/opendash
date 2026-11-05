@@ -23,6 +23,7 @@
 #include "game/pickups.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/player/player_weapons.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
@@ -103,7 +104,7 @@ void wander(StaticActor& actor, RollerFields& roller) {
         roller.travelYaw = int16_t(uint16_t(roller.travelYaw) + uint16_t(int16_t(roller.yawDrift)));
     wrapTravelYaw(roller);
     actor.rotation.y = roller.travelYaw;
-    if (player().pos.y.whole >= -0x80) actor.subState = uint8_t(RollerMove::TurnToPlayer);
+    if (carrierOrNearest(actor).pos.y.whole >= -0x80) actor.subState = uint8_t(RollerMove::TurnToPlayer);
     else rollOverOnDamage(actor, roller);
     if (roller.pauseOrTarget == 0) speedRamp(actor);
     roller.timer = int16_t(roller.timer - 1);
@@ -121,7 +122,7 @@ void wander(StaticActor& actor, RollerFields& roller) {
 // exe 0x5add80: turned toward the angle of itself seen from the player (0x80 above his feet) by its variant's step; the
 // player off its height -> the wander again
 void turnToPlayer(StaticActor& actor, RollerFields& roller) {
-    const Player& p = player();
+    const Player& p = carrierOrNearest(actor);
     const int32_t from[3] = {p.pos.x, int32_t(uint32_t(p.pos.y) + 0xff800000u), p.pos.z};
     const int32_t to[3] = {actor.pos.x, actor.pos.y, actor.pos.z};
     const uint16_t ang = uint16_t(angleOf(from[0], from[2], to[0], to[2])); // exe 0x5e3bc0

@@ -15,6 +15,7 @@
 #include "game/event.hpp"
 #include "game/game_state.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/story_flags.hpp"
 
@@ -78,7 +79,7 @@ void active(StaticActor& actor, GlydeKeyFields& f) {
             actor.pos.y += uint32_t(v) << 12;
             if (actor.pos.y.whole < kHoverY) actor.step = uint8_t(HoverStep::Sink);
         }
-        const Player& p = player();
+        const Player& p = nearestPlayer(actor.pos);
         if (actor.variant != 0 && p.carryFlags == 0 && planarDistance(actor.pos, p.pos) < kPickUpRange) {
             ++actor.state;
             setStoryFlag(keyFlags[size_t(int32_t(f.flagIndex))]); // exe 0x510e10

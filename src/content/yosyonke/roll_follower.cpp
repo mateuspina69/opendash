@@ -121,7 +121,7 @@ void turnHead(int16_t& lane, int d, int dead, int step, int16_t limit) {
 }
 // the player's direction from the actor (its 16.16 differences)
 uint32_t playerDirection(const AnimatedActor& a) {
-    const Player& p = player();
+    const Player& p = carrierOrNearest(a);
     return uint32_t(atanAngle(float(int32_t(uint32_t(a.pos.x) - uint32_t(p.pos.x))),
                               float(int32_t(uint32_t(a.pos.z) - uint32_t(p.pos.z))))) &
            kAngleMask;
@@ -155,7 +155,7 @@ void followerHeadLook(AnimatedActor& a, RollFields& f) {
     const int d = wrappedDiff(int((uint32_t(uint16_t(a.rotation.y)) + h) & kAngleMask) - int(ang & kAngleMask));
     turnHead(f.headYaw, d, 0x20, 0x40, kHeadYawLimit);
     const int16_t p = f.headPitch;
-    const int e = ((int(a.pos.y.whole) - int(player().pos.y.whole)) >> 1) + p;
+    const int e = ((int(a.pos.y.whole) - int(carrierOrNearest(a).pos.y.whole)) >> 1) + p;
     turnHead(f.headPitch, e, 0x20, 0x40, kHeadPitchLimit);
 }
 // bone point 0 raised by dy (written into the bone block), a line-of-sight probe from it toward the player
@@ -172,8 +172,8 @@ void rollSighting(AnimatedActor& a, RollFields& f, int dy) {
         f.targetX = f.seenX;
         f.targetZ = f.seenZ;
     }
-    f.seenX = player().pos.x.whole;
-    f.seenZ = player().pos.z.whole;
+    f.seenX = carrierOrNearest(a).pos.x.whole;
+    f.seenZ = carrierOrNearest(a).pos.z.whole;
     rollProbe(a, f, dy);
 }
 // the hit-list box cleared with the previous position (before the entry)
@@ -248,8 +248,8 @@ void followerInit(const PlayerEnv& env, AnimatedActor& a, RollFields& f) {
     f.box.result = 0;
     f.targetX = a.pos.x.whole;
     f.targetZ = a.pos.z.whole;
-    f.seenX = player().pos.x.whole;
-    f.seenZ = player().pos.z.whole;
+    f.seenX = carrierOrNearest(a).pos.x.whole;
+    f.seenZ = carrierOrNearest(a).pos.z.whole;
     f.coolDown = 0;
     f.headPitch = 0;
     f.headYaw = 0;
@@ -304,7 +304,7 @@ void followerSub(AnimatedActor& a, RollFields& f) {
             a.velocity.z = -0x180;
         }
         if (st <= 1) {
-            const int turn = player().velocity.z != 0 ? 0x30 : 0x60;
+            const int turn = carrierOrNearest(a).velocity.z != 0 ? 0x30 : 0x60;
             turnYawTo(a.rotation.y, uint32_t(angleFromPoint(a, f.targetX, f.targetZ)), turn);
             moveForward(a, a.velocity.z);
         }
@@ -427,7 +427,7 @@ void followerMain(const PlayerEnv& env, AnimatedActor& a, RollFields& f) {
         a.airborne = kAirborneFalling;
         if (!(f.behaviour & kRollNoReactions)) setSub(a, FollowerSub::Fall);
     }
-    if (!(f.behaviour & kRollNoTalk) && player().talksTo(a) && eventState().active == 0) {
+    if (!(f.behaviour & kRollNoTalk) && carrierOrNearest(a).talksTo(a) && eventState().active == 0) {
         talk(a, uint16_t(int16_t(f.message.get())));
         setSub(a, FollowerSub::Talk);
     }
@@ -563,7 +563,7 @@ void shedMain(const PlayerEnv& env, AnimatedActor& a, ShedRollFields& f) {
         a.airborne = kAirborneFalling;
         if (!(f.behaviour & kShedNoFall)) setSub(a, ShedSub::Fall);
     }
-    if (!(f.behaviour & kShedNoTalk) && player().talksTo(a) && eventState().active == 0) {
+    if (!(f.behaviour & kShedNoTalk) && carrierOrNearest(a).talksTo(a) && eventState().active == 0) {
         talk(a, uint16_t(int16_t(f.message.get())));
         setSub(a, ShedSub::Talk);
     }
@@ -621,7 +621,7 @@ void shedRoll(const PlayerEnv& env, AnimatedActor& a) {
         const int d = wrappedDiff(int((uint32_t(uint16_t(a.rotation.y)) + h) & kAngleMask) - int(ang & kAngleMask));
         turnHead(f.headYaw, d, 0x20, 0x40, kHeadYawLimit);
         const int16_t p = f.headPitch;
-        int e = ((int(a.pos.y.whole) - int(player().pos.y.whole)) >> 1) + p;
+        int e = ((int(a.pos.y.whole) - int(carrierOrNearest(a).pos.y.whole)) >> 1) + p;
         if (f.behaviour & kShedLookAside) e -= 0xc0;
         turnHead(f.headPitch, e, 0x10, 0x20, kHeadPitchLimit);
     }
@@ -709,7 +709,7 @@ int fieldRollHurt(AnimatedActor& a, RollFields& f) {
 }
 // the walk / run target of exe 0x4e5250 / 0x4e5420: on the tracks two fixed points, else the last sighting (true)
 bool fieldRollTarget(AnimatedActor& a, RollFields& f, int16_t& tx, int16_t& tz) {
-    const int16_t px = player().pos.x.whole, rx = a.pos.x.whole;
+    const int16_t px = carrierOrNearest(a).pos.x.whole, rx = a.pos.x.whole;
     auto fixed = [&](int16_t x) {
         tx = x;
         tz = kTrackZ;
@@ -793,7 +793,7 @@ void fieldRollSub(AnimatedActor& a, RollFields& f) {
             a.velocity.z = -0x180;
         }
         if (st <= 1) {
-            const int turn = player().velocity.z != 0 ? 0x30 : 0x60;
+            const int turn = carrierOrNearest(a).velocity.z != 0 ? 0x30 : 0x60;
             sighting = fieldRollTarget(a, f, tx, tz);
             turnYawTo(a.rotation.y, uint32_t(angleFromPoint(a, tx, tz)), turn);
             moveForward(a, a.velocity.z);
@@ -1003,7 +1003,7 @@ void fieldRollMain(const PlayerEnv& env, AnimatedActor& a, RollFields& f) {
         a.flags |= kActorDrawn;
         a.enterState(uint8_t(RollState::Lifted));
         f.behaviour |= kRollNoHitEntry;
-    } else if (!(f.behaviour & kRollNoTalk) && player().talksTo(a) && eventState().active == 0) {
+    } else if (!(f.behaviour & kRollNoTalk) && carrierOrNearest(a).talksTo(a) && eventState().active == 0) {
         talk(a, uint16_t(uint8_t(f.message.get())));
         setSub(a, FieldRollSub::Talk);
     }
@@ -1050,8 +1050,8 @@ void fieldRoll(const PlayerEnv& env, AnimatedActor& a) {
         f.hitsToKnockBack = kHitsPerKnockBack;
         f.targetX = a.pos.x.whole;
         f.targetZ = a.pos.z.whole;
-        f.seenX = player().pos.x.whole;
-        f.seenZ = player().pos.z.whole;
+        f.seenX = carrierOrNearest(a).pos.x.whole;
+        f.seenZ = carrierOrNearest(a).pos.z.whole;
         registerEnemy(a.slot, 0);
         rollProbe(a, f, -0x100);
         break;
@@ -1111,7 +1111,7 @@ void fieldRoll(const PlayerEnv& env, AnimatedActor& a) {
         } else {
             notPortedAt(kRollPort, "0x4e5bc0 sub-state", a.subState);
         }
-        if (!(f.behaviour & kRollNoTalk) && player().talksTo(a) && eventState().active == 0) {
+        if (!(f.behaviour & kRollNoTalk) && carrierOrNearest(a).talksTo(a) && eventState().active == 0) {
             eventStartAtActor(a, 0x10, 0, uint16_t(int16_t(f.faintedMessage.get())));
             setSub(a, FaintedSub::Talk);
         }

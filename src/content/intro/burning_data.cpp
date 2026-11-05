@@ -804,7 +804,7 @@ void sceneHop(AnimatedActor& actor) { // exe 0x4ea360: hops around the player wi
     integrateVelocity(actor, 0, actor.velocity.y, actor.velocity.z);
     actor.rotation.y = int16_t(angleOf(actor.pos, nearestPlayer(actor.pos).pos) - kQuarterTurn);
     if (planarDistance(nearestPlayer(actor.pos).pos, actor.pos) > kSceneRadius)
-        pullToRadius(actor, player().pos.x.whole, player().pos.z.whole, kSceneRadiusPull);
+        pullToRadius(actor, nearestPlayer(actor.pos).pos.x.whole, nearestPlayer(actor.pos).pos.z.whole, kSceneRadiusPull);
     if (actor.airborne == 0) {
         actor.velocity.y = kSceneHop;
         actor.airborne = kAirborneFalling;

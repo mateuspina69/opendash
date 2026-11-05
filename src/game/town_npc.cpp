@@ -459,7 +459,7 @@ void npcMain(AnimatedActor& actor, TownNpcFields& npc) {
         actor.enterStep(0);
     }
     if (!(npc.bits & kNpcNoTalk)) {
-        if (player().talksTo(actor) && eventState().active == 0) {
+        if (nearestPlayer(actor.pos).talksTo(actor) && eventState().active == 0) {
             npcStartTalk(actor, npc.behaviour, npc.message);
             actor.subState = uint8_t(NpcSub::Talk);
             actor.enterStep(0);

@@ -37,6 +37,7 @@
 #include "game/player/player_hang.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/script_state.hpp"
 #include "game/story.hpp"
@@ -126,7 +127,7 @@ int barHold(StaticActor& bar, BarFields& fields) {
     if (params.hanger == kPlayerHangs) {
         if (playerBarGrab(bar) == 2) {
             playerPlaceAt(bar, 0, 0, 0, 0x58);
-            fields.hangY = player().pos.y.whole;
+            fields.hangY = carrierOrNearest(bar).pos.y.whole;
             return 1;
         }
         params.hanger = kNoHanger;
@@ -264,7 +265,7 @@ void timedBar(StaticActor& bar, BarFields& fields) {
     case TimedBarPhase::Lower: // exe 0x58f320
         if (bar.step == 0) {
             bar.velocity.y = 0;
-            fields.hangY = player().pos.y.whole;
+            fields.hangY = carrierOrNearest(bar).pos.y.whole;
             bar.enterStep(1);
         }
         if (bar.step == 1 && barLower(bar) != 0) {
@@ -495,7 +496,7 @@ void gateLever(StaticActor& bar, BarFields& fields) {
     case GateLeverPhase::Lower: // exe 0x58fa70
         if (bar.step == 0) {
             bar.velocity.y = 0;
-            fields.hangY = player().pos.y.whole;
+            fields.hangY = carrierOrNearest(bar).pos.y.whole;
             bar.enterStep(1);
         }
         if (bar.step == 1 && barLower(bar) != 0) {
@@ -615,7 +616,7 @@ void liftableInHands(const PlayerEnv& env, StaticActor& bar, BarFields& fields) 
         fields.entry = 0;
     }
     bar.acceleration.y = kLiftableGravity;
-    const int16_t yaw = player().rotation.y;
+    const int16_t yaw = carrierOrNearest(bar).rotation.y;
     bar.rotation.y = yaw;
     bar.rotation.spare = yaw;
     bar.airborne = 1;

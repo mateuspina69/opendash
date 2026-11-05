@@ -17,6 +17,7 @@
 #include "game/encounter.hpp"
 #include "game/field_alias.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/spawn.hpp"
 #include "game/story.hpp"
@@ -63,7 +64,7 @@ void respawner(StaticActor& actor) {
         notPortedAt(kStoryPort, "0x5a9d80 state", actor.state);
         return;
     }
-    const int px = player().pos.x.whole, pz = player().pos.z.whole;
+    const int px = nearestPlayer(actor.pos).pos.x.whole, pz = nearestPlayer(actor.pos).pos.z.whole;
     uint32_t record = recordLists[actor.variant];
     uint8_t live = 0;
     for (uint32_t bit = 31; bit >= 18; --bit)
