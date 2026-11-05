@@ -1,5 +1,5 @@
 // A session's world has no screen: each player's view is on their own machine. What the game
-// decides by the screen there goes by the players instead: "seen" is within kWorldViewRange of any player, so that no enemy
+// decides by the screen there goes by the players instead: "seen" is in front of a player's camera (behind them along their facing) within kWorldViewRange, so that no enemy
 // sleeps while a teammate looks at it, and a direction taken from the view is the player's facing. Single player and the
 // windowed game keep the camera.
 #pragma once
