@@ -9,6 +9,7 @@
 #include <cstdint>
 
 #include "content/nino/water.hpp"
+#include "game/player/players.hpp"
 #include "game/water_splash_state.hpp"
 #include "game/actor_pools.hpp"
 #include "game/actor_state.hpp"
@@ -172,8 +173,7 @@ void bubbleBurst(Player& p) {
 }
 
 // exe 0x426cc0 (the controller itself is not read): not while the player is knocked back / down
-void bubbles() {
-    Player& p = player();
+void bubbles(Player& p) {
     const PlayerSub sub = PlayerSub(p.subState);
     if (sub == PlayerSub::KnockBack || sub == PlayerSub::KnockDown) return;
     if (scriptState().flags != 0 || p.inWater == 0) return;
@@ -183,6 +183,6 @@ void bubbles() {
 } // namespace
 
 void waterSplashUpdate(const PlayerEnv&, uint32_t actor) { splash(staticActorAt(actor)); }
-void waterBubbleControllerUpdate(const PlayerEnv&, uint32_t) { bubbles(); }
+void waterBubbleControllerUpdate(const PlayerEnv&, uint32_t) { forEachPlayer([](Player& p) { bubbles(p); }); }
 
 } // namespace od::port

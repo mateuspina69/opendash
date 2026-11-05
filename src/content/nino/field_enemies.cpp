@@ -834,8 +834,7 @@ int wallTurnIfHit(AnimatedActor& actor, const CarrierFields& carrier) {
 }
 
 // exe 0x4d23c0: the player can be gripped (alive, no immunity, not knocked back / down)
-bool playerGrippable() {
-    const Player& p = player();
+bool playerGrippable(const Player& p) {
     if (p.hitPoints < 0 || p.immunity != 0) return false;
     const PlayerSub s = PlayerSub(p.subState);
     return s != PlayerSub::KnockBack && s != PlayerSub::KnockDown;
@@ -1148,7 +1147,7 @@ void stalk(AnimatedActor& actor, CarrierFields& carrier) {
             actor.variant != 1 && planarDistance(actor.pos, pt) <= 0x1ff) {
             const int16_t above[3] = {actor.pos.x.whole, wholePart(int32_t(uint32_t(actor.pos.y) + 0x1900000u)),
                                       actor.pos.z.whole};
-            if (pointVisibleOrNear(above, 0) == 0 && playerGrippable()) { // exe 0x5e59a0
+            if (pointVisibleOrNear(above, 0) == 0 && playerGrippable(p)) { // exe 0x5e59a0
                 actor.anim = kCarrierReach;
                 actor.step = uint8_t(StalkStep::Reach);
                 enemyGroupMark(int32_t(carrier.group), kGroupPlayerTaken);
@@ -1162,7 +1161,8 @@ void stalk(AnimatedActor& actor, CarrierFields& carrier) {
             if (planarDistance(actor.pos, pt) >= 0xa0 ||
                 uint32_t(int(actor.pos.y.whole) - int(wholePart(pt[1])) + 0x60) >= 0xc0u) {
                 actor.step = uint8_t(StalkStep::Shrug);
-            } else if (playerGrippable()) {
+            } else if (playerGrippable(p)) {
+                actor.ownerPlayer = uint8_t(playerId(p)); // this one is held until the throw
                 carrierSub(actor, CarrierSub::Grab);
                 return;
             }
@@ -1404,7 +1404,7 @@ void boxCarrier(const PlayerEnv& env, AnimatedActor& actor) {
     if ((f & kCarrierBox) && (carriedBox(carrier).flags & kActorLive))
         holdBetweenHands(actor, carriedBox(carrier), dataRecord<BoneOffset>(stateAddress(TableId::FieldEnemiesHoldOffsets), BoneOffset::kBytes));
     if (f & kCarrierHoldsPlayer)
-        holdBetweenHands(actor, carrierOrNearest(actor), dataRecord<BoneOffset>(uint32_t(stateAddress(TableId::FieldEnemiesHoldOffsets) + int32_t(carrier.gripPose.get()) * 8), BoneOffset::kBytes));
+        holdBetweenHands(actor, playerById(actor.ownerPlayer), dataRecord<BoneOffset>(uint32_t(stateAddress(TableId::FieldEnemiesHoldOffsets) + int32_t(carrier.gripPose.get()) * 8), BoneOffset::kBytes));
     carrier.hitBox.result = 0;
     carrier.hitBox.previousX = actor.prevPos.x.whole;
     carrier.hitBox.previousZ = actor.prevPos.z.whole;

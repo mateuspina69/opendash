@@ -21,6 +21,7 @@
 #include "game/distances.hpp"
 #include "game/enemy_neighbours.hpp"
 #include "game/field_alias.hpp"
+#include "game/player/players.hpp"
 #include "game/vectors.hpp"
 #include "game/hit_list.hpp"
 #include "game/pickups.hpp"
@@ -176,7 +177,7 @@ void wander(AnimatedActor& actor, ReaverbotFields& fields) {
     randomTurn(actor, fields, 0xdb);
     if (!(fields.mode & kReaverbotTurned)) {
         neighbourTurn(actor, fields);
-        Player& p = player();
+        Player& p = nearestPlayer(actor.pos);
         if (planarDistance(p.pos, actor.pos) < 0x100) {
             if (p.body.anim != 0) { // the player moves
                 const int angle = angleOf(p.pos, actor.pos);
@@ -235,7 +236,7 @@ void popUp(AnimatedActor& actor, ReaverbotFields& fields) {
         if (actor.rotation.z < 0) actor.rotation.z = 0;
         if (!(fields.mode & kReaverbotTurned)) {
             neighbourTurn(actor, fields);
-            Player& p = player();
+            Player& p = nearestPlayer(actor.pos);
             if (planarDistance(p.pos, actor.pos) < 0x100) {
                 const int angle = angleOf(p.pos, actor.pos) - 0x800;
                 actor.velocity.z = -0x200;

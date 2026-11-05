@@ -387,7 +387,7 @@ void missileCarried(const PlayerEnv& env, StaticActor& actor, MissileFields& fie
     carryAtHands(actor, 0, -0x10, 0);             // exe 0x573ab0
     const CarryRelease release = carryReleased(); // exe 0x573950
     if (release == CarryRelease::Held) return;
-    Player& p = player();
+    Player& p = actingPlayer(); // its carrier
     if (release == CarryRelease::Thrown) {
         fields.hitKind = kMissileThrown;
         if (p.lockedActor) fields.target = p.lockedActor->slot;

@@ -207,11 +207,13 @@ const DataTable<ScalarTable<uint8_t, 0x20>> escortTargets{TableId::FieldSpawners
 // timer counts down, then the next wave (1..4) retargets every live one; the last one following the player gets its
 // point each tick
 void gunshipWave(St15WaveFields& spawner, uint32_t n) {
-    const Player& p = player();
-    int16_t px = p.pos.x.whole;
-    const int16_t pz = p.pos.z.whole;
-    if (px < -0x100) px = -0x100;
-    // the exe passes a stack point {x, y, z} to exe 0x41d290; read here as values
+    // a ship's point: the player nearest it, x no less than -0x100 (the exe passes a stack point {x, y, z} to exe
+    // 0x41d290; read here as values)
+    const auto aimAtNearest = [](auto&& params, const Fixed16Vec3& from) {
+        const Player& p = nearestPlayer(from);
+        params.pointX = p.pos.x.whole < -0x100 ? int16_t(-0x100) : p.pos.x.whole;
+        params.pointZ = p.pos.z.whole;
+    };
     const uint32_t r = rngStep();
     uint32_t k = r & 3;
     WaveRow row = waveRow(spawner.wave);
@@ -238,8 +240,7 @@ void gunshipWave(St15WaveFields& spawner, uint32_t n) {
                 ship.pos.y.whole = point.y;
                 ship.pos.z.whole = point.z;
                 ship.rotation.y = point.yaw;
-                params.pointX = px;
-                params.pointZ = pz;
+                aimAtNearest(params, ship.pos);
                 encounterTrackInScriptSlot(ship, uint16_t(id));
             }
             spawner.follower = uint8_t(i + 1);
@@ -284,8 +285,7 @@ void gunshipWave(St15WaveFields& spawner, uint32_t n) {
         const uint8_t s = spawner.shipSlots[uint32_t(f) - 1u];
         if (s != 0) {
             auto&& ship = MissionGunshipParams(staticSlotAt(s));
-            ship.pointX = px;
-            ship.pointZ = pz;
+            aimAtNearest(ship, staticSlotAt(s).pos);
         }
     }
 }
@@ -760,7 +760,7 @@ void st16Boxes(ControllerActor& actor) {
 // sub-state 1; then at 0xa8c flag 0x681, 0xc4e a timer 0x14, 0xe10 flag 0x682 + a timer 0x11, 0x1194 a timer 0x12
 enum class St16ClockSub : uint8_t { Start = 0, Running = 1, Done = 2 };
 void st16Clock(ControllerActor& actor, St16ClockFields& spawner) {
-    if (player().hitPoints < 0 || storyFlag(kFlagMissionFailed)) return;
+    if (!anyPlayer([](const Player& p) { return p.hitPoints >= 0; }) || storyFlag(kFlagMissionFailed)) return;
     switch (St16ClockSub(actor.subState)) {
     case St16ClockSub::Start:
         if (storyFlag(kFlagCarriersOut)) {

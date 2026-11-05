@@ -365,8 +365,7 @@ int heldBoxes(const BoxSpawnerFields& group, uint32_t list[4]) {
 }
 // the player stands on the static with this key
 bool playerStandsOn(uint32_t key) {
-    const Player& p = player();
-    return p.onPlatform && (slotIdentityWord(p.platform) & 0x1fffff) == key;
+    return anyPlayer([&](const Player& p) { return p.onPlatform && (slotIdentityWord(p.platform) & 0x1fffff) == key; });
 }
 // exe 0x4b69d0: the group's box of the frame (& 3) when it is alive, unheld, the player not on it, within 0x10 in y,
 // not at x >= 0x500 with z <= 0x400 and no other member's platform; else 0

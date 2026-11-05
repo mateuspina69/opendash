@@ -649,7 +649,7 @@ void beamBody(StaticActor& beam, BeamFields& fields) {
 void guardianBeam(StaticActor& beam) {
     BeamFields& fields = classState<BeamFields>(beam);
     const BeamRow row = beamRow(beam);
-    Player& p = player();
+    Player& p = nearestPlayer(beam.pos);
     switch (BeamState(beam.state)) {
     case BeamState::Start: // exe 0x5b9930
         beam.loopFlags |= kActorLateLoop;

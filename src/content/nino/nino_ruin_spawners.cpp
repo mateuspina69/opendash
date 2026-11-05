@@ -5,6 +5,7 @@
 
 #include "content/nino/water.hpp"
 #include "game/loaded_data.hpp"
+#include "game/player/players.hpp"
 #include "game/water_splash_state.hpp"
 
 #include "game/actor_pools.hpp"
@@ -313,19 +314,20 @@ void st37(ControllerActor& actor) {
                     }
                     spawner.soundTicks -= 1u;
                     // exe 0x5e3b40({the player's x, y, z}, the trap's point): the planar distance of the s16 points
-                    Player& p = player();
-                    const int32_t dx = int16_t(uint16_t(uint16_t(spawner.trapPoint.x) - uint16_t(p.pos.x.whole)));
-                    const int32_t dz = int16_t(uint16_t(uint16_t(spawner.trapPoint.z) - uint16_t(p.pos.z.whole)));
-                    const int d = isqrt(int32_t(uint32_t(dx) * uint32_t(dx) + uint32_t(dz) * uint32_t(dz)));
                     const int32_t range = spawner.pullRange;
-                    if (d < range) {
-                        p.pulled = 1;
-                        p.pullX = spawner.trapPoint.x;
-                        p.pullY = spawner.trapPoint.y;
-                        p.pullZ = spawner.trapPoint.z;
-                        p.pullStrength = spawner.pullStrength;
-                        p.pullRadius = int16_t(range);
-                    }
+                    forEachPlayer([&](Player& p) {
+                        const int32_t dx = int16_t(uint16_t(uint16_t(spawner.trapPoint.x) - uint16_t(p.pos.x.whole)));
+                        const int32_t dz = int16_t(uint16_t(uint16_t(spawner.trapPoint.z) - uint16_t(p.pos.z.whole)));
+                        const int d = isqrt(int32_t(uint32_t(dx) * uint32_t(dx) + uint32_t(dz) * uint32_t(dz)));
+                        if (d < range) {
+                            p.pulled = 1;
+                            p.pullX = spawner.trapPoint.x;
+                            p.pullY = spawner.trapPoint.y;
+                            p.pullZ = spawner.trapPoint.z;
+                            p.pullStrength = spawner.pullStrength;
+                            p.pullRadius = int16_t(range);
+                        }
+                    });
                     spawnBubblesSt37(bubbleEntry(kSt37Bubbles, gameState().room, spawner.entry), true);
                     spawner.entry += 1u;
                     if (uint16_t(spawner.entry) == 8) spawner.entry = 0;

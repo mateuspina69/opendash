@@ -15,6 +15,7 @@
 #include "game/hit_list.hpp"
 #include "game/player/player_state.hpp"
 #include "game/player/player_weapons.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/story.hpp"
@@ -45,7 +46,7 @@ void shotStart(ProjectileActor& shot, ShotFields& fields) {
 // exe 0x5cc540
 void shotFly(const PlayerEnv& env, ProjectileActor& shot, ShotFields& fields) {
     HomingShotParams params(shot);
-    Player& p = player();
+    Player& p = nearestPlayer(shot.pos);
     switch (FlightPhase(shot.step)) {
     case FlightPhase::Rise: // up (or down) by its acceleration until it slows to a stop, then it turns back along its z
         if (HomingShotVariant(shot.variant) == HomingShotVariant::Aimed ||

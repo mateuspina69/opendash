@@ -226,10 +226,11 @@ void steerAlways(StaticActor& actor, int16_t px, int16_t pz, PointLows lows, int
     if (actor.spin.y < -lim) actor.spin.y = int16_t(-lim);
 }
 // the point on the player's while the mode asks for it
-void followPlayer(MissionGunshipFields& ship) {
+void followPlayer(const Actor& actor, MissionGunshipFields& ship) {
     if ((ship.mode & kPointModeMask) == kPointOnPlayer) {
-        ship.pointX = player().pos.x.whole;
-        ship.pointZ = player().pos.z.whole;
+        const Player& p = nearestPlayer(actor.pos);
+        ship.pointX = p.pos.x.whole;
+        ship.pointZ = p.pos.z.whole;
     }
 }
 // exe 0x5a1260: told to leave -> fly off
@@ -690,7 +691,7 @@ void st15GunshipInit(StaticActor& actor, MissionGunshipFields& ship) {
     actor.hitPoints = hp;
     actor.collisionBox.pointAt(kSt15Gunship.box);
     actor.airborne = 1;
-    followPlayer(ship);
+    followPlayer(actor, ship);
     ship.leaveHeading = int8_t(uint8_t(angleFromPoint(actor, ship.pointX, ship.pointZ, {}) >> 4)); // whole dwords
     ship.homeHeight = int32_t(actor.pos.y.whole) + kHomeAbove;
     actor.clearClassBlock(); // exe 0x40dc40
@@ -699,7 +700,7 @@ void st15GunshipInit(StaticActor& actor, MissionGunshipFields& ship) {
 
 // exe 0x59d520
 void st15GunshipAlive(const PlayerEnv& env, StaticActor& actor, MissionGunshipFields& ship) {
-    followPlayer(ship);
+    followPlayer(actor, ship);
     const bool hitBranch = gunshipHitTaken(actor); // before 0x59e0e0 reads the box
     if (missionHits(actor, ship)) {
         actor.enterState(uint8_t(MissionGunshipState::Crash));
@@ -966,7 +967,7 @@ void waveInit(StaticActor& actor, MissionGunshipFields& ship) {
     actor.rotation.x = 0;
     actor.velocity.setXY(0, 0);
     actor.velocity.z = 0;
-    followPlayer(ship);
+    followPlayer(actor, ship);
     ship.leaveHeading = int8_t(uint8_t(angleFromPoint(actor, ship.pointX, ship.pointZ, {}) >> 4)); // whole dwords
     ship.homeHeight = int32_t(actor.pos.y.whole) + kHomeAbove;
     actor.clearClassBlock(); // exe 0x40dc40
@@ -980,7 +981,7 @@ void waveInit(StaticActor& actor, MissionGunshipFields& ship) {
 
 // exe 0x5a09d0
 void waveAlive(const PlayerEnv& env, StaticActor& actor, MissionGunshipFields& ship) {
-    followPlayer(ship);
+    followPlayer(actor, ship);
     const bool hitBranch = gunshipHitTaken(actor);
     if (missionHits(actor, ship)) { // exe 0x59e0e0
         actor.enterState(uint8_t(MissionGunshipState::Crash));

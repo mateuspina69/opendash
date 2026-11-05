@@ -343,7 +343,7 @@ void patrol(AnimatedActor& boss, BossFields& fields) {
 // 1 / 2), now and then (the player near the room's centre, the boss high) the aim: it faces the player, then dives or
 // cruises on
 void hunt(AnimatedActor& boss, BossFields& fields) {
-    Player& p = player();
+    Player& p = nearestPlayer(boss.pos);
     switch (HuntPhase(boss.step)) {
     case HuntPhase::Start:
         subStart(boss, fields);
@@ -980,7 +980,7 @@ void boltTick(ControllerActor& bolt, BoltFields& fields) {
     const CameraPoint c0 = cameraPoint(B);
     if (c0.view[2] > int32_t(uint32_t(stage().effectsFar) * 4) || c0.view[2] < 0x30) return;
     const uint32_t r1 = rngStep(), r2 = rngStep();
-    const uint32_t k = (0x40u - ((uint16_t(player().rotation.y) >> 6) & 0x3f)) & 0x3f;
+    const uint32_t k = (0x40u - ((uint16_t(nearestPlayer(int16_t(fields.pos.x), int16_t(fields.pos.z)).rotation.y) >> 6) & 0x3f)) & 0x3f;
     const uint8_t step = uint8_t(fields.angleStep - (r2 & 3));
     uint8_t d = uint8_t(r1 & 0x1f);
     const int ck = fixedCos64(k), sk = fixedSin64(k);
@@ -1174,7 +1174,7 @@ void orbBolt(const ProjectileActor& orb) {
 void homingOrbFly(const PlayerEnv& env, ProjectileActor& orb, ShotFields& fields) {
     orb.savePreviousPose();
     orb.wasAirborne = orb.airborne;
-    Player& p = player();
+    Player& p = nearestPlayer(orb.pos);
     switch (OrbPhase(orb.step)) {
     case OrbPhase::Start:
         fields.fade = 0x10;

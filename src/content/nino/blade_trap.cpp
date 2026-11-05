@@ -109,9 +109,10 @@ int collide(const PlayerEnv& env, StaticActor& actor, TrapFields& fields) {
 }
 // the player inside [x0, x1) x [z0, z1) (unsigned compares of the 16-bit corners, as the exe)
 bool playerIn(int16_t x0, int16_t x1, int16_t z0, int16_t z1) {
-    const Player& p = player();
-    return uint32_t(int32_t(p.pos.x.whole) - x0) < uint32_t(int32_t(x1) - x0) &&
-           uint32_t(int32_t(p.pos.z.whole) - z0) < uint32_t(int32_t(z1) - z0);
+    return anyPlayer([&](const Player& p) {
+        return uint32_t(int32_t(p.pos.x.whole) - x0) < uint32_t(int32_t(x1) - x0) &&
+               uint32_t(int32_t(p.pos.z.whole) - z0) < uint32_t(int32_t(z1) - z0);
+    });
 }
 // exe 0x5b3770: the strong pushes on the armed body cost hit points; the player's hits on the blade flash it and, the
 // player in the 0xb00 square ahead, start the charge; destroyed -> dying (-1). 0 nothing, 1 hit

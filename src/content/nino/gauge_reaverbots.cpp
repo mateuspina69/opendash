@@ -208,8 +208,8 @@ int gaugeHit(AnimatedActor& actor, GaugeFields& fields) {
     return 0;
 }
 // the point on a circle around the player (radius 1 << shift) at the circle's angle
-void circleTarget(GaugeFields& fields, const GaugeParams& params, int shift) {
-    const Player& p = player();
+void circleTarget(const Actor& actor, GaugeFields& fields, const GaugeParams& params, int shift) {
+    const Player& p = nearestPlayer(actor.pos);
     const int a = params.circleAngle & 0xfff;
     fields.circlePoint.x = t16(((int32_t(fixedCos(a)) << shift) >> 12) + p.pos.x.whole);
     fields.circlePoint.y = p.pos.y.whole;
@@ -407,7 +407,7 @@ void swimCircle(AnimatedActor& actor, GaugeFields& fields) {
         actor.step = 1;
     }
     if (!(uint8_t(actor.animKey.frame) & 0xf)) soundPlayAtPos(kSwimSound, actor.pos);
-    circleTarget(fields, params, 10);
+    circleTarget(actor, fields, params, 10);
     int16_t at[3], target[3];
     wholePos(actor, at);
     turnYawTo(actor.rotation.y, uint32_t(angleFromPlayer(actor)), 0x40);
@@ -502,7 +502,7 @@ void swimKeepAway(AnimatedActor& actor, GaugeFields& fields) {
         startMove(actor, fields, 0, 0, -0x100);
         actor.step = 1;
     }
-    circleTarget(fields, params, 9);
+    circleTarget(actor, fields, params, 9);
     int16_t at[3], target[3];
     wholePos(actor, at);
     circlePoint(fields, target);
@@ -621,7 +621,7 @@ void walkCircle(AnimatedActor& actor, GaugeFields& fields) {
     default: break;
     }
     if (!(uint8_t(actor.animKey.frame) & 0xf)) soundPlayAtPos(kSwimSound, actor.pos);
-    circleTarget(fields, params, 9);
+    circleTarget(actor, fields, params, 9);
     int16_t at[3], target[3];
     wholePos(actor, at);
     circlePoint(fields, target);
