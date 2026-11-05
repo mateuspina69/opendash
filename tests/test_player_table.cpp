@@ -165,15 +165,25 @@ void testWorldDigest() {
     CHECK(worldDigest().hash == base);
 }
 
+// a world where player 0 is elsewhere: the others answer, and the slot ids of the class still resolve
+void testPlayerZeroAway() {
+    resetPlayer();
+    joinPlayer(3);
+    leavePlayer(0);
+    CHECK(!playerPresent(0));
+    Fixed16Vec3 point;
+    CHECK(&nearestPlayer(point) == &playerById(3));
+    int seen = 0;
+    forEachPlayer([&](Player&) { ++seen; });
+    CHECK(seen == 1);
+    joinPlayer(0);
+    leavePlayer(3);
+    CHECK(playerPresent(0));
+    resetPlayer();
+}
+
 void testRefusals() {
     bool threw = false;
-    try {
-        joinPlayer(0);
-    } catch (const std::logic_error&) {
-        threw = true;
-    }
-    CHECK(threw);
-    threw = false;
     try {
         playerById(kPlayerSlots);
     } catch (const std::out_of_range&) {
@@ -192,6 +202,7 @@ int main() {
     testNearest();
     testActingPlayer();
     testWorldDigest();
+    testPlayerZeroAway();
     testRefusals();
     return testResult("test_player_table");
 }

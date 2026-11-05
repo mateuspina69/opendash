@@ -1,7 +1,7 @@
 // A world process: one room's simulation with no window, no renderer and no sound device, the same game code the
 // windowed game runs.
 //   opendash --world <stage, hex> <sub> [--story-save <file>] [--world-ticks N] [--world-unpaced]
-//     [--world-pad "<ticks> <hex PS1 pad bits>; ..."]
+//     [--world-pad "<ticks> <hex PS1 pad bits>; ..."] [--world-guest <id> <dx> <dz>]... [--world-host-away]
 #pragma once
 
 namespace od::app {

@@ -26,6 +26,8 @@
 #include "engine/ps1_data_source.hpp"
 #include "game/demo_playback.hpp"
 #include "game/display.hpp"
+#include "game/player/player_snapshot.hpp"
+#include "game/player/remote_player.hpp"
 #include "game/title.hpp"
 #include "game/world_digest.hpp"
 
@@ -42,6 +44,14 @@ struct WorldArgs {
     bool unpaced = false;
     std::string storySave;
     std::vector<uint16_t> pad; // the PS1 pad bits of each tick (past the end: none)
+    struct Guest {
+        size_t id = 0;
+        int dx = 0, dz = 0;
+    };
+    // test instrument: remote players that follow player 0's state at this offset (game units); with hostAway, player 0
+    // is out of the world and they stand where they were placed
+    std::vector<Guest> guests;
+    bool hostAway = false;
 };
 
 // "<ticks> <hex PS1 pad bits>; ..."
@@ -72,6 +82,15 @@ WorldArgs parseArgs(int argc, char** argv) {
             w.unpaced = true;
         } else if (a == "--world-pad" && more) {
             w.pad = parsePad(argv[++i]);
+        } else if (a == "--world-guest" && i + 3 < argc) {
+            WorldArgs::Guest g;
+            g.id = size_t(std::stoul(argv[++i]));
+            g.dx = std::stoi(argv[++i]);
+            g.dz = std::stoi(argv[++i]);
+            if (g.id == 0 || g.id >= od::port::kPlayerSlots) throw std::invalid_argument("--world-guest: id 1..7");
+            w.guests.push_back(g);
+        } else if (a == "--world-host-away") {
+            w.hostAway = true;
         } else if (a == "--story-save" && more) {
             w.storySave = argv[++i];
         }
@@ -135,6 +154,14 @@ int run(const WorldArgs& w) {
         SDL_Log("world: %s", view->playError.c_str());
         return 1;
     }
+    const auto guestState = [](const WorldArgs::Guest& g) {
+        od::port::PlayerSnapshot s = od::port::capturePlayerSnapshot(od::port::player());
+        s.pos[0] = int32_t(uint32_t(s.pos[0]) + (uint32_t(g.dx) << 16));
+        s.pos[2] = int32_t(uint32_t(s.pos[2]) + (uint32_t(g.dz) << 16));
+        return s;
+    };
+    for (const WorldArgs::Guest& g : w.guests) od::port::remotePlayerJoin(g.id, guestState(g));
+    if (w.hostAway) od::port::leavePlayer(0);
     SDL_Log("world: ST%02X sub %d running, %u live actors", w.stage, w.sub, od::port::worldDigest().liveActors);
 
     uint64_t next = SDL_GetTicksNS(), statsNs = 0, statsMaxNs = 0, tick = 0;
@@ -144,6 +171,8 @@ int run(const WorldArgs& w) {
         // the directions as the stick the logic reads when no stick is held, as the windowed game hands them
         const float lx = float(((pad & 0x20) != 0) - ((pad & 0x80) != 0));
         const float ly = float(((pad & 0x40) != 0) - ((pad & 0x10) != 0));
+        if (!w.hostAway)
+            for (const WorldArgs::Guest& g : w.guests) od::port::remotePlayerState(g.id, guestState(g));
         view->playTick(pad, 128, 128, lx, ly);
         if (view->assetsDirty) {
             view->assetsDirty = false;

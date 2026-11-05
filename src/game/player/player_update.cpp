@@ -29,6 +29,7 @@
 #include "game/player/player_motion.hpp"
 #include "game/player/player_pose.hpp"
 #include "game/player/player_script_control.hpp"
+#include "game/player/remote_player.hpp"
 #include "game/player/player_state.hpp"
 #include "game/player/player_status.hpp"
 #include "game/player/player_substates.hpp"
@@ -457,13 +458,29 @@ void startFall(Player& p) {
 } // namespace
 
 void playerInputAndDispatch(const PlayerEnv& env) {
+    if (!playerPresent(0) || playerIsRemote(0)) return; // a world's players are simulated by their owners
     Player& p = player();
     if (!p.live()) return;
     playerReadPad(p);
     dispatch(env, p);
 }
 
+void playerSubmitHit(Player& p) {
+    const int16_t pos[3] = {p.pos.x.whole, wrap16(p.pos.y.whole - kHitHeight), p.pos.z.whole};
+    p.hitBox.previousX = p.prevPos.x.whole;
+    p.hitBox.result = 0;
+    p.hitBox.previousZ = p.prevPos.z.whole;
+    // exe 0x5e4120: the player's hit-list entry (game/hit_list): its result box (read back by exe 0x57a910 next tick),
+    // the contact as the attacker's motion, the height level, the player's group; a touch of 4. Not while immune
+    if ((p.invulnerable | uint8_t(p.immunity)) == 0)
+        hitListSubmit(pos, p.hitBox,
+                      hitOwner(p.slot) | hitGroup(kHitGroupPlayer) | hitHeightLevel(p.hitHeightLevel) |
+                          kHitCompareHeights | kHitContactMotion | hitRadius(kPlayerHitRadius),
+                      kHitAttackBump | kPlayerTouchDamage);
+}
+
 void playerUpdate(const PlayerEnv& env) {
+    if (!playerPresent(0) || playerIsRemote(0)) return; // a world's players are simulated by their owners
     Player& p = player();
     const ScopedActingPlayer acting(playerId(p));
     if (p.onPlatform != 0)
@@ -513,17 +530,7 @@ void playerUpdate(const PlayerEnv& env) {
         p.clearLockOnTarget();
         p.lockedActor = 0;
     }
-    const int16_t pos[3] = {p.pos.x.whole, wrap16(p.pos.y.whole - kHitHeight), p.pos.z.whole};
-    p.hitBox.previousX = p.prevPos.x.whole;
-    p.hitBox.result = 0;
-    p.hitBox.previousZ = p.prevPos.z.whole;
-    // exe 0x5e4120: the player's hit-list entry (game/hit_list): its result box (read back by exe 0x57a910 next tick),
-    // the contact as the attacker's motion, the height level, the player's group; a touch of 4. Not while immune
-    if ((p.invulnerable | uint8_t(p.immunity)) == 0)
-        hitListSubmit(pos, p.hitBox,
-                      hitOwner(p.slot) | hitGroup(kHitGroupPlayer) | hitHeightLevel(p.hitHeightLevel) |
-                          kHitCompareHeights | kHitContactMotion | hitRadius(kPlayerHitRadius),
-                      kHitAttackBump | kPlayerTouchDamage);
+    playerSubmitHit(p);
 }
 
 void playerTickReset() {

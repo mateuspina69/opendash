@@ -770,7 +770,8 @@ public:
 private:
     size_t previous_;
 };
-// In the session: player 0 always; another from joinPlayer (constructed anew) to leavePlayer
+// In the session: player 0 from the start (a world where its player is elsewhere takes it out); another from joinPlayer
+// (constructed anew) to leavePlayer
 bool playerPresent(size_t id);
 void joinPlayer(size_t id);
 void leavePlayer(size_t id);

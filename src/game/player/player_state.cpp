@@ -36,10 +36,6 @@ void constructAnew(size_t id) {
 void checkId(size_t id) {
     if (id >= kPlayerSlots) throw std::out_of_range("no player with this id");
 }
-void checkOtherId(size_t id) {
-    checkId(id);
-    if (id == 0) throw std::logic_error("player 0 is this machine's own: it neither joins nor leaves");
-}
 } // namespace
 
 Player& player() { return table().players[0]; }
@@ -68,12 +64,12 @@ bool playerPresent(size_t id) {
     return table().present[id];
 }
 void joinPlayer(size_t id) {
-    checkOtherId(id);
+    checkId(id);
     constructAnew(id);
     table().present[id] = true;
 }
 void leavePlayer(size_t id) {
-    checkOtherId(id);
+    checkId(id);
     table().present[id] = false;
 }
 

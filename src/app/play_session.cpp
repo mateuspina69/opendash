@@ -55,6 +55,7 @@
 #include "game/player/player_model.hpp"
 #include "game/player/player_state.hpp"
 #include "game/player/player_update.hpp"
+#include "game/player/remote_player.hpp"
 #include "game/shop.hpp"
 #include "game/room_scripts.hpp"
 #include "game/spawn.hpp"
@@ -866,6 +867,7 @@ void PlayerView::setupHooks() {
         od::port::updatePool(env, actors, ActorPool::Statics);
         od::port::actorCollision(); // FUN_004140e0, at 0x5422ad between the two player steps
         od::port::playerUpdate(env);
+        od::port::remotePlayersUpdate();
         od::port::updatePool(env, actors, ActorPool::Shots);
         od::port::cameraUpdate();
         od::port::updatePool(env, actors, ActorPool::EffectsLate);

@@ -14,6 +14,9 @@ struct PlayerEnv;
 void playerInputAndDispatch(const PlayerEnv& env);
 // exe 0x574d30: the update after the actors' pass
 void playerUpdate(const PlayerEnv& env);
+struct Player;
+// the player's hit-list entry of this tick (exe 0x5e4120)
+void playerSubmitHit(Player& p);
 // exe 0x574830 (the field mode's tick, before the event runner): the per-tick player state reset -- the status's floor
 // forms (kStatusTickResetKeep), the hidden bones, the pull, the floor's depth / slipperiness / water and the burden
 // cleared
