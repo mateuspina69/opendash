@@ -25,6 +25,7 @@ public:
 
     bool hasTable(TableKey key) const override;
     TableReader table(TableKey key, uint32_t bytes) const override;
+    TableReader tableOf(TableKey key, uint32_t bytes) const;
     uint32_t stateAddress(TableKey key) const override;
     uint32_t routineStateValue(RoutineId id) const override;
 

@@ -1,3 +1,7 @@
+#ifdef _WIN32
+extern "C" __declspec(dllimport) unsigned short __stdcall RtlCaptureStackBackTrace(unsigned long, unsigned long, void**, unsigned long*);
+extern "C" __declspec(dllimport) void* __stdcall GetModuleHandleW(const wchar_t*);
+#endif
 #include "engine/ps1_data_source.hpp"
 
 #include <algorithm>
@@ -541,6 +545,12 @@ size_t Ps1DataSource::voicePart(TableKey key, const Located& table) const {
 }
 
 TableReader Ps1DataSource::table(TableKey key, uint32_t bytes) const {
+    TableReader r = tableOf(key, bytes);
+    r.named(key);
+    return r;
+}
+
+TableReader Ps1DataSource::tableOf(TableKey key, uint32_t bytes) const {
     debugTableName() = describe(key); // a diagnostic for TableReader's error
     {
         std::lock_guard lock(lock_);
@@ -629,7 +639,16 @@ TableReader Ps1DataSource::pointee(uint32_t pointer, uint32_t n) const {
         if (std::getenv("OPENDASH_TRACE_DATA"))
             std::fprintf(stderr, "PS1 unresolved pointer %08x, %u bytes (last table %s)\n", pointer, n,
                          lastTableKey_.c_str());
-        else
+#ifdef _WIN32
+        if (std::getenv("OPENDASH_TRACE_DATA") && pointer == 0 && n != 1) { // test instrument: who reads through a null pointer
+            void* frames[12];
+            const unsigned short k = RtlCaptureStackBackTrace(0, 12, frames, nullptr);
+            const uintptr_t base = reinterpret_cast<uintptr_t>(GetModuleHandleW(nullptr));
+            for (unsigned short i = 0; i < k; ++i)
+                std::fprintf(stderr, "  from exe+%llx\n", (unsigned long long)(reinterpret_cast<uintptr_t>(frames[i]) - base));
+        }
+#endif
+        if (!std::getenv("OPENDASH_TRACE_DATA"))
             tracePointer(pointer, n);
         return TableReader(*this, {});
     }

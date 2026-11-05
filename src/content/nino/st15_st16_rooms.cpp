@@ -4,6 +4,8 @@
 #include "content/nino/st15_st16_rooms.hpp"
 
 #include "game/player/players.hpp"
+#include "content/nino/st16_script33.hpp"
+#include "game/world_view.hpp"
 #include "game/actor_sweeps.hpp"
 #include "game/event.hpp"
 #include "game/event_state.hpp"
@@ -128,6 +130,10 @@ bool st15St16RoomHandler(RoutineId fn, bool run) {
             }
             break;
         default: break;
+        }
+        if (storyFlag(kFlagSt16CraneScene) && worldHasNoView()) { // a session: for the one held only
+            st16WorldCatch();
+            return true;
         }
         if (storyFlag(kFlagSt16CraneScene) && eventState().active == 0 && transitionRequest().state == 0) {
             scriptRun(kScriptSt16Crane);

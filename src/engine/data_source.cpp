@@ -38,7 +38,12 @@ TableReader TableReader::sub(size_t o, size_t n) const {
 
 TableReader TableReader::follow(size_t o, uint32_t n) const {
     const uint32_t p = u32(o);
-    return p == 0 ? TableReader() : source_->pointee(p, n);
+    if (p == 0) return TableReader();
+    TableReader r = source_->pointee(p, n);
+    r.key_ = key_;
+    r.keyed_ = keyed_;
+    r.pointee_ = p;
+    return r;
 }
 
 std::string TableReader::followString(size_t o, size_t maxLength) const {
@@ -53,9 +58,16 @@ RoutineRef TableReader::routine(size_t o) const {
 
 const uint8_t* TableReader::at(size_t o, size_t n) const {
     if (o + n > size_ || !bytes_) {
-        char b[160];
-        std::snprintf(b, sizeof b, "data source: a read of %zu bytes at +0x%zx of a %zu-byte table (%s)", n, o, size_,
-                      g_debugTableName.empty() ? "no table" : g_debugTableName.c_str());
+        char b[260];
+        if (!bytes_) // a reader of no table: a null pointer followed (the name is only the last table asked)
+            std::snprintf(b, sizeof b, "data source: a read of %zu bytes at +0x%zx through a null pointer (the last table asked: %s)", n, o,
+                          g_debugTableName.empty() ? "none" : g_debugTableName.c_str());
+        else if (keyed_)
+            std::snprintf(b, sizeof b, "data source: a read of %zu bytes at +0x%zx of a %zu-byte table (%s%s)", n, o, size_,
+                          describe(key_).c_str(), pointee_ ? ", what a pointer in it points at" : "");
+        else
+            std::snprintf(b, sizeof b, "data source: a read of %zu bytes at +0x%zx of a %zu-byte table (unnamed; the last table asked: %s)", n,
+                          o, size_, g_debugTableName.empty() ? "none" : g_debugTableName.c_str());
         throw DataSourceError(b);
     }
     return bytes_->data() + offset_ + o;

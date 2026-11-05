@@ -126,6 +126,12 @@ public:
     RoutineRef routine(size_t o) const;
     // the source the bytes come from (a load that needs another of its tables)
     const DataSource& source() const { return *source_; }
+    // the table these bytes are (a read past them names it); a pointee keeps its table's name and its address
+    TableReader& named(TableKey key) {
+        key_ = key;
+        keyed_ = true;
+        return *this;
+    }
 
 private:
     const uint8_t* at(size_t o, size_t n) const;
@@ -133,6 +139,9 @@ private:
     const DataSource* source_ = nullptr;
     std::shared_ptr<const std::vector<uint8_t>> bytes_;
     size_t offset_ = 0, size_ = 0;
+    TableKey key_{};
+    bool keyed_ = false;
+    uint32_t pointee_ = 0;
 };
 
 // A source of the game's data (engine/pc_data_source: the PC one)

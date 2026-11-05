@@ -178,6 +178,12 @@ TableReader PcDataSource::bytesAt(uint32_t va, uint32_t n) const {
 }
 
 TableReader PcDataSource::table(TableKey key, uint32_t bytes) const {
+    TableReader r = tableOf(key, bytes);
+    r.named(key);
+    return r;
+}
+
+TableReader PcDataSource::tableOf(TableKey key, uint32_t bytes) const {
     const uint32_t va = locate(key);
     if (va == 0) throw DataSourceError("data source (PC): no table " + describe(key));
     if (!exe_.sectionOf(va, bytes))

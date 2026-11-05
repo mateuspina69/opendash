@@ -81,9 +81,10 @@ namespace {
 constexpr uint8_t kStatusMenuSwapFirst
  = 2, kStatusMenuSwapLast = 3; // the status menu's steps with its own table
 
-// the handler of (type, sub-type) in a two-level class table set (0: none)
+// the handler of (type, sub-type) in a two-level class table set (0: none; a type with no sub-type table has none)
 uint32_t handlerOf(const DataPtr<>& set, uint8_t type, uint8_t subtype) {
-    return classTableEntry(classTableEntry(set.value(), type), subtype);
+    const uint32_t subtypes = classTableEntry(set.value(), type);
+    return subtypes == 0 ? 0 : classTableEntry(subtypes, subtype);
 }
 // the routine a class table entry names (the state's table pointer: the source translates it)
 RoutineRef classRoutine(uint32_t pointer) { return stateRoutine(pointer); }
