@@ -18,5 +18,9 @@ void remotePlayerLeave(size_t id);
 bool playerIsRemote(size_t id);
 // each remote player's pose and hit-list entry (after the local player's update, before the hit pass)
 void remotePlayersUpdate();
+// the owner pressed Use by nothing of theirs: this tick the classes see what it picks among the world's actors
+void remotePlayerUse(size_t id);
+// the tick is over: what it picked is let go
+void remotePlayersTalkDone();
 
 } // namespace od::port

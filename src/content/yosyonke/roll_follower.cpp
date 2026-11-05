@@ -427,7 +427,7 @@ void followerMain(const PlayerEnv& env, AnimatedActor& a, RollFields& f) {
         a.airborne = kAirborneFalling;
         if (!(f.behaviour & kRollNoReactions)) setSub(a, FollowerSub::Fall);
     }
-    if (!(f.behaviour & kRollNoTalk) && carrierOrNearest(a).talksTo(a) && eventState().active == 0) {
+    if (!(f.behaviour & kRollNoTalk) && anyPlayerTalksTo(a) && eventState().active == 0) {
         talk(a, uint16_t(int16_t(f.message.get())));
         setSub(a, FollowerSub::Talk);
     }
@@ -563,7 +563,7 @@ void shedMain(const PlayerEnv& env, AnimatedActor& a, ShedRollFields& f) {
         a.airborne = kAirborneFalling;
         if (!(f.behaviour & kShedNoFall)) setSub(a, ShedSub::Fall);
     }
-    if (!(f.behaviour & kShedNoTalk) && carrierOrNearest(a).talksTo(a) && eventState().active == 0) {
+    if (!(f.behaviour & kShedNoTalk) && anyPlayerTalksTo(a) && eventState().active == 0) {
         talk(a, uint16_t(int16_t(f.message.get())));
         setSub(a, ShedSub::Talk);
     }
@@ -1003,7 +1003,7 @@ void fieldRollMain(const PlayerEnv& env, AnimatedActor& a, RollFields& f) {
         a.flags |= kActorDrawn;
         a.enterState(uint8_t(RollState::Lifted));
         f.behaviour |= kRollNoHitEntry;
-    } else if (!(f.behaviour & kRollNoTalk) && carrierOrNearest(a).talksTo(a) && eventState().active == 0) {
+    } else if (!(f.behaviour & kRollNoTalk) && anyPlayerTalksTo(a) && eventState().active == 0) {
         talk(a, uint16_t(uint8_t(f.message.get())));
         setSub(a, FieldRollSub::Talk);
     }
@@ -1111,7 +1111,7 @@ void fieldRoll(const PlayerEnv& env, AnimatedActor& a) {
         } else {
             notPortedAt(kRollPort, "0x4e5bc0 sub-state", a.subState);
         }
-        if (!(f.behaviour & kRollNoTalk) && carrierOrNearest(a).talksTo(a) && eventState().active == 0) {
+        if (!(f.behaviour & kRollNoTalk) && anyPlayerTalksTo(a) && eventState().active == 0) {
             eventStartAtActor(a, 0x10, 0, uint16_t(int16_t(f.faintedMessage.get())));
             setSub(a, FaintedSub::Talk);
         }

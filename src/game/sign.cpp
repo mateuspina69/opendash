@@ -90,7 +90,7 @@ void signStates(StaticActor& actor) {
         case SignSub::Idle:
             if (sign.dropFlag != kNoFlag && storyFlag(sign.dropFlag) && (sign.hitBox.result & kDropHit))
                 actor.subState = uint8_t(SignSub::Drop);
-            if (nearestPlayer(actor.pos).talksTo(actor) && eventState().active == 0) {
+            if (anyPlayerTalksTo(actor) && eventState().active == 0) {
                 eventStartAt(0, nullptr, kSignEventParam, 0, sign.message);
                 actor.subState = uint8_t(SignSub::Talking);
             }

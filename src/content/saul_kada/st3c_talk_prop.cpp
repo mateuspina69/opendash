@@ -38,7 +38,7 @@ void talkProp(StaticActor& actor) {
     }
     actorCollisionSubmitSolid(actor, SolidType::StandOn, kNoBone, 0); // exe 0x414050
     if (TalkState(actor.subState) == TalkState::Idle) {
-        if (nearestPlayer(actor.pos).talksTo(actor) && eventState().active == 0) { // exe 0x573fa0
+        if (anyPlayerTalksTo(actor) && eventState().active == 0) { // exe 0x573fa0
             eventStartAt(0, nullptr, 0x12, 0, kTalkMessage);              // exe 0x543b40
             actor.subState = uint8_t(TalkState::Talking);
         }

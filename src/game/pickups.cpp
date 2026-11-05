@@ -1,4 +1,6 @@
 // The pickups (see pickups.hpp).
+#include "game/player/remote_player.hpp"
+#include "game/player/remote_combat.hpp"
 #include "game/pickups.hpp"
 
 #include "engine/data_source.hpp"
@@ -150,24 +152,49 @@ void bounce(const PlayerEnv& env, StaticActor& actor, bool settles) {
 void give(const StaticActor& actor, const PickupFields& pickup) {
     const int mult = amountMultiplier();
     const size_t size = size_t(int32_t(pickup.size));
+    const size_t taker = actingPlayerId();
+    const auto tell = [&](NetGiftKind kind, int amount) {
+        if (playerIsRemote(taker)) noteGift({uint8_t(taker), kind, int16_t(amount)});
+    };
     switch (PickupKind(pickup.kind.get())) {
     case PickupKind::Zenny:
         zennyAdd(zennyAmounts[size] * mult >> 4);
         soundPlayAtPos(kZennySound, actor.pos);
+        tell(NetGiftKind::Zenny, 0);
         break;
     case PickupKind::WeaponEnergy:
         weaponEnergyAdd(actingPlayer(), energyAmounts[size] * mult >> 4);
         soundPlayAtPos(kRefillSound, actor.pos);
+        tell(NetGiftKind::WeaponEnergy, energyAmounts[size] * mult >> 4);
         break;
     case PickupKind::Life:
         hitPointsAdd(actingPlayer(), wrap16(lifeAmounts[size] * mult >> 4));
         soundPlayAtPos(kRefillSound, actor.pos);
+        tell(NetGiftKind::Life, wrap16(lifeAmounts[size] * mult >> 4));
         break;
     default: break;
     }
 }
 
 } // namespace
+
+void pickupGiftArrived(Player& p, const NetGift& gift) {
+    switch (gift.kind) {
+    case NetGiftKind::Zenny: soundPlayAtPos(kZennySound, p.pos); break; // the zenny itself comes with the session's
+    case NetGiftKind::WeaponEnergy:
+        weaponEnergyAdd(p, gift.amount);
+        soundPlayAtPos(kRefillSound, p.pos);
+        break;
+    case NetGiftKind::Life:
+        hitPointsAdd(p, gift.amount);
+        soundPlayAtPos(kRefillSound, p.pos);
+        break;
+    case NetGiftKind::SpecialWeapon:
+        p.specialWeapon = int8_t(gift.amount);
+        setupSpecialGauge(p, true);
+        break;
+    }
+}
 
 namespace {
 

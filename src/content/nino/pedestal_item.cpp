@@ -64,7 +64,7 @@ void pedestalItem(StaticActor& item) {
         }
         return;
     case ItemState::Wait: { // exe 0x5b14c0
-        if (nearestPlayer(item.pos).talksTo(item) && eventState().active == 0) { // exe 0x573fa0
+        if (anyPlayerTalksTo(item) && eventState().active == 0) { // exe 0x573fa0
             eventStartAtActor(item, kTakeEventParam, kTakeWindow, kTakeMessage); // exe 0x543af0
             setStoryFlag(fields.flag);
             item.enterState(uint8_t(ItemState::Taken));

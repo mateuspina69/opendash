@@ -1,4 +1,5 @@
 // The stage / room transitions (see transition.hpp).
+#include "game/world_view.hpp"
 #include "game/transition.hpp"
 
 #include "engine/data_source.hpp"
@@ -108,6 +109,7 @@ void roomScripts() {
     // 0x57e380 / 0x57e5c0 / 0x57e630 / 0x57ea80 .. end with flag 0x700 -> exe 0x511270(0)): a handler the port lacks
     // still gets that test, else a door never starts the transition script (the arrival walk-in included)
     if (!door && roomScriptHandlerMissing()) door = true;
+    if (worldIsElsewhere()) door = true; // this game takes its own door; the rest of the room's logic is its world's
     if (gHooks && gHooks->roomHandler) gHooks->roomHandler();
     if (door && storyFlag(kFlagTransitionArmed)) {
         scriptRun(kExitTransitionScript);

@@ -8,9 +8,11 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <span>
 #include <vector>
 
 #include "app/world_link.hpp"
+#include "game/global_state.hpp"
 #include "game/stage_record.hpp"
 
 struct SDL_Process;
@@ -36,7 +38,7 @@ public:
     static constexpr size_t kPlayers = 8;
 
     // exe: the game's executable; storySave: the save image the worlds start from (empty: a new game's state)
-    WorldHost(std::filesystem::path exe, std::filesystem::path storySave);
+    WorldHost(std::filesystem::path exe, std::filesystem::path storySave, int32_t zenny = 0);
     ~WorldHost(); // every world stopped
 
     // the player enters the room in this state (from another room, if they were in one): its world starts if it has none
@@ -54,6 +56,8 @@ public:
     void netSend(uint8_t client, WorldMessageType type, std::vector<uint8_t> bytes);
     // ... what the next one replaces (a player's state, its acknowledgement)
     void netSendLatest(uint8_t client, WorldMessageType type, std::vector<uint8_t> bytes);
+    // what the session shares changed in this player's game
+    void globalFromPlayer(uint8_t playerId, std::span<const uint8_t> bytes);
     // the turn between frames: the links, the worlds' reports, the keep-alives; a world that ended on its own is forgotten
     void poll(uint64_t nowNs);
 
@@ -76,6 +80,7 @@ private:
     World& worldOf(WorldRoom room);
     void removeFromWorld(uint8_t playerId);
     void dropEmptiedStage(int stage);
+    void globalChanged(const od::port::GlobalChange& change, const World* fromWorld, std::optional<uint8_t> fromPlayer);
 
     std::filesystem::path exe_, storySave_;
     std::map<WorldRoom, std::unique_ptr<World>> worlds_;
@@ -83,6 +88,7 @@ private:
     std::array<std::optional<WorldRoom>, kPlayers> playerRoom_{};
     std::map<int, od::port::StageRecord> stageRecords_;
     std::array<std::vector<WorldMessage>, kPlayers> netInbox_{};
+    od::port::GlobalMaster global_;
 };
 
 } // namespace od::app

@@ -72,7 +72,7 @@ void relicInit(AnimatedActor& actor, RuinRelicFields& f) { // exe 0x4dfd50
 
 void relicWait(AnimatedActor& actor, RuinRelicFields& f) { // exe 0x4dfe30
     if (f.talkBits & kRelicTalking) return;
-    if (!nearestPlayer(actor.pos).talksTo(actor) || eventState().active != 0) return;
+    if (!anyPlayerTalksTo(actor) || eventState().active != 0) return;
     eventStart(&actor.pos, &actor.rotation, kTalkEvent, 0, f.message); // exe 0x543af0
     actor.subState = uint8_t(RelicSub::Talk);
     actor.enterStep(0);

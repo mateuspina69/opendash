@@ -41,6 +41,8 @@
 #include "game/hit_list.hpp"
 #include "game/game_init.hpp"
 #include "game/game_state.hpp"
+#include "game/world_view.hpp"
+#include "game/global_state.hpp"
 #include "game/input_bindings.hpp"
 #include "game/menu_banks.hpp"
 #include "game/save_image.hpp"
@@ -349,6 +351,7 @@ void PlayerView::spawnNative(const RoomMesh& mesh, int param) {
         if (spawnStage != mesh.stage) {
             od::port::stageSetup(); // FUN_005d5a80's [0x8d3808 + stage * 4]
             od::port::applyStartingStageRecord();
+            od::port::applyStartingGlobalState();
             spawnStage = mesh.stage;
         }
         if (param >= 0) od::port::actorSystem().boneBlocksUsed = 0; // every pool-0x20 actor is gone: no bone block in use
@@ -866,6 +869,7 @@ void PlayerView::setupHooks() {
         using od::port::ActorPool;
         if (ownWorld) { // a client: its Mega Man and the effects; the rest is the world's
             od::port::playerInputAndDispatch(env);
+            od::port::setWorldIsElsewhere(true);
             ownWorld->localActors(env, actors, false);
             od::port::actorCollision();
             od::port::playerUpdate(env);
@@ -972,6 +976,7 @@ void PlayerView::setupHooks() {
     od::port::staffRollSetHost(std::move(staffHost));
     // Maybe_TickRoomScripts' per-stage handler (story spawns)
     hooks.roomHandler = [this] {
+        if (ownWorld) return; // the room's logic is its world's
         od::port::RoomScriptState& roomScript = od::port::roomScriptState();
         const uint32_t before = roomScript.actorMask;
         if (!od::port::roomScriptHandler()) return;

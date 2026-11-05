@@ -1,10 +1,27 @@
 // The fight between a world and a player's owner (see remote_combat.hpp).
+#include <utility>
 #include "game/player/remote_combat.hpp"
 
 #include "game/actor_pools.hpp"
 #include "game/player/player_state.hpp"
 
 namespace od::port {
+
+namespace {
+std::vector<NetGift> g_gifts;
+} // namespace
+
+void noteGift(const NetGift& gift) { g_gifts.push_back(gift); }
+std::vector<NetGift> takeGifts() { return std::exchange(g_gifts, {}); }
+
+std::vector<uint8_t> encode(const NetGift& v) {
+    return {v.player, uint8_t(v.kind), uint8_t(uint16_t(v.amount)), uint8_t(uint16_t(v.amount) >> 8)};
+}
+
+std::optional<NetGift> decodeGift(std::span<const uint8_t> b) {
+    if (b.size() != 4 || b[1] > uint8_t(NetGiftKind::SpecialWeapon)) return std::nullopt;
+    return NetGift{b[0], NetGiftKind(b[1]), int16_t(uint16_t(b[2] | b[3] << 8))};
+}
 
 namespace {
 

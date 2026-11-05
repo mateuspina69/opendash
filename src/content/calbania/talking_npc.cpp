@@ -67,7 +67,7 @@ const DataTable<InteractionBoxRecord> twinTalkBox{TableId::TalkingNpcTwinTalkBox
 // exe 0x449850: waits for the player's talk, then starts its event
 void talkerWait(AnimatedActor& actor, TalkingNpcFields& npc) {
     if (npc.talkFlags & kTalking) return;
-    if (!nearestPlayer(actor.pos).talksTo(actor) || eventState().active != 0) return;
+    if (!anyPlayerTalksTo(actor) || eventState().active != 0) return;
     const uint32_t param = ((npc.behaviour & kTalkerEventFlag) | kTalkEventParam) >> 2;
     eventStart(&actor.pos, &actor.rotation, param, 0, npc.message); // exe 0x543af0
     actor.subState = uint8_t(TalkerSub::Talk);

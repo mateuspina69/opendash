@@ -6,6 +6,11 @@
 #include <algorithm>
 
 #include "game/actor_sweeps.hpp"
+#include "game/event.hpp"
+#include "game/game_state.hpp"
+#include "game/global_state.hpp"
+#include "game/pickups.hpp"
+#include "game/player/player_interaction.hpp"
 #include "game/hit_list.hpp"
 #include "game/player/player_status.hpp"
 #include "game/player/player_weapons.hpp"
@@ -19,6 +24,10 @@ OwnWorldClient::OwnWorldClient(std::filesystem::path exe, std::filesystem::path 
     auto coordinator = std::make_unique<CoopHost>(std::move(exe), std::move(storySave));
     coordinator_ = coordinator.get();
     pipe_ = std::move(coordinator);
+    // Use pressed by nothing of this machine's: the world looks among its actors
+    od::port::setUseNothingHook([this] {
+        if (room_ && joined_) pipe_->sendReliable(playerId_, WorldMessageType::NetUse, {});
+    });
 }
 
 void OwnWorldClient::useSession(od::net::Session* session, bool host) {
@@ -72,6 +81,8 @@ void OwnWorldClient::roomBound(int stage, int sub) {
     for (Other& o : others_) o = Other{};
     ownShots_ = {};
     reported_ = {};
+    ownEvent_ = false;
+    od::port::globalWatchRebase();
 }
 
 void OwnWorldClient::joinRoom() {
@@ -125,6 +136,11 @@ void OwnWorldClient::turn(uint64_t nowNs) {
     pipe_->poll(nowNs);
     if (guest_ && coordinator_) (void)pipe_->take(kGuestId);
     for (const WorldMessage& m : pipe_->take(playerId_)) handle(m, nowNs);
+    // what happened in this game goes to the session; not what a stage's load does
+    if (const od::port::GameState& g = od::port::gameState(); int(g.stage) == room_->stage && g.gameMode() != od::port::GameMode::StageLoad) {
+        if (const od::port::GlobalChange change = od::port::globalWatchTake(uint8_t(room_->stage)); !change.empty())
+            pipe_->sendReliable(playerId_, WorldMessageType::GlobalChange, od::port::encode(change));
+    }
     const od::port::NetPlayerReport report = od::port::netPlayerReportOf(od::port::player());
     if (report != reported_) {
         reported_ = report;
@@ -192,6 +208,24 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
             od::port::applyShotHit(od::port::shotPool()[hit->clientSlot], hit->hit);
         break;
     }
+    case WorldMessageType::GlobalChange:
+        if (const auto change = od::port::decodeGlobalChange(m.netState)) od::port::globalWatchApply(*change);
+        break;
+    case WorldMessageType::NetGift:
+        if (const auto gift = od::port::decodeGift(m.netState)) {
+            SDL_Log("own world: gift of kind %d, amount %d", int(gift->kind), int(gift->amount));
+            od::port::pickupGiftArrived(od::port::player(), *gift);
+        }
+        break;
+    case WorldMessageType::NetEventStart:
+        if (const auto e = od::port::decodeOwnerEvent(m.netState)) {
+            eventPoint_.x = e->x;
+            eventPoint_.y = e->y;
+            eventPoint_.z = e->z;
+            od::port::eventStart(e->hasPos ? &eventPoint_ : nullptr, nullptr, e->param, e->window, e->message);
+            ownEvent_ = true;
+        }
+        break;
     case WorldMessageType::NetSave:
         hostSave_.insert(hostSave_.end(), m.netState.begin(), m.netState.end());
         if (m.netState.size() < 1000) hostSaveWhole_ = true; // the last chunk is the short one
@@ -255,6 +289,17 @@ void OwnWorldClient::addGuest(int dx, int dz) { guest_ = std::make_pair(dx, dz);
 
 void OwnWorldClient::endFrame() {
     if (!room_) return;
+    if (ownEvent_) {
+        od::port::EventState& ev = od::port::eventState();
+        if (ev.speakerAnimation < od::port::kSpeakerAnimationCount) {
+            pipe_->sendReliable(playerId_, WorldMessageType::NetSpeaker, {ev.speakerAnimation});
+            ev.speakerAnimation = od::port::kNoSpeakerAnimation;
+        }
+        if (ev.active == 0) {
+            pipe_->sendReliable(playerId_, WorldMessageType::NetEventEnd, {});
+            ownEvent_ = false;
+        }
+    }
     actors_->submitLockPoints();
     od::port::hitListLockOnOnly();
     for (size_t i = 0; i < ownShots_.size(); ++i) {

@@ -215,7 +215,7 @@ void crystalFloat(StaticActor& a) {
 }
 // exe 0x590490: talked to by the player -> flag 0x681; a solid
 void pedestalUse(StaticActor& a) {
-    if (a.subState == 0 && nearestPlayer(a.pos).talksTo(a)) setStoryFlag(kFlagCrystalTaken);
+    if (a.subState == 0 && anyPlayerTalksTo(a)) setStoryFlag(kFlagCrystalTaken);
     actorCollisionSubmitSolid(a, SolidType::PushOutAligned, kNoBone, 0);
 }
 // exe 0x590260: the previous rotation; the routine [[0x8cdce8 + variant * 4] + state * 4] (the source names it)

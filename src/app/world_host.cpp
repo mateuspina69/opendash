@@ -22,8 +22,8 @@ WorldHost::World::~World() {
     SDL_DestroyProcess(process);
 }
 
-WorldHost::WorldHost(std::filesystem::path exe, std::filesystem::path storySave)
-    : exe_(std::move(exe)), storySave_(std::move(storySave)) {}
+WorldHost::WorldHost(std::filesystem::path exe, std::filesystem::path storySave, int32_t zenny)
+    : exe_(std::move(exe)), storySave_(std::move(storySave)), global_(zenny) {}
 
 WorldHost::~WorldHost() {
     for (auto& [room, world] : worlds_) world->link.sendReliable({WorldMessageType::Stop});
@@ -60,6 +60,16 @@ WorldHost::World& WorldHost::worldOf(WorldRoom room) {
         args.push_back("--stage-record");
         args.push_back(recordHex.c_str());
     }
+    std::string globalHex; // what the session's state is by now
+    {
+        char byte[3];
+        for (const uint8_t b : od::port::encode(global_.all(uint8_t(room.stage)))) {
+            std::snprintf(byte, sizeof byte, "%02x", unsigned(b));
+            globalHex += byte;
+        }
+        args.push_back("--global-state");
+        args.push_back(globalHex.c_str());
+    }
     if (!save.empty()) {
         args.push_back("--story-save");
         args.push_back(save.c_str());
@@ -74,6 +84,7 @@ WorldHost::World& WorldHost::worldOf(WorldRoom room) {
 void WorldHost::dropEmptiedStage(int stage) {
     for (const auto& [room, world] : worlds_)
         if (room.stage == stage) return;
+    global_.dropStage(uint8_t(stage));
     if (stageRecords_.erase(stage)) SDL_Log("coordinator: ST%02X emptied, its enemies are back", unsigned(stage));
 }
 
@@ -133,6 +144,71 @@ void WorldHost::netJoin(uint8_t client) {
     WorldMessage m{WorldMessageType::NetJoin};
     m.playerId = client;
     worlds_.at(*room)->link.sendReliable(m);
+    WorldMessage state{WorldMessageType::GlobalChange}; // what has happened in the session by now
+    state.playerId = client;
+    state.netState = od::port::encode(global_.all(uint8_t(room->stage)));
+    netInbox_.at(client).push_back(std::move(state));
+}
+
+void WorldHost::globalChanged(const od::port::GlobalChange& change, const World* fromWorld, std::optional<uint8_t> fromPlayer) {
+    const od::port::GlobalMaster::Out out = global_.merge(change);
+    for (const od::port::GlobalChange* c : {&out.shared, &out.stage})
+        for (const od::port::GlobalChange::Bits& bits : c->flags)
+            SDL_Log("coordinator: flags of byte %03x: set %02x, cleared %02x", unsigned(bits.byte), unsigned(bits.set), unsigned(bits.clear));
+    if (out.zenny) SDL_Log("coordinator: zenny %d", int(*out.zenny));
+    const auto withZenny = [&](od::port::GlobalChange c) {
+        c.zennyNow = out.zenny;
+        return c;
+    };
+    const std::vector<uint8_t> shared = od::port::encode(withZenny(out.shared));
+    od::port::GlobalChange both = out.shared;
+    both.flags.insert(both.flags.end(), out.stage.flags.begin(), out.stage.flags.end());
+    const std::vector<uint8_t> inStage = od::port::encode(withZenny(both));
+    od::port::GlobalChange justZenny;
+    justZenny.stage = change.stage;
+    const std::vector<uint8_t> zenny = od::port::encode(withZenny(justZenny));
+    const bool nothingShared = out.shared.empty() && !out.zenny, nothingInStage = both.empty() && !out.zenny;
+    for (auto& [room, world] : worlds_) {
+        const bool here = room.stage == change.stage;
+        WorldMessage m{WorldMessageType::GlobalChange};
+        if (world.get() == fromWorld) {
+            if (!out.zenny) continue;
+            m.netState = zenny;
+        } else if (here) {
+            if (nothingInStage) continue;
+            m.netState = inStage;
+        } else {
+            if (nothingShared) continue;
+            m.netState = shared;
+        }
+        world->link.sendReliable(m);
+    }
+    for (uint8_t id = 0; id < kPlayers; ++id) {
+        const std::optional<WorldRoom> room = playerRoom_[id];
+        if (!room) continue;
+        WorldMessage m{WorldMessageType::GlobalChange};
+        m.playerId = id;
+        if (fromPlayer == id) {
+            if (!out.zenny) continue;
+            m.netState = zenny;
+        } else if (room->stage == change.stage) {
+            if (nothingInStage) continue;
+            m.netState = inStage;
+        } else {
+            if (nothingShared) continue;
+            m.netState = shared;
+        }
+        netInbox_[id].push_back(std::move(m));
+    }
+}
+
+void WorldHost::globalFromPlayer(uint8_t playerId, std::span<const uint8_t> bytes) {
+    const std::optional<WorldRoom> room = playerRoom_.at(playerId);
+    if (!room) return;
+    if (auto change = od::port::decodeGlobalChange(bytes)) {
+        change->stage = uint8_t(room->stage);
+        globalChanged(*change, nullptr, playerId);
+    }
 }
 
 std::vector<WorldMessage> WorldHost::takeNet(uint8_t client) { return std::exchange(netInbox_.at(client), {}); }
@@ -171,10 +247,18 @@ void WorldHost::poll(uint64_t nowNs) {
             if (m.type == WorldMessageType::Report) world.report = WorldReport{m.tick, m.liveActors, m.players, m.digest};
             if ((m.type == WorldMessageType::NetEvents || m.type == WorldMessageType::NetUpdate ||
                  m.type == WorldMessageType::NetHit || m.type == WorldMessageType::NetShotHit ||
-                 m.type == WorldMessageType::NetPlayer || m.type == WorldMessageType::NetPlayerAck) &&
+                 m.type == WorldMessageType::NetPlayer || m.type == WorldMessageType::NetPlayerAck ||
+                 m.type == WorldMessageType::NetGift || m.type == WorldMessageType::NetEventStart) &&
                 m.playerId < kPlayers &&
                 playerRoom_[m.playerId] == it->first)
                 netInbox_[m.playerId].push_back(m);
+            if (m.type == WorldMessageType::GlobalChange) {
+                if (auto change = od::port::decodeGlobalChange(m.netState)) {
+                    change->stage = uint8_t(it->first.stage);
+                    globalChanged(*change, &world, std::nullopt);
+                }
+                continue;
+            }
             if (m.type != WorldMessageType::StageState) continue;
             const auto changed = od::port::decodeStageRecord(m.stageRecord);
             if (!changed) continue;

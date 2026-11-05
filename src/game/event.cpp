@@ -4,6 +4,7 @@
 #include "game/event_state.hpp"
 
 #include <cstdio>
+#include <utility>
 
 #include "game/angles.hpp"
 #include "game/audio_logic.hpp"
@@ -177,11 +178,76 @@ void standEvent(EventState& ev) {
     }
 }
 
+std::function<void(const OwnerEvent&)> g_ownerHook;
+size_t g_owner = 0;
+bool g_ownerEventRuns = false, g_ownerEventEnding = false;
+
+// what a world does of an event that runs on its player's machine
+void ownerEventTick(EventState& ev) {
+    if (!g_ownerEventEnding) {
+        if (ev.turnedRotation) turnSpeakerYaw(ev.turnedRotation, ev.faceYaw);
+        return;
+    }
+    if (ev.turnedRotation && !turnSpeakerYaw(ev.turnedRotation, ev.restoreYaw)) return;
+    g_ownerEventRuns = false;
+    g_ownerEventEnding = false;
+    ev.active = 0;
+}
+
 } // namespace
+
+void setEventOwnerHook(std::function<void(const OwnerEvent&)> hook) { g_ownerHook = std::move(hook); }
+void setEventOwner(size_t player) { g_owner = player; }
+void eventOwnerEnded() {
+    if (g_ownerEventRuns) g_ownerEventEnding = true;
+}
+void eventOwnerLeft(size_t player) {
+    if (g_ownerEventRuns && g_owner == player) g_ownerEventEnding = true;
+}
+
+std::vector<uint8_t> encode(const OwnerEvent& e) {
+    std::vector<uint8_t> out;
+    const auto put = [&](uint32_t v, size_t n) {
+        for (size_t i = 0; i < n; ++i) out.push_back(uint8_t(v >> (8 * i)));
+    };
+    put(uint32_t(e.player), 1);
+    put(e.hasPos ? 1 : 0, 1);
+    put(uint32_t(e.x), 4);
+    put(uint32_t(e.y), 4);
+    put(uint32_t(e.z), 4);
+    put(e.param, 4);
+    put(e.window, 2);
+    put(e.message, 2);
+    return out;
+}
+
+std::optional<OwnerEvent> decodeOwnerEvent(std::span<const uint8_t> b) {
+    if (b.size() != 22) return std::nullopt;
+    size_t at = 0;
+    const auto get = [&](size_t n) {
+        uint32_t v = 0;
+        for (size_t i = 0; i < n; ++i) v |= uint32_t(b[at++]) << (8 * i);
+        return v;
+    };
+    OwnerEvent e;
+    e.player = get(1);
+    e.hasPos = get(1) != 0;
+    e.x = int32_t(get(4));
+    e.y = int32_t(get(4));
+    e.z = int32_t(get(4));
+    e.param = get(4);
+    e.window = uint16_t(get(2));
+    e.message = uint16_t(get(2));
+    return e;
+}
 
 void eventTick() {
     EventState& ev = eventState();
     if (ev.active == 0) return;
+    if (g_ownerEventRuns) {
+        ownerEventTick(ev);
+        return;
+    }
     const uint8_t mode = ev.mode;
     const RoutineRef& h = eventRunners[mode];
     switch (h.id()) {
@@ -200,6 +266,40 @@ void eventStart(const Fixed16Vec3* pos, ShortVec3* rot, uint32_t param, uint16_t
     const GameMode mode = gameState().gameMode();
     if (int8_t(mode) < int8_t(GameMode::Field) || int8_t(mode) > int8_t(GameMode::Pause)) return;
     EventState& ev = eventState();
+    if (g_ownerHook) {
+        size_t owner = g_owner;
+        if (!playerPresent(owner)) {
+            owner = 0;
+            while (owner < kPlayerSlots && !playerPresent(owner)) ++owner;
+            if (owner == kPlayerSlots) return; // nobody in the room to show it to
+        }
+        ev.setModeWord(uint16_t(int32_t(param) >> 16));
+        ev.active = 1;
+        ev.flags = uint8_t(param);
+        ev.window = int16_t(window);
+        ev.message = int16_t(message);
+        ev.speakerPosition = nullptr;
+        ev.turnedRotation = nullptr;
+        OwnerEvent e{owner, false, 0, 0, 0, param, window, message};
+        if (pos) {
+            e.hasPos = true;
+            e.x = pos->x;
+            e.y = pos->y;
+            e.z = pos->z;
+            if (ev.eventMode() == EventMode::Talk) {
+                ev.speakerPosition = pos;
+                if (!(param & kEventNoTurn)) ev.turnedRotation = rot;
+                const int16_t r = rot ? int16_t(uint16_t(uint16_t(rot->y) << 4)) : int16_t(0);
+                ev.faceYaw = signedAngle(angleOf(playerById(owner).pos, *pos));
+                ev.restoreYaw = int16_t(r >> 4);
+            }
+        }
+        g_owner = owner;
+        g_ownerEventRuns = true;
+        g_ownerEventEnding = false;
+        g_ownerHook(e);
+        return;
+    }
     Player& p = player();
     if (windowStatus(uint8_t(window)) != 0) windowClose(int8_t(ev.window), WindowClose::Force);
     ev.setModeWord(uint16_t(int32_t(param) >> 16));

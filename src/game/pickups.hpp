@@ -14,6 +14,10 @@ namespace od::port {
 
 // what a pickup gives (its +0xc; the drop table's row)
 enum class PickupKind : int8_t { Zenny = 0, WeaponEnergy = 1, Life = 2 };
+struct NetGift;
+struct Player;
+// a world's pickup or chest gave this game's player something: the life and the energy are taken here, with their sound
+void pickupGiftArrived(Player& p, const NetGift& gift);
 
 // The pickup's fields (its static slot past the mesh layout): what it gives, and the pose the pickup draw list
 // (0x6d006c, render output) reads

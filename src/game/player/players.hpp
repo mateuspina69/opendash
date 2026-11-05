@@ -15,6 +15,8 @@ Player& nearestPlayer(int16_t x, int16_t z);   // the point's integer parts
 
 // the player an actor a player can carry asks about: its carrier while carried, else the nearest
 Player& carrierOrNearest(const Actor& actor);
+// a player's Use has picked this actor: in a session it need not be the player nearest to it
+bool anyPlayerTalksTo(const ActorHeader& actor);
 
 // `f(player)` for each player in the session, by id
 template <class F> void forEachPlayer(F&& f) {

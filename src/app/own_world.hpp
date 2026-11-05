@@ -13,6 +13,7 @@
 #include "app/coop_host.hpp"
 #include "app/world_host.hpp"
 #include "app/ghost_view.hpp"
+#include "game/event_state.hpp"
 #include "game/ghost_buffer.hpp"
 #include "game/player/net_player.hpp"
 #include "game/player/remote_combat.hpp"
@@ -86,6 +87,8 @@ private:
         bool joined = false;
     };
     void otherPlayerRules(uint8_t id, Other& o, const od::port::PlayerSnapshot& shown);
+    bool ownEvent_ = false; // an event the world asked of this player runs here
+    od::port::Fixed16Vec3 eventPoint_{};
     uint32_t testLevelTick_ = 0;
     int8_t testLevel_ = 0;
     int testWeapon_ = -1;

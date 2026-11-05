@@ -395,7 +395,7 @@ void burstScene(StaticActor& actor) {
 void talkProp(StaticActor& actor) {
     switch (TalkState(actor.subState)) {
     case TalkState::Idle:
-        if (nearestPlayer(actor.pos).talksTo(actor) && eventState().active == 0) { // exe 0x573fa0
+        if (anyPlayerTalksTo(actor) && eventState().active == 0) { // exe 0x573fa0
             eventStartAt(0, nullptr, 0x12, 0, kTalkMessage);              // exe 0x543b40
             actor.subState = uint8_t(TalkState::Talking);
         }

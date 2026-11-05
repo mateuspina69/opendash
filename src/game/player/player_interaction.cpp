@@ -1,4 +1,6 @@
 // The player's interactions (see player_interaction.hpp): the talk / lift target query, talking and the event poses.
+#include <functional>
+#include <utility>
 #include "game/player/player_interaction.hpp"
 
 #include <cstdlib>
@@ -58,7 +60,8 @@ int targetScore(const Player& p, const Actor& a, int16_t yaw, int reach) {
 // exe 0x57b3b0(player, mode): the nearest interaction target among the model pools (mode 0: the talk targets, reach
 // kTalkReach, the body's yaw; mode 1: the liftable ones, kLiftReach, the move direction) -> interactionTarget = the
 // query's mode | the actor
-int pickTarget(Player& p, int mode) {
+std::function<void()> g_useNothing;
+int pickTarget(Player& p, int mode, bool (*skip)(const Actor&) = nullptr) {
     int16_t yaw = p.rotation.y;
     int reach;
     uint8_t m;
@@ -73,7 +76,7 @@ int pickTarget(Player& p, int mode) {
     int best = kNoTarget;
     const Actor* hit = nullptr;
     auto consider = [&](const Actor& a) {
-        if ((a.flags & kActorQueued) != kActorQueued || !(m & a.interaction)) return;
+        if ((a.flags & kActorQueued) != kActorQueued || !(m & a.interaction) || (skip && skip(a))) return;
         const int r = targetScore(p, a, yaw, reach);
         if (r != 0 && r < best) {
             best = r;
@@ -153,8 +156,14 @@ int tryTalkTarget(Player& p, int mode) {
     } else if (!p.holds(PlayerButton::Use)) {
         return 0;
     }
-    return pickTarget(p, 0);
+    const int picked = pickTarget(p, 0);
+    if (picked == 0 && g_useNothing && p.pressedNow(PlayerButton::Use)) g_useNothing();
+    return picked;
 }
+
+void setUseNothingHook(std::function<void()> hook) { g_useNothing = std::move(hook); }
+
+int pickTalkTargetFor(Player& p, bool (*skip)(const Actor&)) { return pickTarget(p, 0, skip); }
 
 int tryLiftTarget(Player& p) {
     const int busy = weaponBusy(p);

@@ -19,6 +19,8 @@
 #include "game/game_state.hpp"
 #include "game/actor_movement.hpp"
 #include "game/player/player_weapons.hpp"
+#include "game/player/remote_combat.hpp"
+#include "game/player/remote_player.hpp"
 #include "game/story_flags.hpp"
 
 namespace od::port {
@@ -125,7 +127,7 @@ void chestClosed(AnimatedActor& actor, const ChestFields& chest) {
     actor.interaction = uint32_t(d + kFrontHalfWindow) < uint32_t(2 * kFrontHalfWindow + 1) ? kInteractTalk : 0;
     switch (ChestSub(actor.subState)) {
     case ChestSub::Wait:
-        if (nearestPlayer(actor.pos).talksTo(actor) && eventState().active == 0) actor.subState = uint8_t(ChestSub::StartEvent);
+        if (anyPlayerTalksTo(actor) && eventState().active == 0) actor.subState = uint8_t(ChestSub::StartEvent);
         return;
     case ChestSub::StartEvent: {
         // exe 0x543b40(&{x, y, z} (the 16.16 position's integer halves), 0, 0x40023, 0, message): event mode 4
@@ -151,6 +153,7 @@ void chestClosed(AnimatedActor& actor, const ChestFields& chest) {
             Player& opener = nearestPlayer(actor.pos);
             opener.specialWeapon = uint8_t(c);
             setupSpecialGauge(opener, true);
+            if (const size_t id = playerId(opener); playerIsRemote(id)) noteGift({uint8_t(id), NetGiftKind::SpecialWeapon, int16_t(uint8_t(c))});
         } else if (((c & kContentKindMask) == kContentFlag || (c & kContentKindMask) == kContentFlagToo) &&
                    (c & kContentValueMask) != 0) {
             setStoryFlag(c & kContentValueMask);

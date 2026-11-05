@@ -858,7 +858,7 @@ void catchableCritter(const PlayerEnv& env, AnimatedActor& actor) { // 0x4d3240
             actor.enterState(uint8_t(CatchableState::Carried));
             f.bits |= kCritterLifted;
         }
-        if (carrierOrNearest(actor).talksTo(actor) && eventState().active == 0) {
+        if (anyPlayerTalksTo(actor) && eventState().active == 0) {
             uint32_t n = storyFlag(kFlagCaughtFirst) ? 1 : 0;
             if (storyFlag(kFlagCaughtSecond)) ++n;
             eventStartAtActor(actor, kCaughtEventParam, 0, uint16_t(n + kCaughtMessage)); // exe 0x543af0

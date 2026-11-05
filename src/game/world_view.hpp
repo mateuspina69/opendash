@@ -14,6 +14,9 @@ constexpr uint32_t kWorldViewRange = 0xe00; // the far plane of a room at the ga
 
 void setWorldHasNoView(bool noView);
 bool worldHasNoView();
+// A player's game in a session: the room's logic runs in its world, this game only takes its doors
+void setWorldIsElsewhere(bool elsewhere);
+bool worldIsElsewhere();
 // the yaw a direction "as the view faces" takes, for what happens near this player
 int16_t viewYawNear(const Player& p);
 

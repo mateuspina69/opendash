@@ -3,9 +3,13 @@
 // poses (event modes 1 / 2 / 3).
 #pragma once
 
+#include <functional>
+
 #include <cstdint>
 
 namespace od::port {
+
+struct Actor;
 
 struct Player;
 
@@ -16,5 +20,10 @@ constexpr int kTalkWhileHeld = 1; // held
 int tryTalkTarget(Player& p, int mode);
 // exe 0x57b2e0: the special button held with no special weapon picks the nearest liftable actor (1)
 int tryLiftTarget(Player& p);
+
+// a session's game: Use was pressed and nothing of this machine's took it
+void setUseNothingHook(std::function<void()> hook);
+// a world: the owner of this player pressed Use: its target among the world's actors, but those `skip` says are the owner's
+int pickTalkTargetFor(Player& p, bool (*skip)(const Actor&));
 
 } // namespace od::port

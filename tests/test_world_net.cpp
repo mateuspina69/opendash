@@ -20,6 +20,7 @@
 #include "check.hpp"
 #include "game/player/net_player.hpp"
 #include "game/player/remote_combat.hpp"
+#include "game/global_state.hpp"
 #include "game/world_net_state.hpp"
 
 using namespace od::port;
@@ -726,7 +727,41 @@ std::string runRoom(const char* exe, const char* save, const std::filesystem::pa
 
 } // namespace
 
+void testGlobalState() {
+    using namespace od::port;
+    CHECK(flagScope(0x2f0) == FlagScope::Shared);
+    CHECK(flagScope(0x690) == FlagScope::Stage);
+    CHECK(flagScope(0x712) == FlagScope::Stage);
+    CHECK(flagScope(0x700) == FlagScope::Local);
+    CHECK(flagScope(0x6ff) == FlagScope::Local);
+    GlobalMaster master(100);
+    GlobalChange a;
+    a.stage = 0x41;
+    a.flags.push_back({0x5e, 0x01, 0}); // shared
+    a.flags.push_back({0x690 >> 3, 0x01, 0}); // of the stage
+    a.flags.push_back({0x700 >> 3, 0x01, 0}); // this process's only: never goes out
+    a.zennyDelta = 50;
+    const GlobalMaster::Out out = master.merge(a);
+    CHECK(out.shared.flags.size() == 1 && out.shared.flags[0].byte == 0x5e);
+    CHECK(out.stage.flags.size() == 1);
+    CHECK(out.zenny == 150);
+    GlobalChange b;
+    b.stage = 0x42;
+    b.flags.push_back({0x5e, 0x02, 0x01});
+    b.zennyDelta = -1000; // no less than nothing
+    CHECK(master.merge(b).zenny == 0);
+    const GlobalChange here = master.all(0x41), there = master.all(0x42);
+    CHECK(here.flags.size() == 2 && there.flags.size() == 1);
+    CHECK(there.flags[0].set == 0x02 && there.flags[0].clear == 0x01);
+    master.dropStage(0x41);
+    CHECK(master.all(0x41).flags.size() == 1);
+    const auto round = decodeGlobalChange(encode(here));
+    CHECK(round && *round == here);
+    CHECK(!decodeGlobalChange(std::vector<uint8_t>{1, 2}));
+}
+
 int main(int argc, char** argv) {
+    testGlobalState();
     testChangesOnly();
     testLostUpdate();
     testEventsFirstAndReuse();

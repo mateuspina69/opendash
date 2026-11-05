@@ -921,7 +921,7 @@ void birdFree(AnimatedActor& actor, TownBirdFields& f) {
         actor.enterState(uint8_t(BirdState::Lifted));
         f.bits |= kBirdLifted;
     }
-    if (carrierOrNearest(actor).talksTo(actor) && eventState().active == 0) { // exe 0x573fa0
+    if (anyPlayerTalksTo(actor) && eventState().active == 0) { // exe 0x573fa0
         eventStart(&actor.pos, &actor.rotation, 0x10000, 0, 0xffff); // exe 0x543af0(actor, 0x10000, 0, -1)
         actor.enterState(uint8_t(BirdState::Vanish));
     }

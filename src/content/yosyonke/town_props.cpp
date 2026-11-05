@@ -41,7 +41,7 @@ constexpr uint32_t kPropTalkEventParam = 0x12; // the talk event's mode / flags 
 // event's end goes back (0); a stand-on solid every tick
 void talkProp(StaticActor& actor, uint16_t message) {
     if (actor.subState == 0) {
-        if (carrierOrNearest(actor).talksTo(actor) && eventState().active == 0) {
+        if (anyPlayerTalksTo(actor) && eventState().active == 0) {
             eventStartAt(0, nullptr, kPropTalkEventParam, 0, message);
             actor.subState = 1;
         }

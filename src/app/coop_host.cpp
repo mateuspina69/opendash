@@ -25,21 +25,33 @@ bool isReliable(WorldMessageType t) {
     case WorldMessageType::NetReport:
     case WorldMessageType::NetEnter:
     case WorldMessageType::NetSave:
-    case WorldMessageType::NetEquip: return true;
+    case WorldMessageType::NetEquip:
+    case WorldMessageType::GlobalChange:
+    case WorldMessageType::NetGift:
+    case WorldMessageType::NetUse:
+    case WorldMessageType::NetEventStart:
+    case WorldMessageType::NetEventEnd:
+    case WorldMessageType::NetSpeaker: return true;
     default: return false;
     }
 }
 
 } // namespace
 
-CoopHost::CoopHost(std::filesystem::path exe, std::filesystem::path storySave) : worlds_(std::move(exe), storySave) {
-    if (!storySave.empty() && std::filesystem::exists(storySave)) save_ = od::readFile(storySave);
+namespace {
+std::vector<uint8_t> readSave(const std::filesystem::path& storySave) {
+    return !storySave.empty() && std::filesystem::exists(storySave) ? od::readFile(storySave) : std::vector<uint8_t>{};
 }
+} // namespace
+
+CoopHost::CoopHost(std::filesystem::path exe, std::filesystem::path storySave)
+    : worlds_(std::move(exe), storySave, od::port::saveZenny(readSave(storySave))), save_(readSave(storySave)) {}
 
 void CoopHost::enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& state) { worlds_.enter(playerId, room, state); }
 
 void CoopHost::sendReliable(uint8_t playerId, WorldMessageType type, std::vector<uint8_t> bytes) {
     if (type == WorldMessageType::NetJoin) worlds_.netJoin(playerId);
+    else if (type == WorldMessageType::GlobalChange) worlds_.globalFromPlayer(playerId, bytes);
     else worlds_.netSend(playerId, type, std::move(bytes));
 }
 
@@ -74,7 +86,11 @@ void CoopHost::fromClient(uint8_t id, const WorldMessage& m, uint64_t nowNs) {
     case WorldMessageType::NetLeave: worlds_.leave(id); break;
     case WorldMessageType::NetFire:
     case WorldMessageType::NetReport:
-    case WorldMessageType::NetEquip: worlds_.netSend(id, m.type, m.netState); break;
+    case WorldMessageType::NetEquip:
+    case WorldMessageType::NetUse:
+    case WorldMessageType::NetEventEnd:
+    case WorldMessageType::NetSpeaker: worlds_.netSend(id, m.type, m.netState); break;
+    case WorldMessageType::GlobalChange: worlds_.globalFromPlayer(id, m.netState); break;
     case WorldMessageType::NetPlayer:
     case WorldMessageType::NetPlayerAck: worlds_.netSendLatest(id, m.type, m.netState); break;
     default: break;

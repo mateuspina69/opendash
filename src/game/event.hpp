@@ -3,7 +3,12 @@
 // toward the player, the message window), the player's event and item-get poses, the chests' stand.
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
+#include <functional>
+#include <optional>
+#include <span>
+#include <vector>
 
 #include "game/actor_state.hpp"
 #include "game/event_state.hpp"
@@ -26,5 +31,25 @@ void eventStartAtActor(const Actor& actor, uint32_t param, uint16_t window, uint
 // exe 0x543aa0: the running event ended at once (the camera back to the saved follow pose without a blend, the turned
 // actor's yaw restored, the player's invulnerability / input mode by the event's flags)
 void eventAbort();
+
+// A session's world: the events run on the machine of the player they are for, who has the windows and the camera; here the
+// event only holds the room's classes and turns its speaker
+struct OwnerEvent {
+    size_t player = 0;
+    bool hasPos = false;
+    int32_t x = 0, y = 0, z = 0;
+    uint32_t param = 0;
+    uint16_t window = 0, message = 0;
+    friend bool operator==(const OwnerEvent&, const OwnerEvent&) = default;
+};
+std::vector<uint8_t> encode(const OwnerEvent& e);
+std::optional<OwnerEvent> decodeOwnerEvent(std::span<const uint8_t> bytes);
+void setEventOwnerHook(std::function<void(const OwnerEvent&)> hook);
+// the player whose Use asked for the next event
+void setEventOwner(size_t player);
+// the owner's event is over: its speaker turns back, then it ends
+void eventOwnerEnded();
+// the player is out of the world: their event ends with them
+void eventOwnerLeft(size_t player);
 
 } // namespace od::port

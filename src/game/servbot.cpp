@@ -662,7 +662,7 @@ int collide(AnimatedActor& actor, ServbotFields& bot) {
 // exe 0x462af0: the talk and hit tests, the sub-state, the head, the collision (the ground lost -> fall / bounce),
 // the player's lift
 void servbotMain(AnimatedActor& actor, ServbotFields& bot) {
-    if (!(bot.bits & kServbotNoTalk) && carrierOrNearest(actor).talksTo(actor) && eventState().active == 0) {
+    if (!(bot.bits & kServbotNoTalk) && anyPlayerTalksTo(actor) && eventState().active == 0) {
         npcStartTalk(actor, bot.behaviour, bot.message);
         actor.subState = uint8_t(ServbotSub::Talk);
         actor.step = 0;

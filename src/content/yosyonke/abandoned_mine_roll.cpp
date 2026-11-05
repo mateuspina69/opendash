@@ -66,7 +66,7 @@ void setSub(AnimatedActor& a, RuinRollSub s) {
 }
 // the player's talk with her starts her message (her look parameter: the event's flags)
 void talkCheck(AnimatedActor& a, RuinRollFields& f) {
-    if ((f.talking & kTalkingBit) || !nearestPlayer(a.pos).talksTo(a) || eventState().active != 0) return;
+    if ((f.talking & kTalkingBit) || !anyPlayerTalksTo(a) || eventState().active != 0) return;
     const uint8_t param = uint8_t(((f.lookParam & 0x97u) | 0x10u) >> 3);
     eventStartAtActor(a, param, 0, f.message);
     setSub(a, RuinRollSub::Talk);

@@ -12,6 +12,11 @@ bool g_noView = false;
 
 void setWorldHasNoView(bool noView) { g_noView = noView; }
 bool worldHasNoView() { return g_noView; }
+namespace {
+bool g_elsewhere = false;
+} // namespace
+void setWorldIsElsewhere(bool elsewhere) { g_elsewhere = elsewhere; }
+bool worldIsElsewhere() { return g_elsewhere; }
 int16_t viewYawNear(const Player& p) { return g_noView ? p.rotation.y : cameraState().viewAngles.y; }
 
 } // namespace od::port

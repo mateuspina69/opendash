@@ -29,7 +29,10 @@ enum class WorldMessageType : uint8_t {
     NetPlayer = 18, NetPlayerAck = 19,
     // between a client and the host's coordinator: this player enters a room (stage, sub, state), the host's save in chunks,
     // what the player wears
-    NetEnter = 20, NetSave = 21, NetEquip = 22
+    NetEnter = 20, NetSave = 21, NetEquip = 22,
+    // what the session shares (game/global_state), both ways; what a pickup or a chest gave a player; a player pressed Use by
+    // nothing of their own; an event that runs on its player's machine, its end and the speaker's animation it asks
+    GlobalChange = 23, NetGift = 24, NetUse = 25, NetEventStart = 26, NetEventEnd = 27, NetSpeaker = 28
 };
 
 struct WorldMessage {

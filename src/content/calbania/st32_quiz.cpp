@@ -859,7 +859,7 @@ void castStand(AnimatedActor& actor, QuizCastFields& f) {
     default: break;
     }
     if (f.headHold != 0) f.headHold = kHeadHoldTicks;
-    if (!(f.castFlags & kQuizCastTalking) && nearestPlayer(actor.pos).talksTo(actor) && eventState().active == 0) {
+    if (!(f.castFlags & kQuizCastTalking) && anyPlayerTalksTo(actor) && eventState().active == 0) {
         eventStart(&actor.pos, &actor.rotation, kQuizTalkParam, 0, f.message); // exe 0x543af0
         actor.subState = uint8_t(QuizCastSub::Talk);
         actor.enterStep(uint8_t(TalkStep::Enter));

@@ -28,9 +28,12 @@
 #include "engine/lang.hpp"
 #include "engine/pc_data_source.hpp"
 #include "engine/ps1_data_source.hpp"
+#include "game/actors.hpp"
 #include "game/demo_playback.hpp"
 #include "game/display.hpp"
 #include "game/encounter.hpp"
+#include "game/event.hpp"
+#include "game/global_state.hpp"
 #include "game/stage_record.hpp"
 #include "game/room_grid.hpp"
 #include "game/player/net_player.hpp"
@@ -63,8 +66,10 @@ struct WorldArgs {
     // is out of the world and they stand where they were placed
     std::vector<Guest> guests;
     bool hostAway = false;
+    bool listActors = false; // test instrument
     int linkPort = 0; // the coordinator's port (app/world_link): its players, until it stops this world
     std::optional<od::port::StageRecord> stageRecord; // what the stage's other worlds hold
+    std::optional<od::port::GlobalChange> globalState; // what the session's state is by now
     int markDefeated = -1; // test instrument: this enemy id counts as defeated from the first tick on
     bool client = false;       // the receiver of a world's network state (see runClient)
     uint8_t clientId = 0;      // its client id: the player whose own shots the world does not send it
@@ -118,6 +123,12 @@ WorldArgs parseArgs(int argc, char** argv) {
             for (size_t k = 0; k + 1 < hex.size(); k += 2) bytes.push_back(uint8_t(std::stoi(hex.substr(k, 2), nullptr, 16)));
             w.stageRecord = od::port::decodeStageRecord(bytes);
             if (!w.stageRecord) throw std::invalid_argument("--stage-record");
+        } else if (a == "--global-state" && more) {
+            const std::string hex = argv[++i];
+            std::vector<uint8_t> bytes;
+            for (size_t k = 0; k + 1 < hex.size(); k += 2) bytes.push_back(uint8_t(std::stoi(hex.substr(k, 2), nullptr, 16)));
+            w.globalState = od::port::decodeGlobalChange(bytes);
+            if (!w.globalState) throw std::invalid_argument("--global-state");
         } else if (a == "--world-mark-defeated" && more) {
             w.markDefeated = std::stoi(argv[++i]);
         } else if (a == "--world-client") {
@@ -134,6 +145,8 @@ WorldArgs parseArgs(int argc, char** argv) {
             w.effectLog = argv[++i];
         } else if (a == "--world-net-stats" && more) {
             w.netStats = argv[++i];
+        } else if (a == "--world-list-actors") {
+            w.listActors = true;
         } else if (a == "--world-host-away") {
             w.hostAway = true;
         } else if (a == "--story-save" && more) {
@@ -393,6 +406,7 @@ int run(const WorldArgs& w) {
     view->afterFrame = [&] { od::port::softResetFrame(view->fadeTask); };
     holdRoom(current, w.stage, w.sub);
     if (w.stageRecord) od::port::setStartingStageRecord(*w.stageRecord);
+    if (w.linkPort != 0) od::port::setStartingGlobalState(w.globalState.value_or(od::port::GlobalChange{}));
 
     // the boot's display state, which no title sets here (App::leaveTitle)
     od::port::display().mode = 0;
@@ -411,6 +425,18 @@ int run(const WorldArgs& w) {
     for (const WorldArgs::Guest& g : w.guests) od::port::remotePlayerJoin(g.id, guestState(g));
     if (w.hostAway) od::port::leavePlayer(0);
     SDL_Log("world: ST%02X sub %d running, %u live actors", w.stage, w.sub, od::port::worldDigest().liveActors);
+    if (w.listActors) { // test instrument: what stands in the room
+        const auto list = [](auto& pool, size_t count, od::port::ActorPool kind) {
+            for (size_t i = 0; i < count; ++i) {
+                if (!(pool[i].flags & od::port::kActorLive)) continue;
+                const od::RoutineRef h = od::port::actorHandler(pool[i], kind, false);
+                SDL_Log("world actor: %s at %d %d %d", h ? od::routineName(h.id()) : "?", int(pool[i].pos.x.whole), int(pool[i].pos.y.whole),
+                        int(pool[i].pos.z.whole));
+            }
+        };
+        list(od::port::animatedPool(), od::port::kAnimatedFieldSlots, od::port::ActorPool::Animated);
+        list(od::port::staticPool(), od::port::StaticPool::size(), od::port::ActorPool::Statics);
+    }
 
     // on a link: no player of its own; the coordinator's come and go, and its silence ends the world
     std::unique_ptr<WorldLink> link;
@@ -421,6 +447,13 @@ int run(const WorldArgs& w) {
             od::port::leavePlayer(0);
         }
         link->sendReliable({WorldMessageType::Hello});
+        // an event of this room runs on its player's machine
+        od::port::setEventOwnerHook([&](const od::port::OwnerEvent& e) {
+            WorldMessage m{WorldMessageType::NetEventStart};
+            m.playerId = uint8_t(e.player);
+            m.netState = od::port::encode(e);
+            link->sendReliable(m);
+        });
     }
     bool stopped = false;
     if (w.markDefeated >= 0) od::port::encounterState().defeated[size_t(w.markDefeated) >> 5] |= 0x80000000u >> (w.markDefeated & 0x1f);
@@ -476,6 +509,12 @@ int run(const WorldArgs& w) {
                 m.netState = od::port::encode(*hit);
                 link->sendReliable(m);
             }
+        }
+        for (const od::port::NetGift& gift : od::port::takeGifts()) {
+            WorldMessage m{WorldMessageType::NetGift};
+            m.playerId = gift.player;
+            m.netState = od::port::encode(gift);
+            link->sendReliable(m);
         }
         for (size_t i = 0; i < fired.size(); ++i) {
             FiredShot& f = fired[i];
@@ -550,7 +589,10 @@ int run(const WorldArgs& w) {
                 break;
             case WorldMessageType::Leave:
                 if (m.playerId < od::port::kPlayerSlots && od::port::playerIsRemote(m.playerId))
+                {
+                    od::port::eventOwnerLeft(m.playerId);
                     od::port::remotePlayerLeave(m.playerId);
+                }
                 break;
             case WorldMessageType::StageState:
                 if (const auto record = od::port::decodeStageRecord(m.stageRecord)) {
@@ -601,6 +643,16 @@ int run(const WorldArgs& w) {
                     report && m.playerId < od::port::kPlayerSlots && od::port::playerIsRemote(m.playerId))
                     od::port::applyPlayerReport(od::port::playerById(m.playerId), *report);
                 break;
+            case WorldMessageType::GlobalChange:
+                if (const auto change = od::port::decodeGlobalChange(m.netState)) od::port::globalWatchApply(*change);
+                break;
+            case WorldMessageType::NetUse:
+                if (m.playerId < od::port::kPlayerSlots && od::port::playerIsRemote(m.playerId)) od::port::remotePlayerUse(m.playerId);
+                break;
+            case WorldMessageType::NetEventEnd: od::port::eventOwnerEnded(); break;
+            case WorldMessageType::NetSpeaker:
+                if (m.netState.size() == 1) od::port::eventState().speakerAnimation = m.netState[0];
+                break;
             case WorldMessageType::NetLeave: netClients.erase(m.playerId); break;
             case WorldMessageType::NetAck:
                 if (const auto c = netClients.find(m.playerId); c != netClients.end()) c->second.acknowledge(m.netSequence);
@@ -617,6 +669,11 @@ int run(const WorldArgs& w) {
             lastRecord = now_;
             WorldMessage changed{WorldMessageType::StageState};
             changed.stageRecord = od::port::encodeStageRecord(now_);
+            link->sendReliable(changed);
+        }
+        if (const od::port::GlobalChange change = od::port::globalWatchTake(uint8_t(w.stage)); !change.empty()) {
+            WorldMessage changed{WorldMessageType::GlobalChange};
+            changed.netState = od::port::encode(change);
             link->sendReliable(changed);
         }
         WorldMessage report{WorldMessageType::Report};
@@ -641,6 +698,7 @@ int run(const WorldArgs& w) {
             for (const WorldArgs::Guest& g : w.guests) od::port::remotePlayerState(g.id, guestState(g));
         if (link) playersFromOwners();
         view->playTick(pad, 128, 128, lx, ly);
+        if (link) od::port::remotePlayersTalkDone();
         netTurn(uint32_t(tick));
         if (view->assetsDirty) {
             view->assetsDirty = false;

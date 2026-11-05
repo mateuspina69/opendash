@@ -175,7 +175,7 @@ void npcBumped(AnimatedActor& actor, TownNpcFields& npc) {
 // exe 0x443c30: the talk test, the sub-state, the head
 void npcMain(AnimatedActor& actor, TownNpcFields& npc) {
     // the bump test (!(+0x15c & 2) && +0x6c && exe 0x444070) always fails
-    if (!(npc.bits & kNpcNoTalk) && nearestPlayer(actor.pos).talksTo(actor) && eventState().active == 0) {
+    if (!(npc.bits & kNpcNoTalk) && anyPlayerTalksTo(actor) && eventState().active == 0) {
         npcStartTalk(actor, npc.behaviour, npc.message); // exe 0x543af0
         actor.subState = uint8_t(NpcSub::Talk);
         actor.enterStep(0);

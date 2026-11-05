@@ -4,6 +4,9 @@
 #include <array>
 
 #include "game/actor_pools.hpp"
+#include "game/event.hpp"
+#include "game/player/player_interaction.hpp"
+#include "game/world_net_state.hpp"
 #include "game/geometry_scratch.hpp"
 #include "game/player/player_pose.hpp"
 #include "game/player/player_state.hpp"
@@ -63,6 +66,16 @@ void remotePlayerLeave(size_t id) {
 }
 
 bool playerIsRemote(size_t id) { return g_remote[id]; }
+
+void remotePlayerUse(size_t id) {
+    Player& p = playerById(id);
+    if (pickTalkTargetFor(p, netClientKeepsAnyActor) != 0) setEventOwner(id);
+}
+
+void remotePlayersTalkDone() {
+    for (size_t id = 0; id < kPlayerSlots; ++id)
+        if (g_remote[id] && playerPresent(id) && playerById(id).carryFlags == 0) playerById(id).interactionTarget.clear();
+}
 
 void remotePlayersUpdate() {
     for (size_t id = 0; id < kPlayerSlots; ++id) {

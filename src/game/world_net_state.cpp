@@ -1503,6 +1503,10 @@ bool netClientKeepsActor(const StaticActor& a) {
     return h && netClientKeepsClass(h.id());
 }
 
+bool netClientKeepsAnyActor(const Actor& a) {
+    return actorSlotClass(a.slot) == kStaticClass && netClientKeepsActor(static_cast<const StaticActor&>(a));
+}
+
 void PoolNetActors::submitLockPoints() {
     size_t box = 0;
     for (size_t i = 0; i < kNetSlots; ++i) {
