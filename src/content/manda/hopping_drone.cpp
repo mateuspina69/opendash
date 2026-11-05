@@ -30,6 +30,7 @@
 #include "game/pickups.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/territory.hpp"
@@ -159,7 +160,7 @@ void setAnim(AnimatedActor& actor, DroneAnim anim) { actor.anim = uint8_t(anim);
 
 // the drone's facing against the direction from the player (exe 0x5e3bc0(player, drone), wrapped as the exe does)
 int facingVsPlayer(const AnimatedActor& actor) {
-    int d = int(uint16_t(actor.rotation.y) & kAngleMask) - (angleOf(player().pos, actor.pos) & kAngleMask);
+    int d = int(uint16_t(actor.rotation.y) & kAngleMask) - (angleOf(nearestPlayer(actor.pos).pos, actor.pos) & kAngleMask);
     if (uint32_t(d + kHalfTurn) > uint32_t(kFullTurn)) d = int((uint32_t(-d) ^ uint32_t(kAngleMask)) + 1u);
     return d;
 }
@@ -172,7 +173,7 @@ bool playerJumping() {
 }
 // the player jumping within dist (x / z) of the drone
 bool playerJumpingNear(const AnimatedActor& actor, int dist) {
-    return playerJumping() && planarDistance(player().pos, actor.pos) < dist;
+    return playerJumping() && planarDistance(nearestPlayer(actor.pos).pos, actor.pos) < dist;
 }
 
 // the idle behaviour of the variant (the shared tail of the reset and of the fall's landing)
@@ -294,7 +295,7 @@ void wait(AnimatedActor& actor, DroneFields& drone) { // exe 0x49fb10: in front 
     }
     if ((rngStep() & 0x1f) == 0) soundPlayAtPos(kIdleSound, actor.pos);
     const int d = facingVsPlayer(actor);
-    const int dist = planarDistance(player().pos, actor.pos);
+    const int dist = planarDistance(nearestPlayer(actor.pos).pos, actor.pos);
     if (uint32_t(d + kQuarterTurn) < uint32_t(kHalfTurn)) {
         if (dist < kNearFront) setSub(actor, DroneSub::Hop);
     } else if (dist < kNearSide) {
@@ -328,7 +329,7 @@ void hop(AnimatedActor& actor, DroneFields& drone) { // exe 0x49fbf0: steps 4 ju
     case 4: {
         soundPlayAtPos(kHopSound, actor.pos);
         const int d = facingVsPlayer(actor);
-        const int dist = planarDistance(player().pos, actor.pos);
+        const int dist = planarDistance(nearestPlayer(actor.pos).pos, actor.pos);
         int c = sin64(uint32_t(d >> 6)) * dist >> 12; // the player's lateral offset
         const int16_t drift = drone.drift;
         if (c > 0) {
@@ -512,14 +513,14 @@ void sidestep(AnimatedActor& actor, DroneFields& drone) { // exe 0x4a0150: drift
             }
         } else { // the player jumps right in front: jump at it
             const uint32_t i = uint32_t(d >> 6) & 0x3f;
-            const int dist = planarDistance(player().pos, actor.pos);
+            const int dist = planarDistance(nearestPlayer(actor.pos).pos, actor.pos);
             const int16_t sx = wrap16(sin64(i) * dist >> 12);
             if (sx <= kSidestepJumpX && sx >= -kSidestepJumpX) {
                 const int16_t sz = wrap16(cos64(i) * dist >> 12);
                 if (sz <= kSidestepJumpZ && sz >= 0) setSub(actor, DroneSub::JumpAtPlayer);
             }
         }
-    } else if (planarDistance(player().pos, actor.pos) < kNearFront) {
+    } else if (planarDistance(nearestPlayer(actor.pos).pos, actor.pos) < kNearFront) {
         drone.drift = wrap16(-int(drone.drift));
         setSub(actor, DroneSub::TurnBack);
     }
@@ -626,7 +627,7 @@ void hunt(AnimatedActor& actor, DroneFields& drone) { // exe 0x4a0500: turns tow
         [[fallthrough]];
     case 4:
         soundPlayAtPos(kJumpSound, actor.pos);
-        turnYawTo(actor.rotation.y, uint32_t(angleOf(player().pos, actor.pos)), kTurnStep);
+        turnYawTo(actor.rotation.y, uint32_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos)), kTurnStep);
         actor.velocity.z = kHuntHop;
         actor.velocity.y = kHuntHop;
         actor.acceleration.y = kGravity;

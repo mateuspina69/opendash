@@ -545,7 +545,7 @@ void spinSoundLoop(const AnimatedActor& a, GuardianFields& f) {
 }
 // the direction of a volley's side shots: the side the player is on
 int playerSide(const AnimatedActor& a) {
-    return angleDiff(uint32_t(int32_t(a.rotation.y)), uint32_t(angleOf(player().pos, a.pos)));
+    return angleDiff(uint32_t(int32_t(a.rotation.y)), uint32_t(angleOf(nearestPlayer(a.pos).pos, a.pos)));
 }
 
 // ---- variant 0: sub-states [0x892140] ------------------------------------------------------------------------------
@@ -608,7 +608,7 @@ void arenaSpin(AnimatedActor& a, GuardianFields& f) {
         fadeStartLow(a, f);
         a.pos.x.whole = -0x200;
         a.pos.z.whole = -0x200;
-        a.rotation.y = int16_t(angleOf(player().pos, a.pos));
+        a.rotation.y = int16_t(angleOf(nearestPlayer(a.pos).pos, a.pos));
         f.count = 0;
         a.enterStep(1);
         [[fallthrough]];
@@ -825,7 +825,7 @@ void bladeArenaReappear(AnimatedActor& a, GuardianFields& f) {
             a.pos.z = kCentreZ;
             a.pos.x = 0;
         }
-        a.rotation.y = int16_t(angleOf(player().pos, a.pos));
+        a.rotation.y = int16_t(angleOf(nearestPlayer(a.pos).pos, a.pos));
         f.flags = kHarmless | kNoHeadTurn | kNoLean;
         f.count = 0;
         a.enterStep(1);
@@ -836,7 +836,7 @@ void bladeArenaReappear(AnimatedActor& a, GuardianFields& f) {
     dustStep(a, f);
     if (fadeIn(a, f)) {
         f.flags &= uint8_t(~kHarmless);
-        const int d = planarDistance(a.pos, player().pos);
+        const int d = planarDistance(a.pos, nearestPlayer(a.pos).pos);
         a.subState = uint8_t((d > 0x300 && f.volleys < 3) ? BladeArenaSub::HandVolleys : BladeArenaSub::Jump);
         if (f.retreats == 0) a.subState = uint8_t(BladeArenaSub::Spin);
         a.restartStep();
@@ -913,7 +913,7 @@ void bladeArenaHandVolleys(AnimatedActor& a, GuardianFields& f) {
         }
         --f.count;
         if (f.count == 0) a.enterStep(4);
-        if (planarDistance(a.pos, player().pos) < 0x100) {
+        if (planarDistance(a.pos, nearestPlayer(a.pos).pos) < 0x100) {
             a.subState = uint8_t(BladeArenaSub::Jump);
             a.enterStep(3);
             f.flags = kNoHeadTurn | kNoLean | kReflect;
@@ -978,7 +978,7 @@ void bladeArenaJump(AnimatedActor& a, GuardianFields& f) {
         a.anim = 1;
         f.volleys = 0;
         f.bobs = 0;
-        const int d = planarDistance(a.pos, player().pos);
+        const int d = planarDistance(a.pos, nearestPlayer(a.pos).pos);
         int v;
         if (d > 0x200) {
             a.velocity.z = -0x200;
@@ -1853,7 +1853,7 @@ void hopReset(AnimatedActor& a) {
 }
 // exe 0x5e3df0: turned toward the player, minus r
 void hopToward(AnimatedActor& a, const HopperFields& f, uint32_t r, uint32_t extra) {
-    turnYawTo(a.rotation.y, uint32_t(angleOf(player().pos, a.pos)) - r, int(f.turnRate) + int(extra));
+    turnYawTo(a.rotation.y, uint32_t(angleOf(nearestPlayer(a.pos).pos, a.pos)) - r, int(f.turnRate) + int(extra));
 }
 void chirp(const AnimatedActor& a) {
     if ((rngStep() & 0x1f) == 0) soundPlayAtPos(kSoundChirp, a.pos);
@@ -1866,9 +1866,9 @@ void hopIdle(AnimatedActor& a, HopperFields& f) {
         a.enterStep(1);
     }
     chirp(a);
-    const int ang = angleOf(player().pos, a.pos);
+    const int ang = angleOf(nearestPlayer(a.pos).pos, a.pos);
     const int d = angleDiff(uint32_t(ang), uint32_t(uint16_t(a.rotation.y)));
-    const int dist = planarDistance(player().pos, a.pos);
+    const int dist = planarDistance(nearestPlayer(a.pos).pos, a.pos);
     if (uint32_t(d + 0x400) < 0x800 ? dist < 0xc00 : dist < 0x600) toSub(a, HopperSub::Chase);
     if ((f.marks & kMarkRecall) && a.airborne == 0) toSub(a, HopperSub::ToCorner);
 }
@@ -1935,7 +1935,7 @@ void hopChase(AnimatedActor& a, HopperFields& f) {
         break;
     default: break;
     }
-    if (playerInTheAir() && planarDistance(player().pos, a.pos) < 0x400 && a.airborne == 0)
+    if (playerInTheAir() && planarDistance(nearestPlayer(a.pos).pos, a.pos) < 0x400 && a.airborne == 0)
         toSub(a, HopperSub::HighJump);
     if (((f.mode & kHopperToCorner) || (f.marks & kMarkSpin)) && a.airborne == 0) toSub(a, HopperSub::ToCorner);
 }
@@ -1997,7 +1997,7 @@ void hopOrbit(AnimatedActor& a, HopperFields& f) {
     if ((gameState().frame & 7) == 0) soundPlayAtPos(kSoundRoll, a.pos);
     uint32_t ang, step;
     if (!playerInTheAir()) {
-        ang = uint32_t(angleOf(player().pos, a.pos));
+        ang = uint32_t(angleOf(nearestPlayer(a.pos).pos, a.pos));
         step = (uint32_t(f.turnRate) >> 3) + 0x20;
     } else {
         ang = uint32_t(angleOf(guardianOf(f).pos, a.pos));

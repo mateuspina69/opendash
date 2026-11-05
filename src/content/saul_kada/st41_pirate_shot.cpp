@@ -17,6 +17,7 @@
 #include "game/draw_commands.hpp"
 #include "game/hit_list.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/shockwave.hpp"
@@ -117,7 +118,7 @@ void level(ProjectileActor& actor, ShotFields& shot) {
 }
 // exe 0x5d120e / 0x5d143c: turned to the player once the delay is out, forward 0xf0; its life, a wall or a hit end it
 void homingFlight(const PlayerEnv& env, ProjectileActor& actor, ShotFields& shot, uint32_t attackBits) {
-    if (shot.turnDelay == 0) turnYawTo(actor.rotation.y, uint32_t(angleOf(player().pos, actor.pos)), 0x80);
+    if (shot.turnDelay == 0) turnYawTo(actor.rotation.y, uint32_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos)), 0x80);
     else shot.turnDelay -= 1u;
     integrateVelocity(actor, 0, 0, -0xf0);
     shot.life -= 1u;

@@ -29,6 +29,7 @@
 #include "game/pickups.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/script_state.hpp"
@@ -179,7 +180,7 @@ void waitForPlayer(AnimatedActor& a, CritterFields& f) {
     const int32_t e = params.wakeDistance;
     const int32_t d = e != 0 ? e << 8 : 0x3e8;
     if (f.nearPatience < 0 && a.variant == 0) a.enterState(uint8_t(CritterState::TimedOut));
-    if (planarDistance(a.pos, player().pos) >= d) return; // exe 0x5e3b00
+    if (planarDistance(a.pos, nearestPlayer(a.pos).pos) >= d) return; // exe 0x5e3b00
     toSub(a, params.walksPath == 0 ? CritterSub::Wander : CritterSub::Path);
 }
 // exe 0x4e0370: a random turn every 20 ticks; the player near and ahead -> the leap
@@ -208,8 +209,8 @@ void wander(AnimatedActor& a, CritterFields& f) {
             f.targetYaw = int16_t(uint16_t(uint32_t(uint16_t(a.rotation.y)) - r - 0x200u));
         }
     }
-    if (planarDistance(a.pos, player().pos) < 0x258 && (a.variant == 0 || f.cooldown == 0)) {
-        const int ang = angleOf(player().pos, a.pos);                       // exe 0x5e3bc0
+    if (planarDistance(a.pos, nearestPlayer(a.pos).pos) < 0x258 && (a.variant == 0 || f.cooldown == 0)) {
+        const int ang = angleOf(nearestPlayer(a.pos).pos, a.pos);                       // exe 0x5e3bc0
         const int d = angleDiff(uint32_t(int32_t(a.rotation.y)), uint32_t(ang)); // exe 0x5e3d80
         if (d > -0x200 && d < 0x200) {
             toSub(a, CritterSub::Leap);
@@ -424,7 +425,7 @@ void active(const PlayerEnv& env, AnimatedActor& a, CritterFields& f) { // exe 0
     } else {
         if (f.cooldown != 0) --f.cooldown;
         if (a.subState != 0) {
-            if (planarDistance(a.pos, player().pos) < 0x5dc) --f.nearPatience;
+            if (planarDistance(a.pos, nearestPlayer(a.pos).pos) < 0x5dc) --f.nearPatience;
             if (pointVisibleOrNear(a.pos, 0x200) != 0) --f.visiblePatience; // exe 0x5e59a0
         } else {
             f.nearPatience = 0x78;

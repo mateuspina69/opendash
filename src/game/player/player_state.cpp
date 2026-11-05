@@ -66,8 +66,7 @@ void leavePlayer(size_t id) {
     table().present[id] = false;
 }
 
-Fixed16Vec3 playerStructAsPoint() {
-    const Player& p = player();
+Fixed16Vec3 playerStructAsPoint(const Player& p) {
     Fixed16Vec3 v;
     v.x = int32_t(p.headWord());
     v.y = int32_t(uint32_t(p.type) | uint32_t(p.subtype) << 8 | uint32_t(p.variant) << 16 | uint32_t(p.spawnByte) << 24);

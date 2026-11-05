@@ -36,6 +36,7 @@
 #include "game/hit_list.hpp"
 #include "game/player/player_input.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/script_state.hpp"
 #include "game/story.hpp"
@@ -208,7 +209,7 @@ void platformRun(StaticActor& actor) {
     if (dz < 0) dz = int(actor.prevPos.z.whole) - int(actor.pos.z.whole);
     if (int16_t(dx) > int16_t(dz)) f.distanceLeft = int16_t(f.distanceLeft - int16_t(dx));
     else f.distanceLeft = int16_t(f.distanceLeft - int16_t(dz));
-    if (uint32_t(distance3(actor.pos, player().pos)) >= kHurtDistance && !onBoard) f.hitFlags |= kPropHurts;
+    if (uint32_t(distance3(actor.pos, nearestPlayer(actor.pos).pos)) >= kHurtDistance && !onBoard) f.hitFlags |= kPropHurts;
     else f.hitFlags &= uint8_t(~kPropHurts);
     if (f.rider & kRiderPresent) {
         AnimatedActor& rider = animatedPool()[f.rider & kRiderIndexMask];

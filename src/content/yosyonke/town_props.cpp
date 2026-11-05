@@ -20,6 +20,7 @@
 #include "game/rewards.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/spawn.hpp"
@@ -159,7 +160,7 @@ void st09Remains(const StaticActor& actor) {
 void st09Kicked(const PlayerEnv& env, StaticActor& actor, St09PropFields& prop) {
     actor.tint = kTintNeutral;
     actor.savePreviousPose();
-    const int angle = angleOf(actor.pos, player().pos); // exe 0x5e3bc0
+    const int angle = angleOf(actor.pos, nearestPlayer(actor.pos).pos); // exe 0x5e3bc0
     prop.playerAngle = int16_t(angle);
     if (int16_t(angle) >= kHalfTurn) prop.playerAngle = int16_t(angle - 0x1000);
     if (actor.subState == 0) {

@@ -188,7 +188,7 @@ void patrol(const PlayerEnv& env, AnimatedActor& actor, FlyerFields& flyer) {
         int32_t above[3];
         playerAbove(-0x140, above);
         pitchToward(actor, flyer, above);
-        if (planarDistance(player().pos, actor.pos) > 0x340) {
+        if (planarDistance(nearestPlayer(actor.pos).pos, actor.pos) > 0x340) {
             speedUp(actor, -0x180, -0x180);
         } else if (actor.velocity.z < 0) {
             brake(actor);
@@ -212,7 +212,7 @@ void hover(AnimatedActor& actor, FlyerFields& flyer) {
         actor.step = 1;
         return;
     case 1:
-        if (planarDistance(player().pos, actor.pos) < 0x400) {
+        if (planarDistance(nearestPlayer(actor.pos).pos, actor.pos) < 0x400) {
             if (facingPlayerWithin(actor, 0x40)) {
                 if (actor.keyIndex == 4) shots(actor); // exe 0x4eeec0
             } else {

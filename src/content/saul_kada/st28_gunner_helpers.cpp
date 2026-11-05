@@ -106,7 +106,7 @@ void facePlayer(AnimatedActor& actor) { yawStep(actor, int16_t(angleOf(nearestPl
 // exe 0x4626c0: turned toward the player's angle offset 0x80 (helper 1) / -0x80 (helper 0)
 void faceSide(AnimatedActor& actor) {
     const int offset = sideOf(actor) ? 0x80 : -0x80;
-    yawStep(actor, (angleOf(player().pos, actor.pos) + offset) & 0xfff);
+    yawStep(actor, (angleOf(nearestPlayer(actor.pos).pos, actor.pos) + offset) & 0xfff);
 }
 // exe 0x4625e0: the yaw snapped toward its slot beside the boss (the boss's bone 1 at the side's offset, at its own
 // height)
@@ -342,7 +342,7 @@ void attackRun(AnimatedActor& actor) {
 void attackThrow(AnimatedActor& actor, HelperFields& helper) {
     actor.rotation.y = int16_t(uint16_t(uint16_t(actor.rotation.y) +
                                         uint32_t(angleDiff(uint32_t(int32_t(actor.rotation.y)),
-                                                           uint32_t(int32_t(int16_t(angleOf(player().pos, actor.pos))))))));
+                                                           uint32_t(int32_t(int16_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos))))))));
     switch (actor.stepCounter) {
     case 0:
         sound(sideSound(actor, kThrowSound), actor);

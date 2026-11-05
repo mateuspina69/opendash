@@ -23,6 +23,7 @@
 #include "game/hit_list.hpp"
 #include "game/matrix.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/table_records.hpp"
@@ -168,7 +169,7 @@ int takeWater(AnimatedActor& actor, const DataFields& data) {
     int d = int(v & kHitDamageMask) * 0x20;
     if (!(v & (kHitAttackByPlayer | kHitAttackWater))) return 0;
     if (v & kHitAttackWater) {
-        int dist = distance3(player().pos, actor.pos);
+        int dist = distance3(nearestPlayer(actor.pos).pos, actor.pos);
         if (dist > 0x100)
             dist = 0x100;
         else if (dist < 0x80)
@@ -335,7 +336,7 @@ void catchFire(AnimatedActor& actor, DataFields& data) { // the flame on his hea
         mission.setDataPanicking();
         data.setCatchingFire();
         setAnim(actor, DataAnim::CatchFire);
-        actor.rotation.y = int16_t(angleOf(player().pos, actor.pos));
+        actor.rotation.y = int16_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos));
         const uint32_t e = allocActorA0(kActorStageClass); // exe 0x5e13a0
         data.flame = e;
         if (e != 0) {
@@ -583,9 +584,9 @@ void runAtPlayer(const PlayerEnv& env, AnimatedActor& actor, DataFields& data) {
         ++actor.step;
         [[fallthrough]];
     case RunAtStep::Run:
-        actor.rotation.y = int16_t(angleOf(player().pos, actor.pos));
+        actor.rotation.y = int16_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos));
         integrateVelocity(actor, 0, 0, actor.velocity.z);
-        if (planarDistance(player().pos, actor.pos) < kJumpAtPlayer) {
+        if (planarDistance(nearestPlayer(actor.pos).pos, actor.pos) < kJumpAtPlayer) {
             actor.velocity.y = kRunSpeed;
             actor.airborne = kAirborneFalling;
             ++actor.step;
@@ -801,8 +802,8 @@ void sceneHop(AnimatedActor& actor) { // exe 0x4ea360: hops around the player wi
     }
     if (actor.airborne != 0) actor.velocity.y = wrap16(actor.velocity.y + actor.acceleration.y);
     integrateVelocity(actor, 0, actor.velocity.y, actor.velocity.z);
-    actor.rotation.y = int16_t(angleOf(actor.pos, player().pos) - kQuarterTurn);
-    if (planarDistance(player().pos, actor.pos) > kSceneRadius)
+    actor.rotation.y = int16_t(angleOf(actor.pos, nearestPlayer(actor.pos).pos) - kQuarterTurn);
+    if (planarDistance(nearestPlayer(actor.pos).pos, actor.pos) > kSceneRadius)
         pullToRadius(actor, player().pos.x.whole, player().pos.z.whole, kSceneRadiusPull);
     if (actor.airborne == 0) {
         actor.velocity.y = kSceneHop;

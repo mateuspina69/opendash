@@ -22,6 +22,7 @@
 #include "game/message.hpp"
 #include "game/message_state.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/rewards.hpp"
@@ -68,7 +69,7 @@ void ballRolling(const PlayerEnv& env, StaticActor& actor) {
     BallFields& f = classState<BallFields>(actor);
     actor.tint = kTintNeutral;
     actor.savePreviousPose();
-    f.playerAngle = wrapAngle(uint32_t(angleOf(actor.pos, player().pos))); // exe 0x5e3bc0
+    f.playerAngle = wrapAngle(uint32_t(angleOf(actor.pos, nearestPlayer(actor.pos).pos))); // exe 0x5e3bc0
     if (BallSub(actor.subState) == BallSub::Kicked) {
         --f.timer;
         if (f.timer == 0) {

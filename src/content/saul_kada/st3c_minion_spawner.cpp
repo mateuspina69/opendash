@@ -17,6 +17,7 @@
 #include "game/angles.hpp"
 #include "game/camera_state.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/projection_state.hpp"
 #include "game/random.hpp"
@@ -62,7 +63,7 @@ bool spawnAt(const PlayerEnv& env, SpawnerFields& spawner, const ShortVec4& poin
     minion.pos.y = at[1];
     minion.rotation.x = 0;
     minion.pos.z = at[2];
-    minion.rotation.y = int16_t(angleOf(player().pos, minion.pos));
+    minion.rotation.y = int16_t(angleOf(nearestPlayer(minion.pos).pos, minion.pos));
     minion.rotation.z = 0;
     spawner.alive += 1u;
     for (size_t i = 0; i < spawner.slots.size(); ++i)

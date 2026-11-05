@@ -15,6 +15,7 @@
 #include "game/hit_list.hpp"
 #include "game/matrix.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/projection_state.hpp"
 #include "game/random.hpp"
@@ -197,7 +198,7 @@ void homing(const PlayerEnv& env, ProjectileActor& a, TurretBulletFields& f) { /
         e.pos.z = a.pos.z.whole;
         r.height = int8_t(0xe8);
         r.angles[0] = uint8_t((uint32_t(uint16_t(a.rotation.x)) - uint32_t(kQuarterTurn)) >> 4);
-        r.angles[1] = uint8_t(uint32_t(angleOf(a.pos, player().pos)) >> 4);
+        r.angles[1] = uint8_t(uint32_t(angleOf(a.pos, nearestPlayer(a.pos).pos)) >> 4);
         r.angles[2] = 0;
         r.spin = 0;
         r.life = 8;

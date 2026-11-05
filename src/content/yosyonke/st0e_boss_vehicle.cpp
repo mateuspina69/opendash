@@ -41,6 +41,7 @@
 #include "game/hud.hpp"
 #include "game/matrix.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/player/player_weapons.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
@@ -451,7 +452,7 @@ void dropCratesSub(AnimatedActor& a, VehicleFields& f) {
 // exe 0x502960: the player within 0x7ff: voice 0x27c once; every 0x40 ticks (unless flag 0x582) a soldier of variant 0
 // while at most 2 pool-0x20 actors of the upper half live
 void soldiersSub(AnimatedActor& a, VehicleFields& f) {
-    if (planarDistance(a.pos, player().pos) <= 0x7ff && !(f.flags & kVehicleVoice27cSaid)) {
+    if (planarDistance(a.pos, nearestPlayer(a.pos).pos) <= 0x7ff && !(f.flags & kVehicleVoice27cSaid)) {
         vehicleVoice(0x27c);
         f.flagsHigh |= uint8_t(kVehicleVoice27cSaid >> 8);
     }
@@ -752,8 +753,8 @@ void ballFly(const PlayerEnv& env, StaticActor& a, FireballFields& f) {
         return;
     }
     if (facesAwayFrom(a, player().pos, 0x400)) {
-        if (planarDistance(player().pos, a.pos) >= 0x201) {
-            turnYawTo(a.rotation.y, uint32_t(int32_t(t16(angleOf(player().pos, a.pos)))), 0x20); // exe 0x5e3df0
+        if (planarDistance(nearestPlayer(a.pos).pos, a.pos) >= 0x201) {
+            turnYawTo(a.rotation.y, uint32_t(int32_t(t16(angleOf(nearestPlayer(a.pos).pos, a.pos)))), 0x20); // exe 0x5e3df0
             int16_t p = a.rotation.x;
             if (t16((0x800 - pitchOf(player().pos, a.pos)) - p) >= 1) p = t16(p + 0x10);
             else p = t16(p - 0x10);

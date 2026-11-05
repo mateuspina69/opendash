@@ -33,6 +33,7 @@
 #include "game/actor_collision.hpp"
 #include "game/player/player_input.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/script_state.hpp"
@@ -292,11 +293,11 @@ void fireGun(const StaticActor& actor, int gun, int low) {
 
 // exe 0x5a6880: the player within 2000 and off to a side -> the side's guns, one on the frames the gun cycle allows
 void boatGunsTick(StaticActor& actor, BoatFields& boat) {
-    if (planarDistance(player().pos, actor.pos) >= 2000) {
+    if (planarDistance(nearestPlayer(actor.pos).pos, actor.pos) >= 2000) {
         boat.gunCycle = 0;
         return;
     }
-    const int d = angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angleOf(player().pos, actor.pos)));
+    const int d = angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos)));
     if ((gameState().frame & 0x23) != 0) return;
     uint8_t c = uint8_t(boat.gunCycle + 1);
     if (c > 0xc) c = 0;

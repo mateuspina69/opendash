@@ -39,6 +39,7 @@
 #include "game/hit_points.hpp"
 #include "game/pickups.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/stage_state.hpp"
@@ -350,9 +351,9 @@ void missionCruise(StaticActor& actor, MissionGunshipFields& ship, const Mission
         if (c == 0) actor.enterStep(uint8_t(CruiseStep::RunStart));
         if ((ship.mode & kPointModeMask) == kPointOnPlayer || (ship.mode & kPointModeMask) == kPointShootsPlayer) {
             // the exe passes the player's struct (not its position): its +0 / +8 words
-            const int d = planarDistance(actor.pos, playerStructAsPoint());
+            const int d = planarDistance(actor.pos, playerStructAsPoint(nearestPlayer(actor.pos)));
             const int diff =
-                angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angleOf(player().pos, actor.pos)));
+                angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos)));
             if (uint32_t(diff + 0x200) < 0x400 && d < kind.burstNear) {
                 ship.timer = dataScalar<uint8_t>(stateAddress(kind.burstTicks) + (rngStep() & 0xf));
                 actor.enterStep(uint8_t(CruiseStep::Burst));
@@ -611,7 +612,7 @@ void missionFlyOff(StaticActor& actor, MissionGunshipFields& ship, const Mission
     if (steerToPoint(actor, ship.pointX, ship.pointZ, lows, kind.leaveLimit, kind.leaveStep) == 0)
         steerDamp(actor, kind.leaveStep);
     cruiseMove(actor, 0x500);
-    const int d = planarDistance(actor.pos, player().pos);
+    const int d = planarDistance(actor.pos, nearestPlayer(actor.pos).pos);
     if (int(uint32_t(stage().depthRange) << 2) < d) ship.flight |= kFlightDown;
     if (kind.goneDistance < d) actor.enterState(uint8_t(MissionGunshipState::Gone));
 }

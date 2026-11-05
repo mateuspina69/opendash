@@ -407,7 +407,7 @@ void enterSub(AnimatedActor& actor, TankSub sub) {
 }
 // exe 0x46abe0: the next sub-state by the player's distance (past 0x1770 drive, past 0x640 the guns, else pick)
 void pick(AnimatedActor& actor) {
-    const int d = planarDistance(actor.pos, player().pos);
+    const int d = planarDistance(actor.pos, nearestPlayer(actor.pos).pos);
     if (d > 0x1770) enterSub(actor, TankSub::Drive);
     else if (d > 0x640) enterSub(actor, TankSub::Guns);
     else enterSub(actor, TankSub::Pick);
@@ -536,12 +536,12 @@ void resetSub(const PlayerEnv& env, AnimatedActor& actor, TankFields& tank) {
 // exe 0x46a740
 void driveSub(AnimatedActor& actor, TankFields& tank) {
     drive(actor, tank);
-    if (planarDistance(actor.pos, player().pos) < 0x1770) enterSub(actor, TankSub::Pick);
+    if (planarDistance(actor.pos, nearestPlayer(actor.pos).pos) < 0x1770) enterSub(actor, TankSub::Pick);
 }
 // exe 0x46a880
 void pickSub(AnimatedActor& actor, TankFields& tank) {
     drive(actor, tank);
-    const int d = planarDistance(actor.pos, player().pos);
+    const int d = planarDistance(actor.pos, nearestPlayer(actor.pos).pos);
     if (cannonReady(actor, tank, d)) enterSub(actor, TankSub::Cannon);
     if (d < 0x640) enterSub(actor, TankSub::Guns);
     if (d > 0x1838) enterSub(actor, TankSub::Drive);
@@ -556,7 +556,7 @@ void guns(AnimatedActor& actor, TankFields& tank) {
         tank.burst = int8_t(BurstState::Off);
         actor.enterStep(1);
     }
-    const int d = planarDistance(actor.pos, player().pos);
+    const int d = planarDistance(actor.pos, nearestPlayer(actor.pos).pos);
     if (d > 0x708) {
         tank.timer = fireTimer();
         enterSub(actor, TankSub::Pick);
@@ -597,7 +597,7 @@ void cannon(AnimatedActor& actor, TankFields& tank) {
         switch (CannonStep(actor.stepCounter)) {
         case CannonStep::Fire: { // the shell this tick, a recoil step back
             tank.turretState = uint8_t(TurretState::Still);
-            tank.shellNear = planarDistance(actor.pos, player().pos) <= 0x640 ? 1 : 0;
+            tank.shellNear = planarDistance(actor.pos, nearestPlayer(actor.pos).pos) <= 0x640 ? 1 : 0;
             tank.flags |= kTankFireShell;
             tank.stepTimer = 4;
             const uint16_t yaw = uint16_t(uint16_t(tank.turretYaw) + uint16_t(actor.rotation.y));

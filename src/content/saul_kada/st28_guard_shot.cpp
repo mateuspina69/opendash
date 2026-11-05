@@ -15,6 +15,7 @@
 #include "game/hit_list.hpp"
 #include "game/hit_points.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/story.hpp"
 
@@ -43,7 +44,7 @@ void bind(ProjectileActor& actor, ShotFields& shot) {
     shot.clearBytes(); // exe 0x40dc40
     shot.hitBox.previousX = actor.pos.x.whole;
     shot.hitBox.previousZ = actor.pos.z.whole;
-    int d = distance3(actor.pos, player().pos); // exe 0x5e3a60
+    int d = distance3(actor.pos, nearestPlayer(actor.pos).pos); // exe 0x5e3a60
     if (d > 0x7ff) d = 0x7ff;
     const int speed = 0x5a0 / (8 - (d >> 8)) + 0x1e0;
     actor.velocity.x = 0;

@@ -26,6 +26,7 @@
 #include "game/player/player_input.hpp"
 #include "game/player/player_script_control.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/script_engine.hpp"
@@ -817,8 +818,8 @@ int quizCue(AnimatedActor& actor, QuizCastFields& f) {
 // the stand's check of the player: near and in front -> facing it
 void standFaceCheck(AnimatedActor& actor, QuizCastFields& f) { // exe 0x4e1a15
     f.lookMode = uint8_t(LookMode::Straight);
-    if (distance3(actor.pos, player().pos) >= 0x100) return;
-    const int d = angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angleOf(player().pos, actor.pos)));
+    if (distance3(actor.pos, nearestPlayer(actor.pos).pos) >= 0x100) return;
+    const int d = angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos)));
     if (uint32_t(d + 0x200) >= 0x400) return;
     actor.enterStep(uint8_t(StandStep::Facing));
 }
@@ -847,8 +848,8 @@ void castStand(AnimatedActor& actor, QuizCastFields& f) {
     case StandStep::Watch: standFaceCheck(actor, f); break;
     case StandStep::Facing: {
         f.lookMode = uint8_t(LookMode::Player);
-        const int dist = distance3(actor.pos, player().pos); // exe 0x5e3a10
-        const int d = angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angleOf(player().pos, actor.pos)));
+        const int dist = distance3(actor.pos, nearestPlayer(actor.pos).pos); // exe 0x5e3a10
+        const int d = angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos)));
         if (dist > 0x180 || uint32_t(d + 0x280) > 0x500) {
             f.headHold = 0;
             actor.enterStep(uint8_t(StandStep::Watch));

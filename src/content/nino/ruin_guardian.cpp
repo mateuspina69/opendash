@@ -38,6 +38,7 @@
 #include "game/hud.hpp"
 #include "game/matrix.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/projection.hpp"
 #include "game/random.hpp"
@@ -170,7 +171,7 @@ int guardianDamage(AnimatedActor& g, GuardianFields& fields) {
 }
 // facing the player (the yaw within 0x600 of the angle from the player)
 bool facingPlayer(const AnimatedActor& g) {
-    return uint32_t(angleDiff(uint32_t(int32_t(g.rotation.y)), uint32_t(angleOf(player().pos, g.pos))) + 0x600) <
+    return uint32_t(angleDiff(uint32_t(int32_t(g.rotation.y)), uint32_t(angleOf(nearestPlayer(g.pos).pos, g.pos))) + 0x600) <
            0xc00u;
 }
 void attack(AnimatedActor& g, GuardianSub sub) { g.enterState(uint8_t(GuardianState::Fight), uint8_t(sub)); }
@@ -314,7 +315,7 @@ void orbs(const PlayerEnv& env, AnimatedActor& g, GuardianFields& fields) {
         soundPlayAtPos(orbVoices[crtRand() & 1], g.pos);
         [[fallthrough]];
     case 1: {
-        const int angle = angleOf(player().pos, g.pos);
+        const int angle = angleOf(nearestPlayer(g.pos).pos, g.pos);
         if (uint32_t(angleDiff(uint32_t(int32_t(g.rotation.y)), uint32_t(angle)) + 0x200) < 0x400u) {
             g.anim = 5;
             g.step += 1u;
@@ -360,14 +361,14 @@ void orbs(const PlayerEnv& env, AnimatedActor& g, GuardianFields& fields) {
         const uint16_t vy = uint16_t(g.velocity.y);
         g.velocity.y = int16_t(uint16_t(vy + uint16_t(g.acceleration.y)));
         g.pos.y.whole = int16_t(uint16_t(g.pos.y.whole) + uint16_t(int16_t(vy) >> 4));
-        turnYawTo(g.rotation.y, uint32_t(angleOf(player().pos, g.pos) + fields.aimOffset), 0x20);
+        turnYawTo(g.rotation.y, uint32_t(angleOf(nearestPlayer(g.pos).pos, g.pos) + fields.aimOffset), 0x20);
         return;
     }
     case 4: {
         const uint16_t vy = uint16_t(g.velocity.y);
         g.pos.y.whole = int16_t(uint16_t(g.pos.y.whole) + uint16_t(int16_t(vy) >> 4));
         g.velocity.y = int16_t(uint16_t(vy + uint16_t(g.acceleration.y)));
-        turnYawTo(g.rotation.y, uint32_t(angleOf(player().pos, g.pos)), 0x20);
+        turnYawTo(g.rotation.y, uint32_t(angleOf(nearestPlayer(g.pos).pos, g.pos)), 0x20);
         if (fields.groundY > g.pos.y.whole) return;
         g.step += 1u;
         g.anim = 9;
@@ -409,7 +410,7 @@ void ring(AnimatedActor& g, GuardianFields& fields) {
         fields.ticks = turnTicks[crtRand() & 7];
         [[fallthrough]];
     case 1: {
-        const int angle = angleOf(player().pos, g.pos);
+        const int angle = angleOf(nearestPlayer(g.pos).pos, g.pos);
         if (uint32_t(angleDiff(uint32_t(int32_t(g.rotation.y)), uint32_t(angle)) + 0x200) < 0x400u) {
             g.step += 1u;
             g.anim = 0xb;
@@ -1049,7 +1050,7 @@ void driftOrb(const PlayerEnv& env, ProjectileActor& orb, OrbFields& fields) {
             fields.ticks = 0x1e;
         }
         const int y = (player().pos.y.whole - orb.pos.y.whole - 0x64) >> 2;
-        turnYawTo(orb.rotation.y, uint32_t(angleOf(player().pos, orb.pos)), 0x20);
+        turnYawTo(orb.rotation.y, uint32_t(angleOf(nearestPlayer(orb.pos).pos, orb.pos)), 0x20);
         integrateVelocity(orb, 0, y, -0x190);
         break;
     }
@@ -1150,7 +1151,7 @@ void ringOrb(const PlayerEnv& env, ProjectileActor& orb, OrbFields& fields) {
                 fields.ticks = uint16_t(t - 1u);
                 if (t == 0) {
                     fields.ticks = 6;
-                    int d = angleDiff(uint32_t(int32_t(orb.rotation.y)), uint32_t(angleOf(player().pos, orb.pos)));
+                    int d = angleDiff(uint32_t(int32_t(orb.rotation.y)), uint32_t(angleOf(nearestPlayer(orb.pos).pos, orb.pos)));
                     if (d < 0) d = -d;
                     d >>= 8;
                     int c = fields.turnLevel;
@@ -1174,7 +1175,7 @@ void ringOrb(const PlayerEnv& env, ProjectileActor& orb, OrbFields& fields) {
                 orb.enterState(uint8_t(OrbState::End));
                 fields.turnLevel = 0;
             }
-            turnYawTo(orb.rotation.y, uint32_t(angleOf(player().pos, orb.pos)), 0x18);
+            turnYawTo(orb.rotation.y, uint32_t(angleOf(nearestPlayer(orb.pos).pos, orb.pos)), 0x18);
             integrateVelocity(orb, 0, orb.velocity.y, -0x320);
             chase = false;
             break;
@@ -1182,7 +1183,7 @@ void ringOrb(const PlayerEnv& env, ProjectileActor& orb, OrbFields& fields) {
         }
         if (chase) {
             const size_t k = size_t(int32_t(fields.turnLevel));
-            turnYawTo(orb.rotation.y, uint32_t(angleOf(player().pos, orb.pos)), chaseTurns[k]);
+            turnYawTo(orb.rotation.y, uint32_t(angleOf(nearestPlayer(orb.pos).pos, orb.pos)), chaseTurns[k]);
             integrateVelocity(orb, 0, orb.velocity.y, chaseSpeeds[k]);
         }
         break;

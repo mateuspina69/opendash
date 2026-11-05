@@ -18,6 +18,7 @@
 #include "game/message.hpp"
 #include "game/event.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/stage_state.hpp"
@@ -145,7 +146,7 @@ struct LookSet : DataRecord {
 
 // the player's direction against the NPC's facing
 int playerAngleDiff(const Actor& actor) {
-    return angleDiff(uint32_t(actor.rotation.y), uint32_t(angleOf(player().pos, actor.pos)));
+    return angleDiff(uint32_t(actor.rotation.y), uint32_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos)));
 }
 // the angle (& 0xfff) from the 16.16 point (x, z) to the actor
 int angleFromPoint(const Actor& actor, int32_t x, int32_t z) {
@@ -292,7 +293,7 @@ void subRoute(AnimatedActor& actor, TownNpcFields& npc) {
     } else {
         npcPartnerCheck(actor, head);
     }
-    if (distance3(player().pos, actor.pos) < kPlayerNear) {
+    if (distance3(nearestPlayer(actor.pos).pos, actor.pos) < kPlayerNear) {
         if (uint32_t(playerAngleDiff(actor) + int(kFrontWindow / 2)) < kFrontWindow) {
             actor.subState = uint8_t(NpcSub::FacePlayer);
             actor.enterStep(0);
@@ -434,7 +435,7 @@ void subBumped(AnimatedActor& actor, TownNpcFields& npc) {
         actor.anim = kAnimStand;
         if (npc.bumpedBy == nullptr) notPorted(kTownNpcPort, "bumped by no actor (the exe reads address 0x50)");
         const Actor& by = *npc.bumpedBy;
-        if (by.airborne != 0 || by.slot == kPlayerClass)
+        if (by.airborne != 0 || actorSlotClass(by.slot) == kPlayerClass)
             npc.lookMode = uint8_t((npc.behaviour & kNpcFacesSpeaker) ? NpcLook::Player : NpcLook::Ahead);
         npc.bits = kNpcNoBump | kNpcSolid;
         npc.timer = kBumpedTicks;
@@ -445,7 +446,7 @@ void subBumped(AnimatedActor& actor, TownNpcFields& npc) {
         actor.enterStep(0);
     }
     if (npc.timer != 0) --npc.timer;
-    if (npc.timer == 0 && uint32_t(kPlayerGone) < uint32_t(distance3(player().pos, actor.pos))) {
+    if (npc.timer == 0 && uint32_t(kPlayerGone) < uint32_t(distance3(nearestPlayer(actor.pos).pos, actor.pos))) {
         npc.headHold = 0;
         npcBackToIdle(actor, npc);
     }
@@ -611,12 +612,12 @@ void npcLookPoint(uint32_t slot, int16_t out[3]) {
 }
 
 bool npcPlayerGone(const Actor& actor) {
-    const int dist = distance3(player().pos, actor.pos);
+    const int dist = distance3(nearestPlayer(actor.pos).pos, actor.pos);
     return kPlayerGone < dist || kGoneWindow < uint32_t(playerAngleDiff(actor) + int(kGoneWindow / 2));
 }
 
 bool npcPlayerInFront(const Actor& actor, int dist, uint32_t window) {
-    if (distance3(player().pos, actor.pos) >= dist) return false;
+    if (distance3(nearestPlayer(actor.pos).pos, actor.pos) >= dist) return false;
     return uint32_t(playerAngleDiff(actor) + int(window / 2)) < window;
 }
 

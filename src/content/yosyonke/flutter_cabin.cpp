@@ -20,6 +20,7 @@
 #include "game/field_alias.hpp"
 #include "game/hit_list.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/story.hpp"
 #include "game/story_flags.hpp"
@@ -181,7 +182,7 @@ constexpr size_t kFlutterRollParts[3] = {3, 11, 12}; // the parts one of which s
 
 // the yaw against the player's direction toward her (exe 0x5e3d80(+0x2a, exe 0x5e3bc0(the player, actor)))
 int facingDiff(const AnimatedActor& a) {
-    return angleDiff(uint32_t(int32_t(a.rotation.y)), uint32_t(angleOf(player().pos, a.pos)));
+    return angleDiff(uint32_t(int32_t(a.rotation.y)), uint32_t(angleOf(nearestPlayer(a.pos).pos, a.pos)));
 }
 void flutterRollSub(AnimatedActor& a, FlutterRollFields& f) {
     switch (FlutterRollSub(a.subState)) {
@@ -205,10 +206,10 @@ void flutterRollSub(AnimatedActor& a, FlutterRollFields& f) {
         }
         if (st <= 1) {
             f.gaze = 1;
-            if (distance3(a.pos, player().pos) < 0x100 && uint32_t(facingDiff(a) + 0x200) < 0x400u) a.enterStep(2);
+            if (distance3(a.pos, nearestPlayer(a.pos).pos) < 0x100 && uint32_t(facingDiff(a) + 0x200) < 0x400u) a.enterStep(2);
         } else if (st == 2) {
             f.gaze = 2;
-            const int dist = distance3(a.pos, player().pos);
+            const int dist = distance3(a.pos, nearestPlayer(a.pos).pos);
             const int d = facingDiff(a);
             if (dist > 0x180 || uint32_t(d + 0x280) > 0x500u) {
                 f.watchTimer = 0;

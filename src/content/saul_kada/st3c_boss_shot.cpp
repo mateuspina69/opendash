@@ -31,6 +31,7 @@
 #include "game/matrix.hpp"
 #include "game/missile_trail.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/projection_state.hpp"
 #include "game/story.hpp"
@@ -154,7 +155,7 @@ void homingFlight(ProjectileActor& actor, HomingFields& shot) {
             return;
         }
         if (ticks < 0x14) return;
-        if (uint32_t(distance3(player().pos, actor.pos)) >= 0x400u) return; // exe 0x5e3a10
+        if (uint32_t(distance3(nearestPlayer(actor.pos).pos, actor.pos)) >= 0x400u) return; // exe 0x5e3a10
         shot.timer = 0xb4;
         ++actor.step;
         return;

@@ -17,6 +17,7 @@
 #include "game/distances.hpp"
 #include "game/encounter.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/story.hpp"
@@ -99,7 +100,7 @@ void run(AnimatedActor& actor, MinerFields& miner) {
         break;
     default: break;
     }
-    const int bearing = angleOf(player().pos, actor.pos); // exe 0x5e3bc0
+    const int bearing = angleOf(nearestPlayer(actor.pos).pos, actor.pos); // exe 0x5e3bc0
     if (uint32_t(bearing - kArcStart) < uint32_t(kArcEnd - kArcStart)) {
         actor.rotation.y = int16_t(bearing);
         return;
@@ -109,7 +110,7 @@ void run(AnimatedActor& actor, MinerFields& miner) {
     if (storyFlag(kFlagMinerFreed) || enemyDefeated(kGuardEnemyId)) return;
     switch (CallPhase(miner.callPhase)) {
     case CallPhase::Quiet:
-        if (planarDistance(player().pos, actor.pos) >= kHearingDistance) break; // exe 0x5e3b00
+        if (planarDistance(nearestPlayer(actor.pos).pos, actor.pos) >= kHearingDistance) break; // exe 0x5e3b00
         soundPlayAtPos(kFirstCry, actor.pos);
         miner.cryTicks = kFirstCryTicks;
         miner.callPhase = uint8_t(CallPhase::Calling);

@@ -34,6 +34,7 @@
 #include "game/lift_box.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/rewards.hpp"
@@ -338,7 +339,7 @@ bool barCalls(const MemberFields& member) {
     if (!b) return false;
     if (!groupOf(member).boxesMissing) return false;
     const StaticActor& bar = staticActorAt(b);
-    if (planarDistance(player().pos, bar.pos) <= 0x200) return false;
+    if (planarDistance(nearestPlayer(bar.pos).pos, bar.pos) <= 0x200) return false;
     return (bar.flags & kActorLive) && BarRide(staticActorAt(b)).rider == kBarFree;
 }
 // exe 0x4b68d0: the bar calls -> walk to (0x568, 0x690), then the ride
@@ -467,8 +468,8 @@ void sprayYaw(uint32_t slot, int yaw) {
 }
 // exe 0x4b6b00: the player within 0x80 and in front (+-0x400) -> the watch
 bool playerClose(AnimatedActor& actor) {
-    if (planarDistance(actor.pos, player().pos) >= 0x80) return false;
-    const int d = angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angleOf(player().pos, actor.pos)));
+    if (planarDistance(actor.pos, nearestPlayer(actor.pos).pos) >= 0x80) return false;
+    const int d = angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos)));
     if (uint32_t(d + 0x400) > 0x800) return false;
     toSub(actor, MemberSub::Watch);
     return true;
@@ -635,15 +636,15 @@ void watch(AnimatedActor& actor, MemberFields& member) {
     case 0: {
         member.behaviour = 0;
         actor.anim = kAnimStand;
-        const int d = angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angleOf(player().pos, actor.pos)));
+        const int d = angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos)));
         actor.spin.y = int16_t(d <= 0 ? 0x20 : -0x20);
         member.timer = 0;
         actor.enterStep(1);
         [[fallthrough]];
     }
     case 1: {
-        const int dist = planarDistance(actor.pos, player().pos);
-        const int d = angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angleOf(player().pos, actor.pos)));
+        const int dist = planarDistance(actor.pos, nearestPlayer(actor.pos).pos);
+        const int d = angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos)));
         if (uint32_t(dist + 0x100) > 0x200 || uint32_t(d + 0x480) > 0x900) toSub(actor, MemberSub::Walk);
         break;
     }
@@ -1002,7 +1003,7 @@ void runOff(AnimatedActor& actor, MemberFields& member) {
         [[fallthrough]];
     }
     case 1:
-        turnToward(actor.rotation.y, int(int(actor.spin.y) + angleOf(player().pos, actor.pos)), 0x40);
+        turnToward(actor.rotation.y, int(int(actor.spin.y) + angleOf(nearestPlayer(actor.pos).pos, actor.pos)), 0x40);
         break;
     default: break;
     }
@@ -1176,7 +1177,7 @@ void groupMember(const PlayerEnv& env, AnimatedActor& actor) {
         freedPenalty(actor); // exe 0x4b82d0
         freeActor(actor);    // exe 0x5e1490
     };
-    const int dist = distance3(actor.pos, player().pos); // exe 0x5e3a60
+    const int dist = distance3(actor.pos, nearestPlayer(actor.pos).pos); // exe 0x5e3a60
     const uint32_t far = stage().depthRange;
     if ((member.contact & kMemberOffRoom) && (dist > int(far << 2) || pointVisibleOrNear(actor.pos, 0) != 0)) { // 0x5e59a0
         despawn();

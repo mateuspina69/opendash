@@ -34,6 +34,7 @@
 #include "game/pickups.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/room_grid.hpp"
@@ -429,7 +430,7 @@ void shoot(AnimatedActor& a, FieldHoverbotFields& f) {
     switch (a.step) {
     case 0:
         a.enterStep(1);
-        f.aimYaw = int16_t(angleOf(player().pos, a.pos));
+        f.aimYaw = int16_t(angleOf(nearestPlayer(a.pos).pos, a.pos));
         a.anim = 3;
         f.bits = kHoverNoHeightFollow;
         [[fallthrough]];

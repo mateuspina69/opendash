@@ -32,6 +32,7 @@
 #include "game/hit_points.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/story.hpp"
@@ -384,7 +385,7 @@ bool leapStart(AnimatedActor& actor, CritterFields& f) {
         actor.velocity.y = 0;
         actor.velocity.z = 0;
         actor.anim = 0;
-        f.heading = int16_t(angleOf(player().pos, actor.pos));
+        f.heading = int16_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos));
         soundPlayAtPos(kNoticeSound, actor.pos);
         ++actor.step;
         return true;
@@ -628,7 +629,7 @@ void catchableLeap(AnimatedActor& actor, CritterFields& f) {
                 actor.anim = 0;
                 const uint8_t c = coinOf(rngStep());
                 f.coin = c;
-                const uint32_t ang = uint32_t(angleOf(player().pos, actor.pos));
+                const uint32_t ang = uint32_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos));
                 f.heading = int16_t(ang + (c ? 0x7ffu : 0x801u));
                 ++actor.step;
             }
@@ -699,7 +700,7 @@ void stunned(AnimatedActor& actor, CritterFields& f) {
             f.hits = 0;
             f.bits &= uint8_t(~kCritterHurtBits);
             restartBehaviour(actor, CritterBehaviour::Hop);
-            if (planarDistance(actor.pos, player().pos) < 0x200) // exe 0x4d4560
+            if (planarDistance(actor.pos, nearestPlayer(actor.pos).pos) < 0x200) // exe 0x4d4560
                 enterBehaviour(actor, CritterBehaviour::Startled);
         }
         break;
@@ -714,7 +715,7 @@ void startled(AnimatedActor& actor, CritterFields& f) {
         actor.anim = 0;
         actor.velocity.y = 0;
         actor.velocity.z = 0;
-        f.heading = int16_t(angleOf(player().pos, actor.pos));
+        f.heading = int16_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos));
         ++actor.step;
         break;
     case 1:

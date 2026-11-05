@@ -43,6 +43,7 @@
 #include "game/player/player_input.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/stage_state.hpp"
@@ -302,7 +303,7 @@ void riderWalk(AnimatedActor& a, RiderFields& f) { // exe 0x4653b0
         --f.walkTicks;
     } else {
         f.walkTicks = uint16_t(a.spin.x);
-        turnYawTo(a.rotation.y, uint32_t(int32_t(t16(angleOf(player().pos, a.pos)))), 0x20); // exe 0x5e3bc0 / 0x5e3df0
+        turnYawTo(a.rotation.y, uint32_t(int32_t(t16(angleOf(nearestPlayer(a.pos).pos, a.pos)))), 0x20); // exe 0x5e3bc0 / 0x5e3df0
         ++a.subState;
         a.step = 0;
         f.side ^= 1;
@@ -741,7 +742,7 @@ void runSub(AnimatedActor& a, FlungFields& f) { // exe 0x492880: runs around the
     default: integrateVelocity(a, 0, 0, a.velocity.z); return;
     }
     if (f.contacts == 0 && !(a.actorHit & kPushedOutSides)) {
-        const int ang = angleOf(player().pos, a.pos) + a.spin.y; // exe 0x5e3bc0
+        const int ang = angleOf(nearestPlayer(a.pos).pos, a.pos) + a.spin.y; // exe 0x5e3bc0
         // exe 0x5e3db0(actor, angle, 0x20): the yaw += 0x20 toward the angle when at least 0x20 away
         const int d = angleDiff(uint32_t(int32_t(a.rotation.y)), uint32_t(ang));
         if (d >= 0x20) a.rotation.y = int16_t(a.rotation.y + 0x20);
@@ -1022,7 +1023,7 @@ void flungServbot(const PlayerEnv& env, AnimatedActor& a) { // exe 0x492f20
     default: notPortedAt(kSt0ePort, "0x492f20 state", a.state);
     }
     const int far = int(uint32_t(stage().depthRange) << 2);
-    if ((f.contacts & kContactOutOfRoom) && distance3(a.pos, player().pos) > far) { // exe 0x5e3a60
+    if ((f.contacts & kContactOutOfRoom) && distance3(a.pos, nearestPlayer(a.pos).pos) > far) { // exe 0x5e3a60
         freeActor(a);                                                               // exe 0x5e1490
         return;
     }

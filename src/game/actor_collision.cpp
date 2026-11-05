@@ -331,7 +331,7 @@ struct Pass {
                         int32_t(uint32_t(pos[2]) - uint32_t(prev[2]))};
         if (floorOn(mover, solid, pos, axisAligned, lmask) == 0) {
             if (mover.onPlatform == 0 || mover.platform != &platform) return 0;
-            const bool isPlayer = mover.slot == kPlayerClass;
+            const bool isPlayer = actorSlotClass(mover.slot) == kPlayerClass;
             bool velocity = false;
             Matrix3 r{};
             int16_t ang[3];
@@ -396,7 +396,7 @@ struct Pass {
             const bool pushed = (against(mdx, uint32_t(d[0])) && outruns(mdx, uint32_t(d[0]))) ||
                                 (against(mdy, uint32_t(d[1])) && outruns(mdy, uint32_t(d[1]))) ||
                                 (against(mdz, uint32_t(d[2])) && outruns(mdz, uint32_t(d[2])));
-            if (pushed && mover.slot == kPlayerClass && st.landed == 0) {
+            if (pushed && actorSlotClass(mover.slot) == kPlayerClass && st.landed == 0) {
                 auto&& hit = asPlayer(mover).solidHit;
                 hit.result = param;
                 hit.contact.x = solid.pos.x.whole;

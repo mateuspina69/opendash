@@ -190,7 +190,7 @@ void chooseHeading(const AnimatedActor& a, RollerFields& fields, uint32_t dist) 
     }
     const uint32_t r = crtRand();
     if (r & 0x3f) {
-        fields.heading = uint16_t(angleOf(player().pos, a.pos)); // exe 0x5e3bc0
+        fields.heading = uint16_t(angleOf(nearestPlayer(a.pos).pos, a.pos)); // exe 0x5e3bc0
         return;
     }
     fields.heading += (r & 0x40) ? 0x190u : 0xfe70u;
@@ -529,7 +529,7 @@ void chase(const PlayerEnv& env, AnimatedActor& a, RollerFields& fields) {
             enterSub(a, Form2Sub::HitBack);
             a.anim = 1;
             a.velocity.z = 0x80;
-            a.rotation.y = int16_t(uint32_t(angleOf(player().pos, a.pos))); // exe 0x5e3bc0
+            a.rotation.y = int16_t(uint32_t(angleOf(nearestPlayer(a.pos).pos, a.pos))); // exe 0x5e3bc0
         }
         countFarTicks(a, fields, dist);
     }

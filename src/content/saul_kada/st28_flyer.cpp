@@ -30,6 +30,7 @@
 #include "game/hit_points.hpp"
 #include "game/pickups.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/room_grid.hpp"
@@ -242,7 +243,7 @@ void fly(const PlayerEnv& env, AnimatedActor& actor, FlyerFields& flyer) {
                 actor.step = uint8_t(FlyStep::Leave);
                 flyer.flagsLow |= uint8_t(kFlyerLeaving);
             }
-            if (!overLandingSpot(env, actor) && planarDistance(player().pos, actor.pos) <= kPlayerReach) {
+            if (!overLandingSpot(env, actor) && planarDistance(nearestPlayer(actor.pos).pos, actor.pos) <= kPlayerReach) {
                 actor.step = uint8_t(FlyStep::Drop);
                 actor.anim = uint8_t(FlyerAnim::Hover);
                 flyer.flagsLow |= uint8_t(kFlyerStunned);
@@ -264,7 +265,7 @@ void fly(const PlayerEnv& env, AnimatedActor& actor, FlyerFields& flyer) {
         return;
     case FlyStep::Drop:
         if (!actor.animEnded()) {
-            turnToward(actor.rotation.y, int(angleOf(player().pos, actor.pos)), 0x40);
+            turnToward(actor.rotation.y, int(angleOf(nearestPlayer(actor.pos).pos, actor.pos)), 0x40);
             return;
         }
         if (!(flyer.flagsLow & kFlyerDropped)) {

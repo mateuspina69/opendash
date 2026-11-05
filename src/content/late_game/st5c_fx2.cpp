@@ -60,6 +60,7 @@
 #include "game/hit_list.hpp"
 #include "game/matrix.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/projection.hpp"
 #include "game/projection_state.hpp"
@@ -535,7 +536,7 @@ void blastRun(ProjectileActor& actor, BlastFields& blast) {
     blast.hitBox.result = 0;
     blast.hitBox.previousX = actor.pos.x.whole;
     blast.hitBox.previousZ = actor.pos.z.whole;
-    if (planarDistance(player().pos, actor.pos) < int(uint32_t(blast.radius) << 2)) { // exe 0x5e3b00
+    if (planarDistance(nearestPlayer(actor.pos).pos, actor.pos) < int(uint32_t(blast.radius) << 2)) { // exe 0x5e3b00
         Player& p = player();
         p.pulled = 1;
         p.pullX = actor.pos.x.whole;

@@ -33,6 +33,7 @@
 #include "game/pickups.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/room_grid.hpp"
@@ -437,7 +438,7 @@ void lunge(AnimatedActor& a, FieldReaverbotFields& f) { // exe 0x450da0: shake 0
     }
         [[fallthrough]];
     case 1: {
-        a.rotation.y = int16_t(angleOf(player().pos, a.pos));
+        a.rotation.y = int16_t(angleOf(nearestPlayer(a.pos).pos, a.pos));
         const int odd = uint8_t(f.timer) & 1;
         a.scale.x = int16_t((odd + 0x10) * 0x20);
         a.scale.y = int16_t(odd * -0x20 + kModelScaleOne);
@@ -452,7 +453,7 @@ void lunge(AnimatedActor& a, FieldReaverbotFields& f) { // exe 0x450da0: shake 0
     case 2:
         a.enterStep(3);
         a.anim = 2;
-        a.rotation.y = int16_t(angleOf(player().pos, a.pos));
+        a.rotation.y = int16_t(angleOf(nearestPlayer(a.pos).pos, a.pos));
         a.velocity.setXY(0, 0);
         a.velocity.z = kLungeSpeed;
         f.timer = 0xf;
@@ -477,7 +478,7 @@ void hop(AnimatedActor& a, FieldReaverbotFields& f) { // exe 0x450f20: wait 0x1e
         f.timer = 0x1e;
         [[fallthrough]];
     case 1:
-        a.rotation.y = int16_t(angleOf(player().pos, a.pos));
+        a.rotation.y = int16_t(angleOf(nearestPlayer(a.pos).pos, a.pos));
         --f.timer;
         if (f.timer == 0) {
             a.enterStep(2);
@@ -583,7 +584,7 @@ void returnHome(AnimatedActor& a, FieldReaverbotFields& f) { // exe 0x451090: ba
     turnYawTo(a.rotation.y, uint32_t(ang), homeTurnRates[r & 0xf]);
     integrateVelocity(a, 0, 0, a.velocity.z);
     if (neighbourFind(a, f.neighbour, 0) != 0) toSub(a, FieldSub::GiveWay);
-    if (planarDistance(player().pos, a.pos) >= 700) return;
+    if (planarDistance(nearestPlayer(a.pos).pos, a.pos) >= 700) return;
     f.behaviour = kFieldCircles;
     toSub(a, FieldSub::Circle);
 }
@@ -664,7 +665,7 @@ void fire(AnimatedActor& a, FieldReaverbotFields& f) {
         return;
     }
     case 1: {
-        turnYawTo(a.rotation.y, uint32_t(angleOf(player().pos, a.pos)), 0x20);
+        turnYawTo(a.rotation.y, uint32_t(angleOf(nearestPlayer(a.pos).pos, a.pos)), 0x20);
         enemyGroupMark(f.group, 1);
         if (a.keyIndex != 0xb) return;
         const uint32_t shot = allocActor40(kActorStageClass); // exe 0x5e1280
@@ -751,7 +752,7 @@ void mainState(const PlayerEnv& env, AnimatedActor& a, FieldReaverbotFields& f) 
         a.runFlags |= kActorRunMarked;
     }
     if (!(a.runFlags & kRunFlagNoAttack) && a.airborne == 0) {
-        if (planarDistance(player().pos, a.pos) >= kFarDistance) {
+        if (planarDistance(nearestPlayer(a.pos).pos, a.pos) >= kFarDistance) {
             --f.farTicks;
             if (f.farTicks <= 0) {
                 a.enterState(uint8_t(FieldState::Sinking));

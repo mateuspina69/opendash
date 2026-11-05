@@ -491,7 +491,7 @@ void climbOver(StaticActor& actor, ShipFields& ship) {
 }
 // the waits' wait (exe 0x593fb0 / 0x594100 step 1): its enemy alive (or the player 10000 away) while a wall is beside it
 bool keepWaiting(const StaticActor& actor, const ShipFields& ship) {
-    const int d = distance3(player().pos, actor.pos);
+    const int d = distance3(nearestPlayer(actor.pos).pos, actor.pos);
     const int8_t id = ship.enemyId;
     if (id != 0) return !enemyDefeated(uint32_t(int32_t(id))) && (ship.contact & kContactSideWall); // exe 0x5e6420
     return d >= 10000 && (ship.contact & kContactSideWall);

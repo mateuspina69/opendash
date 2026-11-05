@@ -27,6 +27,7 @@
 #include "game/hit_points.hpp"
 #include "game/pickups.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/story.hpp"
 
@@ -264,7 +265,7 @@ void chase(AnimatedActor& actor, GuardFields& guard) {
         enterSub(actor, GuardSub::Leg);
         return;
     }
-    const uint16_t angle = uint16_t(angleOf(player().pos, actor.pos));
+    const uint16_t angle = uint16_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos));
     const int d = angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(int32_t(int16_t(angle)))); // 0x5e3d80
     if (d >= 0x20) actor.rotation.y = int16_t(uint16_t(uint16_t(actor.rotation.y) + 0x20u));
     else if (d <= -0x20) actor.rotation.y = int16_t(uint16_t(uint16_t(actor.rotation.y) - 0x20u));

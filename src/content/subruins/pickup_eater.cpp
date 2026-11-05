@@ -27,6 +27,7 @@
 #include "game/pickups.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/story.hpp"
 #include "game/territory.hpp"
@@ -107,7 +108,7 @@ int findPickup(const AnimatedActor& a) {
 void steer(const PlayerEnv& env, AnimatedActor& a, EaterFields& f, int ang) {
     const uint32_t probes = stateAddress(TableId::PickupEaterProbePoints) + uint32_t(a.variant) * 8 * 2;
     uint32_t blocked = 0;
-    int push = (0x400 - planarDistance(a.pos, player().pos)) << 4; // exe 0x5e3b00
+    int push = (0x400 - planarDistance(a.pos, nearestPlayer(a.pos).pos)) << 4; // exe 0x5e3b00
     if (push > 0x140) push = 0x140;
     else if (push < -0x140) push = -0x140;
     const uint32_t mask = collisionLayerMask(a.slot); // exe 0x413240
@@ -320,7 +321,7 @@ void shies(const PlayerEnv& env, AnimatedActor& a, EaterFields& f) {
         a.tint = kTintNeutral;
     }
     const uint16_t yaw0 = uint16_t(a.rotation.y);
-    const int ang = angleOf(player().pos, a.pos); // exe 0x5e3bc0
+    const int ang = angleOf(nearestPlayer(a.pos).pos, a.pos); // exe 0x5e3bc0
     turnYawTo(a.rotation.y, uint32_t(ang), 0x10); // exe 0x5e3df0
     f.loopYaw = int16_t(uint16_t(uint16_t(f.loopYaw) + uint16_t(uint16_t(a.rotation.y) - yaw0)));
     steer(env, a, f, ang); // exe 0x4abba0

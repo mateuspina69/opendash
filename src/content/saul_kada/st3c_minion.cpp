@@ -43,6 +43,7 @@
 #include "game/hit_list.hpp"
 #include "game/hit_points.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/projection_state.hpp"
 #include "game/random.hpp"
@@ -615,8 +616,8 @@ void statueMinion(const PlayerEnv& env, AnimatedActor& actor) { // exe 0x4ff7d0
     actor.tint = kTintNeutral;
     actor.prevRotation = actor.rotation;
     actor.savePreviousContact();
-    minion.playerYaw = int16_t(angleOf(player().pos, actor.pos));
-    minion.playerDistance = uint16_t(planarDistance(actor.pos, player().pos)); // exe 0x5e3b00
+    minion.playerYaw = int16_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos));
+    minion.playerDistance = uint16_t(planarDistance(actor.pos, nearestPlayer(actor.pos).pos)); // exe 0x5e3b00
     switch (MinionState(actor.state)) {
     case MinionState::Bind: bind(env, actor, minion); return;
     case MinionState::Run: run(env, actor, minion); return;

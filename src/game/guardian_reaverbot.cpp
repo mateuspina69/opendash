@@ -226,7 +226,7 @@ uint32_t sight(AnimatedActor& a, GuardianFields& f, int cone) {
     const int d = facing(a);
     if (uint32_t(d + cone) > uint32_t(cone * 2)) return lo;
     lo = kSightFar;
-    const int dist = planarDistance(a.pos, player().pos);
+    const int dist = planarDistance(a.pos, nearestPlayer(a.pos).pos);
     if (dist >= kSightDistance) return lo;
     lo = 0;
     if (dist < kNearDistance) hi = kSightNear;
@@ -598,7 +598,7 @@ void blocked(AnimatedActor& a, GuardianFields& f) { // exe 0x455de0: a wall -- t
     if (!attack) {
         uint32_t bits = 0xfd77;
         // exe 0x5e3a60(+0x10, the player): the 3D distance of the integer parts (unsigned compare)
-        const uint32_t dist = uint32_t(distance3(a.pos, player().pos));
+        const uint32_t dist = uint32_t(distance3(a.pos, nearestPlayer(a.pos).pos));
         if (dist > 1000 || s < kSightFar) bits = 0x288;
         const uint32_t r = rngStep();
         attack = (bits & (1u << (r & 0xf))) != 0;

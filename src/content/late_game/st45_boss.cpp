@@ -623,7 +623,7 @@ void walk(AnimatedActor& actor, BossFields& boss) {
             actor.step = uint8_t(WalkStep::Fall);
             break;
         }
-        if (uint32_t(distance3(player().pos, actor.pos)) < 0xc00)
+        if (uint32_t(distance3(nearestPlayer(actor.pos).pos, actor.pos)) < 0xc00)
             next = facingPlayer(actor) ? attackIfFootDown() : turnInPlace();
         else if (facingPlayer(actor)) actor.step = uint8_t(WalkStep::Stalk);
         else next = turnInPlace();
@@ -1250,7 +1250,7 @@ void secondWalk(AnimatedActor& actor, BossFields& boss) {
         }
         break;
     case SecondWalkStep::Decide:
-        if (uint32_t(distance3(player().pos, actor.pos)) < 0xc00) {
+        if (uint32_t(distance3(nearestPlayer(actor.pos).pos, actor.pos)) < 0xc00) {
             if (facingPlayer(actor)) {
                 if (!noFootDown(actor, boss, -1, 0)) pickAttack(actor, boss);
             } else {

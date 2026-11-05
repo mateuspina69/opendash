@@ -14,6 +14,7 @@
 #include "game/message.hpp"
 #include "game/event.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/game_state.hpp"
 #include "game/actor_movement.hpp"
@@ -120,7 +121,7 @@ void chestInit(AnimatedActor& actor, ChestFields& chest) {
 // exe 0x474550: talkable from its front; the talk opens the lid, gives the content, sets the opened flag, closes
 void chestClosed(AnimatedActor& actor, const ChestFields& chest) {
     const ChestContent content = contentOf(actor, chest);
-    const int d = angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angleOf(player().pos, actor.pos)));
+    const int d = angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos)));
     actor.interaction = uint32_t(d + kFrontHalfWindow) < uint32_t(2 * kFrontHalfWindow + 1) ? kInteractTalk : 0;
     switch (ChestSub(actor.subState)) {
     case ChestSub::Wait:

@@ -38,6 +38,7 @@
 #include "game/lobbed_shot.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/room_grid.hpp"
@@ -254,7 +255,7 @@ void runAround(AnimatedActor& actor, ServbotFields& servbot) {
             servbot.wallTimer = 0x1e;
             actor.enterStep(2);
         } else {
-            const int angle = angleOf(player().pos, actor.pos); // exe 0x5e3bc0
+            const int angle = angleOf(nearestPlayer(actor.pos).pos, actor.pos); // exe 0x5e3bc0
             turnToward(actor.rotation.y, int(angle + (servbot.side ? 0x600 : -0x600)), 0x20);
         }
         break;
@@ -548,7 +549,7 @@ void watchPlayer(AnimatedActor& actor, ServbotFields& servbot) {
         servbot.timer = 0x3c;
         actor.stepCounter = 1;
     }
-    const int angle = angleOf(player().pos, actor.pos);
+    const int angle = angleOf(nearestPlayer(actor.pos).pos, actor.pos);
     const int d = angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angle));
     if (uint32_t(d + 0x80) > 0x100u) {
         servbot.faceYaw = int16_t(angle);
@@ -568,7 +569,7 @@ void watchPlayer(AnimatedActor& actor, ServbotFields& servbot) {
         servbot.faceYaw = 0;
         actor.enterStep(uint8_t(IntroStep::Jump));
     }
-    if (uint32_t(distance3(player().pos, actor.pos)) < 0x400u) enterSub(actor, ServbotSub::Decide); // exe 0x5e3a60
+    if (uint32_t(distance3(nearestPlayer(actor.pos).pos, actor.pos)) < 0x400u) enterSub(actor, ServbotSub::Decide); // exe 0x5e3a60
 }
 // exe 0x460270: a jump in place (its face yaw set: higher, then decide; else back to watching)
 void jumpInPlace(AnimatedActor& actor, ServbotFields& servbot) {
@@ -901,8 +902,8 @@ void waitForPlayer(AnimatedActor& actor) {
         actor.anim = uint8_t(BomberAnim::Idle);
         ++actor.step;
     }
-    if (planarDistance(actor.pos, player().pos) > 0x600) return; // exe 0x5e3b00
-    const int angle = angleOf(player().pos, actor.pos);
+    if (planarDistance(actor.pos, nearestPlayer(actor.pos).pos) > 0x600) return; // exe 0x5e3b00
+    const int angle = angleOf(nearestPlayer(actor.pos).pos, actor.pos);
     const int d = angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angle));
     if (uint32_t(d + 0x200) > 0x400u) return;
     const uint32_t r = rngStep();
@@ -951,7 +952,7 @@ void lobVolley(AnimatedActor& actor, BomberFields& bomber) {
         ++actor.step;
         return;
     case 2: {
-        turnYawTo(actor.rotation.y, uint32_t(angleOf(player().pos, actor.pos)), 0x20); // exe 0x5e3df0
+        turnYawTo(actor.rotation.y, uint32_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos)), 0x20); // exe 0x5e3df0
         const int home = bomber.homeYaw;
         if (actor.rotation.y > home + kYawRange) actor.rotation.y = int16_t(home + kYawRange);
         if (actor.rotation.y < home - kYawRange) actor.rotation.y = int16_t(home - kYawRange);
@@ -960,7 +961,7 @@ void lobVolley(AnimatedActor& actor, BomberFields& bomber) {
         bomber.bombsLeft -= 1u;
         int16_t dx = 0, dz = 0, dy;
         if (bomber.bombsLeft == 0) { // the last one at the player
-            int d = planarDistance(actor.pos, player().pos);
+            int d = planarDistance(actor.pos, nearestPlayer(actor.pos).pos);
             if (d < 0x30) d = 0x30;
             angleVector(actor.rotation.y, int16_t(d), dx, dz); // exe 0x5e40c0
             dy = -100;

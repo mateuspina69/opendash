@@ -31,6 +31,7 @@
 #include "game/pickups.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/room_grid.hpp"
@@ -387,7 +388,7 @@ void lunge(AnimatedActor& a, WalkerFields& f) { // exe 0x4526d0: shake 0x5a tick
     }
         [[fallthrough]];
     case 1: {
-        a.rotation.y = int16_t(angleOf(player().pos, a.pos));
+        a.rotation.y = int16_t(angleOf(nearestPlayer(a.pos).pos, a.pos));
         const uint32_t b = uint8_t(f.timer) & 1;
         a.scale.x = int16_t((b + 0x10) * 0x20);
         a.scale.y = int16_t(int(b) * -0x20 + kModelScaleOne);
@@ -404,7 +405,7 @@ void lunge(AnimatedActor& a, WalkerFields& f) { // exe 0x4526d0: shake 0x5a tick
     case 2:
         a.enterStep(3);
         a.anim = 2;
-        a.rotation.y = int16_t(angleOf(player().pos, a.pos));
+        a.rotation.y = int16_t(angleOf(nearestPlayer(a.pos).pos, a.pos));
         a.velocity.setXY(0, 0);
         a.velocity.z = kLungeSpeed;
         f.timer = 0xf;
@@ -431,7 +432,7 @@ void hop(AnimatedActor& a, WalkerFields& f) { // exe 0x452850: wait 0x1e ticks f
         f.timer = 0x1e;
         [[fallthrough]];
     case 1:
-        a.rotation.y = int16_t(angleOf(player().pos, a.pos));
+        a.rotation.y = int16_t(angleOf(nearestPlayer(a.pos).pos, a.pos));
         f.timer = int16_t(f.timer - 1);
         if (f.timer == 0) {
             a.enterStep(2);
@@ -538,7 +539,7 @@ void returnHome(AnimatedActor& a, WalkerFields& f) { // exe 0x452b50: back towar
     turnYawTo(a.rotation.y, uint32_t(ang), homeTurnRates[r & 0xf]);
     integrateVelocity(a, 0, 0, a.velocity.z);
     if (neighbourFind(a, f.neighbour, 0) != 0) toSub(a, WalkerSub::GiveWay);
-    if (planarDistance(player().pos, a.pos) < 0x2bc) {
+    if (planarDistance(nearestPlayer(a.pos).pos, a.pos) < 0x2bc) {
         f.behaviour = kWalkerCircles;
         toSub(a, WalkerSub::Circle);
     }
@@ -643,7 +644,7 @@ void fire(AnimatedActor& a, WalkerFields& f) {
         f.cooldown = attackCooldowns[r & 0xf];
         ++a.step;
     } else if (st == 1) {
-        turnYawTo(a.rotation.y, uint32_t(angleOf(player().pos, a.pos)), 0x20);
+        turnYawTo(a.rotation.y, uint32_t(angleOf(nearestPlayer(a.pos).pos, a.pos)), 0x20);
         enemyGroupMark(f.group, 1);
         if (a.keyIndex != 0xb) return;
         const uint32_t shot = allocActor40(kActorStageClass); // exe 0x5e1280

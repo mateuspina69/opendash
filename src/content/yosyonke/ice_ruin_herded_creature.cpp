@@ -173,7 +173,7 @@ int gateDir(const AnimatedActor& actor) {
 // exe 0x4a9410: back to the chase -- away from the gates and within 0xa00 of the player the chase, else look around
 void resume(AnimatedActor& actor) {
     if (penDir(actor) < 0 && gateDir(actor) < 0 &&
-        uint32_t(planarDistance(actor.pos, player().pos)) <= uint32_t(kChaseRange)) {
+        uint32_t(planarDistance(actor.pos, nearestPlayer(actor.pos).pos)) <= uint32_t(kChaseRange)) {
         actor.spin.y = kTurnFast;
         actor.velocity.z = kChargeSpeed;
         actor.anim = 0;
@@ -315,7 +315,7 @@ void lookAround(const PlayerEnv& env, AnimatedActor& actor, HerdFields& f) { // 
                 uint32_t(yawDiff(actor, angleFromPlayer(actor)) + 0x400) > 0x800u)
                 run = true;
             else
-                run = uint32_t(planarDistance(actor.pos, player().pos)) > uint32_t(kChaseRange);
+                run = uint32_t(planarDistance(actor.pos, nearestPlayer(actor.pos).pos)) > uint32_t(kChaseRange);
             if (run) {
                 actor.spin.y = kTurnSlow;
                 actor.velocity.z = kRunSpeed;

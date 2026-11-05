@@ -22,6 +22,7 @@
 #include "game/matrix.hpp"
 #include "game/missile_trail.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/shockwave.hpp"
 #include "game/story.hpp"
@@ -144,7 +145,7 @@ void flight(const PlayerEnv& env, ProjectileActor& actor, ShellFields& shell) {
     if (variant != CannonShellVariant::High) {
         actor.rotation.x = int16_t(pitchOf(actor.prevPos, actor.pos) + 0x800); // exe 0x5e3ca0
         if (variant == CannonShellVariant::Warning && shell.warned == 0 &&
-            planarDistance(actor.pos, player().pos) < kWarnReach) {
+            planarDistance(actor.pos, nearestPlayer(actor.pos).pos) < kWarnReach) {
             // its target as a 16.16 point (the exe's stack point: only its integer x / z are set and read)
             const int32_t target[3] = {int32_t(uint32_t(uint16_t(shell.targetX)) << 16), 0,
                                        int32_t(uint32_t(uint16_t(shell.targetZ)) << 16)};

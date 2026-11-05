@@ -67,6 +67,7 @@
 #include "game/matrix.hpp"
 #include "game/player/player_input.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/player/player_weapons.hpp"
 #include "game/port_gap.hpp"
 #include "game/projection.hpp"
@@ -273,7 +274,7 @@ bool fadeOut(AnimatedActor& actor, BossFields& boss) {
     return false;
 }
 void facePlayer(AnimatedActor& actor, int step) { // exe 0x5083f0: the yaw toward the player
-    turnAt(actor.rotation.y, angleOf(player().pos, actor.pos), step, step);
+    turnAt(actor.rotation.y, angleOf(nearestPlayer(actor.pos).pos, actor.pos), step, step);
 }
 // exe 0x508460: the damage of the tick (at most 0x20, the rest queued); -1 dead, 1 hurt, 0 nothing
 int takeDamage(AnimatedActor& actor, BossFields& boss) {
@@ -454,7 +455,7 @@ void teleport(const PlayerEnv& env, AnimatedActor& actor, BossFields& boss) { //
         fadeStart(actor, boss);
         playAnim(actor, BossAnim::Appear);
         actor.pos.y = int32_t(0xfe740000u);
-        actor.rotation.y = int16_t(angleOf(player().pos, actor.pos));
+        actor.rotation.y = int16_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos));
         boss.verticalSpeed = 0x180;
         ++actor.step;
     } else if (step != TeleportStep::FadeIn) {
@@ -498,7 +499,7 @@ void teleport(const PlayerEnv& env, AnimatedActor& actor, BossFields& boss) { //
         return;
     }
     const uint32_t r = rngStep();
-    pick(uint32_t(planarDistance(actor.pos, player().pos)) < (r & 0x3ff) + 0x400 ? BossMove::Volley : BossMove::Beam);
+    pick(uint32_t(planarDistance(actor.pos, nearestPlayer(actor.pos).pos)) < (r & 0x3ff) + 0x400 ? BossMove::Volley : BossMove::Beam);
 }
 
 void vanish(const PlayerEnv& env, AnimatedActor& actor, BossFields& boss) { // exe 0x507990

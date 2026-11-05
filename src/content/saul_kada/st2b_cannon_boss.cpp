@@ -33,6 +33,7 @@
 #include "game/message_triggers.hpp"
 #include "game/pickups.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/spark_emitter.hpp"
@@ -156,7 +157,7 @@ bool pitchStep(AnimatedActor& actor, BossFields& boss, int target) {
 void moveYaw(AnimatedActor& actor, BossFields& boss) {
     switch (YawMover(boss.yawMover)) {
     case YawMover::Aim: {
-        const int angle = angleOf(player().pos, actor.pos);
+        const int angle = angleOf(nearestPlayer(actor.pos).pos, actor.pos);
         const int d = angleDiff(uint32_t(barrelAngle(actor, boss)), uint32_t(angle));
         if (uint32_t(d + 0x20) <= 0x40u) {
             boss.yawMover = uint8_t(YawMover::Still);
@@ -169,7 +170,7 @@ void moveYaw(AnimatedActor& actor, BossFields& boss) {
         return;
     }
     case YawMover::Accelerate: {
-        const int angle = angleOf(player().pos, actor.pos);
+        const int angle = angleOf(nearestPlayer(actor.pos).pos, actor.pos);
         yawAccelerate(actor, boss, angle);
         const int d = angleDiff(uint32_t(barrelAngle(actor, boss)), uint32_t(angle));
         if (uint32_t(d + 0x20) <= 0x40u) {
@@ -227,8 +228,8 @@ bool settled(const BossFields& boss) { return boss.yawMover == 0 && boss.pitchMo
 // ---- the run's sub-states [0x890450] -------------------------------------------------------------------------------
 // exe 0x473790: idle until the player is in front (within 0x200 of its yaw) nearer than 0x1800, or it was hit
 void idle(AnimatedActor& actor, const BossFields& boss) {
-    const int d = angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angleOf(player().pos, actor.pos)));
-    if (uint32_t(d + 0x200) <= 0x400u && planarDistance(actor.pos, player().pos) < 0x1800) {
+    const int d = angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos)));
+    if (uint32_t(d + 0x200) <= 0x400u && planarDistance(actor.pos, nearestPlayer(actor.pos).pos) < 0x1800) {
         actor.subState = uint8_t(BossSub::Aimed);
         actor.restartStep();
     }
@@ -269,7 +270,7 @@ void aimed(AnimatedActor& actor, BossFields& boss) {
     case 4:
         boss.timer -= 1u;
         if (boss.timer == 0) actor.enterStep(1);
-        if (planarDistance(actor.pos, player().pos) < 0x800) {
+        if (planarDistance(actor.pos, nearestPlayer(actor.pos).pos) < 0x800) {
             actor.subState = uint8_t(BossSub::Lob);
             actor.restartStep();
         }
@@ -309,8 +310,8 @@ void volley(AnimatedActor& actor, BossFields& boss) {
         boss.timer -= 1u;
         if (boss.timer == 0) actor.step = 1;
         if (actor.stepCounter == 0) {
-            const int d = angleDiff(uint32_t(barrelAngle(actor, boss)), uint32_t(angleOf(player().pos, actor.pos)));
-            (void)planarDistance(actor.pos, player().pos); // computed and dropped by the exe
+            const int d = angleDiff(uint32_t(barrelAngle(actor, boss)), uint32_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos)));
+            (void)planarDistance(actor.pos, nearestPlayer(actor.pos).pos); // computed and dropped by the exe
             if (uint32_t(d + 0x20) > 0x40u || d > 0x834 || d < 0x4b0) {
                 actor.subState = uint8_t(BossSub::Lob);
                 actor.restartStep();
@@ -356,7 +357,7 @@ void lob(AnimatedActor& actor, BossFields& boss) {
     case 4:
         boss.timer -= 1u;
         if (boss.timer == 0) actor.step = 1;
-        if (planarDistance(actor.pos, player().pos) > 0x960) {
+        if (planarDistance(actor.pos, nearestPlayer(actor.pos).pos) > 0x960) {
             actor.subState = uint8_t(BossSub::Aimed);
             actor.restartStep();
         }

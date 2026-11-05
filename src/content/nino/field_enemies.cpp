@@ -63,6 +63,7 @@
 #include "game/lift_box.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/rewards.hpp"
@@ -314,9 +315,9 @@ void critterWander(AnimatedActor& actor, CritterFields& critter) {
         const uint32_t r = rngStep();
         actor.enterStep(1);
         actor.spin.y = int16_t(((0xaaaaaaaau >> (r & 0x1f)) & 1) ? 0x600u : 0xfa00u);
-        turnToward(actor.rotation.y, int(actor.spin.y + angleOf(player().pos, actor.pos)), 0x30);
+        turnToward(actor.rotation.y, int(actor.spin.y + angleOf(nearestPlayer(actor.pos).pos, actor.pos)), 0x30);
     } else if (actor.step == 1) {
-        turnToward(actor.rotation.y, int(actor.spin.y + angleOf(player().pos, actor.pos)), 0x30);
+        turnToward(actor.rotation.y, int(actor.spin.y + angleOf(nearestPlayer(actor.pos).pos, actor.pos)), 0x30);
     }
     integrateVelocity(actor, 0, 0, actor.velocity.z);
     if (critter.contact & kCritterHitWall) critterSub(actor, CritterSub::WallTurn);
@@ -517,7 +518,7 @@ void critter(const PlayerEnv& env, AnimatedActor& actor) {
     default: notPortedAt(kEnemyPort, "0x4a0f70 state (table 0x893b5c has 3)", actor.state);
     }
     if (!(actor.flags & kActorLive)) return;
-    const int d = distance3(actor.pos, player().pos); // exe 0x5e3a60
+    const int d = distance3(actor.pos, nearestPlayer(actor.pos).pos); // exe 0x5e3a60
     const int32_t far = int32_t(uint32_t(stage().depthRange) * 4);
     if ((critter.contact & kCritterOffRoom) && (far < d || pointVisibleOrNear(actor.pos, 0) != 0)) {
         critterGone(actor);
@@ -1225,7 +1226,7 @@ void grab(AnimatedActor& actor, CarrierFields& carrier) {
         actor.enterStep(uint8_t(GrabStep::Back));
         return;
     case GrabStep::Back:
-        moveAlongYaw(actor.pos, angleOf(player().pos, actor.pos), 0, 0, 0x180);
+        moveAlongYaw(actor.pos, angleOf(nearestPlayer(actor.pos).pos, actor.pos), 0, 0, 0x180);
         if (!actor.animEnded()) return;
         next(actor, carrier);
         return;

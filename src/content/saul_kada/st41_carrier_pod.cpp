@@ -23,6 +23,7 @@
 #include "game/hit_list.hpp"
 #include "game/hit_points.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/story.hpp"
@@ -156,7 +157,7 @@ void lunge(StaticActor& actor, PodFields& pod) {
         [[fallthrough]];
     case 2: {
         ++actor.step;
-        int d = planarDistance(actor.pos, player().pos);
+        int d = planarDistance(actor.pos, nearestPlayer(actor.pos).pos);
         if (d >= 0x400) d = 0x3ff;
         const uint32_t t = dataScalar<uint16_t>(stateAddress(TableId::St41CarrierPodLungeTicks) + uint32_t(d >> 6) * 2);
         pod.timer = uint8_t(t);

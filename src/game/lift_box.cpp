@@ -26,6 +26,7 @@
 #include "game/hit_points.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/stage_state.hpp"
 #include "game/visibility.hpp"
@@ -515,7 +516,7 @@ void liftBoxStates(StaticActor& actor) {
     if ((box.behaviour & kBoxMover) && actor.prevPos.y - actor.pos.y < 0) actor.prevPos.y = actor.pos.y;
     actor.wasOnPlatform = actor.onPlatform;
     if ((box.collisionBits & kBoxOffGrid) &&
-        distance3(actor.pos, player().pos) > int(uint32_t(stage().depthRange) << 2)) {
+        distance3(actor.pos, nearestPlayer(actor.pos).pos) > int(uint32_t(stage().depthRange) << 2)) {
         freeActor(actor); // fell out of the map, far away
         return;
     }

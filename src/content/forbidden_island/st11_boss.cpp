@@ -238,7 +238,7 @@ void bind(AnimatedActor& a, FighterFields& fields) {
     a.clearClassBlock(); // exe 0x40dc40: +0x14c..+0x16b
     fields.hopPhase = 0;
     fields.hopApex = 0;
-    fields.distance = planarDistance(a.pos, player().pos);
+    fields.distance = planarDistance(a.pos, nearestPlayer(a.pos).pos);
     fields.dead = 0;
     fields.knockbackAngle = 0;
     fields.flags |= kFighterArmed;
@@ -627,7 +627,7 @@ void fighter(const PlayerEnv& env, AnimatedActor& a) {
     if ((a.flags & kActorLive) == 0) return;
     animateAsked(a, 0); // exe 0x5e1c30 / 0x5e1e80
     submitHitCapsule(a, fields); // exe 0x4b46f0
-    fields.distance = planarDistance(a.pos, player().pos);
+    fields.distance = planarDistance(a.pos, nearestPlayer(a.pos).pos);
     // drawn: the shadow exe 0x5f20f0(a, 0x80, 0xc0, 0) -- render output, left out
 }
 

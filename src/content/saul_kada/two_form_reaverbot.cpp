@@ -30,6 +30,7 @@
 #include "game/hit_points.hpp"
 #include "game/pickups.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/projection_state.hpp"
 #include "game/random.hpp"
@@ -224,7 +225,7 @@ void wander(const AnimatedActor& actor, FormFields& form, uint32_t distance) {
     }
     const uint32_t r = crtRand();
     if (r & 0x3f) {
-        form.targetYaw = uint16_t(angleOf(player().pos, actor.pos)); // exe 0x5e3bc0
+        form.targetYaw = uint16_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos)); // exe 0x5e3bc0
         return;
     }
     form.targetYaw = uint16_t(form.targetYaw + ((r & 0x40) ? 0x190u : 0xfe70u));
@@ -372,11 +373,11 @@ void idle(const PlayerEnv& env, AnimatedActor& actor, FormFields& form) {
         form.flags |= kFormFalling;
         return;
     }
-    planarDistance(actor.pos, player().pos); // exe 0x5e3b00 (its result unused)
+    planarDistance(actor.pos, nearestPlayer(actor.pos).pos); // exe 0x5e3b00 (its result unused)
 }
 // exe 0x48de10 (form A 2): the player beyond 0xcd -> idle
 void watch(const PlayerEnv& env, AnimatedActor& actor, FormFields& form) {
-    if (uint32_t(planarDistance(actor.pos, player().pos)) > 0xcd) {
+    if (uint32_t(planarDistance(actor.pos, nearestPlayer(actor.pos).pos)) > 0xcd) {
         enterASub(actor, FormASub::Idle);
         actor.anim = 0;
     }
@@ -474,7 +475,7 @@ void grow(AnimatedActor& actor, FormFields& form) {
 }
 // exe 0x48e040 (form A 8 / form B 1): wandering (step 0) / giving way (1, 2); the walls, the pushes, its life out
 void walk(const PlayerEnv& env, AnimatedActor& actor, FormFields& form) {
-    const uint32_t distance = uint32_t(planarDistance(actor.pos, player().pos)); // exe 0x5e3b00
+    const uint32_t distance = uint32_t(planarDistance(actor.pos, nearestPlayer(actor.pos).pos)); // exe 0x5e3b00
     switch (actor.step) {
     case 0: wander(actor, form, distance); break;
     case 1:
@@ -505,7 +506,7 @@ void walk(const PlayerEnv& env, AnimatedActor& actor, FormFields& form) {
         enterBSub(actor, FormBSub::Pushed);
         actor.anim = 1;
         actor.velocity.z = 0x80;
-        actor.rotation.y = int16_t(angleOf(player().pos, actor.pos)); // exe 0x5e3bc0
+        actor.rotation.y = int16_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos)); // exe 0x5e3bc0
     }
     if (distance < 0x40) form.flags |= kFormNearPlayer;
     if (form.lifeCount == 0x258) {
@@ -586,7 +587,7 @@ void death(const PlayerEnv& env, AnimatedActor& actor, FormFields& form) {
 void turnWalk(const PlayerEnv& env, AnimatedActor& actor, FormFields& form) {
     turnYawTo(actor.rotation.y, form.targetYaw, actor.spin.y); // exe 0x5e3df0
     integrateVelocity(actor, 0, 0, actor.velocity.z);
-    const uint32_t distance = uint32_t(planarDistance(actor.pos, player().pos));
+    const uint32_t distance = uint32_t(planarDistance(actor.pos, nearestPlayer(actor.pos).pos));
     const int r = ground(env, actor, form);
     if (r == 1) {
         toFall(actor, form);

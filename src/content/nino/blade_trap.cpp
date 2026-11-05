@@ -23,6 +23,7 @@
 #include "game/hit_points.hpp"
 #include "game/pickups.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/story.hpp"
 #include "game/territory.hpp"
@@ -231,7 +232,7 @@ int32_t div48(uint32_t leg) {
 // the aim at the end of the leg on the player's side: the player ahead keeps the leg (a left turn), else the leg is
 // reversed; the yaw aimed at the leg's end (a sixteenth of a turn per 0x30 of the leg left, at most a quarter)
 void aimLeg(StaticActor& actor, TrapFields& fields) {
-    const int angle = angleOf(player().pos, actor.pos) & kAngleMask;
+    const int angle = angleOf(nearestPlayer(actor.pos).pos, actor.pos) & kAngleMask;
     const int side = angleDiff(uint32_t(angle), uint16_t(fields.travelYaw));
     if (uint32_t(side + 0x400) < 0x800u) {
         fields.timer = int16_t(uint16_t(uint32_t(div48(fields.legLeft)) << 6));

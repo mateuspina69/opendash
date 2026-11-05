@@ -33,6 +33,7 @@
 #include "game/hit_list.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/rewards.hpp"
@@ -127,7 +128,7 @@ bool near40(const AnimatedActor& actor, const NodePoint& p) {
            uint16_t(uint16_t(actor.pos.z.whole) - uint16_t(p.z) + 0x40u) < 0x80;
 }
 void facePlayer(AnimatedActor& actor, int step) {
-    turnYawTo(actor.rotation.y, uint32_t(angleOf(player().pos, actor.pos)), step);
+    turnYawTo(actor.rotation.y, uint32_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos)), step);
 }
 
 // the dust puff (pool 0xa0 type 0 variant 3) on the odd frames
@@ -272,7 +273,7 @@ void guideRun(AnimatedActor& actor, GuideFields& f) {
         const NodePoint p{player().pos.x.whole, player().pos.z.whole};
         turnYawTo(actor.rotation.y, uint32_t(angleFromPoint(p, actor)), 0x40);
         integrateVelocity(actor, 0, 0, actor.velocity.z);
-        if (planarDistance(player().pos, actor.pos) < 0x1200) enterSub(actor, GuideSub::WaitForPlayer);
+        if (planarDistance(nearestPlayer(actor.pos).pos, actor.pos) < 0x1200) enterSub(actor, GuideSub::WaitForPlayer);
         return;
     }
     default: return;
@@ -323,7 +324,7 @@ void guideAtLastNode(AnimatedActor& actor, GuideFields& f) {
     if (jumpSteps(actor, f) && actor.animEnded()) {
         actor.anim = kAnimCrouch;
         actor.step = uint8_t(JumpStep::Jump);
-        const int d = planarDistance(player().pos, actor.pos);
+        const int d = planarDistance(nearestPlayer(actor.pos).pos, actor.pos);
         if (d < 0xc00) actor.enterState(uint8_t(GuideState::AtExit), uint8_t(ExitSub::RunToExit));
         else if (d > 0x1800) enterSub(actor, GuideSub::Run);
     }

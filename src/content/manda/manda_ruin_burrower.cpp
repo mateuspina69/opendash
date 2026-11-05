@@ -121,7 +121,7 @@ void toSub(AnimatedActor& a, GuardSub s) { toSub(a, uint8_t(s)); }
 void turnHead(BurrowerFields& f, int16_t d) { f.headYaw = int16_t(f.headYaw + d); }
 // the player's direction seen from the burrower, relative to its yaw
 int playerBearing(const AnimatedActor& a) {
-    return angleDiff(uint32_t(angleOf(player().pos, a.pos)), uint32_t(int32_t(a.rotation.y)));
+    return angleDiff(uint32_t(angleOf(nearestPlayer(a.pos).pos, a.pos)), uint32_t(int32_t(a.rotation.y)));
 }
 int playerDistance(const AnimatedActor& a) { return planarDistance(nearestPlayer(a.pos).pos, a.pos); }
 
@@ -339,7 +339,7 @@ void spin(AnimatedActor& a, BurrowerFields& f) {
         }
         break;
     case SpinStep::Face:
-        turnYawTo(a.rotation.y, uint32_t(angleOf(player().pos, a.pos)), 0x80);
+        turnYawTo(a.rotation.y, uint32_t(angleOf(nearestPlayer(a.pos).pos, a.pos)), 0x80);
         f.timer = int16_t(uint16_t(f.timer) - 1u);
         if (f.timer == 0) {
             a.velocity.y = -0x190;
@@ -398,7 +398,7 @@ void leap(AnimatedActor& a, BurrowerFields& f) {
         f.timer = 0x1e;
         if (gameState().frame & 1) dustSpark(a);
     } else if (s == uint8_t(LeapStep::Crouch)) {
-        turnYawTo(a.rotation.y, uint32_t(angleOf(player().pos, a.pos)), 0x80);
+        turnYawTo(a.rotation.y, uint32_t(angleOf(nearestPlayer(a.pos).pos, a.pos)), 0x80);
         const uint32_t odd = uint8_t(f.timer) & 1;
         a.scale.x = int16_t((odd + 0x10) * 0x20);
         a.scale.y = int16_t(uint32_t(int(odd) * -0x20 + 0x200));

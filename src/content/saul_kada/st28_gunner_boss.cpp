@@ -38,6 +38,7 @@
 #include "game/hit_points.hpp"
 #include "game/hud.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/story.hpp"
@@ -327,7 +328,7 @@ void face(AnimatedActor& actor, BossFields& boss) {
         boss.timer += 1u;
         if (int8_t(boss.timer) < 0x1e) return;
     }
-    const uint32_t d = uint32_t(planarDistance(actor.pos, player().pos));
+    const uint32_t d = uint32_t(planarDistance(actor.pos, nearestPlayer(actor.pos).pos));
     BossSub next;
     if (boss.flags & kBossRetreatDue) next = BossSub::Retreat;
     else if (d < 0x400) next = BossSub::Spray;
@@ -363,7 +364,7 @@ void advance(AnimatedActor& actor) {
         }
         break;
     case 2:
-        if (uint32_t(planarDistance(actor.pos, player().pos)) < 0x400) {
+        if (uint32_t(planarDistance(actor.pos, nearestPlayer(actor.pos).pos)) < 0x400) {
             setAnim(actor, BossAnim::WalkEnd);
             actor.acceleration.z = int16_t(0xffe0);
             actor.step = 3;
@@ -432,7 +433,7 @@ void retreat(AnimatedActor& actor) {
         break;
     case 3:
         if (actor.animEnded() && actor.velocity.z == 0) {
-            enterSub(actor, uint32_t(planarDistance(actor.pos, player().pos)) < 0x600 ? BossSub::Bombs : BossSub::Beam);
+            enterSub(actor, uint32_t(planarDistance(actor.pos, nearestPlayer(actor.pos).pos)) < 0x600 ? BossSub::Bombs : BossSub::Beam);
             return;
         }
         break;

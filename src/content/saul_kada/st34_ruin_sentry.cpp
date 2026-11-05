@@ -34,6 +34,7 @@
 #include "game/lobbed_shot.hpp"
 #include "game/pickups.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/story.hpp"
 #include "game/territory.hpp"
@@ -150,7 +151,7 @@ bool move(const PlayerEnv& env, AnimatedActor& actor, SentryFields& sentry) {
 void lobShot(const AnimatedActor& actor, uint32_t rise) {
     const uint32_t slot = allocActor40(kActorStageClass); // exe 0x5e1280
     const AnimatedActorStats stats = sentryStats(actor);
-    int angle = angleOf(player().pos, actor.pos);
+    int angle = angleOf(nearestPlayer(actor.pos).pos, actor.pos);
     const int d = angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angle));
     if (d < -0x400) angle += -0x400 - d;
     else if (d > 0x400) angle += 0x400 - d;
@@ -169,7 +170,7 @@ void lobShot(const AnimatedActor& actor, uint32_t rise) {
     shot.rotation.z = 0;
     shot.velocity.x = 0;
     shot.velocity.y = int16_t(0xfe80);
-    const int32_t reach = int32_t(uint32_t(planarDistance(player().pos, actor.pos)) << 4);
+    const int32_t reach = int32_t(uint32_t(planarDistance(nearestPlayer(actor.pos).pos, actor.pos)) << 4);
     shot.acceleration.y = 0x30;
     shot.velocity.z = int16_t(uint16_t(uint32_t(-((reach + ((reach >> 31) & 0xf)) >> 4))));
     params.size = 0x20;
@@ -197,7 +198,7 @@ void dormant(AnimatedActor& actor, SentryFields& sentry) {
         sentry.flags = kDormantFlags;
     }
     actor.interaction =
-        uint32_t(angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angleOf(player().pos, actor.pos))) +
+        uint32_t(angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos))) +
                  0x180) > 0x300u
             ? 0
             : kInteractTalk;
@@ -208,7 +209,7 @@ void dormant(AnimatedActor& actor, SentryFields& sentry) {
         else if (player().talksTo(actor)) enemyGroupMark(sentry.group, 1);
     } else if (variant == 4) {
         if (enemyGroupMarks(sentry.group, EnemyGroupMarks::LastTick) != 0) wake = true;
-        else if (uint32_t(distance3(actor.pos, player().pos)) < 0x400) enemyGroupMark(sentry.group, 1);
+        else if (uint32_t(distance3(actor.pos, nearestPlayer(actor.pos).pos)) < 0x400) enemyGroupMark(sentry.group, 1);
     } else {
         wake = player().talksTo(actor);
     }
@@ -227,7 +228,7 @@ void dormant(AnimatedActor& actor, SentryFields& sentry) {
 void startTurn(const PlayerEnv& env, AnimatedActor& actor, SentryFields& sentry) {
     actor.step = 2;
     setAnim(actor, SentryAnim::Turn);
-    uint32_t off = (uint32_t(angleOf(actor.pos, player().pos)) - uint16_t(actor.rotation.y)) & 0xfff;
+    uint32_t off = (uint32_t(angleOf(actor.pos, nearestPlayer(actor.pos).pos)) - uint16_t(actor.rotation.y)) & 0xfff;
     if (off >= 0x800) {
         ++actor.step;
         off = 0xfff - off;
@@ -286,7 +287,7 @@ void turnMarch(const PlayerEnv& env, AnimatedActor& actor, SentryFields& sentry)
         move(env, actor, sentry);
         return;
     case 4:
-        turnYawTo(actor.rotation.y, uint32_t(angleOf(actor.pos, player().pos)), 0x33); // exe 0x5e3df0
+        turnYawTo(actor.rotation.y, uint32_t(angleOf(actor.pos, nearestPlayer(actor.pos).pos)), 0x33); // exe 0x5e3df0
         integrateVelocity(actor, 0, 0, -0x200);                                          // exe 0x5e3690
         if (footstepFrame(actor)) sound(kStepSound, actor);
         sentry.marchTimer -= 1u;

@@ -39,6 +39,7 @@
 #include "game/player/player_input.hpp"
 #include "game/player/player_script_control.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/projection.hpp"
 #include "game/projection_state.hpp"
@@ -1889,8 +1890,8 @@ void boss(const PlayerEnv& env, AnimatedActor& a) {
                                                                      : f.flags | kBossFarFromCentre;
     f.flags = uint32_t(planarDistance(arenaCentre(), player().pos)) < 0xb00 ? f.flags | kBossPlayerNearCentre
                                                                             : f.flags & ~kBossPlayerNearCentre;
-    f.distance = uint32_t(planarDistance(a.pos, player().pos));
-    f.playerAngle = int16_t(uint32_t(angleOf(player().pos, a.pos)));
+    f.distance = uint32_t(planarDistance(a.pos, nearestPlayer(a.pos).pos));
+    f.playerAngle = int16_t(uint32_t(angleOf(nearestPlayer(a.pos).pos, a.pos)));
     int d = angleDiff(a.rotation.y, f.playerAngle);
     if (d < 0) d = -d;
     if (d < 0x200) f.flags = (f.flags & ~kBossPlayerAside) | kBossPlayerAhead;

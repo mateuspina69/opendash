@@ -27,6 +27,7 @@
 #include "game/pickups.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/room_grid.hpp"
@@ -91,7 +92,7 @@ bool fuseTick(AnimatedActor& actor, CritterFields& critter) {
 // exe 0x473170: the forward speed toward -0x300 (by 0x20) while farther than 0xc0 - speed from the player, else back
 // toward 0; the planar distance to him (exe 0x5e3b00)
 int approach(AnimatedActor& actor) {
-    const int d = planarDistance(actor.pos, player().pos);
+    const int d = planarDistance(actor.pos, nearestPlayer(actor.pos).pos);
     const uint16_t speed = uint16_t(actor.velocity.z);
     if (d > 0xc0 - int(int16_t(speed))) {
         const uint16_t n = uint16_t(speed - 0x20u);
@@ -123,7 +124,7 @@ void bob(const PlayerEnv& env, AnimatedActor& actor, CritterFields& critter) {
 }
 // exe 0x473260: turned away from the player (0x40 a tick, snapped within 0x40)
 void faceAway(AnimatedActor& actor) {
-    const int away = angleOf(actor.pos, player().pos) - 0x800;                         // exe 0x5e3bc0
+    const int away = angleOf(actor.pos, nearestPlayer(actor.pos).pos) - 0x800;                         // exe 0x5e3bc0
     const int d = angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(away)); // exe 0x5e3d80
     const int distance = d < 0 ? -d : d;
     if (distance > 0x40) {
@@ -158,7 +159,7 @@ void glide(const PlayerEnv& env, AnimatedActor& actor) {
 // ---- the run's sub-states ([0x890408]) ------------------------------------------------------------------------------
 // exe 0x472c00: the player within 0xa00 (or a hit) -> the hover; killed -> the blow-up
 void wait(AnimatedActor& actor, const CritterFields& critter) {
-    if (uint32_t(distance3(actor.pos, player().pos)) < uint32_t(kWakeDistance)) restartSub(actor, CritterSub::Hover);
+    if (uint32_t(distance3(actor.pos, nearestPlayer(actor.pos).pos)) < uint32_t(kWakeDistance)) restartSub(actor, CritterSub::Hover);
     const int hit = takeHit(actor, critter);
     if (hit == 0) return;
     if (hit > 0) {

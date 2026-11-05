@@ -767,7 +767,7 @@ struct PlayerTail {
 PlayerTail& playerTail();
 // the player's struct read as a 16.16 point, as some classes hand the exe's distance routine the struct itself for its
 // position: its +0 / +4 / +8 words (the head, the type word, the state word)
-Fixed16Vec3 playerStructAsPoint();
+Fixed16Vec3 playerStructAsPoint(const Player& p);
 // exe 0x5e00e0(1)'s player part: the player's bytes cleared (the player constructed anew, every member zero) and the
 // 0x10 bytes after them in the game state. The table's other players are constructed anew with it (their ids and
 // whether they are in the session stay).

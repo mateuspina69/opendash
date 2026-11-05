@@ -136,7 +136,7 @@ void riseTo(AnimatedActor& actor, uint32_t y, uint32_t speed) {
 }
 // exe 0x50d130(actor, step): the yaw toward the angle of the actor seen from the player (snap within step)
 void turnFromPlayer(AnimatedActor& actor, int step) {
-    const int ang = angleOf(player().pos, actor.pos);
+    const int ang = angleOf(nearestPlayer(actor.pos).pos, actor.pos);
     const int d = angleDiff(uint32_t(ang), uint32_t(int32_t(actor.rotation.y)));
     const int ad = d < 0 ? -d : d;
     if (step > ad) actor.rotation.y = int16_t(ang);
@@ -204,14 +204,14 @@ void pickAttack(AnimatedActor& actor, BossFields& boss) {
         if (actor.keyIndex == 0) nextStep(actor);
         break;
     case 2:
-        if (int(actor.rotation.y) == angleOf(player().pos, actor.pos)) nextStep(actor);
+        if (int(actor.rotation.y) == angleOf(nearestPlayer(actor.pos).pos, actor.pos)) nextStep(actor);
         break;
     case 3: {
         if (halfHitPointsLost(actor) && boss.cooldown == 0) {
             actor.subState = uint8_t(BossAttack::BallCharge);
         } else {
             bool picked = false;
-            if (planarDistance(actor.pos, player().pos) < 0xc00 && boss.cooldown == 0 && (rngStep() & 3) == 0) {
+            if (planarDistance(actor.pos, nearestPlayer(actor.pos).pos) < 0xc00 && boss.cooldown == 0 && (rngStep() & 3) == 0) {
                 actor.subState = uint8_t((rngStep() & 1) + 4u);
                 picked = true;
             }
@@ -261,7 +261,7 @@ void dashForwardAttack(AnimatedActor& actor, BossFields& boss) {
         int32_t p[3];
         positionOf(actor, p);
         const int y1 = int16_t(angleOf(p[0], p[2], kRoomCentre[0], kRoomCentre[2]));
-        const int y2 = int16_t(angleOf(actor.pos, player().pos));
+        const int y2 = int16_t(angleOf(actor.pos, nearestPlayer(actor.pos).pos));
         const int d = angleDiff(uint32_t(y1), uint32_t(y2));
         if ((d < 0 ? -d : d) < 0x140 && (rngStep() & 3) != 0) {
             setAnim(actor, 0x1b);
@@ -594,7 +594,7 @@ void beamChargesAttack(AnimatedActor& actor, BossFields& boss) {
         }
         const uint16_t y = uint16_t((uint16_t(actor.spin.y) + uint16_t(actor.rotation.y)) & 0xfffu);
         actor.rotation.y = int16_t(y);
-        const int16_t d = int16_t(angleDiff(uint32_t(angleOf(actor.pos, player().pos)), uint32_t(int16_t(y))));
+        const int16_t d = int16_t(angleDiff(uint32_t(angleOf(actor.pos, nearestPlayer(actor.pos).pos)), uint32_t(int16_t(y))));
         if (d == 0) break;
         if (d > 0) {
             actor.spin.y = int16_t(uint16_t(actor.spin.y) + 2u);

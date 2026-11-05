@@ -28,6 +28,7 @@
 #include "game/hit_points.hpp"
 #include "game/pickups.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/projection_state.hpp"
 #include "game/random.hpp"
@@ -282,7 +283,7 @@ void kick(const AnimatedActor& a) {
 }
 // exe 0x4a4bf0(actor): back to the chase: within 0xa00 of the player the lunge, else the howl's run (animation 0)
 void chase(AnimatedActor& a) {
-    if (uint32_t(planarDistance(a.pos, player().pos)) <= uint32_t(kChaseDistance)) {
+    if (uint32_t(planarDistance(a.pos, nearestPlayer(a.pos).pos)) <= uint32_t(kChaseDistance)) {
         a.spin.y = kTurnFast;
         a.velocity.z = kLungeSpeed;
         a.anim = 0;
@@ -350,7 +351,7 @@ void move(AnimatedActor& a) { integrateVelocity(a, 0, 0, a.velocity.z); } // exe
 
 // ---- sub-type 0 ---------------------------------------------------------------------------------------------------
 void buried(AnimatedActor& a, SnowReaverbotFields& f) { // exe 0x4a2ce0: until the player is within its wake range
-    if (uint32_t(planarDistance(a.pos, player().pos)) <= wakeRanges[size_t(int32_t(f.spawnKind))])
+    if (uint32_t(planarDistance(a.pos, nearestPlayer(a.pos).pos)) <= wakeRanges[size_t(int32_t(f.spawnKind))])
         a.subState = uint8_t(SnowSub0::BurstOut);
 }
 void burstOut(const PlayerEnv& env, AnimatedActor& a, SnowReaverbotFields& f) { // exe 0x4a2d10: out of the snow
@@ -370,7 +371,7 @@ void burstOut(const PlayerEnv& env, AnimatedActor& a, SnowReaverbotFields& f) { 
         const uint32_t cx = uint32_t(int32_t(int16_t((a.pos.x.whole >> 9) + kCellBias)));
         switchGridCellVariant(cx, cz, 1); // the snow mound's segment opened
         a.pos.y = int32_t(uint32_t(actorGround(env, a)) << 16);
-        const int ang = angleOf(player().pos, a.pos);
+        const int ang = angleOf(nearestPlayer(a.pos).pos, a.pos);
         a.rotation.y = int16_t(ang);
         f.targetYaw = int16_t(ang);
         a.flags |= kActorDrawn;
@@ -425,7 +426,7 @@ void howl(const PlayerEnv& env, AnimatedActor& a, SnowReaverbotFields& f) { // e
         break;
     case 3:
         if (a.animEnded()) {
-            if (uint32_t(planarDistance(a.pos, player().pos)) <= uint32_t(kChaseDistance)) {
+            if (uint32_t(planarDistance(a.pos, nearestPlayer(a.pos).pos)) <= uint32_t(kChaseDistance)) {
                 a.spin.y = kTurnFast;
                 a.velocity.z = 0;
                 a.subState = uint8_t(SnowSub0::Lunge);
@@ -485,7 +486,7 @@ void lunge(const PlayerEnv& env, AnimatedActor& a, SnowReaverbotFields& f) { // 
         break;
     case 1:
         if (a.animEnded()) {
-            const int ang = angleOf(player().pos, a.pos);
+            const int ang = angleOf(nearestPlayer(a.pos).pos, a.pos);
             f.targetYaw = int16_t(ang);
             if (int32_t(uint32_t(uint16_t(uint16_t(ang) - uint16_t(a.rotation.y))) + 0x40) < 0x80) {
                 a.velocity.z = kLungeSpeed;
@@ -500,7 +501,7 @@ void lunge(const PlayerEnv& env, AnimatedActor& a, SnowReaverbotFields& f) { // 
         }
         break;
     case 2: {
-        const int ang = angleOf(player().pos, a.pos);
+        const int ang = angleOf(nearestPlayer(a.pos).pos, a.pos);
         f.targetYaw = int16_t(ang);
         if (turned(a, uint32_t(int32_t(int16_t(ang))))) {
             a.velocity.z = kLungeSpeed;

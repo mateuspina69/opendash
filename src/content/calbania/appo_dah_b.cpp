@@ -54,6 +54,7 @@
 #include "game/hit_points.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/player/player_weapons.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
@@ -525,8 +526,8 @@ void fightRunOff(AnimatedActor& actor, AppoDahFightFields& f) {
         if (nearestEnemy(actor, slot, dist, angle) != 0) {
             enterSub(actor, FightSub::Walk);
         } else {
-            if (planarDistance(player().pos, actor.pos) < dist && (rngStep() & 0xf) == 0) {
-                angle = angleOf(player().pos, actor.pos);
+            if (planarDistance(nearestPlayer(actor.pos).pos, actor.pos) < dist && (rngStep() & 0xf) == 0) {
+                angle = angleOf(nearestPlayer(actor.pos).pos, actor.pos);
                 actor.step = uint8_t(RunOffStep::FromPlayer);
             }
             f.timer = 0x30;
@@ -933,7 +934,7 @@ void gatePlaced(AnimatedActor& actor, AppoDahFightFields& f) {
         f.ridden = playerRides(actor) ? 1 : 0; // exe 0x59beb0
         return;
     }
-    turnYawTo(actor.rotation.y, uint32_t(angleOf(player().pos, actor.pos)), 0x100);
+    turnYawTo(actor.rotation.y, uint32_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos)), 0x100);
 }
 // exe 0x4c39b0: stands, then placed at once
 void gateStart(AnimatedActor& actor, AppoDahFightFields& f) {

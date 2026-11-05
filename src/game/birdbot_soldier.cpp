@@ -29,6 +29,7 @@
 #include "game/hit_points.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/shadows.hpp"
@@ -248,9 +249,9 @@ void walk(AnimatedActor& a, SoldierFields& f) { // exe 0x494240: to the target; 
     if (r != 0) attack(a, r);
     const uint8_t k = f.range & kSoldierRangeMask;
     if (k == kRangeChaser) {
-        if (planarDistance(a.pos, player().pos) < 900) f.chase = 0xf0;
+        if (planarDistance(a.pos, nearestPlayer(a.pos).pos) < 900) f.chase = 0xf0;
     } else if (k == kRangeStopper) {
-        if (planarDistance(a.pos, player().pos) < 900) f.range = 0;
+        if (planarDistance(a.pos, nearestPlayer(a.pos).pos) < 900) f.range = 0;
     }
     if (neighbourFind(a, f.neighbour, 0) != 0 && !(f.range & kSoldierAlone)) toSub(a, SoldierSub::GiveWay); // 0x5e5e00
     groupCall(a, f, dist, diff); // exe 0x495470(a, a + 0x14c, local_10, param_1)

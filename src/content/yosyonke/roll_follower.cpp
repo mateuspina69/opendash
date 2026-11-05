@@ -76,7 +76,7 @@ int wrappedDiff(int d) {
 }
 // the yaw against the player's direction from the actor
 int yawFromPlayerDiff(const AnimatedActor& a) {
-    return wrappedDiff(int(uint16_t(a.rotation.y) & kAngleMask) - (angleOf(player().pos, a.pos) & kAngleMask));
+    return wrappedDiff(int(uint16_t(a.rotation.y) & kAngleMask) - (angleOf(nearestPlayer(a.pos).pos, a.pos) & kAngleMask));
 }
 // the hit points of the type's row (0 without one), as the exe reads the animated table
 uint16_t rowHitPoints(const AnimatedActor& a) { return hasAnimatedStats(a.type) ? animatedStats(a.type).hitPoints : 0; }
@@ -336,7 +336,7 @@ void followerSub(AnimatedActor& a, RollFields& f) {
         if (pick) {
             a.step = 2;
             f.timer = 0x20;
-            const int ang = angleOf(player().pos, a.pos);
+            const int ang = angleOf(nearestPlayer(a.pos).pos, a.pos);
             f.searchYaw = int16_t(ang);
             const int d = wrappedDiff(int(uint16_t(a.rotation.y) & kAngleMask) - (ang & kAngleMask));
             const uint32_t r = rngStep() & 0x3ff;
@@ -830,8 +830,8 @@ void fieldRollSub(AnimatedActor& a, RollFields& f) {
         if (pick) {
             a.step = 2;
             f.timer = 0x40;
-            f.searchYaw = int16_t(angleOf(player().pos, a.pos));
-            const int ang = angleOf(player().pos, a.pos);
+            f.searchYaw = int16_t(angleOf(nearestPlayer(a.pos).pos, a.pos));
+            const int ang = angleOf(nearestPlayer(a.pos).pos, a.pos);
             f.searchYaw = int16_t(ang);
             const int d = wrappedDiff(int(uint16_t(a.rotation.y) & kAngleMask) - (ang & kAngleMask));
             const uint32_t r = rngStep() & 0x3ff;
@@ -1061,7 +1061,7 @@ void fieldRoll(const PlayerEnv& env, AnimatedActor& a) {
         const uint8_t st = a.step;
         if (st == 0) {
             f.behaviour = kRollNoLift | kRollNoHurt;
-            a.rotation.y = int16_t(angleOf(player().pos, a.pos));
+            a.rotation.y = int16_t(angleOf(nearestPlayer(a.pos).pos, a.pos));
             a.anim = 7;
             resetModelScale(a);
             const uint32_t r = rngStep();

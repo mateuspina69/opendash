@@ -43,6 +43,7 @@
 #include "game/hit_points.hpp"
 #include "game/pickups.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/stage_smoke.hpp"
@@ -253,7 +254,7 @@ void fireCycleStep(GlydeTankFields& f) {
 // exe 0x4bfaf0: the player within kFireRange and the turret within 0x200 of him -> a burst starts
 void spotPlayer(AnimatedActor& actor, GlydeTankFields& f, int dist) {
     if (dist >= kFireRange) return;
-    const int ang = angleOf(player().pos, actor.pos);
+    const int ang = angleOf(nearestPlayer(actor.pos).pos, actor.pos);
     const int d = angleDiff(uint32_t(int32_t(f.turretYaw) + int32_t(actor.rotation.y)), uint32_t(ang));
     if (uint32_t(d + 0x200) <= 0x400u && f.fireCycle == int8_t(FireCycle::Off)) f.fireCycle = int8_t(FireCycle::Start);
 }
@@ -270,7 +271,7 @@ void treadDust(AnimatedActor& actor) {
 }
 // exe 0x4bf760: the chase's step (spot / fire cycle, give up past kGiveUpRange, dust at speed, steps)
 void chaseStep(AnimatedActor& actor, GlydeTankFields& f) {
-    const int dist = planarDistance(player().pos, actor.pos);
+    const int dist = planarDistance(nearestPlayer(actor.pos).pos, actor.pos);
     spotPlayer(actor, f, dist);
     if (dist < kFireRange || f.fireCycle != int8_t(FireCycle::Off)) fireCycleStep(f);
     if (dist > kGiveUpRange) {
@@ -317,7 +318,7 @@ void wait(AnimatedActor& actor, GlydeTankFields& f) {
 // exe 0x4bf380: patrols -- watches the player (re-aims after its ticks off by 0x300); variant 0 drives and turns, the
 // others turn by firing a burst and pausing; variant 0 spots the player within kSpotRange
 void patrol(AnimatedActor& actor, GlydeTankFields& f) {
-    const int dist = planarDistance(actor.pos, player().pos); // exe 0x4c0330
+    const int dist = planarDistance(actor.pos, nearestPlayer(actor.pos).pos); // exe 0x4c0330
     const PatrolStep step = PatrolStep(actor.step);
     bool backToWatch = false;
     switch (step) {
@@ -330,7 +331,7 @@ void patrol(AnimatedActor& actor, GlydeTankFields& f) {
         f.fireCycle = int8_t(FireCycle::Off);
         [[fallthrough]];
     case PatrolStep::Watch: {
-        const int ang = angleOf(player().pos, actor.pos);
+        const int ang = angleOf(nearestPlayer(actor.pos).pos, actor.pos);
         const int d = angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(ang));
         bool turn = false;
         if (uint32_t(d + 0x300) >= 0x600u) {
@@ -436,9 +437,9 @@ void returnHome(AnimatedActor& actor, GlydeTankFields& f) {
 }
 // exe 0x4bf860: a wall / the territory's edge -- turns a quarter away from the player
 void turnBack(AnimatedActor& actor, GlydeTankFields& f) {
-    const int dist = planarDistance(actor.pos, player().pos);
+    const int dist = planarDistance(actor.pos, nearestPlayer(actor.pos).pos);
     if (actor.step == 0) {
-        const int ang = angleOf(player().pos, actor.pos) & kAngleMask;
+        const int ang = angleOf(nearestPlayer(actor.pos).pos, actor.pos) & kAngleMask;
         const uint16_t yaw = uint16_t(actor.rotation.y);
         int d = int(yaw & kAngleMask) - ang;
         if (uint32_t(d + 0x800) > 0x1000u) d = (-d ^ kAngleMask) + 1;

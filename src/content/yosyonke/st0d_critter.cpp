@@ -154,7 +154,7 @@ void critterSub(AnimatedActor& a, CritterFields& f) {
         default: break;
         }
         // it runs off when the player is near and in front (within +-0x400, +-0x600 while hopping)
-        int d = int(uint16_t(a.rotation.y) & kAngleMask) - (angleOf(player().pos, a.pos) & kAngleMask);
+        int d = int(uint16_t(a.rotation.y) & kAngleMask) - (angleOf(nearestPlayer(a.pos).pos, a.pos) & kAngleMask);
         if (uint32_t(d + kHalfTurn) > 0x1000u) d = int((uint32_t(-d) ^ 0xfffu) + 1u);
         const int k = a.anim == 1 ? 0x600 : 0x400;
         if (uint32_t(k + d) < uint32_t(k * 2) && distanceFromPlayer(a) < 0x400) {

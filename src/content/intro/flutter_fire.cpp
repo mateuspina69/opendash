@@ -25,6 +25,7 @@
 #include "game/hit_list.hpp"
 #include "game/lock_on_targets.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/room_grid.hpp"
@@ -115,7 +116,7 @@ int fireDamage(StaticActor& actor, BurningFields& fire) {
     int d = int(v & kHitDamageMask) * 0x20;
     if (!(v & (kHitAttackByPlayer | kHitAttackWater))) return 0;
     if (v & kHitAttackWater) {
-        int dist = distance3(player().pos, actor.pos);
+        int dist = distance3(nearestPlayer(actor.pos).pos, actor.pos);
         if (dist > 0x100)
             dist = 0x100;
         else if (dist < 0x80)
@@ -160,7 +161,7 @@ void submitFireHit(const StaticActor& actor, BurningFields& fire, const FirePara
 }
 // exe 0x5aed20: the heat the player feels -- the mission's heat += (strength >> 2) - the distance when closer
 void addHeat(const StaticActor& actor, const BurningFields& fire) {
-    const uint32_t d = uint32_t(distance3(player().pos, actor.pos));
+    const uint32_t d = uint32_t(distance3(nearestPlayer(actor.pos).pos, actor.pos));
     const uint32_t q = uint32_t(fire.strength >> 2);
     if (d < q) fireMission().heat = fireMission().heat + (q - d);
 }

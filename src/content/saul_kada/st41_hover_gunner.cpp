@@ -27,6 +27,7 @@
 #include "game/hit_points.hpp"
 #include "game/pickups.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/story.hpp"
@@ -209,7 +210,7 @@ void raisedApproach(AnimatedActor& actor, GunnerFields& gunner) {
         break;
     default: break;
     }
-    if (planarDistance(actor.pos, player().pos) < 0x300) enterSub(actor, GunnerSub::Bomb); // exe 0x5e3b00
+    if (planarDistance(actor.pos, nearestPlayer(actor.pos).pos) < 0x300) enterSub(actor, GunnerSub::Bomb); // exe 0x5e3b00
 }
 // exe 0x50aae0 (its steps [0x50ac40]): the ground approach
 void groundApproach(AnimatedActor& actor, GunnerFields& gunner) {
@@ -250,7 +251,7 @@ void groundApproach(AnimatedActor& actor, GunnerFields& gunner) {
         break;
     default: break;
     }
-    if (planarDistance(actor.pos, player().pos) < 0x500) enterSub(actor, GunnerSub::Stream);
+    if (planarDistance(actor.pos, nearestPlayer(actor.pos).pos) < 0x500) enterSub(actor, GunnerSub::Stream);
 }
 // exe 0x50ac50 (its steps [0x50ad4c]): the rise to y -0x400 (a flip on the way); the ceiling knocks it down
 void rise(AnimatedActor& actor, GunnerFields& gunner) {

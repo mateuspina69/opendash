@@ -31,6 +31,7 @@
 #include "game/hit_effects.hpp"
 #include "game/keyframe_tracks.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/script_state.hpp"
 #include "game/shadows.hpp"
@@ -772,7 +773,7 @@ void riserRiseAway(AnimatedActor& actor, RiserFields& fields) {
         actor.rotation.y -= 0x10u;
         fields.riseTicks -= 0x10u;
         integrateVelocity(actor, 0, 0, 0x140);
-        const uint32_t d = uint32_t(distance3(actor.pos, player().pos)); // exe 0x5e3a60
+        const uint32_t d = uint32_t(distance3(actor.pos, nearestPlayer(actor.pos).pos)); // exe 0x5e3a60
         if (d <= kRiseAwayDistance && fields.riseTicks > 0) return;
         actor.enterStep(uint8_t(RisePhase::Gone));
         return;

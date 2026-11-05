@@ -22,6 +22,7 @@
 #include "game/hit_list.hpp"
 #include "game/hit_points.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/story_flags.hpp"
@@ -237,7 +238,7 @@ void throwBomb(AnimatedActor& actor, GlydeBomberFields& f) {
         if (!actor.animEnded()) return;
         actor.enterStep(uint8_t(ThrowStep::Aim));
         actor.anim = kAnimLift;
-        int ang = angleOf(player().pos, actor.pos); // exe 0x5e3bc0
+        int ang = angleOf(nearestPlayer(actor.pos).pos, actor.pos); // exe 0x5e3bc0
         const int d = angleDiff(uint32_t(int32_t(f.spawnYaw)), uint32_t(ang)); // exe 0x5e3d80
         if (d < 0) {
             if (d < -0x100) ang += -0x100 - d;
@@ -255,7 +256,7 @@ void throwBomb(AnimatedActor& actor, GlydeBomberFields& f) {
         --f.timer;
         if (f.timer != 0) return;
         const int reach = var != 0 ? 0xc00 : 0xa00;
-        const int d = planarDistance(player().pos, actor.pos); // exe 0x5e3b00
+        const int d = planarDistance(nearestPlayer(actor.pos).pos, actor.pos); // exe 0x5e3b00
         if (d > reach) {
             actor.enterStep(uint8_t(ThrowStep::Aim));
             f.timer = 1;

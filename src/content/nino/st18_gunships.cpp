@@ -29,6 +29,7 @@
 #include "game/hit_list.hpp"
 #include "game/matrix.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/script_state.hpp"
@@ -376,8 +377,8 @@ void fightCruise(StaticActor& actor, FightGunshipFields& ship) {
         ship.timer = t;
         if (t == 0) actor.enterStep(uint8_t(FightCruiseStep::RunStart));
         // the exe passes the player's struct (not its position): its +0 / +8 words
-        const int dist = planarDistance(actor.pos, playerStructAsPoint());
-        const int d = angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angleOf(player().pos, actor.pos)));
+        const int dist = planarDistance(actor.pos, playerStructAsPoint(nearestPlayer(actor.pos)));
+        const int d = angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos)));
         if (uint32_t(d + 0x200) < 0x400 && dist <= 0xbb8) {
             ship.timer = fightBurstTicks[rngStep() & 0xf];
             actor.enterStep(uint8_t(FightCruiseStep::Burst));

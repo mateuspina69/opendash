@@ -29,6 +29,7 @@
 #include "game/pickups.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/spark_emitter.hpp"
@@ -281,7 +282,7 @@ void toSub(AnimatedActor& a, HoverSub s) {
 }
 // the player within the notice range of the home's range parameter
 bool playerInRange(const AnimatedActor& a) {
-    return planarDistance(a.pos, player().pos) < noticeRanges[size_t(int32_t(HoverReaverbotParams(a).range))];
+    return planarDistance(a.pos, nearestPlayer(a.pos).pos) < noticeRanges[size_t(int32_t(HoverReaverbotParams(a).range))];
 }
 enum class HoverStep : uint8_t { Start = 0, Pause = 1, Wait = 2, SwingStart = 3, Swing = 4, SwingBack = 5 };
 // exe 0x44d730: drifts (the yaw spinning, a vertical swing between pauses) until the player comes near or a hit
@@ -370,7 +371,7 @@ void notice(AnimatedActor& a, HoverFields& f) {
         a.enterStep(uint8_t(NoticeStep::Turn));
         [[fallthrough]];
     case NoticeStep::Turn: { // exe 0x44d9b1
-        const int ang = angleOf(player().pos, a.pos);    // exe 0x5e3bc0(player, position)
+        const int ang = angleOf(nearestPlayer(a.pos).pos, a.pos);    // exe 0x5e3bc0(player, position)
         turnYawTo(a.rotation.y, uint32_t(ang), 0x20);    // exe 0x5e3df0
         --f.timer;
         if (uint16_t(f.timer) == 0) {
@@ -512,7 +513,7 @@ void knock(AnimatedActor& a, HoverFields& f) {
         a.velocity.x = 0;
         a.velocity.z = 0x400;
         a.anim = 2;
-        const int ang = angleOf(player().pos, a.pos); // exe 0x5e3bc0(player, position)
+        const int ang = angleOf(nearestPlayer(a.pos).pos, a.pos); // exe 0x5e3bc0(player, position)
         const uint32_t r = rngStep();
         f.moveYaw = int16_t((r & 0x3ff) + uint32_t(ang) - 0x1ffu);
         f.movePitch = a.rotation.x;

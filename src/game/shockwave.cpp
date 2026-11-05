@@ -14,6 +14,7 @@
 #include "game/hit_list.hpp"
 #include "game/matrix.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/projection.hpp"
 #include "game/random.hpp"
@@ -98,7 +99,7 @@ void ringTick(ProjectileActor& s, ShockwaveFields& f) {
             // 0x6d00c0, the point 0x6d0120, the view 0x6d0160: render-side scratch, not written), its height by the
             // phase
             const int32_t h = phaseSine(f.phase) * f.height >> 0xd;
-            const int ang = angleOf(s.pos, player().pos);
+            const int ang = angleOf(s.pos, nearestPlayer(s.pos).pos);
             const int16_t v16[3] = {0, 0, f.radius};
             int32_t v[3];
             transformVector(rotationY(int(uint32_t(ang) & kAngleMask)), v16, v); // exe 0x40bea0 / 0x40c800

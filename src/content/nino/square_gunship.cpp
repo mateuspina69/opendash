@@ -21,6 +21,7 @@
 #include "game/hit_points.hpp"
 #include "game/hud.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/story.hpp"
@@ -183,7 +184,7 @@ void flyStart(StaticActor& actor, SquareGunshipFields& ship) {
 // the dive
 void fly(StaticActor& actor, SquareGunshipFields& ship) {
     // the exe passes the player's struct, not its position: its +0 / +8 words
-    const int dist = planarDistance(actor.pos, playerStructAsPoint());
+    const int dist = planarDistance(actor.pos, playerStructAsPoint(nearestPlayer(actor.pos)));
     switch (FlyStep(actor.step)) {
     case FlyStep::Init:
         ship.flight = 0;
@@ -203,7 +204,7 @@ void fly(StaticActor& actor, SquareGunshipFields& ship) {
         ship.timer = t;
         if (t == 0) actor.enterStep(uint8_t(FlyStep::RunStart));
         if (actor.variant == kBomberVariant) break;
-        const int d = angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angleOf(player().pos, actor.pos)));
+        const int d = angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos)));
         if (uint32_t(d + 0x280) < 0x500 && dist <= kPlayerNear && !(ship.behaviour & kBehaveRocking)) {
             ship.timer = burstTicks[rngStep() & 0xf];
             actor.enterStep(uint8_t(FlyStep::Burst));

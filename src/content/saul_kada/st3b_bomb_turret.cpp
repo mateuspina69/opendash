@@ -33,6 +33,7 @@
 #include "game/lobbed_shot.hpp"
 #include "game/pickups.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/story.hpp"
 
@@ -102,7 +103,7 @@ int clampYaw(TurretFields& turret) {
 }
 // exe 0x4724d0: aimed within +-0x10 of the player -> fire, 1
 int aimTest(AnimatedActor& actor, const TurretFields& turret) {
-    const int bearing = angleOf(player().pos, actor.pos);
+    const int bearing = angleOf(nearestPlayer(actor.pos).pos, actor.pos);
     const int d = angleDiff(uint32_t(gunYaw(actor, turret)), uint32_t(bearing));
     if (uint32_t(d + 0x10) <= 0x20u) {
         enterSub(actor, TurretSub::Fire);
@@ -136,20 +137,20 @@ void sweep(AnimatedActor& actor, TurretFields& turret) {
         break;
     default: break;
     }
-    const int bearing = angleOf(player().pos, actor.pos);
+    const int bearing = angleOf(nearestPlayer(actor.pos).pos, actor.pos);
     const int d = angleDiff(uint32_t(gunYaw(actor, turret)), uint32_t(bearing));
     if (uint32_t(d + 0x400) > 0x800u) return;
-    if (planarDistance(actor.pos, player().pos) > kSeeDistance) return;
+    if (planarDistance(actor.pos, nearestPlayer(actor.pos).pos) > kSeeDistance) return;
     enterSub(actor, TurretSub::Track);
     aimTest(actor, turret); // exe 0x4724d0 (its result dropped)
 }
 // exe 0x472440: turn toward the player
 void track(AnimatedActor& actor, TurretFields& turret) {
-    const int bearing = angleOf(player().pos, actor.pos);
+    const int bearing = angleOf(nearestPlayer(actor.pos).pos, actor.pos);
     const int d = angleDiff(uint32_t(gunYaw(actor, turret)), uint32_t(bearing));
     if (d > 0) turret.yawOffset += 0x20u;
     if (d < 0) turret.yawOffset -= 0x20u;
-    if (planarDistance(actor.pos, player().pos) > kLoseDistance) enterSub(actor, TurretSub::Sweep);
+    if (planarDistance(actor.pos, nearestPlayer(actor.pos).pos) > kLoseDistance) enterSub(actor, TurretSub::Sweep);
     if (clampYaw(turret)) enterSub(actor, TurretSub::Fire);
     aimTest(actor, turret); // exe 0x4724d0 (its result dropped)
 }
@@ -238,7 +239,7 @@ void fire(AnimatedActor& actor, TurretFields& turret) {
         break;
     default: break;
     }
-    if (planarDistance(actor.pos, player().pos) > kLoseDistance) enterSub(actor, TurretSub::Sweep);
+    if (planarDistance(actor.pos, nearestPlayer(actor.pos).pos) > kLoseDistance) enterSub(actor, TurretSub::Sweep);
 }
 void runSub(AnimatedActor& actor, TurretFields& turret) {
     switch (TurretSub(actor.subState)) {

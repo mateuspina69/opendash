@@ -26,6 +26,7 @@
 #include "game/hit_points.hpp"
 #include "game/pickups.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/story.hpp"
 
@@ -93,7 +94,7 @@ void idle(AnimatedActor& actor, GeneratorFields& generator) {
                 const AnimatedActor& other = animatedPool()[i];
                 if (other.flags != 0 && other.type == kFieldReaverbotType) ++alive;
             }
-            if (planarDistance(player().pos, actor.pos) < kReach && alive < kMaxAlive) { // exe 0x5e3b00
+            if (planarDistance(nearestPlayer(actor.pos).pos, actor.pos) < kReach && alive < kMaxAlive) { // exe 0x5e3b00
                 actor.anim = uint8_t(GeneratorAnim::Open);
                 ++actor.step;
                 generator.flagsLow |= uint8_t(kGeneratorOpen);
@@ -102,7 +103,7 @@ void idle(AnimatedActor& actor, GeneratorFields& generator) {
         } else {
             generator.timer -= 1u;
         }
-        turnYawTo(actor.rotation.y, uint32_t(angleOf(player().pos, actor.pos)), 0x40); // exe 0x5e3bc0, 0x5e3df0
+        turnYawTo(actor.rotation.y, uint32_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos)), 0x40); // exe 0x5e3bc0, 0x5e3df0
         return;
     case IdleStep::Release: release(actor, generator); return;
     case IdleStep::Close:

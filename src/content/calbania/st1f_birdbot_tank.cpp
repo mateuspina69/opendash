@@ -48,6 +48,7 @@
 #include "game/hit_points.hpp"
 #include "game/pickups.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/room_grid.hpp"
@@ -142,8 +143,8 @@ uint32_t pairActorAddress(int8_t slot) { return address_forms::animatedSlotAddre
 // (unless flags 0x581 / 0x582 or their hit points are out); the planar distance (kNoTarget: none)
 int tankTarget(AnimatedActor& actor, BirdbotTankFields& f, uint32_t& target) {
     int d = kNoTarget;
-    target = kPlayer;
-    if (!scriptState().inUse()) d = planarDistance(actor.pos, player().pos);
+    target = nearestPlayer(actor.pos).at;
+    if (!scriptState().inUse()) d = planarDistance(actor.pos, nearestPlayer(actor.pos).pos);
     int de = d, df = d;
     if (!storyFlag(kFlagAppoCarried) && f.appoSlot != 0) {
         const Actor& o = actorAt(pairActorAddress(f.appoSlot));

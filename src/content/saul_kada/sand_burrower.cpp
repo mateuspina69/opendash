@@ -27,6 +27,7 @@
 #include "game/hit_list.hpp"
 #include "game/hit_points.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/story.hpp"
@@ -133,7 +134,7 @@ void turnToward(AnimatedActor& actor, const int16_t to[3], const int16_t from[3]
     turnYawTo(actor.rotation.y, uint32_t(angleOf(to, from)), step); // exe 0x5e3df0
 }
 void turnTowardPlayer(AnimatedActor& actor) {
-    turnYawTo(actor.rotation.y, uint32_t(angleOf(player().pos, actor.pos)), 0x40); // exe 0x5e3bc0
+    turnYawTo(actor.rotation.y, uint32_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos)), 0x40); // exe 0x5e3bc0
 }
 void setAnim(AnimatedActor& actor, BurrowerAnim anim) { actor.anim = uint8_t(anim); }
 

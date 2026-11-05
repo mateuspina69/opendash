@@ -16,6 +16,7 @@
 #include "game/hit_effects.hpp"
 #include "game/hit_list.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/story.hpp"
@@ -94,7 +95,7 @@ void flameEffect(const int16_t p[3], uint32_t rgb) {
 }
 // exe 0x5c3590(actor, -, rate) with exe 0x5c35d0: the yaw turned toward the player by rate
 void turnToPlayer(ProjectileActor& actor, int rate) {
-    const uint32_t to = uint32_t(angleOf(player().pos, actor.pos)); // exe 0x5e3bc0
+    const uint32_t to = uint32_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos)); // exe 0x5e3bc0
     int32_t d = int32_t((to & 0xfff) - (uint32_t(int32_t(actor.rotation.y)) & 0xfff));
     if (uint32_t(d + 0x800) > 0x1000) d = ~d;
     if (d > rate) actor.rotation.y += uint32_t(rate);
@@ -161,7 +162,7 @@ void homingLob(ProjectileActor& actor, FireShotFields& f) {
         actor.subState = uint8_t(FlightSub::Fly);
         f.phase = 0;
         actor.velocity.x = 0;
-        const int32_t d = planarDistance(player().pos, actor.pos); // exe 0x5e3b00
+        const int32_t d = planarDistance(nearestPlayer(actor.pos).pos, actor.pos); // exe 0x5e3b00
         int32_t n = (d + ((d >> 31) & 0x1ff)) >> 9;
         if (n == 0) n = 1;
         actor.velocity.z = int16_t(0xe000);

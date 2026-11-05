@@ -19,6 +19,7 @@
 #include "game/vectors.hpp"
 #include "game/hit_list.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/story.hpp"
 
@@ -78,7 +79,7 @@ void spin(AnimatedActor& actor, BladeFields& blade) {
         if (std::abs(speed) <= std::abs(int(blade.topSpeed))) actor.spin.y = int16_t(speed + accel);
         else actor.spin.y = blade.topSpeed;
         if (blade.hitBox.result & kHitAttackBump) actor.subState = uint8_t(BladeSub::Stopping);
-        const int d = angleDiff(uint32_t(actor.rotation.y + 0x400), uint32_t(angleOf(player().pos, actor.pos)));
+        const int d = angleDiff(uint32_t(actor.rotation.y + 0x400), uint32_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos)));
         if (blade.soundTicks == 0 && uint32_t(d + 0x100) < 0x200) {
             soundPlayAtPos(kPassSound, actor.pos);
             blade.soundTicks = kSoundCooldown;

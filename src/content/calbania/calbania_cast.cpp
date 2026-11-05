@@ -43,6 +43,7 @@
 #include "game/hit_points.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/rewards.hpp"
@@ -544,7 +545,7 @@ void birdFlee(AnimatedActor& actor, TownBirdFields& f) {
         break;
     }
     case FleeStep::Away: { // away from the player, maybe +-0x200
-        const int ang = angleOf(player().pos, actor.pos) + 0x800;
+        const int ang = angleOf(nearestPlayer(actor.pos).pos, actor.pos) + 0x800;
         const uint8_t k = uint8_t(rngStep() & 7);
         f.side = k;
         f.heading = sidestep(k, ang);
@@ -570,7 +571,7 @@ void birdFlee(AnimatedActor& actor, TownBirdFields& f) {
     }
     case FleeStep::Run:
         if (actor.wallHit & 0xf00) { // a wall: look for a way round (three probes 0x30 ahead)
-            const int ang = angleOf(player().pos, actor.pos) + 0x800;
+            const int ang = angleOf(nearestPlayer(actor.pos).pos, actor.pos) + 0x800;
             f.side = uint8_t(1u << (rngStep() & 3));
             actor.step = uint8_t(FleeStep::Turn);
             uint32_t freeDirs = 0;
@@ -605,7 +606,7 @@ void birdFlee(AnimatedActor& actor, TownBirdFields& f) {
                 f.timer = int16_t(fleeTicks[rngStep() & 0xf]);
                 actor.step = uint8_t(FleeStep::Onward);
             }
-            if (actor.stepCounter != 0 && planarDistance(actor.pos, player().pos) > 0xc00)
+            if (actor.stepCounter != 0 && planarDistance(actor.pos, nearestPlayer(actor.pos).pos) > 0xc00)
                 actor.step = uint8_t(FleeStep::Slow);
         }
         break;
@@ -635,7 +636,7 @@ void birdTurnAway(AnimatedActor& actor, TownBirdFields& f) {
     case TurnAwayStep::Start:
         stopMotion(actor);
         birdAnim(actor, f, kAnimBirdWalk);
-        f.heading = int16_t(uint16_t(angleOf(player().pos, actor.pos)));
+        f.heading = int16_t(uint16_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos)));
         sound(kSoundSquawk, actor);
         ++actor.step;
         return;
@@ -654,7 +655,7 @@ void birdTurnAway(AnimatedActor& actor, TownBirdFields& f) {
         if (actor.animKey.flags != kKeyHold) return;
         birdAnim(actor, f, kAnimBirdWalk);
         f.side = coin(rngStep());
-        f.heading = int16_t(uint16_t(angleOf(player().pos, actor.pos) + int((f.side ? 0x7ffu : 0x801u))));
+        f.heading = int16_t(uint16_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos) + int((f.side ? 0x7ffu : 0x801u))));
         ++actor.step;
         return;
     case TurnAwayStep::TurnAway: {

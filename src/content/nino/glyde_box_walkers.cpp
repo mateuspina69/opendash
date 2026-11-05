@@ -35,6 +35,7 @@
 #include "game/lift_box.hpp"
 #include "game/pickups.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/story.hpp"
@@ -345,7 +346,7 @@ void routeWalk(AnimatedActor& actor, WalkerFields& w); // exe 0x4ade00
 // player
 int chooseTarget(AnimatedActor& actor, WalkerFields& w) {
     if (!nearCentre(actor)) {
-        w.target = kPlayer;
+        w.target = nearestPlayer(actor.pos).at;
         return 0;
     }
     if (w.flags & kWalkerBusy) return 0;
@@ -355,7 +356,7 @@ int chooseTarget(AnimatedActor& actor, WalkerFields& w) {
         routeWalk(actor, w);
         return 1;
     }
-    w.target = kPlayer;
+    w.target = nearestPlayer(actor.pos).at;
     return 0;
 }
 // exe 0x4ae850(actor, block): a free box in line (ahead, left or right) at most one cell away -> its throw
@@ -424,11 +425,11 @@ int headTurn(const AnimatedActor& actor, WalkerFields& w, int angle) {
 }
 // the head turned toward the player (exe 0x4aed70 with the angle from the player to the walker)
 int headTurnToPlayer(const AnimatedActor& actor, WalkerFields& w) {
-    return headTurn(actor, w, angleOf(player().pos, actor.pos));
+    return headTurn(actor, w, angleOf(nearestPlayer(actor.pos).pos, actor.pos));
 }
 // exe 0x4ae600: the guns' pitch and spread from the player's distance and height
 void aim(const AnimatedActor& actor, WalkerFields& w) {
-    int d = planarDistance(actor.pos, player().pos) - 0xc8;
+    int d = planarDistance(actor.pos, nearestPlayer(actor.pos).pos) - 0xc8;
     if (d < 0) d = 1;
     const int16_t dy = int16_t(uint16_t(0xff42u - uint16_t(player().pos.y.whole)));
     const int p = atanAngle(float(t16(d)), float(dy)) & 0xfff; // exe 0x5e3c50({0, 0}, {d, dy})
@@ -464,7 +465,7 @@ int damage(AnimatedActor& actor, WalkerFields& w) {
         actor.restartStep();
         w.setAction(uint8_t(WalkerAction::None));
     }
-    if ((v & (kHitAttackStrongPush | kHitAttackByPlayer)) && w.target == 0u) w.target = kPlayer;
+    if ((v & (kHitAttackStrongPush | kHitAttackByPlayer)) && w.target == 0u) w.target = nearestPlayer(actor.pos).at;
     if (hitPointsAdd(actor, -int(dmg)) != 0) {
         actor.subState = uint8_t(WalkerSub::Hurt);
         actor.restartStep();
@@ -533,7 +534,7 @@ void pathWalk(AnimatedActor& actor, WalkerFields& w, bool run) {
     const int speed = run ? -0x300 : -0x200;
     switch (actor.step) {
     case 0:
-        if (run) w.target = kPlayer;
+        if (run) w.target = nearestPlayer(actor.pos).at;
         w.flags &= kWalkerBusy;
         beginSub(actor);
         actor.velocity.z = 0;
@@ -581,7 +582,7 @@ void pathWalk(AnimatedActor& actor, WalkerFields& w, bool run) {
         const int r = pathHeading(actor, w, w.cellX, w.cellZ);
         if (r <= 0) {
             enterSub(actor, WalkerSub::Think);
-            w.target = kPlayer;
+            w.target = nearestPlayer(actor.pos).at;
             think(actor, w);
             return;
         }

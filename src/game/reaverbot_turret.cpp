@@ -29,6 +29,7 @@
 #include "game/hit_points.hpp"
 #include "game/pickups.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/turret_bullet.hpp"
@@ -105,7 +106,7 @@ bool inBox(const TurretBox& box, uint32_t u, int dist) {
 // exe 0x459620(actor, block, box): the player inside the box (the distance exe 0x4597b0, the angle from the reference)
 bool playerInBox(const AnimatedActor& a, const TurretFields& f, const TurretBox& box) {
     const int dist = playerDistance(a);
-    const uint32_t u = (uint32_t(angleOf(player().pos, a.pos)) - uint32_t(f.yawReference)) & kAngleMask;
+    const uint32_t u = (uint32_t(angleOf(nearestPlayer(a.pos).pos, a.pos)) - uint32_t(f.yawReference)) & kAngleMask;
     return inBox(box, u, dist);
 }
 // exe 0x4596a0(actor, block, box): the same from the point the walk-out distance ahead along the reference
@@ -127,7 +128,7 @@ const TurretBox rangeBox(const AnimatedActor& a) { return rangeBoxes[a.variant];
 
 // the facing step of the stand sub-states: snapped within 0x20 (animation 1), else a turn of 0x20 (animation 4)
 void face(AnimatedActor& a, TurretFields& f) {
-    const int16_t yaw = int16_t(angleOf(player().pos, a.pos));
+    const int16_t yaw = int16_t(angleOf(nearestPlayer(a.pos).pos, a.pos));
     f.target = yaw;
     int d = int((uint32_t(uint16_t(a.rotation.y)) - uint32_t(int32_t(yaw))) & kAngleMask);
     if (d > kHalfTurn) d -= kFullTurn;
@@ -322,7 +323,7 @@ void walkBehaviour(AnimatedActor& a, TurretFields& f) { // exe 0x458f90: toward 
             a.anim = 0;
             f.timer = 0;
         }
-        if (f.turnTicks == 0) f.target = int16_t(angleOf(player().pos, a.pos));
+        if (f.turnTicks == 0) f.target = int16_t(angleOf(nearestPlayer(a.pos).pos, a.pos));
         walk(a, f);
         f.yawReference = uint16_t(a.rotation.y);
         if (playerInBox(a, f, meleeBox(a)) && !attackLocked()) {
@@ -339,7 +340,7 @@ void walkBehaviour(AnimatedActor& a, TurretFields& f) { // exe 0x458f90: toward 
         const Actor& o = neighbourActor(uint16_t(f.neighbour));
         if (f.turnTicks == 0) {
             uint16_t y;
-            if (!(f.neighbour & kNeighbourOpposite)) y = uint16_t(angleOf(player().pos, a.pos));
+            if (!(f.neighbour & kNeighbourOpposite)) y = uint16_t(angleOf(nearestPlayer(a.pos).pos, a.pos));
             else y = uint16_t(headingFromOther(a, o, neighbourSide(f.neighbour), 0x140) & kAngleMask);
             f.target = int16_t(y);
         }
@@ -460,7 +461,7 @@ void spawn(const PlayerEnv& env, AnimatedActor& a, TurretFields& f) { // exe 0x4
     a.velocity.x = 0;
     f.hitBox.previousX = x;
     f.hitBox.previousZ = a.pos.z.whole;
-    f.target = int16_t(angleOf(player().pos, a.pos));
+    f.target = int16_t(angleOf(nearestPlayer(a.pos).pos, a.pos));
     f.yawReference = uint16_t(a.rotation.y);
     registerEnemy(a.slot, 1);
     if (a.variant == kTurretSteady) f.setLowFlags(uint8_t(kTurretNoStagger));

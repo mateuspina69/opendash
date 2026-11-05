@@ -202,7 +202,7 @@ void droneChase(const PlayerEnv& env, StaticActor& a, DroneFields& f) {
         f.heightOffset = int16_t(e);
     }
     const int dy = (f.heightOffset - a.pos.y.whole + player().pos.y.whole - 0x64) >> 2;
-    turnYawTo(a.rotation.y, uint32_t(angleOf(player().pos, a.pos)), 0x10); // exe 0x5e3bc0 / 0x5e3df0
+    turnYawTo(a.rotation.y, uint32_t(angleOf(nearestPlayer(a.pos).pos, a.pos)), 0x10); // exe 0x5e3bc0 / 0x5e3df0
     integrateVelocity(a, 0, dy, -0xa0);
     droneCollide(env, a);
     if (f.hitBox.result & kHitDamageMask) {
@@ -718,7 +718,7 @@ void mineIdle(StaticActor& a, MineFields& f) {
         f.swayAngle = int16_t(uint16_t(c + uint16_t(s)));
         if (f.flags & kMineAlerted) {
             a.step = 1;
-            const int ang = angleOf(player().pos, a.pos);
+            const int ang = angleOf(nearestPlayer(a.pos).pos, a.pos);
             f.timer = int16_t(ang);
             turnYawTo(a.rotation.y, uint32_t(int32_t(int16_t(ang))), 0x30);
             mineGlows(a, f);
@@ -766,7 +766,7 @@ void mineHome(StaticActor& a, MineFields& f) {
     if (d <= 0x800) {
         f.timer = 0;
         a.step = 0;
-        turnYawTo(a.rotation.y, uint32_t(angleOf(player().pos, a.pos)), 0x30);
+        turnYawTo(a.rotation.y, uint32_t(angleOf(nearestPlayer(a.pos).pos, a.pos)), 0x30);
         const int dy = int(t[1]) - a.pos.y.whole;
         if (std::abs(dy) <= 0x20) a.velocity.y = 0;
         else a.velocity.y = int16_t(dy > 0 ? -0x30 : 0x30);
@@ -1108,7 +1108,7 @@ uint32_t knockDirection(const DiggerFields& f, int yaw) {
 // exe 0x4df1e0: the player behind it (within 0x400 of its yaw + 0x600) and facing it (its yaw within 0x200 the
 // other way)
 bool playerBehind(const AnimatedActor& a) {
-    const int ang = angleOf(a.pos, player().pos);
+    const int ang = angleOf(a.pos, nearestPlayer(a.pos).pos);
     const uint16_t c = uint16_t((uint32_t(ang) - uint16_t(a.rotation.y) - 0x600) & kAngleMask);
     if (int16_t(c) > 0x400) return false;
     const uint16_t d = uint16_t((uint32_t(ang) - uint16_t(player().rotation.y) + 0x200) & kAngleMask);
@@ -1842,7 +1842,7 @@ void flyerPerch(const PlayerEnv& env, AnimatedActor& a, FlyerFields& f) {
         const int p = pitchOf(above, at);
         const uint16_t c = uint16_t(0x800 - p - int(uint16_t(f.pitch)));
         f.pitch = int16_t(uint16_t(f.pitch) + (int16_t(c) > 0 ? 0x10u : 0xfff0u));
-        if (planarDistance(player().pos, a.pos) > 0x340) {
+        if (planarDistance(nearestPlayer(a.pos).pos, a.pos) > 0x340) {
             if (a.velocity.z > 0x180) a.velocity.z = int16_t(uint16_t(a.velocity.z) - uint16_t(a.acceleration.z));
             else a.velocity.z = -0x180;
         } else if (a.velocity.z < 0) {
@@ -1872,7 +1872,7 @@ void flyerHover(AnimatedActor& a, FlyerFields& f) {
         a.step = 1;
         return;
     case 1:
-        if (planarDistance(player().pos, a.pos) >= 0x400) {
+        if (planarDistance(nearestPlayer(a.pos).pos, a.pos) >= 0x400) {
             a.anim = 0;
             a.subState = uint8_t(FlyerSub::Perch);
             a.step = 2;

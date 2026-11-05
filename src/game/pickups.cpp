@@ -14,6 +14,7 @@
 #include "game/hit_points.hpp"
 #include "game/message.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/player/player_weapons.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
@@ -313,8 +314,8 @@ void pickupUpdate(const PlayerEnv& env, uint32_t address) {
             vacuumPull(actor);
         }
         if (test) bounce(env, actor, false);
-        if (distance3(actor.pos, player().pos) < kRollReach) {
-            actor.rotation.y = int16_t(angleOf(actor.pos, player().pos));
+        if (distance3(actor.pos, nearestPlayer(actor.pos).pos) < kRollReach) {
+            actor.rotation.y = int16_t(angleOf(actor.pos, nearestPlayer(actor.pos).pos));
             actor.velocity.z = kRollSpeed;
         } else {
             actor.velocity.z = 0;
@@ -356,7 +357,7 @@ void pickupUpdate(const PlayerEnv& env, uint32_t address) {
             actor.pos.y = int32_t(uint32_t(ground) << 16);
     }
     if (actor.state < uint8_t(PickupState::Collected)) {
-        if (distance3(actor.pos, player().pos) < kCollectReach && player().hitPoints >= 0) {
+        if (distance3(actor.pos, nearestPlayer(actor.pos).pos) < kCollectReach && player().hitPoints >= 0) {
             actor.state = uint8_t(PickupState::Collected);
         } else if (!storyFlag(kFlagPickupsStay)) {
             const uint16_t t = uint16_t(pickup.timeout - 1);

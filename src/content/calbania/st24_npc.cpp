@@ -373,7 +373,7 @@ void subBumped(AnimatedActor& actor, TownNpcFields& npc) {
     const Actor& by = *npc.bumpedBy; // read once on entry: the distance below is to the previous bumper
     if (actor.step == 0) {
         actor.anim = kAnimIdle;
-        if (by.airborne != 0 || by.slot == 0)
+        if (by.airborne != 0 || actorSlotClass(by.slot) == kPlayerClass)
             npc.lookMode = uint8_t((npc.behaviour & kNpcFacesSpeaker) ? NpcLook::Player : NpcLook::Ahead);
         npc.bits = kStandingBits;
         npc.timer = 0x1e;

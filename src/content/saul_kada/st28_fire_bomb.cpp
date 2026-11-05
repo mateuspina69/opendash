@@ -26,6 +26,7 @@
 #include "game/hit_points.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/story.hpp"
 
@@ -96,7 +97,7 @@ void home(ProjectileActor& actor, BombFields& bomb, const int32_t target[3]) {
     };
     const uint32_t bearing = uint32_t(angleOf(target[0], target[2], actor.pos.x, actor.pos.z));
     if (facingWithin(actor, player().pos, 0x20)) {
-        if (planarDistance(player().pos, actor.pos) > 0x200) {
+        if (planarDistance(nearestPlayer(actor.pos).pos, actor.pos) > 0x200) {
             turnYawTo(actor.rotation.y, bearing, 0x20);
             bomb.travelYaw = actor.rotation.y;
             pitchStep();

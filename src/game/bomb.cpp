@@ -22,6 +22,7 @@
 #include "game/hit_points.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/stage_state.hpp"
@@ -308,7 +309,7 @@ void bombStates(StaticActor& actor) {
     }
     if (!(actor.flags & kActorLive)) return;
     const int far = int(uint32_t(stage().depthRange) << 2);
-    if ((bomb.collisionBits & kBombOffGrid) && distance3(actor.pos, player().pos) > far) {
+    if ((bomb.collisionBits & kBombOffGrid) && distance3(actor.pos, nearestPlayer(actor.pos).pos) > far) {
         freeActor(actor);
         return;
     }

@@ -29,6 +29,7 @@
 #include "game/hit_points.hpp"
 #include "game/pickups.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/story.hpp"
 #include "game/story_flags.hpp"
@@ -85,7 +86,7 @@ void waitForPlayer(AnimatedActor& actor, PodCarrierFields& carrier) {
     } else if (actor.step != 1) {
         return;
     }
-    if (planarDistance(actor.pos, player().pos) < kNearDistance) { // exe 0x5e3b00
+    if (planarDistance(actor.pos, nearestPlayer(actor.pos).pos) < kNearDistance) { // exe 0x5e3b00
         actor.subState = uint8_t(CarrierSub::Drop);
         actor.restartStep();
     }

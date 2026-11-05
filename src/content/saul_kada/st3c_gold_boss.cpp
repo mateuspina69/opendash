@@ -48,6 +48,7 @@
 #include "game/message_triggers.hpp"
 #include "game/player/player_input.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/projection_state.hpp"
 #include "game/random.hpp"
@@ -571,7 +572,7 @@ void chaseTimeout(const PlayerEnv& env, AnimatedActor& actor, BossBlock& b) {
         scratchRadius(b.targetAngle, pickRadii[b.radiusPick]);
         b.ringMoves += 1u;
     } else {
-        b.targetAngle = uint16_t(angleOf(actor.pos, player().pos));
+        b.targetAngle = uint16_t(angleOf(actor.pos, nearestPlayer(actor.pos).pos));
         scratchRadius(b.targetAngle, pickRadii[b.radiusPick]);
     }
     const Player& p = player();
@@ -1514,8 +1515,8 @@ void animate(AnimatedActor& actor) {
 }
 // the phases' common start: the player's distance and angle, whether he stands on something
 void watchPlayer(const PlayerEnv& env, const AnimatedActor& actor, BossBlock& b) {
-    b.distance = uint32_t(planarDistance(actor.pos, player().pos));
-    b.playerAngle = uint16_t(angleOf(player().pos, actor.pos));
+    b.distance = uint32_t(planarDistance(actor.pos, nearestPlayer(actor.pos).pos));
+    b.playerAngle = uint16_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos));
     if (ground(env, player()) < 0) setFlags(b, kPlayerGrounded);
     else clearFlags(b, kPlayerGrounded);
 }

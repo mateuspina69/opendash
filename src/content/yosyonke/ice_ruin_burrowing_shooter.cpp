@@ -49,6 +49,7 @@
 #include "game/pickups.hpp"
 #include "game/player/player_motion.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/story.hpp"
@@ -103,7 +104,7 @@ AnimatedActorStats shooterRow(const AnimatedActor& actor, const char* where) {
 }
 // exe 0x5e3d80(yaw, exe 0x5e3bc0(player, actor)): the turn that faces it away from the player
 int faceDiff(const AnimatedActor& actor) {
-    return angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angleOf(player().pos, actor.pos)));
+    return angleDiff(uint32_t(int32_t(actor.rotation.y)), uint32_t(angleOf(nearestPlayer(actor.pos).pos, actor.pos)));
 }
 void fly(AnimatedActor& actor) { // exe 0x5e3690(a, 0, vy, vz), then the gravity
     integrateVelocity(actor, 0, actor.velocity.y, actor.velocity.z);
@@ -932,7 +933,7 @@ void shooterInit(AnimatedActor& actor, ShooterFields& f) { // 0x479210
     actor.actorHit = 0;
     f.clearAll(); // exe 0x40dc40
     f.bits = uint8_t((f.bits & kShooterReflects) | kShooterTakesDamage | kShooterUntracedBit | kShooterAirborne);
-    f.playerDistance = planarDistance(actor.pos, player().pos); // exe 0x5e3b00
+    f.playerDistance = planarDistance(actor.pos, nearestPlayer(actor.pos).pos); // exe 0x5e3b00
     f.hopCount = 0;
     f.setHitKind(ShooterHitKind::None);
     f.hopSide = 1;
@@ -974,7 +975,7 @@ void burrowingShooter(const PlayerEnv& env, AnimatedActor& actor) { // 0x479130
     if (actor.anim != actor.prevAnim) animSetPose(actor, actor.anim, 0); // exe 0x5e1c30(a, anim, 0)
     else if (f.bits & kShooterAnimates) animStepPose(actor);            // exe 0x5e1e80
     hitEntry(actor, f);                                                  // 0x47a030
-    f.playerDistance = planarDistance(actor.pos, player().pos);          // exe 0x5e3b00
+    f.playerDistance = planarDistance(actor.pos, nearestPlayer(actor.pos).pos);          // exe 0x5e3b00
 }
 
 } // namespace
