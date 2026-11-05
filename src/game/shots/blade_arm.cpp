@@ -44,7 +44,7 @@ constexpr uint32_t kHitRumble = 0x301, kHitRumbleShape = 0x2005ff;
 
 // ring entry i from the arm's pose: the forearm's angles, then the point kBladeRoot out along them
 void ringEntry(BladeFields& fields, uint32_t i) {
-    const Player& p = player();
+    const Player& p = actingPlayer();
     const auto& hand = p.bonePoints[kLeftHandBone];
     const auto& forearm = p.bonePoints[kLeftForearmBone];
     const int16_t from[3] = {hand.x, hand.y, hand.z};
@@ -62,7 +62,7 @@ void ringEntry(BladeFields& fields, uint32_t i) {
 }
 
 void spawn(ShotActor& shot, BladeFields& fields) { // exe 0x56ee30
-    const Player& p = player();
+    const Player& p = actingPlayer();
     shot.flags &= uint8_t(~kActorDrawn);
     shot.runFlags |= kActorWarpKept;
     const uint32_t e = allocActorA0(0); // exe 0x5e13b0
@@ -79,8 +79,8 @@ void spawn(ShotActor& shot, BladeFields& fields) { // exe 0x56ee30
     PlayerShotFields(shot).hitBox.result = 0;
     fillShotStats(fields.stats);
     fields.ringIndex = 0;
-    if (weaponLevel(p, player().activeSpecial, WeaponStat::Energy) < kFreeEnergyLevel)
-        paySpecialEnergy(player()); // the swing costs energy
+    if (weaponLevel(p, actingPlayer().activeSpecial, WeaponStat::Energy) < kFreeEnergyLevel)
+        paySpecialEnergy(actingPlayer()); // the swing costs energy
     for (uint32_t i = 0; i < kBladeRingSize; ++i) ringEntry(fields, i);
     shot.collisionBox.pointTo(*bladeBox);
     shot.actorHit = 0;
@@ -89,7 +89,7 @@ void spawn(ShotActor& shot, BladeFields& fields) { // exe 0x56ee30
 }
 
 void swing(const PlayerEnv& env, ShotActor& shot, BladeFields& fields) { // exe 0x56f010
-    const Player& p = player();
+    const Player& p = actingPlayer();
     auto&& shotFields = PlayerShotFields(shot);
     shot.savePreviousPose();
     if (shotFields.hitBox.result & (kHitAttackSolid | kHitAttackDeflects))
@@ -167,7 +167,7 @@ void bladeTrailUpdate(const PlayerEnv&, uint32_t address) {
         ++trail.state;
         return;
     case BladeTrailState::Follow: // drawn (game/effects_draw) while the arm is up and swinging, else freed
-        if (!(player().armFlags & kArmSpecial) || player().specialFiring == 0) freeActor(trail);
+        if (!(actingPlayer().armFlags & kArmSpecial) || actingPlayer().specialFiring == 0) freeActor(trail);
         return;
     default: notPortedAt(kBladeArea, "0x55e870 state", trail.state);
     }

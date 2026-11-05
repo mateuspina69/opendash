@@ -71,7 +71,7 @@ uint32_t muzzleXY(const LaserBlock& block) {
 // room from the hand (a blocked step queues the wall hit and spawns the wall spark, ending the beam), then one capsule
 // per step reached (4/5 of a step, radius (level * 8 + 0x20) / 4) in the hit list
 void traceBeam(const PlayerEnv& env, ShotActor& shot, LaserBlock& block) {
-    const Player& p = player();
+    const Player& p = actingPlayer();
     block.aim.x = p.rotation.x;
     block.aim.y = p.rotation.y;
     block.aim.z = 0;
@@ -237,13 +237,13 @@ void shiningLaserShotUpdate(const PlayerEnv& env, uint32_t address) {
     }
     case LaserState::Fire: { // while the special button is held and the arm is up; below the energy level 3 the beam
                              // pays every tick
-        Player& p = player();
+        Player& p = actingPlayer();
         if (p.holds(PlayerButton::Special) && (p.armFlags & kArmSpecial)) {
             if (block.beamOut == 0) {
                 traceBeam(env, shot, block);
                 return;
             }
-            bool paid = weaponLevel(p, player().activeSpecial, WeaponStat::Energy) >= kFreeEnergyLevel;
+            bool paid = weaponLevel(p, actingPlayer().activeSpecial, WeaponStat::Energy) >= kFreeEnergyLevel;
             if (!paid) {
                 p.gauge = wrap16(p.gauge - p.shotCost);
                 paid = p.shotCost <= p.gauge;
@@ -273,7 +273,7 @@ void shiningLaserShotUpdate(const PlayerEnv& env, uint32_t address) {
 void shiningLaserBeamUpdate(const PlayerEnv&, uint32_t address) {
     EffectActor& beam = effectActorAt(address);
     LaserBlock& block = classState<LaserBlock>(*classState<LaserBeamFields>(beam).laserShot);
-    const Player& p = player();
+    const Player& p = actingPlayer();
     switch (BeamState(beam.state)) {
     case BeamState::Start: // the charge sparks
         beam.runFlags |= kActorWarpKept;

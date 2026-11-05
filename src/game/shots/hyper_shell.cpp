@@ -164,7 +164,7 @@ void blastAt(const ShotActor& shot, uint8_t variant, uint16_t size, uint16_t att
 }
 
 ShellEnd spawn(const PlayerEnv& env, ShotActor& shot, ShellFields& fields) { // exe 0x56d230
-    const Player& p = player();
+    const Player& p = actingPlayer();
     shot.flags |= kActorDrawn | kActorMeshModel;
     shot.runFlags |= kActorShown | kActorMeshModel | kActorWarpKept;
     if (!bindActorModel(shot, 0)) {
@@ -214,7 +214,7 @@ ShellEnd spawn(const PlayerEnv& env, ShotActor& shot, ShellFields& fields) { // 
     shot.actorHit = 0;
     soundPlayAtPos(kShellSound, shot.pos);
     fillShotStats(fields.stats);
-    paySpecialEnergy(player());
+    paySpecialEnergy(actingPlayer());
     fields.homingDelay = kHomingDelay;
     fields.locked = p.lockTarget;
     const uint32_t n = uint32_t(int32_t(weaponLevel(p, p.activeSpecial, WeaponStat::Extra)) * 4 + 4) & 0xffff;

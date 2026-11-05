@@ -34,13 +34,13 @@ void spawn(ShotActor& shot) { // exe 0x56e660: the suction effect (retried while
     e.type = typeByte(GlobalEffectType::Suction);
     e.variant = 0;
     auto&& suction = classState<SuctionFields>(e);
-    suction.rangeLevel = weaponLevel(player(), player().activeSpecial, WeaponStat::Range);
+    suction.rangeLevel = weaponLevel(actingPlayer(), actingPlayer().activeSpecial, WeaponStat::Range);
     suction.vacuumShot = &shot;
     ++shot.state;
 }
 
 void hold(ShotActor& shot) { // exe 0x56e6b0
-    Player& p = player();
+    Player& p = actingPlayer();
     if (!(p.armFlags & kArmSpecial) || !p.holds(PlayerButton::Special)) {
         freeActor(shot);
         return;

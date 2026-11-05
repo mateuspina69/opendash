@@ -136,7 +136,7 @@ ReflectorEnd spawn(const PlayerEnv& env, ShotActor& shot, ReflectorFields& field
     shot.runFlags |= kActorWarpKept;
     aimRelativeToTarget(shot);
     PlayerShotFields(shot).hitBox.result = 0;
-    if (player().onPlatform == 0) {
+    if (actingPlayer().onPlatform == 0) {
         shot.velocity.x = 0;
         shot.velocity.z = kReflectorSpeed;
     } else {
@@ -152,7 +152,7 @@ ReflectorEnd spawn(const PlayerEnv& env, ShotActor& shot, ReflectorFields& field
     fillShotStats(fields.stats);
     fields.deflectTicks = 0;
     fields.skidTicks = 0;
-    paySpecialEnergy(player());
+    paySpecialEnergy(actingPlayer());
     shot.collisionBox.pointAt(reflectorBox.stateAddress());
     shot.actorHit = 0;
     soundPlayAtPos(kReflectorSound, shot.pos);

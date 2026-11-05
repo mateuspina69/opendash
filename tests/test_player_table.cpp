@@ -118,6 +118,26 @@ void testNearest() {
     resetPlayer();
 }
 
+void testActingPlayer() {
+    CHECK(actingPlayerId() == 0 && &actingPlayer() == &player());
+    const uint32_t mine = allocActor10();
+    CHECK(shotActorAt(mine).ownerPlayer == 0);
+    {
+        const ScopedActingPlayer acting(4);
+        CHECK(&actingPlayer() == &playerById(4));
+        const uint32_t theirs = allocActor10();
+        CHECK(shotActorAt(theirs).ownerPlayer == 4);
+        {
+            const ScopedActingPlayer nested(shotActorAt(mine).ownerPlayer);
+            CHECK(actingPlayerId() == 0);
+        }
+        CHECK(actingPlayerId() == 4);
+    }
+    CHECK(actingPlayerId() == 0);
+    resetActorPools();
+    actorSystem().shotsLive = 0;
+}
+
 // the digest two runs of a room are compared by: the same state the same hash, a change in what it covers another
 void testWorldDigest() {
     resetPlayer();
@@ -170,6 +190,7 @@ int main() {
     testJoinAndLeave();
     testSlotsAlone();
     testNearest();
+    testActingPlayer();
     testWorldDigest();
     testRefusals();
     return testResult("test_player_table");

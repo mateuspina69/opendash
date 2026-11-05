@@ -46,7 +46,7 @@ void submitBusterHit(ShotActor& shot, const ShotStats& stats, bool moved) {
 }
 
 BusterEnd spawnBusterShot(const PlayerEnv& env, ShotActor& shot, BusterShotFields& fields) { // exe 0x56c060
-    Player& p = player();
+    Player& p = actingPlayer();
     shot.flags &= uint8_t(~kActorDrawn);
     shot.runFlags |= kActorWarpKept;
     aimRelativeToTarget(shot);
@@ -128,7 +128,7 @@ constexpr uint16_t kKickSound = 0x95;
 
 // the kick's position on a bone point of the player (<< 16: not by the stage shift; the previous position kept)
 void kickAtBone(ShotActor& shot, uint32_t bone) {
-    const auto& b = player().bonePoints[bone];
+    const auto& b = actingPlayer().bonePoints[bone];
     shot.pos.x = int32_t(uint32_t(int32_t(b.x)) << 16);
     shot.pos.y = int32_t(uint32_t(int32_t(b.y)) << 16);
     shot.pos.z = int32_t(uint32_t(int32_t(b.z)) << 16);
@@ -146,7 +146,7 @@ void busterShotUpdate(const PlayerEnv& env, uint32_t address) {
     case BusterState::Spawn: end = spawnBusterShot(env, shot, fields); break;
     case BusterState::Fly: end = flyBusterShot(env, shot, fields); break;
     case BusterState::Free: { // exe 0x56c560: the buster is usable again
-        Player& p = player();
+        Player& p = actingPlayer();
         --p.busterShotsInFlight;
         p.setArmBits(kArmBusterFree);
         freeActor(shot); // exe 0x5e14d0
@@ -186,7 +186,7 @@ void townKickUpdate(const PlayerEnv&, uint32_t address) {
         PlayerShotFields(shot).hitBox.result = 0;
         shot.flags &= uint8_t(~kActorDrawn);
         kick.ticks = kKickTicks;
-        kick.attack = int8_t(weaponAttack(player(), player().activeBuster)); // exe 0x5734b0
+        kick.attack = int8_t(weaponAttack(actingPlayer(), actingPlayer().activeBuster)); // exe 0x5734b0
         kickAtBone(shot, kBodyBone);
         shot.rotation.z = 0;
         shot.rotation.y = 0;

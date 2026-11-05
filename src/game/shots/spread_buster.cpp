@@ -48,10 +48,10 @@ constexpr int kFanStep = 0x80;
 constexpr int kSteps = 2;
 
 SpreadEnd spawn(const PlayerEnv& env, ShotActor& shot, SpreadFields& fields) { // exe 0x56ffd0
-    const Player& p = player();
+    const Player& p = actingPlayer();
     shot.flags &= uint8_t(~kActorDrawn);
     shot.runFlags |= kActorWarpKept;
-    const int n = weaponLevel(p, player().activeSpecial, WeaponStat::Extra) > 0 ? 1 : 0;
+    const int n = weaponLevel(p, actingPlayer().activeSpecial, WeaponStat::Extra) > 0 ? 1 : 0;
     if (uint8_t(fields.copy) == 0) {
         const int copies = n * 2 + 2;
         for (int i = 0; i < copies;) {
@@ -64,7 +64,7 @@ SpreadEnd spawn(const PlayerEnv& env, ShotActor& shot, SpreadFields& fields) { /
             copy.loopFlags |= kActorSweepGroup1;
             classState<SpreadFields>(copy).setCopy(uint32_t(i));
         }
-        paySpecialEnergy(player());
+        paySpecialEnergy(actingPlayer());
     }
     PlayerShotFields(shot).hitBox.result = 0;
     if (p.onPlatform == 0) {

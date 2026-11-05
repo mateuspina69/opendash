@@ -465,6 +465,7 @@ void playerInputAndDispatch(const PlayerEnv& env) {
 
 void playerUpdate(const PlayerEnv& env) {
     Player& p = player();
+    const ScopedActingPlayer acting(playerId(p));
     if (p.onPlatform != 0)
         actorCarry(p, *p.platform); // exe 0x414f20: follow the platform actor stood on
     else if (p.wasOnPlatform != 0 && p.airborne == 0 && p.wasAirborne == 0)

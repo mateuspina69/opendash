@@ -58,7 +58,7 @@ bool climbsOver(uint32_t shape) {
 }
 
 CrawlerEnd spawn(const PlayerEnv& env, ShotActor& shot, CrawlerFields& fields) { // exe 0x56e010
-    const Player& p = player();
+    const Player& p = actingPlayer();
     shot.flags |= kActorDrawn | kActorMeshModel;
     shot.runFlags |= kActorShown | kActorMeshModel | kActorWarpKept;
     if (!bindActorModel(shot, 0)) {
@@ -89,7 +89,7 @@ CrawlerEnd spawn(const PlayerEnv& env, ShotActor& shot, CrawlerFields& fields) {
     shot.actorHit = 0;
     soundPlayAtPos(kCrawlerSound, shot.pos);
     fillShotStats(fields.stats);
-    paySpecialEnergy(player());
+    paySpecialEnergy(actingPlayer());
     fields.turnRate = 0;
     fields.turnStep = uint16_t(weaponLevel(p, p.activeSpecial, WeaponStat::Extra) + 1);
     ++shot.state;

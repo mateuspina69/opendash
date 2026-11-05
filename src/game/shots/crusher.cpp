@@ -253,7 +253,7 @@ void orbStart(StaticActor& actor, EnergyOrbFields& f) {
     f.hitBox.result = 0;
     f.hitBox.previousX = actor.pos.x.whole;
     f.hitBox.previousZ = actor.pos.z.whole;
-    const Player& p = player();
+    const Player& p = actingPlayer();
     const int w = p.activeSpecial;
     f.attack = uint16_t(weaponAttack(p, w));
     f.level = int16_t(weaponLevel(p, w, WeaponStat::Attack));
@@ -269,7 +269,7 @@ void orbHeld(StaticActor& actor, EnergyOrbFields& f) {
         orbIdleDraw(actor);
         return;
     }
-    const Player& p = player();
+    const Player& p = actingPlayer();
     const uint32_t ticks = kOrbBaseTicks << (uint8_t(weaponLevel(p, p.activeSpecial, WeaponStat::Extra)) & 0x1f);
     f.soundTicks = kOrbSoundTicks;
     f.life = int16_t(ticks);
@@ -329,7 +329,7 @@ constexpr uint32_t kCrusherAttack = 0x80;
 
 // the shot's position at the player's hand (<< 16)
 void placeAtHandWhole(ShotActor& shot) {
-    const ShortVec3& hand = player().bonePoints[kLeftHandBone];
+    const ShortVec3& hand = actingPlayer().bonePoints[kLeftHandBone];
     shot.pos.x = int32_t(uint32_t(int32_t(hand.x)) << 16);
     shot.pos.y = int32_t(uint32_t(int32_t(hand.y)) << 16);
     shot.pos.z = int32_t(uint32_t(int32_t(hand.z)) << 16);
@@ -340,7 +340,7 @@ void carryOrb(const ShotActor& shot, const CrusherFields& fields) { fields.orb->
 void burstOrb(const CrusherFields& fields) { classState<EnergyOrbFields>(*fields.orb).burst = 1; }
 
 void spawn(const PlayerEnv& env, ShotActor& shot, CrusherFields& fields) { // exe 0x56c6e0
-    const Player& p = player();
+    const Player& p = actingPlayer();
     shot.flags |= kActorDrawn | kActorMeshModel;
     shot.runFlags |= kActorShown | kActorMeshModel | kActorWarpKept;
     const uint32_t o = bindActorModel(shot, 0) ? allocActor60(0) : 0; // exe 0x5e0ba0, exe 0x5e1300
@@ -381,7 +381,7 @@ void spawn(const PlayerEnv& env, ShotActor& shot, CrusherFields& fields) { // ex
     shot.collisionBox.pointAt(crusherBox.stateAddress());
     shot.actorHit = 0;
     actorPushOut(env, shot); // exe 0x410960
-    paySpecialEnergy(player());
+    paySpecialEnergy(actingPlayer());
     fields.holdTicks = kHoldTicks;
     ++shot.state;
 }

@@ -53,7 +53,7 @@ constexpr int16_t kSpiralStep = 0x40;
 // (4 - shrink) * 32, coloured between the pair of the variant and pulsing by the band; a ring record and the particles
 // spiralling (ring records, their size by the charge level)
 void chargeDraw(StaticActor& actor, ChargeMarkerFields& f) {
-    const Player& p = player();
+    const Player& p = actingPlayer();
     const ShortVec3& body = p.bonePoints[kBodyBone];
     const int16_t org[3] = {body.x, body.y, body.z};
     const LocalFrame frame = localFrame(0, int16_t(uint16_t(uint32_t(gameState().frame) << 2)), 0, org);
@@ -151,7 +151,7 @@ void chargeStart(StaticActor& actor, ChargeMarkerFields& f) {
 void chargeTick(StaticActor& actor, ChargeMarkerFields& f) {
     f.phase = int16_t((uint32_t(uint8_t(f.phase)) + 1u) & 0xff);
     if (f.shrink != 0) --f.shrink;
-    Player& p = player();
+    Player& p = actingPlayer();
     if (p.charge == 0) {
         freeActor(actor);
         return;

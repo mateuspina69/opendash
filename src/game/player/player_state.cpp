@@ -52,6 +52,17 @@ size_t playerId(const Player& p) {
     if (id < 0) throw std::logic_error("a player outside the table");
     return size_t(id);
 }
+namespace {
+size_t g_acting = 0;
+} // namespace
+size_t actingPlayerId() { return g_acting; }
+Player& actingPlayer() { return table().players[g_acting]; }
+ScopedActingPlayer::ScopedActingPlayer(size_t id) : previous_(g_acting) {
+    checkId(id);
+    g_acting = id;
+}
+ScopedActingPlayer::~ScopedActingPlayer() { g_acting = previous_; }
+
 bool playerPresent(size_t id) {
     checkId(id);
     return table().present[id];

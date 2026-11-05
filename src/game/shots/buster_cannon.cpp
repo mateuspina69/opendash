@@ -53,7 +53,7 @@ CannonEnd spawn(const PlayerEnv& env, ShotActor& shot, CannonFields& fields) { /
     shot.runFlags |= kActorWarpKept;
     aimRelativeToTarget(shot);
     PlayerShotFields(shot).hitBox.result = 0;
-    if (player().onPlatform == 0) {
+    if (actingPlayer().onPlatform == 0) {
         shot.velocity.x = 0;
         shot.velocity.z = kCannonSpeed;
     } else {
@@ -67,7 +67,7 @@ CannonEnd spawn(const PlayerEnv& env, ShotActor& shot, CannonFields& fields) { /
     aimAlongPlayer(shot);
     moveAlongRotation(shot.prevPos, shot.rotation, 0, 0, -int(shot.velocity.z) * 4);
     fillShotStats(fields.stats);
-    paySpecialEnergy(player());
+    paySpecialEnergy(actingPlayer());
     const uint32_t reach = uint32_t(uint16_t(fields.stats.level)) * 2 + 10;
     BoxExtents& box = *cannonBox;
     box.maxZ = int16_t(reach);

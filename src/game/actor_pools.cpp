@@ -219,6 +219,7 @@ int takeSlot(uint32_t& mask, uint32_t n, uint32_t first = 0) {
 // the head of a new slot: run flags, loop flags, type / state / parameters cleared
 void startSlot(ActorHeader& actor, uint8_t loopFlags) {
     actor.beginLifetime();
+    actor.ownerPlayer = uint8_t(actingPlayerId());
     actor.runFlags = kActorRun | kActorShown;
     actor.loopFlags = loopFlags;
     actor.clearIdentity();

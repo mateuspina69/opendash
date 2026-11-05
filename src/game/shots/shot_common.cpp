@@ -27,7 +27,7 @@ constexpr int kHomingTolerance = 0x200; // an angle off by this much or more dro
 } // namespace
 
 void fillShotStats(ShotStats& stats) {
-    const Player& p = player();
+    const Player& p = actingPlayer();
     const int w = p.activeSpecial;
     stats.range = uint16_t(weaponStat(p, w, WeaponStat::Range)); // exe 0x573510
     stats.attack = uint16_t(weaponAttack(p, w));                 // exe 0x5734b0
@@ -36,7 +36,7 @@ void fillShotStats(ShotStats& stats) {
 
 void placeAtBone(ShotActor& shot, uint32_t bone, int dy) {
     const uint32_t sh = (0x10u - stage().coordinateShift) & 0x1f;
-    const auto& b = player().bonePoints[bone];
+    const auto& b = actingPlayer().bonePoints[bone];
     const int16_t point[3] = {b.x, b.y, b.z};
     for (int k = 0; k < 3; ++k) {
         const int32_t v = int32_t(uint32_t(int32_t(point[k]) + (k == 1 ? dy : 0)) << sh);
@@ -48,8 +48,8 @@ void placeAtBone(ShotActor& shot, uint32_t bone, int dy) {
 }
 
 void aimAlongPlayer(ShotActor& shot) {
-    shot.rotation.x = player().rotation.x;
-    shot.rotation.y = player().rotation.y;
+    shot.rotation.x = actingPlayer().rotation.x;
+    shot.rotation.y = actingPlayer().rotation.y;
     shot.rotation.z = 0;
     const int32_t from[3] = {shot.pos.x, shot.pos.y, shot.pos.z};
     int16_t pitch, yaw;
@@ -82,7 +82,7 @@ void dropDeadTarget(ShotActor& shot) {
 }
 
 void platformMove(int& x, int& z) {
-    const Player& p = player();
+    const Player& p = actingPlayer();
     const Actor& platform = *p.platform;
     const int yaw = uint16_t(p.rotation.y) & kAngleMask;
     const int dx = int32_t(uint32_t(platform.pos.x) - uint32_t(platform.prevPos.x)) >> 12;

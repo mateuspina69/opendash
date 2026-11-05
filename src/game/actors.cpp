@@ -1,6 +1,7 @@
 // The actor system's update loops, class dispatch and registry (see actors.hpp).
 #include "game/actor_state.hpp"
 #include "game/actors.hpp"
+#include "game/player/player_state.hpp"
 #include "game/port_gap.hpp"
 
 #include <cstdio>
@@ -326,6 +327,7 @@ int updatePool(const PlayerEnv& env, ActorContext& ctx, ActorPool pool) {
             continue;
         }
         try {
+            const ScopedActingPlayer acting(actor.ownerPlayer);
             fn(env, actor.at);
             ++n;
         } catch (const std::logic_error& e) {

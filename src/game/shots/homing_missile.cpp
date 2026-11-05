@@ -41,7 +41,7 @@ constexpr uint8_t kWobbling = 1; // the variant once it wobbles (the homing's sh
 constexpr int kSteps = 2;
 
 MissileEnd spawn(const PlayerEnv& env, ShotActor& shot, MissileFields& fields) { // exe 0x56db10
-    const Player& p = player();
+    const Player& p = actingPlayer();
     shot.flags |= kActorDrawn | kActorMeshModel;
     shot.runFlags |= kActorShown | kActorMeshModel | kActorWarpKept;
     const uint32_t tr = bindActorModel(shot, 0) ? allocActor60(0) : 0;
@@ -67,7 +67,7 @@ MissileEnd spawn(const PlayerEnv& env, ShotActor& shot, MissileFields& fields) {
     shot.actorHit = 0;
     soundPlayAtPos(kMissileSound, shot.pos);
     fillShotStats(fields.stats);
-    paySpecialEnergy(player());
+    paySpecialEnergy(actingPlayer());
     const int level = weaponLevel(p, p.activeSpecial, WeaponStat::Extra);
     fields.wobbleDelay = uint16_t(kWobbleLevels - level);
     fields.turnRate = 0;

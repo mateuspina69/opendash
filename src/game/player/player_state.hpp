@@ -755,6 +755,21 @@ Player& player();
 // The table: every id's player exists for the life of the program, as a pool's slots do. An id past the table throws.
 Player& playerById(size_t id);
 size_t playerId(const Player& p);
+// The player acting: whose update or whose actor runs now. What a shot's code asks of "the player" is this one, and a
+// slot started now belongs to them (ActorHeader::ownerPlayer), so a shot's sparks are its shooter's. Player 0 outside
+// these (a script's, a room's).
+size_t actingPlayerId();
+Player& actingPlayer();
+class ScopedActingPlayer {
+public:
+    explicit ScopedActingPlayer(size_t id);
+    ~ScopedActingPlayer();
+    ScopedActingPlayer(const ScopedActingPlayer&) = delete;
+    ScopedActingPlayer& operator=(const ScopedActingPlayer&) = delete;
+
+private:
+    size_t previous_;
+};
 // In the session: player 0 always; another from joinPlayer (constructed anew) to leavePlayer
 bool playerPresent(size_t id);
 void joinPlayer(size_t id);

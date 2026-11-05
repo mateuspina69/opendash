@@ -53,7 +53,7 @@ constexpr int kMists = 3;
 
 // the hand >> the stage shift into the partner's nozzle
 void nozzleToPartner(StreamPartnerFields& partner) {
-    const auto& hand = player().bonePoints[kLeftHandBone];
+    const auto& hand = actingPlayer().bonePoints[kLeftHandBone];
     const int sh = stage().coordinateShift & 0x1f;
     partner.nozzle[0] = int16_t(hand.x >> sh);
     partner.nozzle[1] = int16_t(hand.y >> sh);
@@ -63,15 +63,15 @@ void nozzleToPartner(StreamPartnerFields& partner) {
 // the special button held with the arm up: the gauge pays the shot; 1 = it still holds one, 0 = out (disarmed), -1 =
 // not held
 int sprayEnergy() {
-    const Player& p = player();
+    const Player& p = actingPlayer();
     if (!p.holds(PlayerButton::Special) || !(p.armFlags & kArmSpecial)) return -1;
-    paySpecialEnergy(player());
+    paySpecialEnergy(actingPlayer());
     return p.shotCost <= p.gauge ? 1 : 0;
 }
 
 // exe 0x570a10(shot, stats, nozzle): the stream's points, from the nozzle, its spark where it stops and its hit entries
 void stream(const PlayerEnv& env, ShotActor& shot, ExtinguisherFields& fields, StreamPartnerFields& partner) {
-    const Player& p = player();
+    const Player& p = actingPlayer();
     if (fields.pointCount < kStreamPoints) ++fields.pointCount;
     const auto& hand = p.bonePoints[kLeftHandBone];
     const int16_t nozzle[3] = {hand.x, hand.y, hand.z};
@@ -140,7 +140,7 @@ void stream(const PlayerEnv& env, ShotActor& shot, ExtinguisherFields& fields, S
 }
 
 void spawn(const PlayerEnv& env, ShotActor& shot, ExtinguisherFields& fields) { // exe 0x5705d0
-    Player& p = player();
+    Player& p = actingPlayer();
     shot.flags &= uint8_t(~kActorDrawn);
     shot.runFlags |= kActorWarpKept;
     const uint32_t s = allocActor10();
@@ -190,7 +190,7 @@ void spray(const PlayerEnv& env, ShotActor& shot, ExtinguisherFields& fields) { 
     StreamPartnerFields& partner = classState<StreamPartnerFields>(*fields.partner);
     if (sprayEnergy() == 1) {
         nozzleToPartner(partner);
-        player().specialFiring = 1;
+        actingPlayer().specialFiring = 1;
         stream(env, shot, fields, partner);
         --fields.soundTicks;
         if (fields.soundTicks != 0) return;
@@ -234,7 +234,7 @@ struct BubbleParams {
 constexpr int16_t kBubbleSpeed = 0x200;
 
 void bubbles(ShotActor& shot, ExtinguisherFields& fields) { // exe 0x5708f0
-    Player& p = player();
+    Player& p = actingPlayer();
     if (sprayEnergy() == 1) {
         p.specialFiring = 1;
         const uint32_t m = allocActor60(kActorStageClass); // exe 0x5e12f0
@@ -274,7 +274,7 @@ constexpr int16_t kMistLife = 10;
 // reborn at the nozzle when its ticks run out, spread around the player's aim and carried by the player's (or its
 // platform's) last move
 void mistParticles(StaticActor& mist, MistFields& fields, bool stop) {
-    const Player& p = player();
+    const Player& p = actingPlayer();
     if (!stop) {
         if (fields.count < kMistParticles) fields.count = int16_t(fields.count + 1);
         fields.alive = uint16_t(fields.count);
@@ -362,7 +362,7 @@ void extinguisherMistUpdate(const PlayerEnv&, uint32_t address) {
         ++mist.state;
         return;
     case MistState::Emit: // while the stream sprays
-        if (player().specialFiring != 0) {
+        if (actingPlayer().specialFiring != 0) {
             mistParticles(mist, fields, false);
             return;
         }

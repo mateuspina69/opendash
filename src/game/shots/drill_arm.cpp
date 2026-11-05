@@ -41,7 +41,7 @@ constexpr int kConeRings = 0x10, kConeRingQuads = 0x10;
 // between a random radius ((rand & 0x1f) + 0x18) * (16 - i) / 8 and that + rand + 2 i, grey by the strength
 void coneDraw(StaticActor& actor, const DrillConeFields& f) {
     const Actor& parent = actorLayoutAt(f.parent);
-    const ShortVec3& hand = player().bonePoints[kLeftHandBone];
+    const ShortVec3& hand = actingPlayer().bonePoints[kLeftHandBone];
     const int16_t org[3] = {hand.x, hand.y, hand.z};
     const LocalFrame frame = localFrame(parent.rotation.x, parent.rotation.y, parent.rotation.z, org);
     const int sh = (0xc - int(stage().coordinateShift)) & 0x1f;
@@ -84,7 +84,7 @@ void coneStart(StaticActor& actor, DrillConeFields& f) {
 // exe 0x56b9d0: growing up to kConeFull while the drill runs (the player's special weapon firing), then fading
 void coneGrow(StaticActor& actor, DrillConeFields& f) {
     if (f.strength < kConeFull) f.strength += uint32_t(kConeGrowth);
-    if (player().specialFiring == 0) actor.state += 1u;
+    if (actingPlayer().specialFiring == 0) actor.state += 1u;
     coneDraw(actor, f);
 }
 // exe 0x56ba00: fading (none left: freed)
@@ -110,7 +110,7 @@ constexpr uint16_t kRootRadius = 8, kTipRadius = 4;
 
 // the shot's rotation: the forearm's pitch, the player's yaw turned back
 void aimAlongForearm(ShotActor& shot) {
-    const Player& p = player();
+    const Player& p = actingPlayer();
     const auto& hand = p.bonePoints[kLeftHandBone];
     const auto& forearm = p.bonePoints[kLeftForearmBone];
     const int16_t from[3] = {hand.x, hand.y, hand.z};
@@ -121,7 +121,7 @@ void aimAlongForearm(ShotActor& shot) {
 // exe 0x571460(shot, block): the drill's aim, its wall test (from the hand to half the bit), the sparks on a hit
 // (kSparkTicks apart) and its capsule (the hand, radius 8, to the tip, radius 4); true = it grinds on something
 bool drillTick(const PlayerEnv& env, ShotActor& shot, DrillFields& fields) {
-    const Player& p = player();
+    const Player& p = actingPlayer();
     bool grinding = false;
     aimAlongForearm(shot);
     shot.rotation.y = wrap16(p.rotation.y + kHalfTurn);
@@ -184,7 +184,7 @@ void spawn(ShotActor& shot, DrillFields& fields) { // exe 0x5712a0: no cone slot
     PlayerShotFields(shot).hitBox.result = 0;
     aimAlongForearm(shot);
     shot.rotation.z = 0;
-    shot.rotation.y = wrap16(player().rotation.y + kHalfTurn);
+    shot.rotation.y = wrap16(actingPlayer().rotation.y + kHalfTurn);
     fillShotStats(fields.stats);
     fields.sparkTicks = 0;
     fields.soundTicks = kStartSoundTicks;
@@ -196,7 +196,7 @@ void spawn(ShotActor& shot, DrillFields& fields) { // exe 0x5712a0: no cone slot
 }
 
 void run(const PlayerEnv& env, ShotActor& shot, DrillFields& fields) { // exe 0x571380
-    Player& p = player();
+    Player& p = actingPlayer();
     if (!(p.armFlags & kArmSpecial) || !p.holds(PlayerButton::Special)) {
         soundPlayAtPlayer(kStopSound);
         freeActor(shot);

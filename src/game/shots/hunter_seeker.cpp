@@ -49,7 +49,7 @@ constexpr int kTurnStep = 0x20;
 constexpr uint16_t kCrystalTicks = 8;
 
 HunterEnd spawn(const PlayerEnv& env, ShotActor& shot, HunterFields& fields) { // exe 0x570ea0
-    const Player& p = player();
+    const Player& p = actingPlayer();
     shot.flags |= kActorDrawn | kActorMeshModel;
     shot.runFlags |= kActorShown | kActorMeshModel | kActorWarpKept;
     if (!bindActorModel(shot, 0)) {
@@ -62,12 +62,12 @@ HunterEnd spawn(const PlayerEnv& env, ShotActor& shot, HunterFields& fields) { /
     placeAtBone(shot, kLeftHandBone, 0);
     aimAlongPlayer(shot);
     moveAlongRotation(shot.prevPos, shot.rotation, 0, 0, kThrowStart);
-    const int weapon = player().activeSpecial;
+    const int weapon = actingPlayer().activeSpecial;
     fields.stats.range = hunterRanges[uint32_t(int32_t(weaponLevel(p, weapon, WeaponStat::Extra)))];
     fields.stats.attack = uint16_t(weaponAttack(p, weapon));
     fields.stats.level = weaponLevel(p, weapon, WeaponStat::Attack);
     fields.crystalTicks = 0;
-    paySpecialEnergy(player());
+    paySpecialEnergy(actingPlayer());
     shot.collisionBox.pointAt(hunterBox.stateAddress());
     shot.actorHit = 0;
     soundPlayAtPos(kThrowSound, shot.pos);
@@ -85,7 +85,7 @@ bool blinks(uint32_t ticksLeft) {
 }
 
 HunterEnd seek(const PlayerEnv& env, ShotActor& shot, HunterFields& fields) { // exe 0x571020
-    const Player& p = player();
+    const Player& p = actingPlayer();
     auto&& shotFields = PlayerShotFields(shot);
     if (shotFields.hitBox.result & kHitAttackSolid) {
         stopHalfway(shot);
@@ -180,7 +180,7 @@ CrystalEnd crystalStart(const PlayerEnv& env, StaticActor& actor, CrystalFields&
     actor.prevPos.z = actor.pos.z;
     moveAlongRotation(actor.prevPos, actor.rotation, 0, 0, kCrystalStartBehind); // exe 0x5e3810
     f.stats.range = kCrystalLife;
-    const Player& p = player();
+    const Player& p = actingPlayer();
     const int w = p.specialWeapon;
     f.stats.attack = uint16_t(weaponAttack(p, w));
     f.stats.level = int16_t(weaponLevel(p, w, WeaponStat::Attack));

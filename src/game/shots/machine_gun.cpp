@@ -76,7 +76,7 @@ void casingDraw(StaticActor& actor, const CasingFields& f) {
 // random spread; its life, a random spin
 void casingStart(StaticActor& actor, CasingFields& f) {
     actor.runFlags |= kActorWarpKept;
-    const ShortVec3& hand = player().bonePoints[kLeftHandBone];
+    const ShortVec3& hand = actingPlayer().bonePoints[kLeftHandBone];
     actor.pos.x = int32_t(uint32_t(int32_t(hand.x)) << 16);
     actor.pos.y = int32_t(uint32_t(int32_t(hand.y)) << 16);
     actor.pos.z = int32_t(uint32_t(int32_t(hand.z)) << 16);
@@ -84,7 +84,7 @@ void casingStart(StaticActor& actor, CasingFields& f) {
     const uint32_t r = rngStep();
     actor.rotation.z = 0;
     actor.collisionBox.pointAt(casingBox.stateAddress());
-    actor.rotation.y = int16_t(uint16_t((r & kCasingYawSpread) + uint32_t(uint16_t(player().rotation.y)) - kCasingYawBias));
+    actor.rotation.y = int16_t(uint16_t((r & kCasingYawSpread) + uint32_t(uint16_t(actingPlayer().rotation.y)) - kCasingYawBias));
     f.life = kCasingLife;
     f.spin = int16_t(rngStep() & kAngleMask);
     f.soundTicks = 0;
@@ -141,7 +141,7 @@ void muzzleOffset(const MachineGunFields& fields, int16_t off[3]) {
 }
 
 MachineGunEnd spawn(const PlayerEnv& env, ShotActor& shot, MachineGunFields& fields) { // exe 0x56f990
-    const Player& p = player();
+    const Player& p = actingPlayer();
     shot.flags &= uint8_t(~kActorDrawn);
     shot.runFlags |= kActorWarpKept;
     const uint32_t m = allocActorA0(0);
@@ -188,7 +188,7 @@ MachineGunEnd spawn(const PlayerEnv& env, ShotActor& shot, MachineGunFields& fie
     aimAlongPlayer(shot);
     moveAlongRotation(shot.prevPos, shot.rotation, 0, 0, -int(shot.velocity.z) * 2);
     fillShotStats(fields.stats);
-    paySpecialEnergy(player());
+    paySpecialEnergy(actingPlayer());
     shot.collisionBox.pointAt(machineGunBox.stateAddress());
     shot.actorHit = 0;
     soundPlayAtPlayer(kMachineGunSound);
@@ -526,7 +526,7 @@ void machineGunMuzzleUpdate(const PlayerEnv&, uint32_t address) {
         muzzle.pos.x = int16_t((rngStep() & 0x1f) - 0x10u);
         muzzle.pos.z = 0;
         muzzle.pos.y = int16_t((rngStep() & 0x1f) - 0x10u);
-        const auto& hand = player().bonePoints[kLeftHandBone];
+        const auto& hand = actingPlayer().bonePoints[kLeftHandBone];
         dc::emitDisc(muzzle.at, dc::ringColour(0x0090ff), uint32_t(uint16_t(hand.x)) | uint32_t(uint16_t(hand.y)) << 16,
                      uint16_t(hand.z) | dc::ringStep(2), 0x200000u);
         ++muzzle.state;

@@ -450,6 +450,7 @@ struct ActorHeader {
     uint8_t flags = 0;
     uint8_t runFlags = 0;   // kActorRun | drawn | kActorBoneScale | class bits
     uint8_t slot = 0;       // slot id: pool class + index (set at boot, never by an allocator)
+    uint8_t ownerPlayer = 0; // OpenDash's co-op: the id of the player acting when this slot started (actingPlayer)
     uint8_t loopFlags = 0;  // kActorLateLoop | kActorStageClass
     uint8_t type = 0;       // the class table index
     uint8_t subtype = 0;    // the sub-table index (pools 0x20 / 0x60)
