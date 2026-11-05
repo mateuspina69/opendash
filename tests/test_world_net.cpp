@@ -228,9 +228,9 @@ void testFitsOneDatagram() {
     t.tick = 2;
     fill(1);
     std::map<uint8_t, int> told;
-    for (int round = 0; round < 3; ++round) {
+    for (int round = 0; round < 6; ++round) { // a burst spreads over updates of the budget
         const auto u = sender.update(t);
-        CHECK(u.size() <= kNetMaxPayload);
+        CHECK(u.size() <= kNetUpdateBudget);
         // walks past what the last one held: every actor is in some update (the mask of a whole entry: 14 bytes)
         for (size_t at = kHeader; at + 14 <= u.size(); at += 14) ++told[u[at]];
     }

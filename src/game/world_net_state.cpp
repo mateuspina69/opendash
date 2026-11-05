@@ -964,7 +964,9 @@ std::vector<uint8_t> NetStateSender::update(const NetWorldTable& table) {
             if (steps & 0x40) e.i16(a.state.fallStep);
         }
         count(&UpdateBytes::path);
-        if (w.bytes.size() + e.bytes.size() > kNetMaxPayload) {
+        // past the budget the rest waits for the next update (a burst spreads over a few), one actor at least goes
+        const size_t after = w.bytes.size() + e.bytes.size();
+        if (after > kNetMaxPayload || (after > kNetUpdateBudget && !sent.entries.empty())) {
             cursor_ = i; // the next update starts with what did not fit
             cut = true;
             break;

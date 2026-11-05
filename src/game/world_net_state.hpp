@@ -49,6 +49,7 @@ namespace od::port {
 constexpr size_t kNetSlots = 256;                // a slot id is one byte: the pool's class + the index
 constexpr int kNetDefaultUpdateTicks = 2;        // an update every 2 ticks of 30 a second: 15 a second
 constexpr size_t kNetMaxPayload = 1160;          // a payload in net/udp_socket's 1200-byte datagram, with the link's framing
+constexpr size_t kNetUpdateBudget = 300;         // what an update carries before the rest waits for the next
 constexpr size_t kNetMaxEventBatch = 1100;       // an event batch, likewise
 constexpr double kNetInterpolationTicks = 4.0;   // how far in the past a client shows the world: an update's period + jitter
 constexpr uint8_t kNetNoModel = 0xff;            // an actor with no entry of the model bank
