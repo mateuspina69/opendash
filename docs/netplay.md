@@ -7,8 +7,6 @@ or story. Each player's game runs exactly as single player.
 One player **hosts** and the others **join** the host's `ip:port` over UDP. Up to 8 players: the host and 7 others.
 Everyone talks only to the host, and the host forwards each player's state to the others.
 
-Transport: `docs/adr/0005-netplay-transport.md`.
-
 ## What every player needs
 
 - **The same OpenDash build.** The host refuses a different build and names both. The build id is a hash of the

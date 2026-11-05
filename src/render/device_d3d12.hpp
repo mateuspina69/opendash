@@ -1,4 +1,4 @@
-// D3D12 device + flip-model swapchain wrapped in an NVRHI device (ADR 0004). Two frames in flight.
+// D3D12 device + flip-model swapchain wrapped in an NVRHI device. Two frames in flight.
 #pragma once
 
 #include <d3d12.h>

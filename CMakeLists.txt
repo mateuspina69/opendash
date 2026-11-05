@@ -55,7 +55,7 @@ endif()
 find_path(XXHASH_INCLUDE_DIR xxhash.h REQUIRED)
 target_include_directories(odengine PRIVATE ${Stb_INCLUDE_DIR} ${XXHASH_INCLUDE_DIR})
 
-# --- net: the netplay transport, protocol and session (plain Winsock / BSD sockets UDP, docs/adr/0005-netplay-transport.md); no
+# --- net: the netplay transport, protocol and session (plain Winsock / BSD sockets UDP); no
 # game code, the app glues it to the game ---
 file(GLOB od_net_sources CONFIGURE_DEPENDS src/net/*.cpp)
 add_library(odnet STATIC ${od_net_sources})

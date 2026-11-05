@@ -120,10 +120,10 @@ constexpr uint32_t kFlakeCellCount = 24 * 12 * 24, kFlakesNear = 32, kFlakesFar 
 constexpr float kFlakeFarScale = 3.0f;
 constexpr int kHeightTexels = 1024; // the height map's longer side
 
-// Same projection and 24-bit depth as the former D3D11 renderer (ADR 0002): the room data has coplanar faces
+// Same projection and 24-bit depth as the former D3D11 renderer: the room data has coplanar faces
 // whose depths differ only by rounding (different quad splits). D24 quantisation makes them tie, and LESS keeps
 // the first drawn, like the original; reverse-Z on D32F resolves those ties per pixel and shows stripes
-// (ST12 sub 1 floor). ADR 0004.
+// (ST12 sub 1 floor).
 // Vulkan has no D24 on AMD: D32 there, with the scene shader writing its depth at D24's precision (the same ties)
 #ifdef _WIN32
 constexpr nvrhi::Format kDepthFormat = nvrhi::Format::D24S8;

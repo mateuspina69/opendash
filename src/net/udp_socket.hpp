@@ -1,4 +1,4 @@
-// Plain IPv4 UDP over Winsock / BSD sockets (docs/adr/0005-netplay-transport.md): a non-blocking socket bound to a port, datagrams
+// Plain IPv4 UDP over Winsock / BSD sockets: a non-blocking socket bound to a port, datagrams
 // sent to and drained from `ip:port` endpoints. No game code: the netplay session (net/session) runs on it.
 #pragma once
 

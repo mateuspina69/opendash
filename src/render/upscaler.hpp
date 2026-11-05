@@ -1,4 +1,4 @@
-// Temporal AA / upscaler backends behind one interface (DLSS, FSR, XeSS, NIS, SSAA, MSAA, none). See ADR 0004.
+// Temporal AA / upscaler backends behind one interface (DLSS, FSR, XeSS, NIS, SSAA, MSAA, none).
 #pragma once
 
 #include <nvrhi/nvrhi.h>

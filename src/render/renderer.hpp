@@ -1,4 +1,4 @@
-// Minimal 3D renderer interface (NVRHI / D3D12 implementation, see docs/adr/0004-renderer-nvrhi.md).
+// Minimal 3D renderer interface (NVRHI / D3D12 implementation).
 #pragma once
 
 #include <cstdint>
