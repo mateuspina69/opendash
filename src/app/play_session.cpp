@@ -1262,6 +1262,7 @@ bool PlayerView::enterRoomAsClient(const RoomMesh& mesh) {
         game.stage = uint8_t(st);
         game.room = uint8_t(sb);
         if (loadRoom) loadRoom(st, sb); // the files of the story's state
+        od::port::stageSetup(); // the stage's class tables: what runs here (the effects) dispatches through them
         bindRoomFiles(*room);
     } catch (const std::exception& e) {
         playError = e.what();

@@ -451,7 +451,7 @@ add_test(NAME test_world_host COMMAND test_world_host $<TARGET_FILE:opendash>)
 
 add_executable(test_world_net tests/test_world_net.cpp src/app/world_link.cpp)
 target_include_directories(test_world_net PRIVATE tests src)
-target_link_libraries(test_world_net PRIVATE odgame odnet SDL3::SDL3)
+target_link_libraries(test_world_net PRIVATE odcontent odnet SDL3::SDL3)
 if(WIN32)
     target_compile_definitions(test_world_net PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
 endif()

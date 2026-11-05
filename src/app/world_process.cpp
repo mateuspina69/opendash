@@ -67,6 +67,7 @@ struct WorldArgs {
     int netTicks = od::port::kNetDefaultUpdateTicks; // the ticks between two updates of the network state
     std::string poseLog;       // test instrument: each actor's pose per tick, in this local file
     std::string netStats;      // test instrument: the bytes of the network state for one client, in this local file
+    std::string effectLog;     // test instrument: the effects a receiver starts, in this local file
 };
 
 // "<ticks> <hex PS1 pad bits>; ..."
@@ -122,6 +123,8 @@ WorldArgs parseArgs(int argc, char** argv) {
             w.netTicks = std::max(std::stoi(argv[++i]), 1);
         } else if (a == "--world-pose-log" && more) {
             w.poseLog = argv[++i];
+        } else if (a == "--world-effect-log" && more) {
+            w.effectLog = argv[++i];
         } else if (a == "--world-net-stats" && more) {
             w.netStats = argv[++i];
         } else if (a == "--world-host-away") {
@@ -173,8 +176,7 @@ struct LocalFile {
 };
 
 // What one client's network state takes, tick by tick (--world-net-stats): the update's period, acknowledged as late as a
-// round trip of about 270 ms would (kAckLagUpdates at 15 a second, no loss), once with what the traffic carries and once with
-// the shots and projectiles as state too
+// round trip of about 270 ms would (kAckLagUpdates at 15 a second, no loss)
 class NetStats {
 public:
     static constexpr int kAckLagUpdates = 4;
@@ -229,8 +231,25 @@ private:
     int every_;
     size_t maxLive_ = 0;
     uint64_t occupants_ = 0;
-    std::array<Run, 2> runs_{Run{"visible", od::port::netSlotVisible, od::port::NetStateSender(od::port::netSlotVisible)},
-                             Run{"withShots", od::port::netSlotVisibleOrShot, od::port::NetStateSender(od::port::netSlotVisibleOrShot)}};
+    std::array<Run, 1> runs_{Run{"all", od::port::netSlotNetworked, od::port::NetStateSender(od::port::netSlotNetworked)}};
+};
+
+// test instrument: each effect a receiver starts, a line flushed at once, so that the file tells what ran before an end
+class LoggedNetActors : public od::port::PoolNetActors {
+public:
+    explicit LoggedNetActors(std::FILE* file) : file_(file) {}
+    void effect(const od::port::NetEffect& e) override {
+        if (file_) {
+            std::fprintf(file_, "pool %02x type %02x subtype %02x variant %02x loop %02x params %02x %02x %02x %02x\n", unsigned(e.pool),
+                         unsigned(e.type), unsigned(e.subtype), unsigned(e.variant), unsigned(e.loopFlags), unsigned(e.params[0]),
+                         unsigned(e.params[1]), unsigned(e.params[2]), unsigned(e.params[3]));
+            std::fflush(file_);
+        }
+        PoolNetActors::effect(e);
+    }
+
+private:
+    std::FILE* file_;
 };
 
 // The receiver of a world's network state: the room's files and each actor's animation, no world update
@@ -264,10 +283,11 @@ int runClient(const WorldArgs& w) {
     join.playerId = client;
     link.sendReliable(join);
 
-    LocalFile poses(w.poseLog);
-    od::port::PoolNetActors actors;
+    LocalFile poses(w.poseLog), effects(w.effectLog);
+    LoggedNetActors actors(effects.f);
     od::port::NetStateClient state(actors);
     od::port::NetRenderClock clock;
+    od::port::NetLocalRunFailures failures;
     const auto acknowledge = [&](std::optional<uint16_t> sequence) {
         if (!sequence) return;
         WorldMessage ack{WorldMessageType::NetAck};
@@ -301,8 +321,11 @@ int runClient(const WorldArgs& w) {
                 shown = shownAny ? shown + 1 : uint32_t(at);
                 shownAny = true;
                 state.advance(shown);
+                od::port::runNetLocalActors(view->env, view->actors, false, failures);
+                od::port::runNetLocalActors(view->env, view->actors, true, failures);
+                od::port::actorSystem().hitCount = 0; // the world decides what hits
                 actors.endTick();
-                if (poses.f) od::port::writeNetPoses(poses.f, shown, od::port::netSlotVisible);
+                if (poses.f) od::port::writeNetPoses(poses.f, shown, od::port::netSlotVisibleOrShot, true);
             }
         }
         ++ticks;
@@ -311,7 +334,9 @@ int runClient(const WorldArgs& w) {
         if (next > after) SDL_DelayNS(next - after);
         else next = after;
     }
-    SDL_Log("client: ended at world tick %u, %zu actors shown", shown, state.shownCount());
+    SDL_Log("client: ended at world tick %u, %zu actors shown, %llu effects started, %zu classes failed", shown, state.shownCount(),
+            (unsigned long long)actors.effectsStarted(), failures.classes.size());
+    for (const std::string& f : failures.classes) SDL_Log("client: failed: %s", f.c_str());
     return 0;
 }
 
@@ -386,7 +411,7 @@ int run(const WorldArgs& w) {
     if (!w.netStats.empty()) netStats = std::make_unique<NetStats>(w.netStats, w.netTicks);
     if (netTable) od::port::watchNetPoses();
     const auto netTurn = [&](uint32_t netTick) {
-        if (poses.f) od::port::writeNetPoses(poses.f, netTick, od::port::netSlotVisible);
+        if (poses.f) od::port::writeNetPoses(poses.f, netTick, od::port::netSlotVisibleOrShot, false);
         if (!netTable) return;
         // every tick from the first, whoever is connected: a client that joins later is told how long ago each animation
         // started

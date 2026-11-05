@@ -6,11 +6,14 @@
 #include <cstdlib>
 #include <cstring>
 #include <exception>
+#include <string>
+#include <type_traits>
 
 #include "game/actor_animation.hpp"
 #include "game/actor_model.hpp"
 #include "game/actor_pools.hpp"
 #include "game/animation_data.hpp"
+#include "game/footstep_dust.hpp"
 #include "game/loaded_data.hpp"
 #include "game/model_data.hpp"
 #include "game/stage_state.hpp"
@@ -59,10 +62,12 @@ struct Reader {
 constexpr uint8_t kMaskX = 0x01, kMaskY = 0x02, kMaskZ = 0x04, kMaskYaw = 0x08, kMaskRotXZ = 0x10, kMaskAnim = 0x20,
                   kMaskShown = 0x40, kMaskMore = 0x80;
 constexpr uint8_t kMoreAge = 0x01, kMoreKey = 0x02, kMoreHeld = 0x04, kMoreScale = 0x08, kMoreTint = 0x10, kMoreParts = 0x20,
-                  kMoreAim = 0x40;
-constexpr uint8_t kEventAppear = 1, kEventGo = 2, kEventAppearStill = 3; // Still: no animation in play
+                  kMoreAim = 0x40, kMorePath = 0x80;
+constexpr uint8_t kEventAppear = 1, kEventGo = 2, kEventAppearStill = 3, kEventEffect = 4, kEventShift = 5; // Still: no animation in play
 constexpr size_t kBatchHeaderBytes = 8;
-constexpr size_t kAppearBytes = 26, kGoBytes = 2;
+constexpr size_t kAppearBytes = 26, kGoBytes = 2, kEffectBytes = 31;
+constexpr int kPathPosTolerance = 32; // 1/16 units an actor may leave its path by before the world sends a new one
+constexpr int kPathRotTolerance = 16; // of a turn of 4096
 constexpr size_t kMaxInFlight = 64;
 constexpr size_t kMaxSamples = 32;
 
@@ -79,9 +84,15 @@ bool netSlotVisible(uint8_t slot) {
            (slot >= kStaticClass && slot < kStaticClass + StaticPool::size());
 }
 
-bool netSlotVisibleOrShot(uint8_t slot) {
-    return netSlotVisible(slot) || (slot >= kShotClass && slot < kShotClass + ShotPool::size()) ||
+bool netSlotOnPath(uint8_t slot) {
+    return (slot >= kShotClass && slot < kShotClass + ShotPool::size()) ||
            (slot >= kProjectileClass && slot < kProjectileClass + ProjectilePool::size());
+}
+
+bool netSlotVisibleOrShot(uint8_t slot) { return netSlotVisible(slot) || netSlotOnPath(slot); }
+
+bool netSlotNetworked(uint8_t slot) {
+    return netSlotVisibleOrShot(slot) || (slot >= kEffectClass && slot < kEffectClass + EffectPool::size());
 }
 
 // ---- the world's table ----------------------------------------------------------------------------------------------
@@ -95,6 +106,12 @@ void NetWorldTable::seen(uint8_t slot, const Seen& s) {
         ++occupants;
     }
     a.identity = {s.type, s.subtype, s.variant, s.modelEntry};
+    if (occupantChanged) {
+        a.effect = s.effect;
+        a.effectGoes = s.effectGoes;
+        a.effectStart = s.effectStart;
+    }
+    const std::array<int16_t, 3> pathPos = a.state.pos, pathRot = a.state.rot;
     const uint8_t previousAnim = a.state.anim;
     const uint32_t previousTick = a.state.animTick;
     a.state.pos = s.pos;
@@ -126,6 +143,37 @@ void NetWorldTable::seen(uint8_t slot, const Seen& s) {
     a.animScript = s.animScript;
     a.lastKeyAt = s.keyAt;
     a.lastTicks = s.ticksLeft;
+    if (!s.onPath) return;
+    // on a path: the state holds its point and steps, and they change when the actor leaves them
+    if (occupantChanged) {
+        a.state.pathTick = tick;
+    } else {
+        const uint32_t age = tick - a.state.pathTick;
+        bool left = false;
+        for (size_t i = 0; i < 3; ++i) {
+            const int predicted = int(pathPos[i]) * 16 + int(a.state.posStep[i]) * int(age);
+            left = left || std::abs((s.fine[i] >> 12) - predicted) > kPathPosTolerance;
+            int turned = (int(s.rot[i]) - (int(pathRot[i]) + int(a.state.rotStep[i]) * int(age))) & 0xfff;
+            if (turned > 0x800) turned = 0x1000 - turned;
+            left = left || turned > kPathRotTolerance;
+        }
+        if (left) {
+            for (size_t i = 0; i < 3; ++i) {
+                a.state.posStep[i] = int16_t(std::clamp((s.fine[i] - a.lastPos[i]) >> 12, -0x8000, 0x7fff));
+                int turn = (int(s.rot[i]) - int(a.lastRot[i])) & 0xfff;
+                if (turn > 0x800) turn -= 0x1000;
+                a.state.rotStep[i] = int16_t(turn);
+                a.state.pos[i] = int16_t(a.lastPos[i] >> 16);
+                a.state.rot[i] = a.lastRot[i];
+            }
+            a.state.pathTick = tick - 1;
+        } else {
+            a.state.pos = pathPos;
+            a.state.rot = pathRot;
+        }
+    }
+    a.lastPos = s.fine;
+    a.lastRot = s.rot;
 }
 
 void NetWorldTable::gone(uint8_t slot) { actors[slot].live = false; }
@@ -193,6 +241,42 @@ NetWorldTable::Seen seenOf(const Actor& a, uint32_t model, uint32_t animTable) {
     return s;
 }
 
+// the statics that are effects: seen, not played with, and the same on every machine's own random numbers
+bool netEffectClass(RoutineId id) {
+    switch (id) {
+    case RoutineId::BlastUpdate:
+    case RoutineId::ExplosionUpdate:
+    case RoutineId::FlashBurstUpdate:
+    case RoutineId::WallDebrisUpdate:
+    case RoutineId::HurtSparksUpdate:
+    case RoutineId::SparkSprayUpdate:
+    case RoutineId::ShellCasingUpdate:
+    case RoutineId::SmokeColumnUpdate:
+    case RoutineId::SparkleUpdate:
+    case RoutineId::ExtinguisherMistUpdate:
+    case RoutineId::ShockWaveUpdate:
+    case RoutineId::HitSparkUpdate:
+    case RoutineId::BurstUpdate:
+    case RoutineId::SkidSparksUpdate:
+    case RoutineId::DustPuffUpdate:
+    case RoutineId::LaserWallSparkUpdate:
+    case RoutineId::MachineGunMuzzleUpdate:
+    case RoutineId::MachineGunImpactUpdate:
+    case RoutineId::FootstepDustUpdate:
+    case RoutineId::SparkEmitterUpdate:
+    case RoutineId::WaterSplashUpdate: return true;
+    default: return false;
+    }
+}
+
+bool staticIsEffect(const StaticActor& a) {
+    const RoutineRef h = actorHandler(a, (a.loopFlags & kActorLateLoop) ? ActorPool::StaticsLate : ActorPool::Statics, false);
+    return h && netEffectClass(h.id());
+}
+
+// a splash whose source is an actor or a player's bone point follows what only the world holds (its variant's top bits)
+bool effectFollowsTheWorld(const StaticActor& a, RoutineId id) { return id == RoutineId::WaterSplashUpdate && (a.variant >> 6) != 0; }
+
 template <class Pool> void captureMeshPool(NetWorldTable& table, Pool& pool, size_t count) {
     for (size_t i = 0; i < count; ++i) {
         const auto& a = pool[i];
@@ -211,6 +295,36 @@ template <class Pool> void captureMeshPool(NetWorldTable& table, Pool& pool, siz
             s.visual.scale = {a.scale.x, a.scale.y, a.scale.z};
             s.visual.tint = a.tint;
         }
+        if constexpr (std::is_same_v<Pool, StaticPool>) {
+            if (!held.live || held.identity.type != a.type || held.model != a.model) {
+                const RoutineRef h =
+                    actorHandler(a, (a.loopFlags & kActorLateLoop) ? ActorPool::StaticsLate : ActorPool::Statics, false);
+                s.effect = h && netEffectClass(h.id());
+                s.effectGoes = s.effect && !effectFollowsTheWorld(a, h.id());
+                s.effectStart.pool = uint8_t(kStaticClass);
+                s.effectStart.type = a.type;
+                s.effectStart.subtype = a.subtype;
+                s.effectStart.variant = a.variant;
+                s.effectStart.spawnByte = a.spawnByte;
+                s.effectStart.loopFlags = a.loopFlags;
+                s.effectStart.flags = uint8_t(a.flags & (kActorLive | kActorDrawn | kActorScenery));
+                for (size_t p = 0; p < 4; ++p) s.effectStart.params[p] = a.params[p];
+                s.effectStart.pos = s.pos;
+                s.effectStart.rot = s.rot;
+                s.effectStart.velocity = {a.velocity.x, a.velocity.y, a.velocity.z};
+                if (h && h.id() == RoutineId::FootstepDustUpdate) {
+                    const auto* dust = heldClassStateOf<FootstepDustFields>(a);
+                    const Actor* parent = dust ? dust->parent.get() : nullptr;
+                    // no walker known yet: it went with the slot, nothing to show
+                    if (parent) s.effectStart.parent = parent->slot;
+                    else s.effectGoes = false;
+                }
+            }
+        }
+        if (netSlotOnPath(slot)) {
+            s.onPath = true;
+            s.fine = {a.pos.x.value(), a.pos.y.value(), a.pos.z.value()};
+        }
         table.seen(slot, s);
     }
 }
@@ -221,6 +335,7 @@ void watchNetPoses() { setAnimPoseObserver(notePoseEdits); }
 
 void captureNetWorld(NetWorldTable& table, uint32_t tick) {
     table.tick = tick;
+    table.coordinateShift = stage().coordinateShift;
     AnimatedPool& animated = animatedPool();
     for (size_t i = 0; i < kAnimatedFieldSlots; ++i) {
         const AnimatedActor& a = animated[i];
@@ -260,7 +375,7 @@ void captureNetWorld(NetWorldTable& table, uint32_t tick) {
     captureMeshPool(table, staticPool(), StaticPool::size());
     captureMeshPool(table, shotPool(), ShotPool::size());
     captureMeshPool(table, projectilePool(), ProjectilePool::size());
-    // the effects only count: they run on the client from their event
+    // the effects run on the client from their event
     EffectPool& effects = effectPool();
     for (size_t i = 0; i < EffectPool::size(); ++i) {
         const EffectActor& e = effects[i];
@@ -272,6 +387,18 @@ void captureNetWorld(NetWorldTable& table, uint32_t tick) {
         }
         NetWorldTable::Seen s;
         s.type = e.type;
+        s.effect = true;
+        s.effectGoes = true;
+        s.effectStart.pool = uint8_t(kEffectClass);
+        s.effectStart.type = e.type;
+        s.effectStart.subtype = e.subtype;
+        s.effectStart.variant = e.variant;
+        s.effectStart.spawnByte = e.spawnByte;
+        s.effectStart.loopFlags = e.loopFlags;
+        s.effectStart.flags = uint8_t(e.flags & (kActorLive | kActorDrawn));
+        for (size_t p = 0; p < 4; ++p) s.effectStart.params[p] = e.params[p];
+        s.effectStart.pos = {e.pos.x, e.pos.y, e.pos.z};
+        s.effectStart.spare = e.posSpare;
         table.seen(slot, s);
     }
 }
@@ -291,6 +418,13 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
             w.u32(eventsSent_);
         }
     };
+    if (table.coordinateShift != shiftTold_ && table.coordinateShift != 0xff) {
+        room(kGoBytes);
+        w.u8(kEventShift);
+        w.u8(table.coordinateShift);
+        ++eventsSent_;
+        shiftTold_ = table.coordinateShift;
+    }
     for (size_t i = 0; i < kNetSlots; ++i) {
         const uint8_t slot = uint8_t(i);
         if (!filter_(slot)) continue;
@@ -298,7 +432,9 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
         const NetWorldActor& a = table.actors[i];
         const bool same = k.told && a.live && a.generation == k.generation;
         if (same) continue;
-        if (k.told) {
+        if (k.told && k.effect) { // an effect ends by itself on the client
+            k.told = false;
+        } else if (k.told) {
             room(kGoBytes);
             w.u8(kEventGo);
             w.u8(slot);
@@ -306,6 +442,34 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
             k.told = false;
         }
         if (!a.live) continue;
+        if (a.effect) {
+            k.told = true;
+            k.effect = true;
+            k.generation = a.generation;
+            if (!a.effectGoes) continue;
+            const NetEffect& e = a.effectStart;
+            room(kEffectBytes);
+            w.u8(kEventEffect);
+            w.u8(e.pool);
+            w.u8(e.type);
+            w.u8(e.subtype);
+            w.u8(e.variant);
+            w.u8(e.spawnByte);
+            w.u8(e.loopFlags);
+            w.u8(e.flags);
+            w.u8(e.parent);
+            for (const uint8_t p : e.params) w.u8(p);
+            for (const int16_t v : e.pos) w.i16(v);
+            if (e.pool == kStaticClass) {
+                for (const int16_t v : e.rot) w.i16(v);
+                for (const int16_t v : e.velocity) w.i16(v);
+            } else {
+                w.i16(e.spare);
+            }
+            ++eventsSent_;
+            continue;
+        }
+        k.effect = false;
         room(kAppearBytes);
         const bool playing = a.state.animTick != kNetNoAnimTick;
         w.u8(playing ? kEventAppear : kEventAppearStill);
@@ -350,7 +514,7 @@ std::vector<uint8_t> NetStateSender::update(const NetWorldTable& table) {
         const size_t i = (from + n) % kNetSlots;
         Known& k = known_[i];
         const NetWorldActor& a = table.actors[i];
-        if (!k.told || !a.live || a.generation != k.generation) continue;
+        if (!k.told || k.effect || !a.live || a.generation != k.generation) continue;
         if (a.state == k.acked && a.state == k.sent) continue;
         uint8_t mask = a.state.shown ? kMaskShown : 0;
         // a field goes while it differs from what the client is known to hold or from what it may hold by now
@@ -378,6 +542,10 @@ std::vector<uint8_t> NetStateSender::update(const NetWorldTable& table) {
         if (v.tint != va.tint || v.tint != vs.tint) more |= kMoreTint;
         if (v.hiddenParts != va.hiddenParts || v.hiddenParts != vs.hiddenParts) more |= kMoreParts;
         if (a.state.aim != k.acked.aim || a.state.aim != k.sent.aim) more |= kMoreAim;
+        const auto pathDiffers = [&](const NetActorState& o) {
+            return a.state.pathTick != o.pathTick || a.state.posStep != o.posStep || a.state.rotStep != o.rotStep;
+        };
+        if (pathDiffers(k.acked) || pathDiffers(k.sent)) more |= kMorePath;
         if (more) mask |= kMaskMore;
         Writer e;
         e.u8(uint8_t(i));
@@ -414,6 +582,11 @@ std::vector<uint8_t> NetStateSender::update(const NetWorldTable& table) {
                 for (size_t l = 0; l < 3; ++l)
                     if (o.lanes[l] != 0) e.i16(o.lanes[l]);
             }
+        }
+        if (more & kMorePath) {
+            e.u8(animAgeByte(table.tick, a.state.pathTick));
+            for (const int16_t c : a.state.posStep) e.i16(c);
+            for (const int16_t c : a.state.rotStep) e.i16(c);
         }
         if (w.bytes.size() + e.bytes.size() > kNetMaxPayload) {
             cursor_ = i; // the next update starts with what did not fit
@@ -473,7 +646,8 @@ double NetRenderClock::at(uint64_t nowNs) {
 
 void NetStateClient::noteStart(Occupant& o, const NetActorState& s) {
     if (s.animTick == kNetNoAnimTick) return;
-    if (!o.starts.empty() && o.starts.back().tick == s.animTick && o.starts.back().start.anim == s.anim) return; // a resend
+    if (o.startNoted == s.animTick) return; // a resend
+    o.startNoted = s.animTick;
     NetClientActors::AnimStart start;
     start.anim = s.anim;
     start.key = s.animKey;
@@ -490,10 +664,37 @@ bool NetStateClient::applyEvents(std::span<const uint8_t> bytes) {
     if (!r.ok || first != eventsArrived_) return false;
     while (r.ok && r.at < bytes.size()) {
         const uint8_t kind = r.u8();
+        if (kind == kEventEffect) {
+            NetEffect e;
+            e.pool = r.u8();
+            e.type = r.u8();
+            e.subtype = r.u8();
+            e.variant = r.u8();
+            e.spawnByte = r.u8();
+            e.loopFlags = r.u8();
+            e.flags = r.u8();
+            e.parent = r.u8();
+            for (uint8_t& p : e.params) p = r.u8();
+            for (int16_t& v : e.pos) v = r.i16();
+            if (e.pool == kStaticClass) {
+                for (int16_t& v : e.rot) v = r.i16();
+                for (int16_t& v : e.velocity) v = r.i16();
+            } else {
+                e.spare = r.i16();
+            }
+            due_.push_back({tick, false, nullptr, e, std::nullopt});
+            ++eventsArrived_;
+            continue;
+        }
+        if (kind == kEventShift) {
+            due_.push_back({tick, false, nullptr, std::nullopt, r.u8()});
+            ++eventsArrived_;
+            continue;
+        }
         const uint8_t slot = r.u8();
         if (kind == kEventGo) {
             if (std::shared_ptr<Occupant>& o = heardOf_[slot]) {
-                due_.push_back({tick, false, o});
+                due_.push_back({tick, false, o, std::nullopt, std::nullopt});
                 o = nullptr;
             }
         } else if (kind == kEventAppear || kind == kEventAppearStill) {
@@ -516,10 +717,11 @@ bool NetStateClient::applyEvents(std::span<const uint8_t> bytes) {
                 o->last.held = (bits & 2) != 0;
             }
             o->appearedAtEvent = eventsArrived_ + 1;
+            o->last.pathTick = tick;
             o->samples.push_back({tick, o->last});
             noteStart(*o, o->last);
             heardOf_[slot] = o;
-            due_.push_back({tick, true, o});
+            due_.push_back({tick, true, o, std::nullopt, std::nullopt});
         } else {
             return false;
         }
@@ -553,14 +755,13 @@ std::optional<uint16_t> NetStateClient::applyParsed(std::span<const uint8_t> byt
         s.shown = (mask & kMaskShown) != 0;
         if (mask & kMaskAnim) s.anim = r.u8();
         const uint32_t age = (more & kMoreAge) ? r.u8() : 0u;
-        s.animKeyed = false;
         if (more & kMoreKey) {
             s.animKey = r.u16();
             s.animTicks = r.u8();
-            s.animKeyed = true;
         }
         if (mask & kMaskAnim) {
             s.animTick = tick - age;
+            s.animKeyed = (more & kMoreKey) != 0;
             s.held = (more & kMoreHeld) != 0;
         }
         if (more & kMoreScale) {
@@ -584,6 +785,11 @@ std::optional<uint16_t> NetStateClient::applyParsed(std::span<const uint8_t> byt
                 for (size_t l = 0; l < 3; ++l) a.lanes[l] = (head >> (5 + l) & 1) ? r.i16() : int16_t(0);
             }
         }
+        if (more & kMorePath) {
+            s.pathTick = tick - r.u8();
+            for (int16_t& c : s.posStep) c = r.i16();
+            for (int16_t& c : s.rotStep) c = r.i16();
+        }
         changed[slot] = s;
     }
     if (!r.done()) return std::nullopt;
@@ -595,9 +801,17 @@ std::optional<uint16_t> NetStateClient::applyParsed(std::span<const uint8_t> byt
         Occupant* o = heardOf_[i].get();
         if (!o) continue;
         // an update built before this occupant appeared speaks of the one before it
-        if (changed[i] && o->appearedAtEvent <= eventsThrough) {
+        const bool told = changed[i] && o->appearedAtEvent <= eventsThrough;
+        if (told) {
             o->last = *changed[i];
             noteStart(*o, o->last);
+        }
+        if (netSlotOnPath(uint8_t(i))) { // a path holds until the next, from its own tick
+            if (told) {
+                while (!o->samples.empty() && int32_t(o->samples.back().tick - o->last.pathTick) >= 0) o->samples.pop_back();
+                o->samples.push_back({o->last.pathTick, o->last});
+            }
+            continue;
         }
         o->samples.push_back({tick, o->last});
         while (o->samples.size() > kMaxSamples) o->samples.pop_front();
@@ -652,6 +866,14 @@ void NetStateClient::advance(uint32_t tick) {
     while (!due_.empty() && int32_t(due_.front().tick - tick) <= 0) {
         const Due d = std::move(due_.front());
         due_.pop_front();
+        if (d.effect) {
+            actors_.effect(*d.effect);
+            continue;
+        }
+        if (d.shift) {
+            actors_.coordinateShift(*d.shift);
+            continue;
+        }
         const uint8_t slot = d.occupant->slot;
         if (d.appear) {
             if (shown_[slot]) actors_.go(slot);
@@ -667,7 +889,13 @@ void NetStateClient::advance(uint32_t tick) {
         Occupant& o = *held;
         while (o.samples.size() >= 2 && int32_t(o.samples[1].tick - tick) <= 0) o.samples.pop_front();
         NetActorState s = o.samples.front().state;
-        if (o.samples.size() >= 2 && int32_t(tick - o.samples[0].tick) > 0) {
+        if (netSlotOnPath(o.slot)) {
+            const int age = int(int32_t(tick - s.pathTick));
+            for (size_t i = 0; i < 3; ++i) {
+                s.pos[i] = int16_t((int(s.pos[i]) * 16 + int(s.posStep[i]) * age) >> 4);
+                s.rot[i] = int16_t(int(s.rot[i]) + int(s.rotStep[i]) * age);
+            }
+        } else if (o.samples.size() >= 2 && int32_t(tick - o.samples[0].tick) > 0) {
             const Sample &a = o.samples[0], &b = o.samples[1];
             const double f = double(tick - a.tick) / double(b.tick - a.tick);
             bool cut = false;
@@ -703,8 +931,20 @@ size_t NetStateClient::shownCount() const {
 
 // ---- the client on the game's pools ---------------------------------------------------------------------------------
 
+ActorHeader* PoolNetActors::slotOf(uint8_t slot) const {
+    if (shotsInOwnSlots_ && actorSlotClass(slot) == kShotClass)
+        return ownSlot_[slot] != 0 ? &actorHeaderAt(ownSlot_[slot]) : nullptr;
+    return &actorHeaderAt(actorBySlot(slot));
+}
+
 void PoolNetActors::appear(uint8_t slot, const NetActorIdentity& identity, const NetActorState& state) {
-    ActorHeader& head = claimActorSlot(slot);
+    if (shotsInOwnSlots_ && actorSlotClass(slot) == kShotClass) {
+        ownSlot_[slot] = allocActor10();
+        if (ownSlot_[slot] == 0) return; // the pool is full here: this shot is not seen
+    }
+    ActorHeader& head = ownSlot_[slot] != 0 ? actorHeaderAt(ownSlot_[slot]) : claimActorSlot(slot);
+    head.flags = kActorLiveDrawn;
+    head.runFlags &= uint8_t(~kActorRun); // the pool loops pass it by: its class runs in the world
     head.type = identity.type;
     head.subtype = identity.subtype;
     head.variant = identity.variant;
@@ -720,12 +960,60 @@ void PoolNetActors::appear(uint8_t slot, const NetActorIdentity& identity, const
 }
 
 void PoolNetActors::go(uint8_t slot) {
-    freeActor(actorHeaderAt(actorBySlot(slot)));
+    if (ActorHeader* head = slotOf(slot)) {
+        if (actorSlotClass(slot) == kShotClass) freeActor(asShot(*head)); // freeActor(ActorHeader&), as the exe, has no case for shots
+        else freeActor(*head);
+    }
+    ownSlot_[slot] = 0;
     animates_[slot] = false;
 }
 
+void PoolNetActors::coordinateShift(uint8_t shift) { stage().coordinateShift = shift; }
+
+void PoolNetActors::effect(const NetEffect& e) {
+    // what it hangs from: an actor held here, or (a player's slot) this machine's Mega Man
+    Actor* parent = nullptr;
+    if (e.parent != kNetNoParent) {
+        ActorHeader& head = actorHeaderAt(actorBySlot(e.parent));
+        if (!(head.flags & kActorLive) && actorSlotClass(e.parent) != kPlayerClass) return;
+        parent = &actorLayoutOf(head);
+    }
+    const uint32_t address = e.pool == kEffectClass ? allocActorA0(e.loopFlags) : allocActor60(e.loopFlags);
+    if (address == 0) return; // the pool is full here: this one is not seen
+    ActorHeader& head = actorHeaderAt(address);
+    head.flags = e.flags;
+    head.type = e.type;
+    head.subtype = e.subtype;
+    head.variant = e.variant;
+    head.spawnByte = e.spawnByte;
+    for (size_t i = 0; i < 4; ++i) head.params[i] = e.params[i];
+    head.enterState(0);
+    if (parent) classState<FootstepDustFields>(asStatic(head)).parent = parent;
+    if (e.pool == kEffectClass) {
+        EffectActor& fx = asEffect(head);
+        fx.pos.x = e.pos[0];
+        fx.pos.y = e.pos[1];
+        fx.pos.z = e.pos[2];
+        fx.posSpare = e.spare;
+    } else {
+        StaticActor& s = asStatic(head);
+        s.pos.x = int32_t(uint32_t(uint16_t(e.pos[0])) << 16);
+        s.pos.y = int32_t(uint32_t(uint16_t(e.pos[1])) << 16);
+        s.pos.z = int32_t(uint32_t(uint16_t(e.pos[2])) << 16);
+        s.rotation.x = e.rot[0];
+        s.rotation.y = e.rot[1];
+        s.rotation.z = e.rot[2];
+        s.velocity.x = e.velocity[0];
+        s.velocity.y = e.velocity[1];
+        s.velocity.z = e.velocity[2];
+    }
+    ++effectsStarted_;
+}
+
 void PoolNetActors::tick(uint8_t slot, const NetActorState& state, const std::optional<AnimStart>& start) {
-    Actor& a = actorLayoutOf(actorHeaderAt(actorBySlot(slot)));
+    ActorHeader* head = slotOf(slot);
+    if (!head) return;
+    Actor& a = actorLayoutOf(*head);
     a.pos.x.whole = state.pos[0];
     a.pos.y.whole = state.pos[1];
     a.pos.z.whole = state.pos[2];
@@ -791,6 +1079,32 @@ void PoolNetActors::tick(uint8_t slot, const NetActorState& state, const std::op
 
 void PoolNetActors::endTick() { applyActorFrees(); }
 
+namespace {
+
+// one pool loop; a class that throws loses the actor it was on
+void runLocalPool(const PlayerEnv& env, ActorContext& context, ActorPool pool, uint32_t& cursor, NetLocalRunFailures& failed) {
+    for (int guard = 0; guard < 64; ++guard) {
+        try {
+            updatePool(env, context, pool);
+            return;
+        } catch (const std::exception& e) {
+            ActorHeader& actor = actorHeaderAt(cursor);
+            const std::string what = std::string(pool == ActorPool::Effects || pool == ActorPool::EffectsLate ? "effect" : "static") +
+                                     " type " + std::to_string(int(actor.type)) + ": " + e.what();
+            if (std::find(failed.classes.begin(), failed.classes.end(), what) == failed.classes.end()) failed.classes.push_back(what);
+            freeActor(actor);
+        }
+    }
+}
+
+} // namespace
+
+void runNetLocalActors(const PlayerEnv& env, ActorContext& context, bool late, NetLocalRunFailures& failed) {
+    ActorSystemState& s = actorSystem();
+    runLocalPool(env, context, late ? ActorPool::EffectsLate : ActorPool::Effects, s.effectCursor, failed);
+    runLocalPool(env, context, late ? ActorPool::StaticsLate : ActorPool::Statics, s.staticCursor, failed);
+}
+
 // ---- the pose log ----------------------------------------------------------------------------------------------------
 
 namespace {
@@ -841,13 +1155,15 @@ void poseRecord(std::FILE* file, uint32_t tick, const Actor& a, const AnimatedAc
 
 } // namespace
 
-void writeNetPoses(std::FILE* file, uint32_t tick, NetSlotFilter filter) {
+void writeNetPoses(std::FILE* file, uint32_t tick, NetSlotFilter filter, bool client) {
     AnimatedPool& animated = animatedPool();
     for (size_t i = 0; i < kAnimatedFieldSlots; ++i)
         if ((animated[i].flags & kActorLive) && filter(animated[i].slot)) poseRecord(file, tick, animated[i], &animated[i]);
     StaticPool& statics = staticPool();
     for (size_t i = 0; i < StaticPool::size(); ++i)
-        if ((statics[i].flags & kActorLive) && filter(statics[i].slot)) poseRecord(file, tick, statics[i], nullptr);
+        if ((statics[i].flags & kActorLive) && filter(statics[i].slot) &&
+            !(client ? (statics[i].runFlags & kActorRun) != 0 : staticIsEffect(statics[i])))
+            poseRecord(file, tick, statics[i], nullptr);
     ShotPool& shots = shotPool();
     for (size_t i = 0; i < ShotPool::size(); ++i)
         if ((shots[i].flags & kActorLive) && filter(shots[i].slot)) poseRecord(file, tick, shots[i], nullptr);

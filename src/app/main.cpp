@@ -50,7 +50,8 @@
 namespace {
 // OD_TRACE_THROW: a vectored handler runs before the unwind, so it sees the thrower's frames
 LONG CALLBACK traceThrow(EXCEPTION_POINTERS* e) {
-    if (e->ExceptionRecord->ExceptionCode != 0xE06D7363) return EXCEPTION_CONTINUE_SEARCH; // a C++ throw
+    const DWORD code = e->ExceptionRecord->ExceptionCode;
+    if (code != 0xE06D7363 && code != EXCEPTION_ACCESS_VIOLATION) return EXCEPTION_CONTINUE_SEARCH; // a C++ throw, or a bad address
     void* frames[24];
     const USHORT n = CaptureStackBackTrace(0, 24, frames, nullptr);
     HANDLE p = GetCurrentProcess();

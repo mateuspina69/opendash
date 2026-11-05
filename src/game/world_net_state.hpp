@@ -15,11 +15,19 @@
 // Update payload (little-endian): u16 sequence, u32 tick, u32 events sent so far, then per actor: u8 slot, u8 mask,
 //   the fields of the mask's bits: i16 x, i16 y, i16 z, i16 yaw, i16 rotation x + i16 rotation z, u8 animation; with the
 //   mask's top bit a second mask: u8 the animation's age, u16 key + u8 ticks left, i16 scale x, y, z, u16 tint, u24 hidden
-//   parts, u8 count + the aim offsets (u8 entry | lanes << 5, i16 per lane).
+//   parts, u8 count + the aim offsets (u8 entry | lanes << 5, i16 per lane), u8 the path's age + its steps (i16 x, y, z in
+//   1/16 unit a tick, i16 rotation x, y, z a tick).
 // Event batch: u32 tick, u32 index of the batch's first event, then per event: u8 kind, Appear: u8 slot, type, subtype,
 //   variant, the model bank's entry, shown; i16 x, y, z, rotation x, y, z; with an animation in play u8 animation, u16 its
 //   age, u16 key, u8 ticks left, u8 held. Go: u8 slot. What a class changes of the model (scale, tint, hidden parts, aim)
 //   goes in the updates, against what the model binds: a client's bind gives the same.
+//   Effect: u8 pool, type, subtype, variant, spawn byte, loop flags, flags, parent, 4 parameters; i16 x, y, z; statics: i16 rotation
+//   and velocity x, y, z; effects: i16 the short after the position.
+//
+// A shot or a projectile goes as a path: the client moves it by itself from a point and its steps, and the world sends a new
+// path only when the actor leaves the last one (a straight shot: once; a homing one or a falling one: as often as it turns).
+// An effect (the effect pool, and the statics of netEffectClass: a blast, a splash, sparks) runs on the client from its event,
+// with the client's own random numbers; the world's copy is not sent.
 #pragma once
 
 #include <array>
@@ -32,6 +40,8 @@
 #include <span>
 #include <string>
 #include <vector>
+
+#include "game/actors.hpp"
 
 namespace od::port {
 
@@ -48,8 +58,23 @@ constexpr uint32_t kNetNoAnimTick = 0xffffffffu; // an actor on which no animati
 using NetSlotFilter = bool (*)(uint8_t slot);
 // the animated pool's field slots and the statics: what this slice of the traffic carries
 bool netSlotVisible(uint8_t slot);
-// ... and the shots and the projectiles (measured against it: ADR 0006 sends those as events, not as state)
+// ... and the shots and the projectiles
 bool netSlotVisibleOrShot(uint8_t slot);
+// ... and the effects: all the traffic
+bool netSlotNetworked(uint8_t slot);
+// a shot or a projectile: it moves along a path
+bool netSlotOnPath(uint8_t slot);
+
+constexpr uint8_t kNetNoParent = 0xff;
+// What starts an effect on a client
+struct NetEffect {
+    uint8_t pool = 0, type = 0, subtype = 0, variant = 0, spawnByte = 0, loopFlags = 0, flags = 0;
+    uint8_t parent = kNetNoParent; // the slot of the actor it hangs from (a walker's foot dust)
+    std::array<uint8_t, 4> params{};
+    std::array<int16_t, 3> pos{}, rot{}, velocity{};
+    int16_t spare = 0;
+    friend bool operator==(const NetEffect&, const NetEffect&) = default;
+};
 
 // What an actor's model is bound from on the client
 struct NetActorIdentity {
@@ -87,6 +112,8 @@ struct NetActorState {
     bool shown = false;
     NetActorVisual visual;
     std::vector<NetAimOffset> aim;
+    uint32_t pathTick = 0;        // on a path: pos and rot are the actor's on this tick, and it goes on by these steps
+    std::array<int16_t, 3> posStep{}, rotStep{};
     uint8_t told = 0;             // a client's: which of the visual's fields the world has said (kNetTold...)
     friend bool operator==(const NetActorState&, const NetActorState&) = default;
 };
@@ -102,11 +129,17 @@ struct NetWorldActor {
     uint32_t model = 0, animTable = 0, animScript = 0; // what tells that the occupant changed or an animation started
     uint32_t lastKeyAt = 0;  // the animation's place on the last tick
     uint8_t lastTicks = 0;
+    std::array<int32_t, 3> lastPos{}; // an actor on a path: its 16.16 position and rotation on the last tick
+    std::array<int16_t, 3> lastRot{};
+    bool effect = false;     // it runs on the client from an event
+    bool effectGoes = false; // ... and this one goes (one that follows something only the world holds does not)
+    NetEffect effectStart;
 };
 
 class NetWorldTable {
 public:
     uint32_t tick = 0;
+    uint8_t coordinateShift = 0xff; // the stage's (a camera script can change it): every pose scales by it
     std::array<NetWorldActor, kNetSlots> actors{};
     // the actors that started in this table's life
     uint64_t occupants = 0;
@@ -126,6 +159,10 @@ public:
         bool stayed = false;  // ... is the last tick's
         NetActorVisual visual, bound;
         std::vector<NetAimOffset> aim;
+        bool onPath = false;
+        std::array<int32_t, 3> fine{}; // the 16.16 position
+        bool effect = false, effectGoes = false;
+        NetEffect effectStart;
     };
     void seen(uint8_t slot, const Seen& s);
     void gone(uint8_t slot);
@@ -140,7 +177,7 @@ void watchNetPoses();
 // One client's view of the world: what it was told, what it acknowledged
 class NetStateSender {
 public:
-    explicit NetStateSender(NetSlotFilter filter = netSlotVisible) : filter_(filter) {}
+    explicit NetStateSender(NetSlotFilter filter = netSlotNetworked) : filter_(filter) {}
 
     // what must arrive since the last call: the appearances and departures, in batches of at most kNetMaxEventBatch bytes
     std::vector<std::vector<uint8_t>> events(const NetWorldTable& table);
@@ -154,6 +191,7 @@ public:
 private:
     struct Known {
         bool told = false;      // the client was told of this occupant
+        bool effect = false;    // ... which runs there by itself from its event
         uint32_t generation = 0;
         NetActorState acked;    // the state the client is known to hold
         NetActorState sent;     // the newest state sent: a value back at the acknowledged one still has to replace this
@@ -170,6 +208,7 @@ private:
     NetSlotFilter filter_;
     std::array<Known, kNetSlots> known_{};
     std::deque<Sent> inFlight_;
+    uint8_t shiftTold_ = 0xff;
     uint16_t nextSequence_ = 1;
     uint32_t eventsSent_ = 0;
     size_t cursor_ = 0;
@@ -183,6 +222,10 @@ public:
     // the slot's occupant appears
     virtual void appear(uint8_t slot, const NetActorIdentity& identity, const NetActorState& state) = 0;
     virtual void go(uint8_t slot) = 0;
+    // the stage's coordinate shift changes
+    virtual void coordinateShift(uint8_t shift) = 0;
+    // an effect starts, in a slot of the client's own
+    virtual void effect(const NetEffect& start) = 0;
     struct AnimStart {
         uint8_t anim = 0;
         uint32_t steps = 0; // the ticks it has been in play (0: it starts on this tick)
@@ -248,11 +291,14 @@ private:
             NetClientActors::AnimStart start;
         };
         std::deque<Start> starts;
+        uint32_t startNoted = kNetNoAnimTick; // the tick of the newest one heard: an update repeats it until acknowledged
     };
     struct Due {
         uint32_t tick = 0;
         bool appear = false;
         std::shared_ptr<Occupant> occupant;
+        std::optional<NetEffect> effect;
+        std::optional<uint8_t> shift;
     };
     void noteStart(Occupant& o, const NetActorState& s);
     std::optional<uint16_t> applyParsed(std::span<const uint8_t> bytes, uint32_t eventsThrough);
@@ -273,15 +319,32 @@ private:
 // from them. No class update runs.
 class PoolNetActors : public NetClientActors {
 public:
+    // shotsInOwnSlots: the client's own Mega Man has shots in that pool, so the world's take free slots there
+    explicit PoolNetActors(bool shotsInOwnSlots = false) : shotsInOwnSlots_(shotsInOwnSlots) {}
     void appear(uint8_t slot, const NetActorIdentity& identity, const NetActorState& state) override;
     void go(uint8_t slot) override;
+    void effect(const NetEffect& start) override;
+    void coordinateShift(uint8_t shift) override;
     void tick(uint8_t slot, const NetActorState& state, const std::optional<AnimStart>& start) override;
     // to run after a timeline's ticks: what went frees its slot
     void endTick();
+    uint64_t effectsStarted() const { return effectsStarted_; }
 
 private:
+    ActorHeader* slotOf(uint8_t slot) const;
+    bool shotsInOwnSlots_;
     std::array<bool, kNetSlots> animates_{}, held_{};
+    std::array<uint32_t, kNetSlots> ownSlot_{}; // a world's shot in a slot of the client's: its address
+    uint64_t effectsStarted_ = 0;
 };
+
+// One tick of what runs on a client: the effects, and the statics started as effects (the world's actors are held with their
+// run flag off, so the pool loops pass them by). A class that throws ends its own actor, not the client; the classes that
+// did are named in `failed` once each.
+struct NetLocalRunFailures {
+    std::vector<std::string> classes;
+};
+void runNetLocalActors(const PlayerEnv& env, ActorContext& context, bool late, NetLocalRunFailures& failed);
 
 // ---- a test instrument: each actor's pose on a tick, in a local file of each process, compared afterwards (a pose never
 // crosses the network) ----------------------------------------------------------------------------------------------------
@@ -296,8 +359,8 @@ struct NetPoseRecord {
     std::array<int16_t, 3> pos{}, rot{};
     std::vector<int16_t> bones; // per part: the point relative to the root's, then the matrix (12 values)
 };
-// every live actor the filter takes, on this tick
-void writeNetPoses(std::FILE* file, uint32_t tick, NetSlotFilter filter);
+// every live actor the filter takes, on this tick, but the effects: a world's by their class, a client's by their run flag
+void writeNetPoses(std::FILE* file, uint32_t tick, NetSlotFilter filter, bool client);
 std::vector<NetPoseRecord> readNetPoses(const std::filesystem::path& file);
 
 } // namespace od::port

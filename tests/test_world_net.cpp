@@ -54,6 +54,9 @@ struct Recorded : NetClientActors {
         live.erase(slot);
         last.erase(slot);
     }
+    void coordinateShift(uint8_t) override {}
+    std::vector<NetEffect> effects;
+    void effect(const NetEffect& e) override { effects.push_back(e); }
     void tick(uint8_t slot, const NetActorState& state, const std::optional<AnimStart>& start) override {
         last[slot] = state;
         if (start) starts.emplace_back(slot, *start);
@@ -291,6 +294,89 @@ void testVisualFields() {
     CHECK(rec.starts.size() == 1 && !rec.starts[0].second.held);
 }
 
+// a shot moves by itself from a point and its steps; a new path only when it leaves that one
+void testPaths() {
+    constexpr uint8_t kShot = 0x45;
+    NetWorldTable t;
+    NetStateSender sender;
+    Recorded rec;
+    NetStateClient client(rec);
+    const auto shotAt = [](int x16) { // x in 1/16 unit
+        NetWorldTable::Seen s;
+        s.type = 3;
+        s.onPath = true;
+        s.fine = {x16 << 12, 0, 0};
+        s.pos = {int16_t(x16 >> 4), 0, 0};
+        return s;
+    };
+    t.seen(kShot, shotAt(0));
+    for (const auto& batch : sender.events(t)) CHECK(client.applyEvents(batch));
+    t.tick = 1;
+    t.seen(kShot, shotAt(10 * 16)); // leaves the still point: a path, from the tick before
+    t.tick = 2;
+    t.seen(kShot, shotAt(20 * 16));
+    const auto u = sender.update(t);
+    CHECK(u.size() == kHeader + 3 + 1 + 12); // slot, masks, age, steps
+    CHECK(client.applyUpdate(u).has_value());
+    client.advance(0);
+    client.advance(1);
+    CHECK(rec.last[kShot].pos[0] == 10);
+    client.advance(2);
+    CHECK(rec.last[kShot].pos[0] == 20);
+    sender.acknowledge(1);
+    // straight on: nothing goes, and the client moves it
+    for (uint32_t tick = 3; tick <= 12; ++tick) {
+        t.tick = tick;
+        t.seen(kShot, shotAt(int(tick) * 160));
+        if (tick % 2 == 0) CHECK(sender.update(t).size() == kHeader);
+        client.advance(tick);
+    }
+    CHECK(rec.last[kShot].pos[0] == 120);
+    // it turns: a new path
+    t.tick = 13;
+    t.seen(kShot, shotAt(120 * 16));
+    t.tick = 14;
+    t.seen(kShot, shotAt(120 * 16));
+    CHECK(sender.update(t).size() > kHeader);
+}
+
+void testEffects() {
+    NetWorldTable t;
+    NetStateSender sender;
+    Recorded rec;
+    NetStateClient client(rec);
+    NetWorldTable::Seen s;
+    s.type = 7;
+    s.effect = true;
+    s.effectGoes = true;
+    s.effectStart.pool = 0x60;
+    s.effectStart.type = 7;
+    s.effectStart.pos = {1, 2, 3};
+    s.effectStart.params = {4, 5, 6, 7};
+    s.pos = {1, 2, 3};
+    t.seen(0x61, s);
+    auto batches = sender.events(t);
+    CHECK(batches.size() == 1 && batches[0].size() == 8 + 31);
+    for (const auto& batch : batches) CHECK(client.applyEvents(batch));
+    CHECK(sender.update(t).size() == kHeader); // no state for it
+    client.advance(0);
+    CHECK(rec.effects.size() == 1 && rec.effects[0] == s.effectStart);
+    CHECK(rec.live.empty());
+    // it ends on the world: nothing to say. Another starts in the slot: one more event.
+    t.tick = 1;
+    t.gone(0x61);
+    CHECK(sender.events(t).empty());
+    t.tick = 2;
+    t.seen(0x61, s);
+    CHECK(sender.events(t).size() == 1);
+    // one that follows what only the world holds does not go
+    NetStateSender second;
+    s.effectGoes = false;
+    NetWorldTable t2;
+    t2.seen(0x62, s);
+    CHECK(second.events(t2).empty());
+}
+
 void testLinkMessages() {
     WorldMessage ack{WorldMessageType::NetAck};
     ack.playerId = 3;
@@ -310,7 +396,7 @@ void testLinkMessages() {
 const char* const kFightingPad =
     "45 10; 20 8000; 40 8010; 12 4000; 30 8080; 25 8000; 40 8020; 12 4000; 40 8040; 30 8000; "
     "45 10; 20 8000; 40 8010; 12 4000; 30 8080; 25 8000; 40 8020; 12 4000; 40 8040; 30 8000";
-constexpr int kTicks = 588;
+int gTicks = 588;
 
 struct LinkFaults {
     const char* name;
@@ -360,13 +446,15 @@ std::string runRoom(const char* exe, const char* save, const std::filesystem::pa
     char worldPort[8], clientPort[8], ticks[16];
     std::snprintf(worldPort, sizeof worldPort, "%u", unsigned(toWorld.port()));
     std::snprintf(clientPort, sizeof clientPort, "%u", unsigned(toClient.port()));
-    std::snprintf(ticks, sizeof ticks, "%d", kTicks);
+    std::snprintf(ticks, sizeof ticks, "%d", gTicks);
     const std::string worldLog = worldPoses.string(), clientLog = clientPoses.string();
     const char* worldArgs[] = {exe, "--world", stage.c_str(), sub.c_str(), "--world-link", worldPort, "--world-keep-player",
                                "--world-ticks", ticks, "--world-pad", kFightingPad, "--world-pose-log", worldLog.c_str(),
                                "--story-save", save, nullptr};
+    const std::string effectLog = (dir / ("effects-" + stage + "-" + sub + ".txt")).string();
     const char* clientArgs[] = {exe, "--world", stage.c_str(), sub.c_str(), "--world-client", "--world-link", clientPort,
-                                "--world-pose-log", clientLog.c_str(), "--story-save", save, nullptr};
+                                "--world-pose-log", clientLog.c_str(), "--world-effect-log", effectLog.c_str(), "--story-save", save,
+                                nullptr};
     SDL_Process* client = SDL_CreateProcess(clientArgs, false);
     CHECK(client != nullptr);
     SDL_Process* world = SDL_CreateProcess(worldArgs, false);
@@ -418,13 +506,14 @@ std::string runRoom(const char* exe, const char* save, const std::filesystem::pa
     bool clientEnded = false;
     for (const uint64_t until = SDL_GetTicksNS() + 10'000'000'000ull; !clientEnded && SDL_GetTicksNS() < until; SDL_DelayNS(20'000'000))
         clientEnded = SDL_WaitProcess(client, false, &clientCode);
+    if (!clientEnded || clientCode != 0) std::printf("the receiver %s, code %d\n", clientEnded ? "ended" : "did not end", clientCode);
     CHECK(clientEnded && clientCode == 0);
     if (!clientEnded) SDL_KillProcess(client, true);
     SDL_DestroyProcess(client);
 
     // ---- the two pose files, tick by tick ---------------------------------------------------------------------------
     const std::vector<NetPoseRecord> w = readNetPoses(worldPoses), c = readNetPoses(clientPoses);
-    CHECK(!w.empty() && !c.empty());
+    CHECK(w.empty() == c.empty()); // a room can hold no actor at all
     if (w.empty() || c.empty()) return "no poses";
     std::map<uint64_t, const NetPoseRecord*> atWorld, atClient;
     const auto key = [](const NetPoseRecord& r) { return uint64_t(r.tick) << 8 | r.slot; };
@@ -524,16 +613,23 @@ int main(int argc, char** argv) {
     testEventsFirstAndReuse();
     testFitsOneDatagram();
     testVisualFields();
+    testPaths();
+    testEffects();
     testLinkMessages();
     if (argc >= 4) {
         SDL_Init(0);
         std::vector<std::string> rooms;
-        for (int i = 4; i < argc; ++i) rooms.push_back(argv[i]);
+        bool quick = false; // --quick: 10 s of each room with a clean link, for a sweep of the rooms
+        for (int i = 4; i < argc; ++i) {
+            if (std::string(argv[i]) == "--quick") quick = true;
+            else rooms.push_back(argv[i]);
+        }
         if (rooms.empty()) rooms = {"12:1", "42:2", "41:2"};
+        if (quick) gTicks = 300;
         const LinkFaults clean{"no delay, no loss", 0, 0}, far{"125 ms each way, 3% lost", 125, 3};
         for (const std::string& room : rooms) {
             runRoom(argv[1], argv[2], argv[3], room, clean);
-            runRoom(argv[1], argv[2], argv[3], room, far);
+            if (!quick) runRoom(argv[1], argv[2], argv[3], room, far);
         }
         SDL_Quit();
     }

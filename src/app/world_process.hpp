@@ -5,7 +5,7 @@
 //     [--world-link <the coordinator's port>] [--stage-record <hex>] [--world-mark-defeated <enemy id>]
 //     [--world-keep-player] [--world-net-ticks N] [--world-pose-log <file>] [--world-net-stats <file>]
 //   opendash --world <stage, hex> <sub> --world-client --world-link <port> [--story-save <file>] [--world-ticks N]
-//     [--world-pose-log <file>]
+//     [--world-pose-log <file>] [--world-effect-log <file>]
 // --world-client: the receiver of a world's network state (game/world_net_state): the room's files, no world update, no
 // window. --world-net-ticks: the ticks between two updates (2: 15 a second). The test instruments: --world-keep-player, the
 // world's own player on a link, driven by the pad; --world-pose-log, each actor's pose per tick in a local file;
