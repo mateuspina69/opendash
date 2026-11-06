@@ -124,8 +124,11 @@ bool netSlotNetworked(uint8_t slot) {
 
 void NetWorldTable::seen(uint8_t slot, const Seen& s) {
     NetWorldActor& a = actors[slot];
-    const bool occupantChanged =
-        !a.live || a.identity.type != s.type || a.model != s.model || a.animTable != s.animTable || a.serial != s.serial;
+    // a shot is the same occupant while its slot's count stays (a beam's class changes its model and its table as it
+    // goes: that is still the shot every client runs from its one event)
+    const bool shotSlot = slot >= kShotClass && slot < kShotClass + ShotPool::size();
+    const bool occupantChanged = !a.live || a.identity.type != s.type || a.serial != s.serial ||
+                                 (!shotSlot && (a.model != s.model || a.animTable != s.animTable));
     if (occupantChanged) {
         a = NetWorldActor{true, a.generation + 1, {}, {}, s.bound, s.model, s.animTable, 0, 0, 0};
         a.serial = s.serial;

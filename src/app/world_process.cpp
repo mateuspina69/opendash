@@ -506,6 +506,12 @@ int run(const WorldArgs& w) {
         sceneGated = !od::port::storyOptionalStage(uint8_t(w.stage));
         od::port::setScriptsGated(sceneGated);
         od::port::setWorldExitHook([&](const od::port::TransitionRequest& r) {
+            SDL_Log("world: a transition armed: state %u kind %u exit %02x %02x %02x -> ST%02X sub %u at %d %d %d", unsigned(r.state),
+                    unsigned(r.kind), unsigned(r.exitId), unsigned(r.exitByte1), unsigned(r.exitByte2), unsigned(r.destStage),
+                    unsigned(r.destRoom), int(r.destination.x), int(r.destination.y), int(r.destination.z));
+            // no exit of the room's table and no place named: not a room change this world carries out (a scene's, whose
+            // script moves each player's game itself, or a door's that its player's game asks the gate for)
+            if (r.exitId == 0 && r.destStage == 0 && r.destRoom == 0) return;
             const auto half = [](int16_t v, std::vector<uint8_t>& o) {
                 o.push_back(uint8_t(v));
                 o.push_back(uint8_t(uint16_t(v) >> 8));
