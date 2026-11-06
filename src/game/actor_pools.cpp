@@ -237,9 +237,16 @@ void clearContact(Actor& actor) {
 }
 } // namespace
 
+namespace {
+std::array<uint32_t, ShotPool::size()> g_shotSerials{};
+} // namespace
+
+uint32_t shotSlotSerial(size_t index) { return index < g_shotSerials.size() ? g_shotSerials[index] : 0; }
+
 uint32_t allocActor10() {
     const int i = takeSlot(actorSystem().shotsLive, ShotPool::size());
     if (i < 0) return 0;
+    ++g_shotSerials[size_t(i)];
     ShotActor& actor = shotPool()[size_t(i)];
     startSlot(actor, 0);
     clearContact(actor);

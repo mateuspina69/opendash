@@ -173,6 +173,7 @@ struct NetWorldActor {
     std::array<int32_t, 3> lastPos{}; // an actor on a path: its 16.16 position and rotation on the last tick
     std::array<int16_t, 3> lastRot{};
     uint32_t flashTick = 0;  // the newest tick its tint was a hit's flash (0: none)
+    uint32_t serial = 0;     // Seen::serial of the occupant
     uint8_t owner = 0;       // ActorHeader::ownerPlayer: a shot's is told to the others only
     bool startedByShot = false; // ... and so is what a shot started
     bool effect = false;     // it runs on the client from an event
@@ -224,6 +225,7 @@ public:
         std::array<int32_t, 3> fine{}; // the 16.16 position
         bool effect = false, effectGoes = false;
         NetEffect effectStart;
+        uint32_t serial = 0; // a shot slot's occupant count (actor_pools shotSlotSerial): a new one is a new occupant
     };
     void seen(uint8_t slot, const Seen& s);
     void gone(uint8_t slot);

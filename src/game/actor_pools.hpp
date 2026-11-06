@@ -289,6 +289,9 @@ ActorSystemState& actorSystem();
 // kActorShown, its loop flags `loopFlags`, its type / state / parameters and its contact fields cleared). Each
 // returns the slot's address, 0 when the pool is full (Phase 1: the callers still work on addresses). ----------------
 uint32_t allocActor10();                   // exe 0x5e1220: pool 0x10 (loop flags 0)
+// how many shots the pool-0x10 slot `index` has held (OpenDash's: a shot that takes a slot freed in the same tick is
+// another shot for the network state)
+uint32_t shotSlotSerial(size_t index);
 uint32_t allocActor20();                   // exe 0x5e1160: pool 0x20 (loop flags kActorStageClass)
 // exe 0x5e11c0: pool 0x20's sub-screen slots (24..31: the status sub-screen's model) as allocActor20, the contact bytes
 // cleared as one dword (the exe's store)

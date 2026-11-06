@@ -123,9 +123,11 @@ bool netSlotNetworked(uint8_t slot) {
 
 void NetWorldTable::seen(uint8_t slot, const Seen& s) {
     NetWorldActor& a = actors[slot];
-    const bool occupantChanged = !a.live || a.identity.type != s.type || a.model != s.model || a.animTable != s.animTable;
+    const bool occupantChanged =
+        !a.live || a.identity.type != s.type || a.model != s.model || a.animTable != s.animTable || a.serial != s.serial;
     if (occupantChanged) {
         a = NetWorldActor{true, a.generation + 1, {}, {}, s.bound, s.model, s.animTable, 0, 0, 0};
+        a.serial = s.serial;
         a.state.animTick = kNetNoAnimTick;
         ++occupants;
     }
@@ -135,6 +137,7 @@ void NetWorldTable::seen(uint8_t slot, const Seen& s) {
         a.effectGoes = s.effectGoes;
         a.effectStart = s.effectStart;
         a.effectStart.slot = slot;
+        a.effectStart.owner = s.owner; // the player it belongs to, in the world's ids (a client maps them to its table)
     }
     const std::array<int16_t, 3> pathPos = a.state.pos, pathRot = a.state.rot;
     const uint8_t previousAnim = a.state.anim;
@@ -488,6 +491,7 @@ template <class Pool> void captureMeshPool(NetWorldTable& table, Pool& pool, siz
             }
         }
         if constexpr (std::is_same_v<Pool, ShotPool>) {
+            s.serial = shotSlotSerial(ShotPool::index(a));
             // a player's shot (the buster's, a blade's swing that follows its owner's arm): each client runs it from its
             // event, its picture its class's draw; the world's copy hits, and its go ends the others'
             if (actorHandler(a, ActorPool::Shots, false)) {
