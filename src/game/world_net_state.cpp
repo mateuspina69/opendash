@@ -1441,7 +1441,9 @@ void PoolNetActors::appear(uint8_t slot, const NetActorIdentity& identity, const
 }
 
 void PoolNetActors::go(uint8_t slot) {
-    if (ActorHeader* head = slotOf(slot)) {
+    // a copy that ended here by itself: its slot may hold a shot of this machine's since, which is not the world's to end
+    const bool stale = ownSlot_[slot] != 0 && shotSlotSerial(ShotPool::index(asShot(actorHeaderAt(ownSlot_[slot])))) != ownSerial_[slot];
+    if (ActorHeader* head = stale ? nullptr : slotOf(slot)) {
         if (actorSlotClass(slot) == kShotClass) freeActor(asShot(*head)); // freeActor(ActorHeader&), as the exe, has no case for shots
         else freeActor(*head);
     }
@@ -1501,7 +1503,10 @@ void PoolNetActors::effect(const NetEffect& e) {
         shot.aimPoint.spare = e.trail[3];
         ActorHeader* target = e.second != kNetNoParent ? slotOf(e.second) : nullptr;
         shot.target = target && (target->flags & kActorLive) ? target : nullptr;
-        if (shotsInOwnSlots_) ownSlot_[e.slot] = address; // the world's go ends it
+        if (shotsInOwnSlots_) { // the world's go ends it; the slot's occupant count tells it from a shot made there after
+            ownSlot_[e.slot] = address;
+            ownSerial_[e.slot] = shotSlotSerial(ShotPool::index(asShot(head)));
+        }
         ++effectsStarted_;
         return;
     }
@@ -1662,16 +1667,26 @@ void PoolNetActors::endTick() { applyActorFrees(); }
 
 bool PoolNetActors::heldShot(size_t index) const {
     if (index >= ShotPool::size()) return false;
-    const uint32_t at = shotPool()[index].at;
+    // the copy that is still in that slot (one that ended there by itself is not: a shot of this machine may have the slot
+    // since, a new occupant)
+    const uint32_t at = shotPool()[index].at, serial = shotSlotSerial(index);
     for (size_t i = kShotClass; i < kShotClass + ShotPool::size(); ++i)
-        if (ownSlot_[i] == at) return true;
+        if (ownSlot_[i] == at && ownSerial_[i] == serial) return true;
     return false;
+}
+
+ShotActor* PoolNetActors::heldCopy(uint8_t worldSlot) const {
+    if (ownSlot_[worldSlot] == 0) return nullptr;
+    ShotActor& s = asShot(actorHeaderAt(ownSlot_[worldSlot]));
+    if (!(s.flags & kActorLive) || shotSlotSerial(ShotPool::index(s)) != ownSerial_[worldSlot]) return nullptr;
+    return &s;
 }
 
 bool PoolNetActors::shotRunsFor(uint8_t tablePlayer) const {
     for (size_t i = kShotClass; i < kShotClass + ShotPool::size(); ++i) {
         if (ownSlot_[i] == 0) continue;
         const ActorHeader& h = actorHeaderAt(ownSlot_[i]);
+        if (shotSlotSerial(ShotPool::index(asShot(actorHeaderAt(ownSlot_[i])))) != ownSerial_[i]) continue; // ended here, the slot is another's
         if (!(h.flags & kActorLive) || !(h.runFlags & kActorRun) || h.ownerPlayer != tablePlayer) continue;
         const RoutineRef c = actorHandler(h, ActorPool::Shots, false); // a swing, a beam, a suction: held while it runs
         if (c && (c.id() == RoutineId::BladeArmShotUpdate || c.id() == RoutineId::ShiningLaserShotUpdate || c.id() == RoutineId::VacuumArmShotUpdate))

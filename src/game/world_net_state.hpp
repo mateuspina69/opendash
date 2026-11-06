@@ -426,6 +426,8 @@ public:
     bool shotRunsFor(uint8_t tablePlayer) const;
     // shot pool slot `index` holds a world's shot started here from its event (another player's): not this machine's fire
     bool heldShot(size_t index) const;
+    // the copy running here of the world's shot in slot id `worldSlot` (nullptr: none, or it ended here already)
+    ShotActor* heldCopy(uint8_t worldSlot) const;
     // the solids of the actors held here, for the actor collision pass
     void submitSolids();
     uint64_t effectsStarted() const { return effectsStarted_; }
@@ -452,6 +454,7 @@ private:
     uint8_t ownPlayerId_ = 0;
     std::array<bool, kNetSlots> animates_{}, held_{};
     std::array<uint32_t, kNetSlots> ownSlot_{}; // a world's shot in a slot of the client's: its address
+    std::array<uint32_t, kNetSlots> ownSerial_{}; // ... and that slot's occupant count when it came
     std::array<std::optional<uint16_t>, kNetSlots> flashed_{}; // flashed on the last tick: the tint it had before
     std::array<std::vector<NetLockPoint>, kNetSlots> lock_{};
     std::array<std::vector<NetSolid>, kNetSlots> solids_{};

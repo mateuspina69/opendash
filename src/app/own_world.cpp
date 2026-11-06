@@ -375,6 +375,10 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
         break;
     case WorldMessageType::NetShotHit: {
         const auto hit = od::port::decodeShotHit(m.netState);
+        if (hit && hit->serial == od::port::kNetShotCopy) { // another player's shot: the copy running here
+            if (od::port::ShotActor* copy = actors_->heldCopy(hit->clientSlot)) od::port::applyShotHit(*copy, hit->hit);
+            break;
+        }
         if (hit && hit->clientSlot < ownShots_.size() && ownShots_[hit->clientSlot].live && ownShots_[hit->clientSlot].serial == hit->serial)
             od::port::applyShotHit(od::port::shotPool()[hit->clientSlot], hit->hit);
         break;
@@ -635,6 +639,7 @@ void OwnWorldClient::endFrame() {
         const bool mine = (shot.flags & od::port::kActorLive) && (shot.runFlags & od::port::kActorRun) && shot.ownerPlayer == 0 &&
                           !actors_->heldShot(i);
         if (mine && !ownShots_[i].live) {
+            if (nextSerial_ == od::port::kNetShotCopy) nextSerial_ = 0; // that value names another player's shot
             ownShots_[i] = {true, nextSerial_++};
             pipe_->sendReliable(playerId_, WorldMessageType::NetFire, od::port::encode(od::port::netFireOf(shot, uint8_t(i), ownShots_[i].serial)));
         } else if (!mine) {

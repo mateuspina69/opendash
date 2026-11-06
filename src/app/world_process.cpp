@@ -617,6 +617,16 @@ int run(const WorldArgs& w) {
                 m.playerId = f.player;
                 m.netState = od::port::encode(hit);
                 link->sendReliable(m);
+                // the others run a copy of it from its event (a ricochet off a shield, a burst): the same result, to the
+                // copy of this world slot
+                const od::port::NetShotHit copyHit{uint8_t(od::port::kShotClass + i), od::port::kNetShotCopy, hit.hit};
+                for (const auto& [client, sender] : netClients) {
+                    if (client == f.player) continue;
+                    WorldMessage c{WorldMessageType::NetShotHit};
+                    c.playerId = client;
+                    c.netState = od::port::encode(copyHit);
+                    link->sendReliable(c);
+                }
             }
         }
     };

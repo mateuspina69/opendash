@@ -68,6 +68,9 @@ std::vector<uint8_t> encode(const NetGift& v);
 std::optional<NetGift> decodeGift(std::span<const uint8_t> b);
 
 // the shot's hit result, read and taken by the owner's shot
+// a NetShotHit's serial for another player's shot: clientSlot is then the world's slot id of the shot, which the
+// receiving machine runs a copy of
+constexpr uint16_t kNetShotCopy = 0xffff;
 struct NetShotHit {
     uint8_t clientSlot = 0;
     uint16_t serial = 0;
