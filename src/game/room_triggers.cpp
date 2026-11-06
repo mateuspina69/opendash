@@ -18,6 +18,7 @@
 #include "game/stage_state.hpp"
 #include "game/story_flags.hpp"
 #include "game/transition_state.hpp"
+#include "game/world_view.hpp"
 
 namespace od::port {
 
@@ -77,6 +78,9 @@ uint32_t scanTriggers(const PlayerEnv& env, const Actor& actor) {
 // exe 0x413f40: the player may use an exit now: no transition pending, standing / walking / turning, the use button
 // held, no weapon or carry busy
 bool playerMayUseExit(const Player* p) {
+    // a session's world: its players are the others' games' Mega Men, each of which takes its own exits there (its room
+    // change, alone; a gated one through the coordinator's gate). Taken here too it would move everyone in the room.
+    if (worldHasNoView()) return false;
     if (!p || transitionRequest().state != kTransitionNone) return false;
     const PlayerSub sub = p->sub();
     if (sub != PlayerSub::Idle && sub != PlayerSub::Walk && sub != PlayerSub::TurnInPlace) return false;
@@ -268,7 +272,7 @@ uint32_t roomTriggers(const PlayerEnv& env, Actor& actor) {
         break;
     }
     case kTriggerPassageCeiling: {
-        if (!p) return type;
+        if (!p || worldHasNoView()) return type; // (a world: as playerMayUseExit)
         const auto e = exitAt(false);
         if (!e) return type;
         if (request.state != kTransitionNone) { // a transition runs: the ceiling holds the player under it
@@ -305,7 +309,7 @@ uint32_t roomTriggers(const PlayerEnv& env, Actor& actor) {
         return type;
     }
     case kTriggerWalkOff: {
-        if (!p || request.state != kTransitionNone) return type;
+        if (!p || request.state != kTransitionNone || worldHasNoView()) return type; // (a world: as playerMayUseExit)
         const auto e = exitAt(false);
         if (!e) return type;
         request.state = exitRequestState(*e);
