@@ -121,6 +121,13 @@ void OwnWorldClient::roomBound(int stage, int sub) {
         return;
     }
     od::port::presentationLoopsClear();
+    if (const auto at = std::exchange(doorArrival_, std::nullopt); at && (*at)[0] == stage && (*at)[1] == sub) {
+        // through a gated door together: the door's script arrived at the exit's spot, the coordinator's is beside the others
+        od::port::Player& p = od::port::player();
+        p.pos.x.whole = p.prevPos.x.whole = (*at)[2];
+        p.pos.y.whole = p.prevPos.y.whole = (*at)[3];
+        p.pos.z.whole = p.prevPos.z.whole = (*at)[4];
+    }
     if (od::port::storyStageRunsAlone(uint8_t(stage))) { // the race runs here, as in the game; out of the session's worlds
         if (room_ && joined_) pipe_->sendReliable(playerId_, WorldMessageType::NetLeave, {});
         room_.reset();
@@ -157,6 +164,8 @@ void OwnWorldClient::roomBound(int stage, int sub) {
     reported_ = {};
     ownEvent_ = false;
     gateAsked_ = false;
+    gateAtDoor_ = false;
+    doorPass_ = false;
     bossFight_ = false;
     od::port::globalWatchRebase();
     scene_ = false;
@@ -376,6 +385,20 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
         sceneEnd(m.netState);
         break;
     case WorldMessageType::NetMoveTo:
+        if (gateAsked_ && gateAtDoor_) {
+            // the gate this player waited at, a door's, opens: the door's own script and scene go on here, as in the game
+            gateAsked_ = false;
+            gateAtDoor_ = false;
+            doorPass_ = true;
+            if (m.netState.size() >= 8) {
+                const auto half = [&](size_t i) { return int16_t(uint16_t(m.netState[i] | m.netState[i + 1] << 8)); };
+                doorArrival_ = std::array<int16_t, 5>{int16_t(m.netState[0]), int16_t(m.netState[1]), half(2), half(4), half(6)};
+            }
+            od::port::transitionRequest().kind = uint8_t(od::port::TransitionKind::DoorActor);
+            od::port::setStoryFlag(od::port::kFlagTransitionArmed);
+            SDL_Log("own world: the gate opens: through the door");
+            break;
+        }
         pendingMove_ = m.netState;
         break;
     case WorldMessageType::NetWarp:
@@ -620,7 +643,10 @@ void OwnWorldClient::gateTurn() {
     const bool gateWasAsked = gateAsked_;
     if (asked && g.gameMode() == od::port::GameMode::Field && g.fieldStep() == od::port::FieldStep::Playing) {
         const bool mission = od::port::storyPlaceOf(uint8_t(room_->stage), room_->sub, g.story) == od::port::StoryPlaceKind::Mission;
-        const bool gated = mission || od::port::storyDoorGated(uint8_t(room_->stage), r.destStage, r.destRoom, g.story);
+        const bool door = r.kind == uint8_t(od::port::TransitionKind::DoorActor);
+        const bool passing = doorPass_ && door; // the gate opened for this door: its script runs
+        if (passing) doorPass_ = false;
+        const bool gated = !passing && (mission || od::port::storyDoorGated(uint8_t(room_->stage), r.destStage, r.destRoom, g.story));
         if (bossFight_ || testBossFight_ || gated) {
             r.state = od::port::kTransitionNone;
             od::port::clearStoryFlag(od::port::kFlagTransitionArmed);
@@ -645,6 +671,7 @@ void OwnWorldClient::gateTurn() {
                 move.push_back(uint8_t(mission ? 1 : 0));
                 pipe_->sendReliable(playerId_, WorldMessageType::NetGateAsk, std::move(move));
                 gateAsked_ = true;
+                gateAtDoor_ = door;
             }
         }
     }
@@ -654,6 +681,7 @@ void OwnWorldClient::gateTurn() {
     } else if (gateAsked_ && od::port::distance3(gatePlace_, od::port::player().pos) > kWalkedOff) {
         pipe_->sendReliable(playerId_, WorldMessageType::NetGateLeave, {});
         gateAsked_ = false;
+        gateAtDoor_ = false;
     }
 }
 

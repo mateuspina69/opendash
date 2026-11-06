@@ -110,7 +110,9 @@ uint16_t PlayerView::steer(uint16_t ps1, float lx, float ly) {
 }
 
 bool PlayerView::gameCameraActive() const {
-    return od::port::cameraState().mode() != od::port::CameraMode::Follow || od::port::eventState().active != 0;
+    // a session's scene is watched here: its camera is the world's, shown as the game's own (game/presentation)
+    return od::port::cameraState().mode() != od::port::CameraMode::Follow || od::port::eventState().active != 0 ||
+           (od::port::scriptState().flags & od::port::kScriptWatched);
 }
 
 bool PlayerView::orbitCamera(const RoomMesh& mesh, od::Camera& cam, float alpha, float dt) {

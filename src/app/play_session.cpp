@@ -871,10 +871,11 @@ void PlayerView::setupHooks() {
         using od::port::ActorPool;
         od::port::setWorldIsElsewhere(ownWorld && ownWorld->inWorld());
         if (ownWorld && ownWorld->inWorld()) { // a client: its Mega Man and the effects; the rest is the world's
-            od::port::playerInputAndDispatch(env);
+            const bool watching = ownWorld->watchingScene(); // as a script holds it in the game: no input, no fall
+            if (!watching) od::port::playerInputAndDispatch(env);
             ownWorld->localActors(env, actors, false);
             od::port::actorCollision();
-            od::port::playerUpdate(env);
+            if (!watching) od::port::playerUpdate(env);
             od::port::remotePlayersUpdate(); // the others' bones, for what follows them here
             od::port::updatePool(env, actors, ActorPool::Shots);
             od::port::cameraUpdate();

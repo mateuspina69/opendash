@@ -49,6 +49,9 @@ public:
     void roomBound(int stage, int sub);
     // the room's logic is this room's world's (else this game runs the room itself: a race of its own)
     bool inWorld() const { return room_.has_value(); }
+    // a scene of the world plays, or the room's world has not said anything yet (it is starting): this game's Mega Man
+    // waits where it is, as a script holds it in the game (the scene's Mega Man is the world's)
+    bool watchingScene() const { return scene_ || (room_ && (!joined_ || !state_ || !state_->heard())); }
     // the turn before a tick: the player's state to the world, what the world sent, the timeline up to now
     void turn(uint64_t nowNs);
     // a turn away from a game (the title, a load): the session's save and what it says; nothing of a room
@@ -139,6 +142,10 @@ private:
     std::string alert_;        // what went wrong (notice), shown until alertUntilNs_
     uint64_t alertUntilNs_ = 0;
     bool gateAsked_ = false;
+    bool gateAtDoor_ = false; // ... at a door actor: when the gate opens its own script plays here (doorPass_: let it by)
+    bool doorPass_ = false;
+    std::optional<std::array<int16_t, 5>> doorArrival_; // stage, sub, x, y, z the coordinator gave this player: the spot
+                                                         // beside the others where the door's script arrives
     od::port::Fixed16Vec3 gatePlace_{};
     uint32_t testForceTick_ = 0;
     uint32_t testFlagTick_ = 0, testFlag_ = 0;
