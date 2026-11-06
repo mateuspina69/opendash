@@ -71,14 +71,22 @@ std::optional<NetGift> decodeGift(std::span<const uint8_t> b);
 // a NetShotHit's serial for another player's shot: clientSlot is then the world's slot id of the shot, which the
 // receiving machine runs a copy of
 constexpr uint16_t kNetShotCopy = 0xffff;
+// what the world's shot did: its hit result (a ricochet's, a burst's), its pose after it turned away (a ricochet: where
+// it is and where it goes now, so that it meets what the world's meets), or its end against a solid actor at pos
+enum class NetShotEvent : uint8_t { Result = 0, Turned = 1, EndedAt = 2 };
 struct NetShotHit {
     uint8_t clientSlot = 0;
     uint16_t serial = 0;
     NetHitResult hit;
+    NetShotEvent event = NetShotEvent::Result;
+    std::array<int16_t, 3> pos{}; // Turned / EndedAt
+    int16_t rotX = 0, rotY = 0;   // Turned
     friend bool operator==(const NetShotHit&, const NetShotHit&) = default;
 };
 // the result into the client's shot of that slot
 void applyShotHit(ShotActor& shot, const NetHitResult& hit);
+// the world's shot's event into this machine's copy of it (or the owner's own shot)
+void applyShotEvent(ShotActor& shot, const NetShotHit& e);
 
 // little-endian wire forms (a failure: nullopt)
 std::vector<uint8_t> encode(const NetHitResult& v);

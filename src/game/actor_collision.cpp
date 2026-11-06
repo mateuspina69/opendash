@@ -15,6 +15,7 @@
 #include "game/fixed_point.hpp"
 #include "game/geometry_scratch.hpp"
 #include "game/matrix.hpp"
+#include "game/world_view.hpp"
 #include "game/actor_movement.hpp"
 #include "game/player/player_state.hpp"
 #include "game/port_gap.hpp"
@@ -453,6 +454,10 @@ struct Pass {
                 const SolidEntry& entry = q.solids[k];
                 const ActorRef<ActorHeader>& moverEntry = q.movers[moverAt];
                 if (entry.actor.get() == moverEntry.get()) continue;
+                // a session's machine: a shot here does not end on the world's actors (held here with their run flag
+                // off) -- the world's shot does, and its end comes from there (a ricochet off them first, as the game's)
+                if (worldIsElsewhere() && actorSlotClass(moverEntry->slot) == kShotClass && !(entry.actor->runFlags & kActorRun))
+                    continue;
                 // the Actor layout of whatever the queues hold (any slot that submitted itself)
                 auto&& solid = actorLayoutOf(*entry.actor);
                 auto&& mover = actorLayoutOf(*moverEntry);

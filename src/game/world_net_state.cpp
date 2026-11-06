@@ -1113,6 +1113,11 @@ bool NetStateClient::applyEvents(std::span<const uint8_t> bytes) {
             if (std::shared_ptr<Occupant>& o = heardOf_[slot]) {
                 due_.push_back({tick, false, o, std::nullopt, std::nullopt, std::nullopt});
                 o = nullptr;
+            } else if (slot >= kShotClass && slot < kShotClass + ShotPool::size()) {
+                // a shot run here from its event (a beam, a swing: they last until the world's ends)
+                Due d{tick, false, nullptr, std::nullopt, std::nullopt, std::nullopt};
+                d.goShot = slot;
+                due_.push_back(std::move(d));
             }
         } else if (kind == kEventAppear || kind == kEventAppearStill) {
             auto o = std::make_shared<Occupant>();
@@ -1344,6 +1349,10 @@ void NetStateClient::advance(uint32_t tick) {
         }
         if (d.patch) {
             actors_.roomPatch(*d.patch);
+            continue;
+        }
+        if (d.goShot) {
+            actors_.go(*d.goShot);
             continue;
         }
         const uint8_t slot = d.occupant->slot;

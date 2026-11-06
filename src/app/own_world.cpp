@@ -380,16 +380,18 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
         bool applied = false;
         if (hit->serial == od::port::kNetShotCopy) { // another player's shot: the copy running here
             if (od::port::ShotActor* copy = actors_->heldCopy(hit->clientSlot)) {
-                od::port::applyShotHit(*copy, hit->hit);
+                od::port::applyShotEvent(*copy, *hit);
                 applied = true;
             }
         } else if (hit->clientSlot < ownShots_.size() && ownShots_[hit->clientSlot].live && ownShots_[hit->clientSlot].serial == hit->serial) {
-            od::port::applyShotHit(od::port::shotPool()[hit->clientSlot], hit->hit);
+            od::port::applyShotEvent(od::port::shotPool()[hit->clientSlot], *hit);
             applied = true;
         }
-        SDL_Log("own world: %s shot hit %08x at %d %d %d%s", hit->serial == od::port::kNetShotCopy ? "another's" : "own",
-                unsigned(hit->hit.result), int(hit->hit.contact[0]), int(hit->hit.contact[1]), int(hit->hit.contact[2]),
-                applied ? "" : " (the shot is gone here)");
+        static constexpr const char* kEvents[] = {"hit", "turned", "ended on a solid actor"};
+        SDL_Log("own world: %s shot %s, result %08x at %d %d %d%s", hit->serial == od::port::kNetShotCopy ? "another's" : "own",
+                kEvents[size_t(hit->event)], unsigned(hit->hit.result), int(hit->event == od::port::NetShotEvent::Result ? hit->hit.contact[0] : hit->pos[0]),
+                int(hit->event == od::port::NetShotEvent::Result ? hit->hit.contact[1] : hit->pos[1]),
+                int(hit->event == od::port::NetShotEvent::Result ? hit->hit.contact[2] : hit->pos[2]), applied ? "" : " (the shot is gone here)");
         break;
     }
     case WorldMessageType::GlobalChange:

@@ -236,7 +236,31 @@ std::vector<uint8_t> encode(const NetShotHit& v) {
     o.u8(v.clientSlot);
     o.u16(v.serial);
     put(o, v.hit);
+    o.u8(uint8_t(v.event));
+    if (v.event != NetShotEvent::Result) {
+        for (const int16_t c : v.pos) o.i16(c);
+        o.i16(v.rotX);
+        o.i16(v.rotY);
+    }
     return std::move(o.b);
+}
+
+void applyShotEvent(ShotActor& shot, const NetShotHit& e) {
+    if (e.event == NetShotEvent::Result) {
+        applyShotHit(shot, e.hit);
+        return;
+    }
+    // the world's place for it: as the world's shot is now (a turn) or where it ended
+    shot.pos.x = int32_t(uint32_t(uint16_t(e.pos[0])) << 16);
+    shot.pos.y = int32_t(uint32_t(uint16_t(e.pos[1])) << 16);
+    shot.pos.z = int32_t(uint32_t(uint16_t(e.pos[2])) << 16);
+    shot.prevPos = shot.pos;
+    if (e.event == NetShotEvent::Turned) {
+        shot.rotation.x = e.rotX;
+        shot.rotation.y = e.rotY;
+    } else {
+        shot.hitBox.result |= kHitAttackSolid; // it bursts there, as the world's did on the solid actor
+    }
 }
 std::optional<NetShotHit> decodeShotHit(std::span<const uint8_t> b) {
     In r{b};
@@ -244,6 +268,13 @@ std::optional<NetShotHit> decodeShotHit(std::span<const uint8_t> b) {
     v.clientSlot = r.u8();
     v.serial = r.u16();
     v.hit = get(r);
+    v.event = NetShotEvent(r.u8());
+    if (v.event != NetShotEvent::Result) {
+        for (int16_t& c : v.pos) c = r.i16();
+        v.rotX = r.i16();
+        v.rotY = r.i16();
+    }
+    if (uint8_t(v.event) > uint8_t(NetShotEvent::EndedAt)) return std::nullopt;
     return r.done() ? std::optional(v) : std::nullopt;
 }
 

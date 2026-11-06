@@ -544,6 +544,9 @@ int run(const WorldArgs& w) {
         bool live = false;
         uint8_t player = 0, clientSlot = 0;
         uint16_t serial = 0;
+        bool turning = false;       // deflected: its pose goes out once it has turned
+        bool hitSolidActor = false; // the last tick's actor collision met a solid actor (its end, next tick)
+        std::array<int16_t, 3> lastPos{};
     };
     std::array<FiredShot, od::port::ShotPool::size()> fired{}; // the world's shots that came from a client's fire
     // the players' states: what each owner sends, played here from this world's files; what goes on to the others
@@ -609,27 +612,53 @@ int run(const WorldArgs& w) {
             FiredShot& f = fired[i];
             if (!f.live) continue;
             const od::port::ShotActor& shot = od::port::shotPool()[i];
-            if (!(shot.flags & od::port::kActorLive)) {
-                f.live = false;
-            } else if (shot.hitBox.result != 0) {
-                const od::port::NetShotHit hit{f.clientSlot, f.serial,
-                                               {shot.hitBox.result,
-                                                {shot.hitBox.contact.x, shot.hitBox.contact.y, shot.hitBox.contact.z, shot.hitBox.contactKind}}};
+            // what the world's shot did, to its owner's shot and to the copy each other player runs of this world slot
+            const auto tell = [&](od::port::NetShotHit e) {
+                e.clientSlot = f.clientSlot;
+                e.serial = f.serial;
                 WorldMessage m{WorldMessageType::NetShotHit};
                 m.playerId = f.player;
-                m.netState = od::port::encode(hit);
+                m.netState = od::port::encode(e);
                 link->sendReliable(m);
-                // the others run a copy of it from its event (a ricochet off a shield, a burst): the same result, to the
-                // copy of this world slot
-                const od::port::NetShotHit copyHit{uint8_t(od::port::kShotClass + i), od::port::kNetShotCopy, hit.hit};
+                e.clientSlot = uint8_t(od::port::kShotClass + i);
+                e.serial = od::port::kNetShotCopy;
                 for (const auto& [client, sender] : netClients) {
                     if (client == f.player) continue;
                     WorldMessage c{WorldMessageType::NetShotHit};
                     c.playerId = client;
-                    c.netState = od::port::encode(copyHit);
+                    c.netState = od::port::encode(e);
                     link->sendReliable(c);
                 }
+            };
+            if (!(shot.flags & od::port::kActorLive)) {
+                f.live = false;
+                // it ended on a solid actor (the actor collision pass: a key, a shield's body): there, for the others too
+                if (f.hitSolidActor) {
+                    od::port::NetShotHit e;
+                    e.event = od::port::NetShotEvent::EndedAt;
+                    e.pos = f.lastPos;
+                    tell(e);
+                }
+                continue;
             }
+            if (f.turning) { // it turned away last tick (a ricochet): where it is and where it goes now
+                f.turning = false;
+                od::port::NetShotHit e;
+                e.event = od::port::NetShotEvent::Turned;
+                e.pos = {shot.pos.x.whole, shot.pos.y.whole, shot.pos.z.whole};
+                e.rotX = shot.rotation.x;
+                e.rotY = shot.rotation.y;
+                tell(e);
+            }
+            if (shot.hitBox.result != 0) {
+                od::port::NetShotHit e;
+                e.hit = {shot.hitBox.result,
+                         {shot.hitBox.contact.x, shot.hitBox.contact.y, shot.hitBox.contact.z, shot.hitBox.contactKind}};
+                tell(e);
+                if (shot.hitBox.result & od::port::kHitAttackDeflects) f.turning = true;
+            }
+            f.hitSolidActor = shot.actorHit != 0;
+            f.lastPos = {shot.pos.x.whole, shot.pos.y.whole, shot.pos.z.whole};
         }
     };
     std::unique_ptr<od::port::NetWorldTable> netTable;
