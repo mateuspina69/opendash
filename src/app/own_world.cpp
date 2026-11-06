@@ -735,8 +735,11 @@ void OwnWorldClient::sceneEnd(const std::vector<uint8_t>& at) {
     od::port::Player& p = od::port::player();
     if (at.size() == 9) { // next to where the scene's Mega Man stands; its owner there
         const auto half = [&](size_t i) { return int16_t(uint16_t(at[i] | at[i + 1] << 8)); };
-        constexpr int kBeside = 0x80;
-        const int16_t x = int16_t(half(0) + (playerId_ == at[8] ? 0 : kBeside)), y = half(2), z = half(4), yaw = half(6);
+        // the others a step ahead of it, the way it faces (a step aside may be in a wall: the scene left it where it stands)
+        constexpr int kStep = 0x80;
+        int16_t ahead[3] = {half(0), half(2), half(4)};
+        if (playerId_ != at[8]) od::port::moveAlongYaw16(ahead, half(6), 0, 0, kStep);
+        const int16_t x = ahead[0], y = ahead[1], z = ahead[2], yaw = half(6);
         p.pos.x = int32_t(uint32_t(int32_t(x)) << 16);
         p.pos.y = int32_t(uint32_t(int32_t(y)) << 16);
         p.pos.z = int32_t(uint32_t(int32_t(z)) << 16);

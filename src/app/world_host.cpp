@@ -4,6 +4,8 @@
 
 #include <SDL3/SDL.h>
 
+#include "game/actor_movement.hpp"
+
 #include <algorithm>
 #include <cstdio>
 #include <stdexcept>
@@ -254,11 +256,17 @@ namespace {
 // the place of the k-th player arriving through one move: the first at it, each next one beside the one before, as a
 // joining player is placed beside the host
 std::vector<uint8_t> arrivalBeside(std::vector<uint8_t> move, size_t k) {
-    constexpr int kBeside = 0x80;
-    if (move.size() < 4 || k == 0) return move;
-    const int16_t x = int16_t(uint16_t(move[2] | move[3] << 8) + kBeside * int(k));
-    move[2] = uint8_t(x);
-    move[3] = uint8_t(uint16_t(x) >> 8);
+    // the k-th one a step further along the way in (the arrival's facing): the place an exit gives is just past its
+    // door, facing into the room -- a step aside of a narrow door is in its wall or out of the room
+    constexpr int kStep = 0x80;
+    if (move.size() < 10 || k == 0) return move;
+    const auto half = [&](size_t at) { return int16_t(uint16_t(move[at] | move[at + 1] << 8)); };
+    int16_t at[3] = {half(2), half(4), half(6)};
+    od::port::moveAlongYaw16(at, half(8), 0, 0, kStep * int(k));
+    for (size_t q = 0; q < 3; ++q) {
+        move[2 + q * 2] = uint8_t(at[q]);
+        move[3 + q * 2] = uint8_t(uint16_t(at[q]) >> 8);
+    }
     return move;
 }
 } // namespace
