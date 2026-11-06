@@ -172,7 +172,9 @@ std::vector<uint8_t> NetPlayerSender::update(uint8_t playerId, uint32_t tick, co
     const uint16_t sequence = next_++;
     o.u16(sequence);
     o.u32(tick);
-    const uint16_t mask = uint16_t(maskOf(now, acked_) | maskOf(now, sent_));
+    // started over (a receiver that may hold anything): every field until one update is acknowledged
+    constexpr uint16_t kAll = uint16_t(kCamera | (kCamera - 1));
+    const uint16_t mask = full_ ? kAll : uint16_t(maskOf(now, acked_) | maskOf(now, sent_));
     o.u16(mask);
     if (mask & kX) o.i16(now.pos[0]);
     if (mask & kY) o.i16(now.pos[1]);
@@ -242,7 +244,10 @@ std::vector<uint8_t> NetPlayerSender::update(uint8_t playerId, uint32_t tick, co
 
 void NetPlayerSender::acknowledge(uint16_t sequence) {
     while (!inFlight_.empty() && int16_t(uint16_t(inFlight_.front().sequence - sequence)) <= 0) {
-        if (inFlight_.front().sequence == sequence) acked_ = inFlight_.front().fields;
+        if (inFlight_.front().sequence == sequence) {
+            acked_ = inFlight_.front().fields;
+            full_ = false;
+        }
         inFlight_.pop_front();
     }
 }

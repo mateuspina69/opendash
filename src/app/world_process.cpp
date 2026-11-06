@@ -762,7 +762,8 @@ int run(const WorldArgs& w) {
                 // a client that joins (again: its game bound the room anew) holds nothing yet: it is told all of it
                 netClients.erase(m.playerId);
                 netClients.try_emplace(m.playerId, od::port::netSlotNetworked, m.playerId);
-                std::erase_if(playerSenders, [&](const auto& s) { return s.first.first == m.playerId; });
+                for (auto& [key, sender] : playerSenders) // the numbering goes on: an update of before is older here
+                    if (key.first == m.playerId) sender.restart();
                 if (sceneOn) sceneStartMessage(m.playerId); // joining during a scene: their game runs it too
                 lastScreen.clear();                          // ... and is told the screen again
                 for (size_t f = 0; f < roomPlayerFields.size(); ++f)

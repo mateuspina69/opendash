@@ -68,6 +68,13 @@ class NetPlayerSender {
 public:
     std::vector<uint8_t> update(uint8_t playerId, uint32_t tick, const NetPlayerFields& now);
     void acknowledge(uint16_t sequence);
+    // the receiver starts over (it joined anew): the numbering goes on -- an update of before is older than every one
+    // after -- and every field goes until the receiver acknowledges one
+    void restart() {
+        acked_ = sent_ = NetPlayerFields{};
+        inFlight_.clear();
+        full_ = true;
+    }
 
 private:
     struct Sent {
@@ -77,6 +84,7 @@ private:
     NetPlayerFields acked_, sent_;
     std::deque<Sent> inFlight_;
     uint16_t next_ = 1;
+    bool full_ = true;
 };
 
 // From one sender
