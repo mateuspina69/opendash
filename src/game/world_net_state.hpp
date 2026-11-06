@@ -27,8 +27,9 @@
 //
 // A shot or a projectile goes as a path: the client moves it by itself from a point and its steps, and the world sends a new
 // path only when the actor leaves the last one (a straight shot: once; a homing one or a falling one: as often as it turns).
-// An effect (the effect pool, and the statics of netEffectClass: a blast, a splash, sparks) runs on the client from its event,
-// with the client's own random numbers; the world's copy is not sent.
+// An effect (the effect pool, the statics of netEffectClass: a blast, a splash, sparks, and the projectiles of
+// netEffectProjectileClass: a ground shockwave) runs on the client from its event, with the client's own random numbers;
+// the world's copy is not sent. The client's copy (ActorHeader::worldCopy) hits no one: the world's does.
 #pragma once
 
 #include <array>
@@ -67,6 +68,9 @@ bool netSlotVisibleOrShot(uint8_t slot);
 bool netSlotNetworked(uint8_t slot);
 // a shot or a projectile: it moves along a path
 bool netSlotOnPath(uint8_t slot);
+// a world's actor every client runs from its event (an effect, a static of netEffectClass, a projectile of
+// netEffectProjectileClass), updated in `pool`: what it starts, each client's copy starts too (not sent)
+bool netStartsOnClients(const ActorHeader& actor, ActorPool pool);
 
 constexpr uint8_t kNetNoParent = 0xff;
 // What starts an effect on a client
@@ -175,7 +179,7 @@ struct NetWorldActor {
     uint32_t flashTick = 0;  // the newest tick its tint was a hit's flash (0: none)
     uint32_t serial = 0;     // Seen::serial of the occupant
     uint8_t owner = 0;       // ActorHeader::ownerPlayer: a shot's is told to the others only
-    bool startedByShot = false; // ... and so is what a shot started
+    bool startedByClientRun = false; // ... and so is what a shot started
     bool effect = false;     // it runs on the client from an event
     bool effectGoes = false; // ... and this one goes (one that follows something only the world holds does not)
     NetEffect effectStart;
@@ -220,7 +224,7 @@ public:
         std::vector<NetLockPoint> lock;
         std::vector<NetSolid> solids;
         uint8_t owner = 0;
-        bool startedByShot = false;
+        bool startedByClientRun = false;
         bool onPath = false;
         std::array<int32_t, 3> fine{}; // the 16.16 position
         bool effect = false, effectGoes = false;

@@ -275,6 +275,10 @@ struct ActorSystemState {
     uint32_t staticCursor = 0;
     uint32_t effectCursor = 0;
     uint32_t controllerCursor = 0;
+    // OpenDash's co-op: the actor updating now is one every client runs from its event (a world's) / a client's copy of a
+    // world's actor (startSlot, the hit list)
+    bool updatingClientRun = false;
+    bool updatingWorldCopy = false;
     // the allocation mask of the bone blocks (bit 31 - block index; boneBlockPool())
     uint32_t boneBlocksUsed = 0;
     // the hit list (filled by the updates, read and emptied by game/hit_list's pass)
@@ -306,6 +310,9 @@ bool allocBoneBlocks(AnimatedActor& actor, uint32_t n);
 // A client holds the world's actors in the slots the world says (game/world_net_state): this slot id's slot taken, its bit
 // in the pool's live mask set, its head as an allocation leaves it, live and drawn
 ActorHeader& claimActorSlot(uint32_t slot);
+// OpenDash's co-op: the projectile or static slot `slot` taken as allocActor40 / allocActor60 take a free one (a client's
+// copy of a world's actor, in the slot it runs in there); a pending free of the slot's last occupant dropped
+uint32_t claimActorSlotFor(uint32_t slot, uint8_t loopFlags);
 
 // ---- pending frees (the slot's bit in its pool's pending mask, byte 0 cleared) -------------------------------------
 void freeActor(ShotActor& actor);       // exe 0x5e14d0

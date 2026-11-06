@@ -220,7 +220,12 @@ int takeSlot(uint32_t& mask, uint32_t n, uint32_t first = 0) {
 void startSlot(ActorHeader& actor, uint8_t loopFlags) {
     actor.beginLifetime();
     actor.ownerPlayer = uint8_t(actingPlayerId());
-    actor.startedByShot = actorSystem().shotCursor != 0;
+    const ActorSystemState& sys = actorSystem();
+    // (OpenDash's co-op) what a shot starts, its copies start too; what a world's actor run by every client starts in a
+    // pool no world's actor is held in (an effect, a controller), likewise -- the rest comes from the world
+    const uint32_t cls = actorSlotClass(actor.slot);
+    actor.startedByClientRun = sys.shotCursor != 0 || (sys.updatingClientRun && (cls == kEffectClass || cls == kControllerClass));
+    actor.worldCopy = sys.updatingWorldCopy;
     actor.runFlags = kActorRun | kActorShown;
     actor.loopFlags = loopFlags;
     actor.clearIdentity();
@@ -254,6 +259,7 @@ uint32_t allocActor10() {
 }
 
 uint32_t allocActor20() {
+    if (actorSystem().updatingWorldCopy) return 0; // a client's copy of a world's actor: what it starts here comes from the world
     const int i = takeSlot(actorSystem().animatedLive, kAnimatedFieldSlots);
     if (i < 0) return 0;
     AnimatedActor& actor = animatedPool()[size_t(i)];
@@ -279,6 +285,28 @@ ActorHeader& claimActorSlot(uint32_t slot) {
     return actor;
 }
 
+uint32_t claimActorSlotFor(uint32_t slot, uint8_t loopFlags) {
+    const uint32_t cls = actorSlotClass(slot);
+    const uint32_t i = slot - cls;
+    ActorSystemState& s = actorSystem();
+    // live, and no free of its last occupant pending: applyActorFrees would toggle its live bit off under the new one
+    switch (cls) {
+    case kProjectileClass:
+        s.projectilesLive |= slotBit(i);
+        s.projectilesFreed &= ~slotBit(i);
+        break;
+    case kStaticClass:
+        s.staticsLive[i >> 5] |= slotBit(i);
+        s.staticsFreed[i >> 5] &= ~slotBit(i);
+        break;
+    default: notAnActorSlot(slot, 0);
+    }
+    Actor& actor = actorLayoutOf(actorHeaderAt(actorBySlot(slot)));
+    startSlot(actor, loopFlags);
+    clearContact(actor);
+    return actor.at;
+}
+
 uint32_t allocSubScreenActor() {
     const int i = takeSlot(actorSystem().animatedLive, AnimatedPool::size(), kAnimatedFieldSlots);
     if (i < 0) return 0;
@@ -295,6 +323,7 @@ uint32_t allocSubScreenActor() {
 }
 
 uint32_t allocActor40(uint8_t loopFlags) {
+    if (actorSystem().updatingWorldCopy) return 0; // (allocActor20)
     const int i = takeSlot(actorSystem().projectilesLive, ProjectilePool::size());
     if (i < 0) return 0;
     ProjectileActor& actor = projectilePool()[size_t(i)];
@@ -304,6 +333,7 @@ uint32_t allocActor40(uint8_t loopFlags) {
 }
 
 uint32_t allocActor60(uint8_t loopFlags) {
+    if (actorSystem().updatingWorldCopy) return 0; // (allocActor20)
     for (uint32_t w = 0; w < 2; ++w) {
         auto&& live = actorSystem().staticsLive[w];
         const int b = takeSlot(live, 0x20);

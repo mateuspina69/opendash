@@ -7,6 +7,7 @@
 #include <optional>
 
 #include "game/player/remote_player.hpp"
+#include "game/world_net_state.hpp"
 #include "game/player/player_state.hpp"
 #include "game/port_gap.hpp"
 
@@ -352,11 +353,15 @@ int updatePool(const PlayerEnv& env, ActorContext& ctx, ActorPool pool) {
             g_updatingClass = h.id();
 #endif
             if (worldHasNoView()) eventSelectFor(actor.slot);
+            ActorSystemState& sys = actorSystem();
+            sys.updatingWorldCopy = actor.worldCopy;
+            sys.updatingClientRun = worldHasNoView() && netStartsOnClients(actor, pool);
             if (pool == ActorPool::Shots) {
                 setSoundOwner(actor.ownerPlayer);
                 if (worldIsElsewhere() && actor.ownerPlayer != 0) setLocalEffectsMuted(true); // heard from the world
             }
             fn(env, actor.at);
+            sys.updatingWorldCopy = sys.updatingClientRun = false;
             if (worldHasNoView()) eventSelectNone();
             if (pool == ActorPool::Shots) {
                 setSoundOwner(kNoSoundOwner);
@@ -365,6 +370,7 @@ int updatePool(const PlayerEnv& env, ActorContext& ctx, ActorPool pool) {
             ++n;
         } catch (const std::logic_error& e) {
             if (pool == ActorPool::Shots) actorSystem().shotCursor = 0;
+            actorSystem().updatingWorldCopy = actorSystem().updatingClientRun = false;
             ctx.disabled.insert(h.id());
             if (ctx.log) ctx.log(std::string("PORT GAP: actor class disabled: ") + e.what());
         }

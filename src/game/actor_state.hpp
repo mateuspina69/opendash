@@ -451,7 +451,12 @@ struct ActorHeader {
     uint8_t runFlags = 0;   // kActorRun | drawn | kActorBoneScale | class bits
     uint8_t slot = 0;       // slot id: pool class + index (set at boot, never by an allocator)
     uint8_t ownerPlayer = 0; // OpenDash's co-op: the id of the player acting when this slot started (actingPlayer)
-    bool startedByShot = false; // OpenDash's co-op: this slot started in the shots' update: its owner's client runs that too
+    // OpenDash's co-op: this slot started in the update of one every client runs from its event (a player's shot, an
+    // effect): each client's copy starts its own
+    bool startedByClientRun = false;
+    // OpenDash's co-op: a client's copy of a world's actor run from its event, or what such a copy started: seen, it plays
+    // with no one (its hits are the world's)
+    bool worldCopy = false;
     uint8_t loopFlags = 0;  // kActorLateLoop | kActorStageClass
     uint8_t type = 0;       // the class table index
     uint8_t subtype = 0;    // the sub-table index (pools 0x20 / 0x60)

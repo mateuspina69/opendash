@@ -190,6 +190,7 @@ void writeEntry(HitEntry& e, const int16_t pos[3], HitBoxHead& box, HitBox* cont
 
 void submit(const int16_t pos[3], HitBoxHead& box, HitBox* contactBox, uint32_t ownerShape, uint32_t attack) {
     ActorSystemState& s = actorSystem();
+    if (s.updatingWorldCopy) return; // a client's copy of a world's actor: what it hits is the world's copy's
     const uint32_t n = s.hitCount;
     if (n >= kHitListCapacity) return;
     s.hitCount = n + 1;
@@ -200,6 +201,7 @@ void submit(const int16_t pos[3], HitBoxHead& box, HitBox* contactBox, uint32_t 
 void submitCapsule(const int16_t a[3], uint16_t ra, const int16_t b[3], uint16_t rb, HitBoxHead& box,
                    HitBox* contactBox, uint32_t ownerShape, uint32_t attack) {
     ActorSystemState& s = actorSystem();
+    if (s.updatingWorldCopy) return; // (submit)
     const uint32_t n = s.hitCount;
     if (n >= kHitListCapacity - 1) return;
     const uint16_t levelAndCapsule = uint16_t(ownerShape & kHitShapeAboveRadius);
@@ -233,6 +235,7 @@ void hitListSubmitCapsule(const int16_t a[3], uint16_t ra, const int16_t b[3], u
 
 void hitListPutEntry(const int16_t pos[3], uint16_t shape, uint32_t owner, uint32_t attack, HitBoxHead& box) {
     ActorSystemState& s = actorSystem();
+    if (s.updatingWorldCopy) return; // (submit)
     if (s.hitCount >= kHitListCapacity) return;
     writeEntry(s.hitList[s.hitCount++], pos, box, nullptr, owner, shape, attack);
 }

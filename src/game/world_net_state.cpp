@@ -159,7 +159,7 @@ void NetWorldTable::seen(uint8_t slot, const Seen& s) {
     a.state.aim = s.aim;
     a.state.paint = s.paint;
     a.owner = s.owner;
-    a.startedByShot = s.startedByShot;
+    a.startedByClientRun = s.startedByClientRun;
     a.state.solids = s.solids;
     bool lockKept = a.state.lock.size() == s.lock.size();
     for (size_t i = 0; lockKept && i < s.lock.size(); ++i) {
@@ -356,7 +356,7 @@ void gatherLockEntries() {
 NetWorldTable::Seen seenOf(const Actor& a, uint32_t model, uint32_t animTable) {
     NetWorldTable::Seen s;
     s.owner = a.ownerPlayer;
-    s.startedByShot = a.startedByShot;
+    s.startedByClientRun = a.startedByClientRun;
     s.solids = solidEntries()[a.slot];
     s.lock = lockEntries()[a.slot];
     for (NetLockPoint& p : s.lock) {
@@ -416,6 +416,9 @@ bool staticIsEffect(const StaticActor& a) {
     const RoutineRef h = actorHandler(a, (a.loopFlags & kActorLateLoop) ? ActorPool::StaticsLate : ActorPool::Statics, false);
     return h && netEffectClass(h.id());
 }
+
+// the projectiles that are effects: their picture is their class's, what they hit is the world's copy's
+bool netEffectProjectileClass(RoutineId id) { return id == RoutineId::ShockwaveUpdate; }
 
 // what a splash follows, by its variant's top bits: its own position (0), an actor (1), a player's bone point (2)
 void noteSplashSource(StaticActor& a, NetEffect& e, bool& goes) {
@@ -494,6 +497,24 @@ template <class Pool> void captureMeshPool(NetWorldTable& table, Pool& pool, siz
                     noteSplashSource(const_cast<StaticActor&>(static_cast<const StaticActor&>(a)), s.effectStart, s.effectGoes);
             }
         }
+        if constexpr (std::is_same_v<Pool, ProjectilePool>) {
+            // a projectile whose picture is its class's (a ground shockwave's ring): each client runs it from its event
+            if (const RoutineRef h = actorHandler(a, ActorPool::Projectiles, false); h && netEffectProjectileClass(h.id())) {
+                s.effect = true;
+                s.effectGoes = true;
+                s.effectStart.pool = uint8_t(kProjectileClass);
+                s.effectStart.type = a.type;
+                s.effectStart.subtype = a.subtype;
+                s.effectStart.variant = a.variant;
+                s.effectStart.spawnByte = a.spawnByte;
+                s.effectStart.loopFlags = a.loopFlags;
+                s.effectStart.flags = uint8_t(a.flags & (kActorLive | kActorDrawn));
+                for (size_t p = 0; p < 4; ++p) s.effectStart.params[p] = a.params[p];
+                s.effectStart.pos = s.pos;
+                s.effectStart.rot = s.rot;
+                s.effectStart.velocity = {a.velocity.x, a.velocity.y, a.velocity.z};
+            }
+        }
         if constexpr (std::is_same_v<Pool, ShotPool>) {
             s.serial = shotSlotSerial(ShotPool::index(a));
             // a player's shot (the buster's, a blade's swing that follows its owner's arm): each client runs it from its
@@ -527,6 +548,23 @@ template <class Pool> void captureMeshPool(NetWorldTable& table, Pool& pool, siz
 }
 
 } // namespace
+
+bool netStartsOnClients(const ActorHeader& actor, ActorPool pool) {
+    const RoutineRef h = actorHandler(actor, pool, false);
+    if (!h) return false;
+    switch (pool) {
+    case ActorPool::Effects:
+    case ActorPool::EffectsLate: { // every effect goes, but one whose links do not read (captureNetWorld)
+        const NetEffectLinks* links = netEffectLinksOf(h.id());
+        std::array<const ActorHeader*, 2> held{};
+        return !links || links->read(asEffect(const_cast<ActorHeader&>(actor)), held);
+    }
+    case ActorPool::Statics:
+    case ActorPool::StaticsLate: return netEffectClass(h.id());
+    case ActorPool::Projectiles: return netEffectProjectileClass(h.id());
+    default: return false; // a player's shot: the shots' update (startSlot)
+    }
+}
 
 void watchNetPoses() { setAnimPoseObserver(notePoseEdits); }
 
@@ -626,7 +664,7 @@ void captureNetWorld(NetWorldTable& table, uint32_t tick) {
         s.effectStart.pos = {e.pos.x, e.pos.y, e.pos.z};
         s.effectStart.spare = e.posSpare;
         s.owner = e.ownerPlayer;
-        s.startedByShot = e.startedByShot;
+        s.startedByClientRun = e.startedByClientRun;
         table.seen(slot, s);
     }
 }
@@ -711,7 +749,7 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
         // a client's own shot: the client runs it itself. What a player's shot started: every client runs it itself, from
         // its own shot or from the copy it runs of another player's (the world's hits; its pictures would be a second set)
         const bool shotSlot = slot >= kShotClass && slot < kShotClass + ShotPool::size();
-        const bool withheld = a.live && ((shotSlot && a.owner == ownShotsOf_) || (a.startedByShot && ownShotsOf_ != kNetNoPlayer));
+        const bool withheld = a.live && ((shotSlot && a.owner == ownShotsOf_) || (a.startedByClientRun && ownShotsOf_ != kNetNoPlayer));
         const bool live = a.live && !withheld;
         const bool same = k.told && live && a.generation == k.generation;
         if (same && !k.effect && a.flashTick != k.flashTold) {
@@ -760,7 +798,7 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
             for (const uint8_t p : e.params) w.u8(p);
             for (const int16_t v : e.pos) w.i16(v);
             w.i16(e.spare);
-            if (e.pool == kStaticClass) {
+            if (e.pool == kStaticClass || e.pool == kProjectileClass) {
                 for (const int16_t v : e.rot) w.i16(v);
                 for (const int16_t v : e.velocity) w.i16(v);
             }
@@ -1083,7 +1121,7 @@ bool NetStateClient::applyEvents(std::span<const uint8_t> bytes) {
             for (uint8_t& p : e.params) p = r.u8();
             for (int16_t& v : e.pos) v = r.i16();
             e.spare = r.i16();
-            if (e.pool == kStaticClass) {
+            if (e.pool == kStaticClass || e.pool == kProjectileClass) {
                 for (int16_t& v : e.rot) v = r.i16();
                 for (int16_t& v : e.velocity) v = r.i16();
             }
@@ -1485,10 +1523,16 @@ void PoolNetActors::effect(const NetEffect& e) {
         if (!head || (!(head->flags & kActorLive) && actorSlotClass(e.parent) != kPlayerClass)) return;
         parent = &actorLayoutOf(*head);
     }
+    // a projectile or a static runs in the world's slot (the world's are held here in theirs: one in a slot of its own would
+    // be overwritten by the next the world starts there); an effect (a pool the world's are not held in) in a free one
+    const bool worldSlot = (e.pool == kProjectileClass || e.pool == kStaticClass) && actorSlotClass(e.slot) == e.pool;
     const uint32_t address = e.pool == kEffectClass ? allocActorA0(e.loopFlags)
                              : e.pool == kShotClass ? allocActor10()
-                                                    : allocActor60(e.loopFlags);
+                             : worldSlot            ? claimActorSlotFor(e.slot, e.loopFlags)
+                                                    : 0;
     if (address == 0) return; // the pool is full here: this one is not seen
+    // a world's actor (not a player's shot, which hits as its owner's): its hits are the world's copy's
+    actorHeaderAt(address).worldCopy = e.pool != kShotClass;
     const bool onPlayer = e.parent != kNetNoParent && actorSlotClass(e.parent) == kPlayerClass;
     if (e.pool == kShotClass || onPlayer)
         started_.push_back({e.pool, e.type, e.variant, e.owner, e.parent, onPlayer ? tableOfPlayer(e.parent) : kNetNoParent});
@@ -1504,6 +1548,7 @@ void PoolNetActors::effect(const NetEffect& e) {
     if (logged) {
         const RoutineRef named = e.pool == kShotClass ? actorHandler(head, ActorPool::Shots, false)
                                  : e.pool == kEffectClass ? actorHandler(head, (e.loopFlags & kActorLateLoop) ? ActorPool::EffectsLate : ActorPool::Effects, false)
+                                 : e.pool == kProjectileClass ? actorHandler(head, ActorPool::Projectiles, false)
                                                           : actorHandler(head, (e.loopFlags & kActorLateLoop) ? ActorPool::StaticsLate : ActorPool::Statics, false);
         std::fprintf(stderr, "net effect %s\n", named ? routineName(named.id()) : "?");
     }
@@ -1552,6 +1597,17 @@ void PoolNetActors::effect(const NetEffect& e) {
         fx.step = e.step;
         fx.stepCounter = e.stepCounter;
         for (size_t k = 0; k < fx.trail.size(); ++k) fx.trail[k] = e.trail[k];
+    } else if (e.pool == kProjectileClass) {
+        ProjectileActor& p = projectileActorAt(address);
+        p.pos.x = int32_t(uint32_t(uint16_t(e.pos[0])) << 16);
+        p.pos.y = int32_t(uint32_t(uint16_t(e.pos[1])) << 16);
+        p.pos.z = int32_t(uint32_t(uint16_t(e.pos[2])) << 16);
+        p.rotation.x = e.rot[0];
+        p.rotation.y = e.rot[1];
+        p.rotation.z = e.rot[2];
+        p.velocity.x = e.velocity[0];
+        p.velocity.y = e.velocity[1];
+        p.velocity.z = e.velocity[2];
     } else {
         StaticActor& s = asStatic(head);
         s.pos.x = int32_t(uint32_t(uint16_t(e.pos[0])) << 16);
@@ -1757,7 +1813,9 @@ void runLocalPool(const PlayerEnv& env, ActorContext& context, ActorPool pool, u
             return;
         } catch (const std::exception& e) {
             ActorHeader& actor = actorHeaderAt(cursor);
-            const std::string what = std::string(pool == ActorPool::Effects || pool == ActorPool::EffectsLate ? "effect" : "static") +
+            const std::string what = std::string(pool == ActorPool::Effects || pool == ActorPool::EffectsLate ? "effect"
+                                                 : pool == ActorPool::Projectiles                              ? "projectile"
+                                                                                                               : "static") +
                                      " type " + std::to_string(int(actor.type)) + ": " + e.what();
             if (std::find(failed.classes.begin(), failed.classes.end(), what) == failed.classes.end()) failed.classes.push_back(what);
             freeActor(actor);
@@ -1773,6 +1831,8 @@ void runNetLocalActors(const PlayerEnv& env, ActorContext& context, bool late, N
         Muted() { setLocalEffectsMuted(true); }
         ~Muted() { setLocalEffectsMuted(false); }
     } muted;
+    // the projectiles run here (a ground shockwave), in the game's order; the world's held here have their run flag off
+    if (!late) runLocalPool(env, context, ActorPool::Projectiles, s.projectileCursor, failed);
     runLocalPool(env, context, late ? ActorPool::EffectsLate : ActorPool::Effects, s.effectCursor, failed);
     runLocalPool(env, context, late ? ActorPool::StaticsLate : ActorPool::Statics, s.staticCursor, failed);
 }
