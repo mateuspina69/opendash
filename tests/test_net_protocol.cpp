@@ -204,6 +204,8 @@ void testMessages() {
         {Bye{}, 5},
         {Ack{42}, 0},
         {WorldEvent{{1, 2, 3}}, 7},
+        {Probe{}, 0},
+        {Offer{"Mateus", "netplay-2 abc", 2, 27460}, 0},
     };
     CHECK(all.size() == std::variant_size_v<Message>);
     for (const auto& [m, seq] : all) {

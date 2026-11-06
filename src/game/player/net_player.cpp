@@ -19,7 +19,7 @@ constexpr uint32_t kKeyBytes = 4;
 constexpr uint16_t kX = 1 << 0, kY = 1 << 1, kZ = 1 << 2, kYaw = 1 << 3, kPitch = 1 << 4, kLean = 1 << 5, kFlags = 1 << 6, kLight = 1 << 7,
                    kMaskStageAnims = 1 << 8, kFace = 1 << 9, kLook = 1 << 10, kChannel0 = 1 << 11, kChannel1 = 1 << 12, kFight = 1 << 13, kCamera = 1 << 14,
                    kAim = 1 << 15;
-constexpr uint8_t kChannelAge = 1, kChannelKey = 2, kChannelHeld = 4;
+constexpr uint8_t kChannelAge = 1, kChannelKey = 2, kChannelHeld = 4, kChannelNoTick = 8; // NoTick: none has started on it
 
 struct Out {
     std::vector<uint8_t> b;
@@ -219,7 +219,8 @@ std::vector<uint8_t> NetPlayerSender::update(uint8_t playerId, uint32_t tick, co
         if (!(mask & (i == 0 ? kChannel0 : kChannel1))) continue;
         const NetPlayerChannel& c = now.channels[i];
         const uint32_t age = c.tick == kNetPlayerNoTick ? 0 : std::min<uint32_t>(tick - c.tick, 0xff);
-        const uint8_t bits = uint8_t((age != 0 ? kChannelAge : 0) | (c.keyed ? kChannelKey : 0) | (c.held ? kChannelHeld : 0));
+        const uint8_t bits = uint8_t((age != 0 ? kChannelAge : 0) | (c.keyed ? kChannelKey : 0) | (c.held ? kChannelHeld : 0) |
+                                     (c.tick == kNetPlayerNoTick ? kChannelNoTick : 0));
         o.u8(c.anim);
         o.u8(bits);
         if (bits & kChannelAge) o.u8(uint8_t(age));
@@ -315,7 +316,7 @@ std::optional<NetPlayerHeard> NetPlayerReceiver::apply(std::span<const uint8_t> 
         c.anim = r.u8();
         const uint8_t bits = r.u8();
         const uint32_t age = (bits & kChannelAge) ? r.u8() : 0u;
-        c.tick = h.tick - age;
+        c.tick = (bits & kChannelNoTick) ? kNetPlayerNoTick : h.tick - age;
         c.keyed = (bits & kChannelKey) != 0;
         c.held = (bits & kChannelHeld) != 0;
         if (c.keyed) {
