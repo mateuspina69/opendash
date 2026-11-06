@@ -1456,7 +1456,9 @@ void PoolNetActors::appear(uint8_t slot, const NetActorIdentity& identity, const
 void PoolNetActors::go(uint8_t slot) {
     // a copy that ended here by itself: its slot may hold a shot of this machine's since, which is not the world's to end
     const bool stale = ownSlot_[slot] != 0 && shotSlotSerial(ShotPool::index(asShot(actorHeaderAt(ownSlot_[slot])))) != ownSerial_[slot];
-    if (ActorHeader* head = stale ? nullptr : slotOf(slot)) {
+    // ... and one gone already is not freed again: a free of a slot no longer live puts it back in the pool's live mask
+    // (applyActorFrees toggles the freed bits), a slot lost for good -- the shots' pool runs out and the buster stops
+    if (ActorHeader* head = stale ? nullptr : slotOf(slot); head && (head->flags & kActorLive)) {
         if (actorSlotClass(slot) == kShotClass) freeActor(asShot(*head)); // freeActor(ActorHeader&), as the exe, has no case for shots
         else freeActor(*head);
     }
