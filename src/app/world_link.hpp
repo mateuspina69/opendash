@@ -52,7 +52,9 @@ enum class WorldMessageType : uint8_t {
     // a room's logic set this on its players (game/player/room_player_effects): field, value
     NetRoomPlayer = 54,
     // what went wrong in the session (a world that stopped): a line on every player's screen
-    NetAlert = 55
+    NetAlert = 55,
+    // the enemy gauges the world shows and their actors' life (game/hud hudNetGaugesCapture): what the next one replaces
+    NetGauges = 56
 };
 
 // What a world says of its players to the coordinator

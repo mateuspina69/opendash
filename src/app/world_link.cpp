@@ -114,6 +114,7 @@ std::vector<uint8_t> encodeWorldMessage(const WorldMessage& m) {
     case WorldMessageType::NetReload:
     case WorldMessageType::NetRoomPlayer:
     case WorldMessageType::NetAlert:
+    case WorldMessageType::NetGauges:
         w.u8(m.playerId);
         w.blob(m.netState);
         break;
@@ -191,6 +192,7 @@ std::optional<WorldMessage> decodeWorldMessage(std::span<const uint8_t> bytes) {
     case WorldMessageType::NetReload:
     case WorldMessageType::NetRoomPlayer:
     case WorldMessageType::NetAlert:
+    case WorldMessageType::NetGauges:
         m.playerId = r.u8();
         m.netState = r.blob();
         break;

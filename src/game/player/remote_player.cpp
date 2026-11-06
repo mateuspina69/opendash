@@ -2,6 +2,7 @@
 #include "game/player/remote_player.hpp"
 
 #include <array>
+#include <optional>
 
 #include "game/actor_pools.hpp"
 #include "game/event.hpp"
@@ -94,17 +95,35 @@ void remotePlayersTalkDone() {
         if (g_remote[id] && playerPresent(id) && playerById(id).carryFlags == 0) playerById(id).interactionTarget.clear();
 }
 
+namespace {
+std::function<LoadedFileData*(size_t id)> g_remoteFiles;
+} // namespace
+
+void setRemotePlayerFiles(std::function<LoadedFileData*(size_t id)> filesOf) { g_remoteFiles = std::move(filesOf); }
+
+LoadedFileData* remotePlayerFiles(size_t id) {
+    return id < kPlayerSlots && g_remote[id] && g_remoteFiles ? g_remoteFiles(id) : nullptr;
+}
+
 void remotePlayersUpdate() {
     for (size_t id = 0; id < kPlayerSlots; ++id) {
         if (!g_remote[id] || !playerPresent(id)) continue;
         Player& p = playerById(id);
         const ScopedActingPlayer acting(id);
-        // the pose scratch and the matrix stack are the local player's, put back after it (game/ghost)
-        const GeometryScratch scratch = geometryScratch();
-        const PoseStack stack = poseStack();
-        playerPose(p);
-        geometryScratch() = scratch;
-        poseStack() = stack;
+        // the pose reads the look's data: this player's own files (their weapon, their costume) when they are known
+        LoadedFileData* files = g_remoteFiles ? g_remoteFiles(id) : nullptr;
+        // (whose files are not built yet keeps the bones it has: posed on this machine's own it would read a look's
+        // data they do not hold)
+        if (files || !g_remoteFiles) {
+            std::optional<ScopedLoadedFiles> bound;
+            if (files) bound.emplace(*files);
+            // the pose scratch and the matrix stack are the local player's, put back after it (game/ghost)
+            const GeometryScratch scratch = geometryScratch();
+            const PoseStack stack = poseStack();
+            playerPose(p);
+            geometryScratch() = scratch;
+            poseStack() = stack;
+        }
         if (p.hitPoints >= 0 && !g_scene) playerSubmitHit(p); // one who is down is out of the fight
     }
 }

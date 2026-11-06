@@ -29,6 +29,9 @@ namespace od::app {
 class OwnWorldClient {
 public:
     OwnWorldClient(std::filesystem::path exe, std::filesystem::path storySave);
+    ~OwnWorldClient();
+    OwnWorldClient(const OwnWorldClient&) = delete;
+    OwnWorldClient& operator=(const OwnWorldClient&) = delete;
     // the session this game is in: a host's clients come through its coordinator; a client's world is the host's
     void useSession(od::net::Session* session, bool host);
     // the host's save, when it differs from this game's: the game restarts from it (what exists is the host's)
@@ -142,6 +145,12 @@ private:
         bool joined = false;
         std::vector<uint8_t> equipment; // what they wear (the world's NetEquip of them): their shots here are theirs
     };
+    size_t gaugesHeard_ = 0; // the enemy gauges the world last showed (logged when it changes)
+    // the ghost slot each other player of this machine's table is drawn in (-1: none), and the ghosts: their files are
+    // what those players pose on here
+    std::array<int, od::port::kPlayerSlots> ghostSlotOfTable_{};
+    GhostView* ghosts_ = nullptr;
+    od::LoadedFileData* filesOfTable(size_t table);
     void otherPlayerRules(uint8_t id, Other& o, const od::port::PlayerSnapshot& shown);
     void downedTurn();
     bool reloading_ = false;

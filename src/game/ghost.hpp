@@ -27,6 +27,11 @@ constexpr uint32_t actorAddr(int slot) { return kActorBase + uint32_t(slot) * kS
 // each file once, app/dat_cache)
 using ReadFile = std::function<const GameFile&(const std::string& datName)>;
 
+// The loaded files a player of `look` poses on: the local ones with the look's body and weapon files mapped over them
+// (the local player's own cleared first). nullopt: a look outside the tables, or a file that cannot be read (named in
+// `missing`)
+std::optional<LoadedFileData> lookFiles(const port::PlayerLook& look, const ReadFile& read, std::string* missing = nullptr);
+
 enum class Hidden { No, NotVisible, UnsupportedCharacter, MissingFile };
 const char* hiddenReason(Hidden h);
 

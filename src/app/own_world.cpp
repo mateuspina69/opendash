@@ -28,6 +28,7 @@
 #include "game/event.hpp"
 #include "game/game_state.hpp"
 #include "game/global_state.hpp"
+#include "game/hud.hpp"
 #include "game/modern_aim.hpp"
 #include "game/pickups.hpp"
 #include "game/player/player_interaction.hpp"
@@ -50,7 +51,11 @@ OwnWorldClient::OwnWorldClient(std::filesystem::path exe, std::filesystem::path 
     od::port::setUseNothingHook([this] {
         if (room_ && joined_) pipe_->sendReliable(playerId_, WorldMessageType::NetUse, {});
     });
+    ghostSlotOfTable_.fill(-1);
+    od::port::setRemotePlayerFiles([this](size_t table) { return filesOfTable(table); });
 }
+
+OwnWorldClient::~OwnWorldClient() { od::port::setRemotePlayerFiles(nullptr); }
 
 void OwnWorldClient::useSession(od::net::Session* session, bool host) {
     if (!session) return;
@@ -370,6 +375,18 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
     case WorldMessageType::NetHit:
         if (const auto hit = od::port::decodeHitResult(m.netState)) od::port::applyPlayerHit(od::port::player(), *hit);
         break;
+    case WorldMessageType::NetGauges: // the world's enemy gauges, on this game's copies of their actors
+        if (const size_t n = m.netState.size() / 11; n != gaugesHeard_) {
+            gaugesHeard_ = n;
+            SDL_Log("own world: the world shows %zu enemy gauge(s)%s", n,
+                    n ? (", the first of slot " + std::to_string(m.netState[6]) + " at " +
+                         std::to_string(int16_t(uint16_t(m.netState[7] | m.netState[8] << 8))) + " hp").c_str() : "");
+        }
+        od::port::hudNetGaugesApply(m.netState, [this](uint8_t slot) -> od::port::Actor* {
+            od::port::ActorHeader* head = actors_->mirrorOf(slot);
+            return head && (head->flags & od::port::kActorLive) ? &od::port::actorLayoutOf(*head) : nullptr;
+        });
+        break;
     case WorldMessageType::NetEquip: // another player's equipment: u8 their id, then what they wear
         if (!m.netState.empty() && m.netState[0] < others_.size() && m.netState[0] != playerId_)
             others_[m.netState[0]].equipment.assign(m.netState.begin() + 1, m.netState.end());
@@ -593,6 +610,7 @@ void OwnWorldClient::showPlayers(GhostView& ghosts, uint64_t localFingerprint, u
         for (int slot = 0; slot < od::ghost::kMaxGhosts; ++slot) ghosts.clearRemote(slot);
         return;
     }
+    ghostSlotOfTable_.fill(-1);
     for (size_t id = 0, slot = 0; id < others_.size() && slot < size_t(od::ghost::kMaxGhosts); ++id) {
         Other& o = others_[id];
         if (o.buffer.empty()) continue;
@@ -624,8 +642,16 @@ void OwnWorldClient::showPlayers(GhostView& ghosts, uint64_t localFingerprint, u
         }
         shown->fingerprint = localFingerprint;
         otherPlayerRules(uint8_t(id), o, shown->snapshot);
+        if (const uint8_t table = actors_->tableOfPlayer(uint8_t(id)); table < ghostSlotOfTable_.size()) ghostSlotOfTable_[table] = int(slot);
         ghosts.setRemote(int(slot++), *shown);
     }
+    // their poses here (their bones, for what follows them) run on the files their ghost is drawn from
+    ghosts_ = &ghosts;
+}
+
+od::LoadedFileData* OwnWorldClient::filesOfTable(size_t table) {
+    if (!ghosts_ || table >= ghostSlotOfTable_.size() || ghostSlotOfTable_[table] < 0) return nullptr;
+    return ghosts_->files(ghostSlotOfTable_[table]);
 }
 
 void OwnWorldClient::addGuest(int dx, int dz) { guest_ = std::make_pair(dx, dz); }
@@ -655,6 +681,8 @@ void OwnWorldClient::endFrame() {
         if (mine && !ownShots_[i].live) {
             if (nextSerial_ == od::port::kNetShotCopy) nextSerial_ = 0; // that value names another player's shot
             ownShots_[i] = {true, nextSerial_++};
+            static const bool fireLog = std::getenv("OD_NET_FIRE_LOG") != nullptr; // test instrument
+            if (fireLog) SDL_Log("own world: fire slot %zu type %02x variant %02x", i, unsigned(shot.type), unsigned(shot.variant));
             pipe_->sendReliable(playerId_, WorldMessageType::NetFire, od::port::encode(od::port::netFireOf(shot, uint8_t(i), ownShots_[i].serial)));
         } else if (!mine) {
             ownShots_[i].live = false;

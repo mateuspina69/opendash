@@ -15,6 +15,8 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
+#include <span>
 #include <vector>
 
 #include "engine/data_source.hpp"
@@ -252,6 +254,12 @@ void hudAddBossGauge(Actor& actor, uint8_t style, uint8_t shift, uint32_t colour
 bool hudScriptWhiteNow();
 // a boss's gauge is up
 bool hudBossGaugeShown();
+// A session: the enemy gauges a world shows (a boss's, a mission target's) and the life of the actor each shows, for its
+// players' games to show the same on their copies of those actors. The bytes: per gauge u8 type, style, shift, the
+// colour's three bytes, the actor's slot id, i16 its hit points and its maximum.
+std::vector<uint8_t> hudNetGaugesCapture();
+// ... on this machine: the slot's actor here (nullptr: none here); the gauges of actors no longer listed go
+void hudNetGaugesApply(std::span<const uint8_t> bytes, const std::function<Actor*(uint8_t slot)>& actorOf);
 // exe 0x415e50(actor, style, shift, colour): a mission target's bar (frame style 7 + `style`) in the first free enemy
 // element, none twice for one actor
 void hudAddTargetGauge(Actor& actor, uint8_t style, uint8_t shift, uint32_t colour);

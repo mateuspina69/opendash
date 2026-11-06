@@ -3,6 +3,10 @@
 #include "game/presentation.hpp"
 #include "game/actor_state.hpp"
 #include "game/actors.hpp"
+
+#include <optional>
+
+#include "game/player/remote_player.hpp"
 #include "game/player/player_state.hpp"
 #include "game/port_gap.hpp"
 
@@ -340,6 +344,10 @@ int updatePool(const PlayerEnv& env, ActorContext& ctx, ActorPool pool) {
         }
         try {
             const ScopedActingPlayer acting(actor.ownerPlayer);
+            // a remote player's shot reads its owner's arm (its animation scripts come with their weapon's files)
+            std::optional<ScopedLoadedFiles> ownerFiles;
+            if (pool == ActorPool::Shots)
+                if (LoadedFileData* files = remotePlayerFiles(actor.ownerPlayer)) ownerFiles.emplace(*files);
 #ifndef NDEBUG
             g_updatingClass = h.id();
 #endif

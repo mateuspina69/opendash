@@ -4,6 +4,9 @@
 #pragma once
 
 #include <cstddef>
+#include <functional>
+
+#include "engine/file_data.hpp"
 
 #include "game/player/player_snapshot.hpp"
 
@@ -21,6 +24,12 @@ void remotePlayersSceneStart();
 void remotePlayersSceneEnd();
 // each remote player's pose and hit-list entry (after the local player's update, before the hit pass)
 void remotePlayersUpdate();
+// the loaded files each remote player poses on: their look's body and weapon over this machine's (a look's data this
+// machine's own files do not hold -- a weapon without a PL00R, another costume -- is not read from them). nullptr: the
+// bound files as they are
+void setRemotePlayerFiles(std::function<LoadedFileData*(size_t id)> filesOf);
+// ... this remote player's (nullptr: not remote, or none built)
+LoadedFileData* remotePlayerFiles(size_t id);
 // the owner pressed Use by nothing of theirs: this tick the classes see what it picks among the world's actors
 void remotePlayerUse(size_t id);
 // the tick is over: what it picked is let go

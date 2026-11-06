@@ -23,6 +23,58 @@ const char* hiddenReason(Hidden h) {
     return "?";
 }
 
+namespace {
+constexpr int8_t kFirstWeaponWithFile = 3; // special weapons 3..17 come with a PL00R (game/player/player_model)
+} // namespace
+
+std::optional<LoadedFileData> lookFiles(const port::PlayerLook& look, const ReadFile& read, std::string* missing) {
+    const auto files = playerLookFiles(look); // reads only the data source's tables
+    if (!files) return std::nullopt;
+    // body + weapon files of the look are its own; the rest is the local files as they are now. The local player's own
+    // files (0xa6d1d8 / 0xa6d1da) are cleared first: a look without a PL00R (special weapon <= 2) would otherwise pose
+    // from the local's weapon data -- its arm animations 0x60..0x6f (table 0x751e20 = PS1 0x121e20, exe 0x5722c0), arm
+    // model (0x743340) and 0x7546b0 come with the PL00R. Zero = no PL00R loaded. A local file that is also one of the
+    // look's is skipped (the look maps the same segments).
+    LoadedFileData own = loadedFiles(); // the local blocks, shared until written
+    std::string localFile;
+    const std::string* current = &localFile;
+    try {
+        for (const uint16_t i : playerDatLoaded()) {
+            localFile = datFileName(i);
+            if (localFile.empty() || localFile == files->body || localFile == files->weapon) continue;
+            for (const FilePart& p : read(localFile).parts)
+                if (p.kind == FilePart::Kind::Code && p.arg != 0) own.zero(LoadedFileData::kPsxBase + p.arg, uint32_t(p.bytes.size()));
+        }
+        current = &files->body;
+        auto loadLook = [&](const std::string& name) {
+            const GameFile& file = read(name);
+            for (const FilePart& p : file.parts)
+                if (p.kind == FilePart::Kind::Code && p.arg != 0) own.zero(LoadedFileData::kPsxBase + p.arg, uint32_t(p.bytes.size()));
+            own.mapCode(file);
+        };
+        loadLook(files->body);
+        if (!files->weapon.empty()) {
+            current = &files->weapon;
+            loadLook(files->weapon);
+        } else {
+            // a look without a PL00R reads its weapon segment as the game's memory holds it then: zero. These files'
+            // own may never have held one (a world whose player had no PL00R): the segment, as a PL00R's code parts span
+            // it, is put there zeroed
+            port::PlayerLook withWeapon = look;
+            withWeapon.specialWeapon = kFirstWeaponWithFile;
+            if (const auto ref = playerLookFiles(withWeapon); ref && !ref->weapon.empty()) {
+                current = &ref->weapon;
+                for (const FilePart& p : read(ref->weapon).parts)
+                    if (p.kind == FilePart::Kind::Code && p.arg != 0) own.zero(LoadedFileData::kPsxBase + p.arg, uint32_t(p.bytes.size()));
+            }
+        }
+    } catch (const std::exception&) {
+        if (missing) *missing = *current;
+        return std::nullopt;
+    }
+    return own;
+}
+
 Hidden GhostSet::pose(int slot, uint32_t localGeneration, const port::PlayerSnapshot& s, const ReadFile& read) {
     Slot& g = slots_.at(size_t(slot));
     if (!(s.drawFlags[0] & s.drawFlags[1] & port::kActorDrawn)) return Hidden::NotVisible; // the files stay valid
@@ -33,37 +85,10 @@ Hidden GhostSet::pose(int slot, uint32_t localGeneration, const port::PlayerSnap
     }
     if (g.failed && g.failedGeneration == localGeneration && g.failedLook == s.look) return Hidden::MissingFile;
     if (!g.files || g.generation != localGeneration || !(g.look == s.look)) {
-        // body + weapon files of the look are the ghost's own; the rest is the local files as they are now. The local
-        // player's own files (0xa6d1d8 / 0xa6d1da) are cleared first: a look without a PL00R (special weapon <= 2)
-        // would otherwise pose from the local's weapon data -- its arm animations 0x60..0x6f (table 0x751e20 =
-        // PS1 0x121e20, exe 0x5722c0), arm model (0x743340) and 0x7546b0 come with the PL00R. Zero = no PL00R
-        // loaded. A local file that is also one of the look's is skipped (the look maps the same segments).
-        LoadedFileData own = loadedFiles(); // the local blocks, shared until written
-        std::string localFile;
-        const std::string* current = &localFile;
-        try {
-            for (const uint16_t i : playerDatLoaded()) {
-                localFile = datFileName(i);
-                if (localFile.empty() || localFile == files->body || localFile == files->weapon) continue;
-                for (const FilePart& p : read(localFile).parts)
-                    if (p.kind == FilePart::Kind::Code && p.arg != 0)
-                        own.zero(LoadedFileData::kPsxBase + p.arg, uint32_t(p.bytes.size()));
-            }
-            current = &files->body;
-            auto loadLook = [&](const std::string& name) {
-                const GameFile& file = read(name);
-                for (const FilePart& p : file.parts)
-                    if (p.kind == FilePart::Kind::Code && p.arg != 0)
-                        own.zero(LoadedFileData::kPsxBase + p.arg, uint32_t(p.bytes.size()));
-                own.mapCode(file);
-            };
-            loadLook(files->body);
-            if (!files->weapon.empty()) {
-                current = &files->weapon;
-                loadLook(files->weapon);
-            }
-        } catch (const std::exception& e) {
-            std::fprintf(stderr, "ghost %d hidden: cannot read %s (%s)\n", slot, current->c_str(), e.what());
+        std::string missing;
+        std::optional<LoadedFileData> built = lookFiles(s.look, read, &missing);
+        if (!built) {
+            std::fprintf(stderr, "ghost %d hidden: cannot read %s\n", slot, missing.c_str());
             g.files.reset();
             g.failed = true;
             g.failedGeneration = localGeneration;
@@ -71,7 +96,7 @@ Hidden GhostSet::pose(int slot, uint32_t localGeneration, const port::PlayerSnap
             return Hidden::MissingFile;
         }
         g.failed = false;
-        g.files = std::move(own);
+        g.files = std::move(*built);
         g.generation = localGeneration;
         g.look = s.look;
     }

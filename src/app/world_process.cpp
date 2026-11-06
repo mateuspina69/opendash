@@ -15,6 +15,7 @@
 #include <string_view>
 #include <vector>
 
+#include "app/dat_cache.hpp"
 #include "app/game_files.hpp"
 #include "app/log_file.hpp"
 #include "app/play_session.hpp"
@@ -51,6 +52,7 @@
 #include "game/player/player_snapshot.hpp"
 #include "game/player/remote_combat.hpp"
 #include "game/player/remote_player.hpp"
+#include "game/ghost.hpp"
 #include "game/title.hpp"
 #include "game/world_view.hpp"
 #include "game/world_digest.hpp"
@@ -453,6 +455,8 @@ int run(const WorldArgs& w) {
         lastActorTicksAgo = 0;
     };
     std::vector<uint8_t> lastScreen;
+    std::vector<uint8_t> lastGauges;                   // the enemy gauges last told
+    static constexpr int kGaugesAgainTicks = 30;       // ... told again this often (a lost one is replaced)
     uint16_t scenePad = 0;
     uint8_t sceneOwner = 0;
     uint8_t sceneScript = 0; // the scene's script: each game starts it itself
@@ -577,6 +581,27 @@ int run(const WorldArgs& w) {
         bool heard = false;
     };
     std::array<RemoteMirror, od::port::kPlayerSlots> mirrors{};
+    // the files each player poses on here: their look (from their owner's state) over this world's files, built again when
+    // it changes -- a look whose data the world's own files do not hold (a weapon without a PL00R, another costume) is
+    // never read from them
+    struct LookFiles {
+        std::optional<od::port::PlayerLook> look;
+        std::optional<od::LoadedFileData> files;
+    };
+    std::array<LookFiles, od::port::kPlayerSlots> lookFiles{};
+    const auto filesOfPlayer = [&](size_t id) -> od::LoadedFileData* {
+        if (id >= lookFiles.size() || !mirrors[id].heard) return nullptr;
+        const od::port::PlayerLook& look = mirrors[id].from.fields().look;
+        LookFiles& lf = lookFiles[id];
+        if (!lf.look || !(*lf.look == look)) {
+            lf.look = look;
+            std::string missing;
+            lf.files = od::ghost::lookFiles(look, [](const std::string& dat) -> const od::GameFile& { return datCache().file(dat); }, &missing);
+            if (!lf.files) SDL_Log("world: player %zu's look has no files here%s%s", id, missing.empty() ? "" : ": ", missing.c_str());
+        }
+        return lf.files ? &*lf.files : nullptr;
+    };
+    od::port::setRemotePlayerFiles(filesOfPlayer);
     std::map<std::pair<uint8_t, uint8_t>, od::port::NetPlayerSender> playerSenders; // by client, player
     const auto playersFromOwners = [&] {
         for (uint8_t id = 0; id < od::port::kPlayerSlots; ++id) {
@@ -585,6 +610,11 @@ int run(const WorldArgs& w) {
             if (sceneOn) continue; // the scene's players wait for it to end
             ++m.ownerTick;
             const od::port::NetPlayerFields& f = m.from.fields();
+            // their animations and their state are played from their look's files (a special arm's scripts come with
+            // its PL00R)
+            od::LoadedFileData* files = filesOfPlayer(id);
+            if (!files) continue; // a look this world cannot hold: not played (as a ghost that cannot be shown)
+            const od::ScopedLoadedFiles bound(*files);
             for (size_t c = 0; c < 2; ++c) m.tracks[c].step(f.channels[c], f.stageAnims, m.ownerTick);
             od::port::remotePlayerState(id, od::port::netPlayerSnapshot(f, m.tracks));
             od::port::applyNetArm(od::port::playerById(id), f);
@@ -785,6 +815,17 @@ int run(const WorldArgs& w) {
                 present.white(worldWhite);
             }
             if (int(netTick) % w.netTicks == 0) {
+                // the enemy gauges and their actors' life: on a change, and again now and then (what the next replaces)
+                if (std::vector<uint8_t> gauges = od::port::hudNetGaugesCapture();
+                    gauges != lastGauges || int(netTick) % kGaugesAgainTicks == 0) {
+                    lastGauges = gauges;
+                    for (const auto& [client, sender] : netClients) {
+                        WorldMessage m{WorldMessageType::NetGauges};
+                        m.playerId = client;
+                        m.netState = gauges;
+                        link->sendLatest(m);
+                    }
+                }
                 if (std::vector<uint8_t> screen = od::port::netScreenCapture(); screen != lastScreen) {
                     lastScreen = screen;
                     for (const auto& [client, sender] : netClients) {
@@ -891,13 +932,19 @@ int run(const WorldArgs& w) {
                     }
                 }
                 break;
-            case WorldMessageType::NetFire:
-                if (const auto fire = od::port::decodeFire(m.netState);
-                    fire && m.playerId < od::port::kPlayerSlots && od::port::playerIsRemote(m.playerId)) {
-                    if (const od::port::ShotActor* shot = od::port::startFiredShot(m.playerId, *fire))
-                        fired[od::port::ShotPool::index(*shot)] = {true, m.playerId, fire->clientSlot, fire->serial};
+            case WorldMessageType::NetFire: {
+                static const bool fireLog = std::getenv("OD_NET_FIRE_LOG") != nullptr; // test instrument
+                const auto fire = od::port::decodeFire(m.netState);
+                if (fireLog)
+                    SDL_Log("world: fire of player %u: %s, remote %d", unsigned(m.playerId), fire ? "decoded" : "bad",
+                            m.playerId < od::port::kPlayerSlots ? int(od::port::playerIsRemote(m.playerId)) : -1);
+                if (fire && m.playerId < od::port::kPlayerSlots && od::port::playerIsRemote(m.playerId)) {
+                    const od::port::ShotActor* shot = od::port::startFiredShot(m.playerId, *fire);
+                    if (fireLog) SDL_Log("world: its shot type %02x %s", unsigned(fire->type), shot ? "started" : "not started (pool full)");
+                    if (shot) fired[od::port::ShotPool::index(*shot)] = {true, m.playerId, fire->clientSlot, fire->serial};
                 }
                 break;
+            }
             case WorldMessageType::NetPlayer:
                 if (m.playerId < od::port::kPlayerSlots && !m.netState.empty()) {
                     RemoteMirror& mirror = mirrors[m.playerId];
@@ -1069,6 +1116,7 @@ int run(const WorldArgs& w) {
     if (rc != 0) SDL_Log("world: stopped at tick %llu: %s", (unsigned long long)tick, view->playError.c_str());
     else SDL_Log("world: ended after %llu ticks", (unsigned long long)tick);
     od::port::setPresentationBatch(nullptr);
+    od::port::setRemotePlayerFiles(nullptr); // (its files are this loop's)
     od::port::setSoundBackend(nullptr);
     view->mixer.reset();
     return rc;

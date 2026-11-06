@@ -745,4 +745,44 @@ void hudAddTargetGauge(Actor& actor, uint8_t style, uint8_t shift, uint32_t colo
     }
 }
 
+std::vector<uint8_t> hudNetGaugesCapture() {
+    std::vector<uint8_t> out;
+    for (size_t i = 0; i < kHudEnemyGauges; ++i) {
+        const auto& g = hudMemory().elements[kHudFirstEnemyGauge + i];
+        const Actor* a = g.target.get();
+        if (g.flags == 0 || !a || (g.elementType() != HudElementType::BossGauge && g.elementType() != HudElementType::TargetGauge))
+            continue;
+        const uint8_t base = g.elementType() == HudElementType::BossGauge ? kBossGaugeStyles : kTargetGaugeStyles;
+        out.insert(out.end(), {g.type, uint8_t(g.style - base), g.shift, g.colour[0], g.colour[1], g.colour[2], a->slot});
+        for (const int16_t v : {a->hitPoints, a->maxHitPoints}) {
+            out.push_back(uint8_t(v));
+            out.push_back(uint8_t(uint16_t(v) >> 8));
+        }
+    }
+    return out;
+}
+
+void hudNetGaugesApply(std::span<const uint8_t> b, const std::function<Actor*(uint8_t slot)>& actorOf) {
+    constexpr size_t kEntry = 11;
+    std::array<Actor*, kHudEnemyGauges> listed{};
+    size_t n = 0;
+    for (size_t at = 0; at + kEntry <= b.size() && n < listed.size(); at += kEntry) {
+        Actor* a = actorOf(b[at + 6]);
+        if (!a) continue;
+        // the world's life of it: the bar follows the actor's hit points, as the game's own does
+        a->hitPoints = int16_t(uint16_t(b[at + 7] | b[at + 8] << 8));
+        a->maxHitPoints = int16_t(uint16_t(b[at + 9] | b[at + 10] << 8));
+        listed[n++] = a;
+        const uint32_t colour = uint32_t(b[at + 3]) | uint32_t(b[at + 4]) << 8 | uint32_t(b[at + 5]) << 16;
+        if (HudElementType(b[at]) == HudElementType::BossGauge) hudAddBossGauge(*a, b[at + 1], b[at + 2], colour);
+        else hudAddTargetGauge(*a, b[at + 1], b[at + 2], colour);
+    }
+    // a gauge of an actor the world no longer shows one of: gone (as its actor's end takes it)
+    for (size_t i = 0; i < kHudEnemyGauges; ++i) {
+        auto& g = hudMemory().elements[kHudFirstEnemyGauge + i];
+        if (g.flags == 0 || (g.elementType() != HudElementType::BossGauge && g.elementType() != HudElementType::TargetGauge)) continue;
+        if (std::find(listed.begin(), listed.begin() + ptrdiff_t(n), g.target.get()) == listed.begin() + ptrdiff_t(n)) g.target = nullptr;
+    }
+}
+
 } // namespace od::port
