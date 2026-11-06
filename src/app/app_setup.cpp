@@ -811,7 +811,12 @@ std::string App::sessionStart(const NetSettings& net) {
     // a netplay session is co-op: the host's game runs the session's worlds (from the game it starts), a client follows
     // the host's state and room
     sessionStop();
-    const std::filesystem::path self = std::filesystem::path(SDL_GetBasePath() ? SDL_GetBasePath() : "") / "opendash.exe";
+#ifdef _WIN32
+    constexpr const char* kSelf = "opendash.exe";
+#else
+    constexpr const char* kSelf = "opendash";
+#endif
+    const std::filesystem::path self = std::filesystem::path(SDL_GetBasePath() ? SDL_GetBasePath() : "") / kSelf;
     playerView.ownWorld = std::make_shared<OwnWorldClient>(self, resolveSavePath(devWorldSave));
     for (const auto& f : coopSetup) f(*playerView.ownWorld);
     netplay.setWorldMode(true);
