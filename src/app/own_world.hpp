@@ -94,7 +94,7 @@ public:
     void testClearFlag(uint32_t flag) { if (coordinator_) coordinator_->testClearFlag(flag); }
     // test instrument: at this local tick the session sets or clears this flag (what a room's logic does, as the session
     // shares it)
-    void testFlagAt(uint32_t tick, uint32_t flag, bool set) { testFlagTick_ = tick; testFlag_ = flag; testFlagSet_ = set; }
+    void testFlagAt(uint32_t tick, uint32_t flag, bool set) { testFlags_.push_back({tick, flag, set}); }
     // a flag the game starts with (--flag, --clear-flag): the session's from the start, so a world started now has it
     void startFlag(uint32_t flag, bool set, uint8_t stage) { if (coordinator_) coordinator_->testFlagNow(flag, set, stage); }
     void stayOnJoin() { if (pipe_) pipe_->setStays(true); stays_ = true; }
@@ -171,8 +171,11 @@ private:
                                                          // beside the others where the door's script arrives
     od::port::Fixed16Vec3 gatePlace_{};
     uint32_t testForceTick_ = 0;
-    uint32_t testFlagTick_ = 0, testFlag_ = 0;
-    bool testFlagSet_ = false;
+    struct TestFlag {
+        uint32_t tick = 0, flag = 0;
+        bool set = false;
+    };
+    std::vector<TestFlag> testFlags_;
     void sceneTurn();
     void sceneEnd(const std::vector<uint8_t>& at);
     void movedTo(const std::vector<uint8_t>& to);

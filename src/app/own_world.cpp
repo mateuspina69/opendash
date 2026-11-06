@@ -253,10 +253,11 @@ void OwnWorldClient::turn(uint64_t nowNs) {
         od::port::player().weaponLevels[od::port::weaponLevelIndex(od::port::player().busterWeapon, od::port::WeaponStat::Attack)] = testLevel_;
         SDL_Log("own world: buster attack level set to %d at tick %u", int(testLevel_), localTick_);
     }
-    if (coordinator_ && testFlagTick_ != 0 && localTick_ == testFlagTick_) {
-        coordinator_->testFlagNow(testFlag_, testFlagSet_, uint8_t(room_->stage));
-        SDL_Log("own world: flag %03x %s at tick %u", unsigned(testFlag_), testFlagSet_ ? "set" : "cleared", localTick_);
-    }
+    for (const TestFlag& t : testFlags_)
+        if (coordinator_ && t.tick == localTick_) {
+            coordinator_->testFlagNow(t.flag, t.set, uint8_t(room_->stage));
+            SDL_Log("own world: flag %03x %s at tick %u", unsigned(t.flag), t.set ? "set" : "cleared", localTick_);
+        }
     if (testLifeTick_ != 0 && localTick_ == testLifeTick_) {
         od::port::Player& p = od::port::player();
         p.hitPoints = testLife_;
