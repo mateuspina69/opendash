@@ -52,6 +52,15 @@ void testCodecAndLink() {
           back->digest == m.digest);
     const std::vector<uint8_t> bad = {0x7f};
     CHECK(!decodeWorldMessage(bad));
+    // every type the link carries comes back: the last ones too (the enemy gauges, a session's alert)
+    for (const WorldMessageType t : {WorldMessageType::NetRoomPlayer, WorldMessageType::NetAlert, WorldMessageType::NetGauges}) {
+        WorldMessage g{t};
+        g.playerId = 1;
+        g.netState = {1, 2, 3};
+        const auto out = decodeWorldMessage(encodeWorldMessage(g));
+        CHECK(out && out->type == t && out->playerId == 1 && out->netState == g.netState);
+    }
+    CHECK(!decodeWorldMessage(std::vector<uint8_t>{uint8_t(uint8_t(kLastWorldMessageType) + 1)}));
 
     // what must arrive arrives once and in order; what the next one replaces goes through too
     WorldLink coordinator;

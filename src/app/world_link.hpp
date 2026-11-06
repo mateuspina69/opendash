@@ -56,6 +56,8 @@ enum class WorldMessageType : uint8_t {
     // the enemy gauges the world shows and their actors' life (game/hud hudNetGaugesCapture): what the next one replaces
     NetGauges = 56
 };
+// the last type: what a decoder takes (a type added after it is the new last)
+constexpr WorldMessageType kLastWorldMessageType = WorldMessageType::NetGauges;
 
 // What a world says of its players to the coordinator
 struct WorldBrief {

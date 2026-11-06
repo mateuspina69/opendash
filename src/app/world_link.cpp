@@ -127,7 +127,7 @@ std::optional<WorldMessage> decodeWorldMessage(std::span<const uint8_t> bytes) {
     od::net::ByteReader r(bytes);
     WorldMessage m;
     const uint8_t type = r.u8();
-    if (type < uint8_t(WorldMessageType::Hello) || type > uint8_t(WorldMessageType::NetRoomPlayer)) return std::nullopt;
+    if (type < uint8_t(WorldMessageType::Hello) || type > uint8_t(kLastWorldMessageType)) return std::nullopt;
     m.type = WorldMessageType(type);
     switch (m.type) {
     case WorldMessageType::Join:
