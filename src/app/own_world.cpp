@@ -279,6 +279,10 @@ void OwnWorldClient::turn(uint64_t nowNs) {
     pipe_->poll(nowNs);
     if (guest_ && coordinator_) (void)pipe_->take(kGuestId);
     for (const WorldMessage& m : pipe_->take(playerId_)) handle(m, nowNs);
+    for (const od::port::PoolNetActors::Appeared& a : actors_->takeAppeared())
+        SDL_Log("own world: actor %02x appeared: type %02x subtype %02x variant %02x model %02x%s", unsigned(a.slot),
+                unsigned(a.identity.type), unsigned(a.identity.subtype), unsigned(a.identity.variant),
+                unsigned(a.identity.modelEntry), a.bound ? "" : " (its model does not bind here)");
     sceneTurn();
     localSceneTurn();
     if (!room_) return;

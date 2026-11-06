@@ -1432,8 +1432,9 @@ void PoolNetActors::appear(uint8_t slot, const NetActorIdentity& identity, const
     a.rotation.x = state.rot[0];
     a.rotation.y = state.rot[1];
     a.rotation.z = state.rot[2];
-    animates_[slot] = identity.modelEntry != kNetNoModel && bindActorModelEntry(a, identity.modelEntry) &&
-                      actorSlotClass(slot) == kAnimatedClass;
+    const bool bound = identity.modelEntry != kNetNoModel && bindActorModelEntry(a, identity.modelEntry);
+    animates_[slot] = bound && actorSlotClass(slot) == kAnimatedClass;
+    if (netSlotVisible(slot)) appeared_.push_back({slot, identity, bound});
 }
 
 void PoolNetActors::go(uint8_t slot) {

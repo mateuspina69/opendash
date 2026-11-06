@@ -423,8 +423,17 @@ public:
     // the solids of the actors held here, for the actor collision pass
     void submitSolids();
     uint64_t effectsStarted() const { return effectsStarted_; }
+    // the world's actors that appeared here since the last call (the field's and the statics, not shots or effects), and
+    // whether their model bound from this machine's files
+    struct Appeared {
+        uint8_t slot = 0;
+        NetActorIdentity identity;
+        bool bound = false;
+    };
+    std::vector<Appeared> takeAppeared() { return std::exchange(appeared_, {}); }
 
 private:
+    std::vector<Appeared> appeared_;
     ActorHeader* slotOf(uint8_t slot) const;
     bool shotsInOwnSlots_;
     uint8_t ownPlayerId_ = 0;
