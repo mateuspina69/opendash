@@ -11,6 +11,12 @@
 //    restarts the same way); stream volume = the same cB mapping.
 //  - language packs (engine/lang): ODXA voice tracks (CD-XA ADPCM, 18.9 / 37.8 kHz) are decoded per sector while
 //    mixing, resampled like MP3 streams of another rate; their packs replace snd/ files of the same name.
+//  - DualSense haptics (OpenDash, audio/haptics): the sounds hapticFeel marks are also mixed, at their
+//    pan, into a second bus: each sound at its own peak (a quiet sample is felt as much as a loud one) and at the
+//    game's volume for it before the SFX master (hapticVolume: the volume options do not weaken it). Each side's
+//    envelope drives a carrier, a 180 Hz tap for the light sounds, an 80 Hz thump for the heavy ones, over the
+//    sounds themselves (their texture); driven and soft-clipped, then sent to the controller's USB audio device as
+//    its channels 3 / 4 (the left / right actuators, felt, not heard; 1 / 2, its speaker, stay silent).
 //  - without an audio device (--shot runs, no device) advance(seconds) runs the mixer silently so stream "playing"
 //    states (the message system waits on voice clips) still progress.
 #pragma once
@@ -43,6 +49,10 @@ public:
     // silent mode: mix `seconds` of output into nothing
     void advance(double seconds);
     void setMasterGain(float g); // user volume 0..1 (F1 menu); 0 = mute
+    // the DualSense's 4-channel output (re)found and opened; false = none (no controller on a cable)
+    bool openHaptics();
+    bool hasHaptics() const { return haptic_ != nullptr; }
+    void setHapticGain(float g); // 0..2 (F1 menu); 0 = off
     float masterGain() const { return master_; }
     // peak |sample| of the output since the last call (0..1), per channel, and the number of samples mixed
     std::array<float, 2> takePeak();
@@ -61,6 +71,8 @@ public:
     void stop(uint32_t h) override;
     void pause(uint32_t h) override;
     void resume(uint32_t h) override;
+    void voiceSound(uint32_t h, uint16_t id) override;
+    void hapticVolume(uint32_t h, int32_t v) override;
     uint32_t createStream(std::span<const uint8_t> mp3, uint32_t loop) override;
     void destroyStream(uint32_t s) override;
     void streamPlay(uint32_t s) override;
@@ -88,6 +100,10 @@ private:
         uint32_t freq = 22050;
         float gain = 1.0f;
         std::array<float, 2> pan{1.0f, 1.0f};
+        float haptic = 0.0f;      // its sound's weight on the actuators (voiceSound)
+        bool hapticHeavy = false; // a thump rather than a tap
+        float hapticLevel = 1.0f; // the game's volume for it, before the SFX master (hapticVolume)
+        float hapticNorm = 0.0f;  // 1 / its peak (0: not measured yet)
         double pos = 0.0;
         bool playing = false, paused = false;
     };
@@ -107,6 +123,12 @@ private:
     float master_ = 1.0f;
     std::array<float, 2> peak_{0.0f, 0.0f};
     std::vector<float> scratch_, decode_;
+    SDL_AudioStream* haptic_ = nullptr; // the DualSense's output (4 channels)
+    float hapticGain_ = 1.0f;
+    std::vector<float> hapticBus_, hapticOut_;
+    std::array<float, 4> hapticEnv_{};             // the envelope followers: light left / right, heavy left / right
+    std::array<float, 2> hapticPhase_{};           // the carriers', in turns: light, heavy
+    void hapticSend(int frames); // under lock_: the bus (light L / R, heavy L / R a frame) shaped and queued
 };
 
 } // namespace od::audio

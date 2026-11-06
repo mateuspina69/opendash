@@ -229,6 +229,11 @@ void App::handleEvents() {
             pad = nullptr;
             rumbleSent = {};
         }
+        // the DualSense's audio device comes and goes with its cable: the haptics follow it
+        if ((e.type == SDL_EVENT_AUDIO_DEVICE_ADDED || e.type == SDL_EVENT_AUDIO_DEVICE_REMOVED) &&
+            !e.adevice.recording && playerView.mixer && playerView.mixer->hasDevice() && playerView.hapticGain > 0.0f &&
+            (e.type == SDL_EVENT_AUDIO_DEVICE_REMOVED || !playerView.mixer->hasHaptics()))
+            playerView.mixer->openHaptics();
         if (e.type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED) {
             width = e.window.data1;
             height = e.window.data2;

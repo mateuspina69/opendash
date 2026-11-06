@@ -661,6 +661,9 @@ void PlayerView::audioInit(const od::Config& cfg, bool device) {
         mixer = std::make_unique<od::audio::Mixer>(discData ? std::filesystem::path() : cfg.datDir.parent_path() / "snd");
         if (device) mixer->open();
         mixer->setMasterGain(audioVolume);
+        hapticGain = cfg.haptics;
+        mixer->setHapticGain(hapticGain);
+        if (device && hapticGain > 0.0f) mixer->openHaptics(); // experimental: off (0) opens no device
         soundRec.next = mixer.get();
         od::port::setSoundBackend(&soundRec);
         od::port::soundMasters().sfx = od::port::kSoundMasterFull; // SFX / BGM masters (save +0x244, FUN_0054a790)

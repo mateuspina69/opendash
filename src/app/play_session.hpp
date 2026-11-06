@@ -173,6 +173,7 @@ struct PlayerView {
     od::port::RecordingSoundBackend soundRec;
     bool audioLog = false, audioMute = false;
     float audioVolume = 0.8f;
+    float hapticGain = 0.0f; // the DualSense actuators' strength (haptics=; experimental, off by default)
     int audioStage = -1;
     uint32_t audioTicks = 0;
     int voiceStarts = 0, streamStarts = 0, requests = 0;

@@ -371,6 +371,16 @@ void App::drawDebugMenu() {
                 ImGui::SameLine();
                 ImGui::Checkbox("log", &playerView.audioLog);
                 if (!playerView.mixer->hasDevice()) ImGui::TextDisabled("sem dispositivo de audio (silencioso)");
+                ImGui::SetNextItemWidth(160);
+                if (ImGui::SliderFloat("haptico DualSense (experimento; 0 = desligado)", &playerView.hapticGain, 0.0f, 2.0f, "%.2f")) {
+                    playerView.mixer->setHapticGain(playerView.hapticGain);
+                    if (playerView.hapticGain > 0.0f && !playerView.mixer->hasHaptics() && playerView.mixer->hasDevice())
+                        playerView.mixer->openHaptics(); // turned on: the controller's device found now
+                }
+                if (ImGui::IsItemDeactivatedAfterEdit()) // saved once the drag ends
+                    od::saveConfigValue("haptics", std::to_string(playerView.hapticGain));
+                ImGui::SameLine();
+                ImGui::TextDisabled(playerView.mixer->hasHaptics() ? "(controle no cabo)" : "(sem DualSense no cabo)");
             }
             {
                 ImGui::SeparatorText("Idioma");

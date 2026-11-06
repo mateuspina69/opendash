@@ -1,5 +1,6 @@
 // SDL3 software mixer (see mixer.hpp).
 #include "audio/mixer.hpp"
+#include "audio/haptics.hpp"
 
 #include <SDL3/SDL.h>
 
@@ -166,6 +167,7 @@ Mixer::Mixer(std::filesystem::path sndDir) : sndDir_(std::move(sndDir)) {}
 
 Mixer::~Mixer() {
     if (stream_) SDL_DestroyAudioStream(stream_);
+    if (haptic_) SDL_DestroyAudioStream(haptic_);
 }
 
 bool Mixer::open() {
@@ -182,6 +184,70 @@ bool Mixer::open() {
     SDL_ResumeAudioStreamDevice(stream_);
     SDL_Log("audio: device open (%d Hz stereo float mix)", kRate);
     return true;
+}
+
+bool Mixer::openHaptics() {
+    std::lock_guard<std::mutex> g(lock_);
+    if (haptic_) SDL_DestroyAudioStream(haptic_);
+    haptic_ = nullptr;
+    if (!stream_) return false; // the bus is filled by the main output's callback
+    int n = 0;
+    SDL_AudioDeviceID* ids = SDL_GetAudioPlaybackDevices(&n);
+    SDL_AudioDeviceID found = 0;
+    for (int i = 0; i < n && !found; ++i) {
+        const char* name = SDL_GetAudioDeviceName(ids[i]);
+        SDL_AudioSpec spec{};
+        int frames = 0;
+        if (name && SDL_strcasestr(name, "dualsense") && SDL_GetAudioDeviceFormat(ids[i], &spec, &frames) &&
+            spec.channels >= 4)
+            found = ids[i];
+    }
+    SDL_free(ids);
+    if (!found) return false;
+    const SDL_AudioSpec spec{SDL_AUDIO_F32, 4, kRate};
+    haptic_ = SDL_OpenAudioDeviceStream(found, &spec, nullptr, nullptr);
+    if (!haptic_) {
+        SDL_Log("audio: DualSense haptics: %s", SDL_GetError());
+        return false;
+    }
+    hapticEnv_ = {};
+    hapticPhase_ = {};
+    SDL_ResumeAudioStreamDevice(haptic_);
+    SDL_Log("audio: DualSense haptics on '%s'", SDL_GetAudioDeviceName(found));
+    return true;
+}
+
+void Mixer::setHapticGain(float g) {
+    std::lock_guard<std::mutex> l(lock_);
+    hapticGain_ = std::clamp(g, 0.0f, 2.0f);
+}
+
+void Mixer::hapticSend(int frames) {
+    // the envelopes: ~1 ms attack, a tap's ~50 ms release, a thump's ~120 ms
+    static const float attack = 1.0f - std::exp(-1.0f / (0.001f * float(kRate))),
+                       tapRelease = 1.0f - std::exp(-1.0f / (0.050f * float(kRate))),
+                       thumpRelease = 1.0f - std::exp(-1.0f / (0.120f * float(kRate)));
+    constexpr float kPi = 3.14159265f, kTap = 180.0f / float(kRate), kThump = 80.0f / float(kRate);
+    const float drive = 2.5f * hapticGain_;
+    hapticOut_.assign(size_t(frames) * 4, 0.0f);
+    for (int i = 0; i < frames; ++i) {
+        const float tap = std::sin(2.0f * kPi * hapticPhase_[0]), thump = std::sin(2.0f * kPi * hapticPhase_[1]);
+        hapticPhase_[0] = std::fmod(hapticPhase_[0] + kTap, 1.0f);
+        hapticPhase_[1] = std::fmod(hapticPhase_[1] + kThump, 1.0f);
+        const float* in = &hapticBus_[size_t(i) * 4];
+        for (int c = 0; c < 2; ++c) {
+            const float light = in[c], heavy = in[2 + c];
+            float& el = hapticEnv_[size_t(c)];
+            float& eh = hapticEnv_[size_t(2 + c)];
+            el += (std::fabs(light) - el) * (std::fabs(light) > el ? attack : tapRelease);
+            eh += (std::fabs(heavy) - eh) * (std::fabs(heavy) > eh ? attack : thumpRelease);
+            const float x = 0.5f * (light + heavy) + el * tap + 1.5f * eh * thump;
+            hapticOut_[size_t(i) * 4 + 2 + size_t(c)] = std::tanh(x * drive);
+        }
+    }
+    // a tenth of a second queued at most (the controller's clock is not the main output's)
+    if (SDL_GetAudioStreamQueued(haptic_) > int(kRate / 10 * 4 * sizeof(float))) SDL_ClearAudioStream(haptic_);
+    SDL_PutAudioStreamData(haptic_, hapticOut_.data(), frames * int(4 * sizeof(float)));
 }
 
 void Mixer::callback(void* user, SDL_AudioStream* s, int additional, int) {
@@ -225,10 +291,14 @@ Mixer::Stats Mixer::stats() {
 }
 
 void Mixer::mix(float* out, int frames) {
+    const bool haptics = haptic_ && hapticGain_ > 0.0f;
+    if (haptics) hapticBus_.assign(size_t(frames) * 4, 0.0f);
     for (auto& [h, b] : buffers_) {
         if (!b.playing || b.paused || b.pcm.empty()) continue;
         const double step = double(b.freq) / kRate;
         const float gl = b.gain * b.pan[0], gr = b.gain * b.pan[1];
+        float* hap = haptics && b.haptic > 0.0f ? hapticBus_.data() + (b.hapticHeavy ? 2 : 0) : nullptr;
+        const float hk = b.haptic * b.hapticLevel * b.hapticNorm, hl = b.pan[0] * hk, hr = b.pan[1] * hk;
         const int64_t n = int64_t(b.pcm.size());
         for (int i = 0; i < frames; ++i) {
             int64_t k = int64_t(b.pos);
@@ -246,6 +316,10 @@ void Mixer::mix(float* out, int frames) {
             const float v = (float(b.pcm[size_t(k)]) * (1.0f - frac) + float(b.pcm[size_t(k1)]) * frac) / 32768.0f;
             out[i * 2] += v * gl;
             out[i * 2 + 1] += v * gr;
+            if (hap) {
+                hap[i * 4] += v * hl;
+                hap[i * 4 + 1] += v * hr;
+            }
             b.pos += step;
         }
     }
@@ -279,6 +353,7 @@ void Mixer::mix(float* out, int frames) {
         out[i] = v;
         peak_[size_t(i & 1)] = std::max(peak_[size_t(i & 1)], std::fabs(v));
     }
+    if (haptics) hapticSend(frames);
 }
 
 // FUN_0040a800: v == 0 -> -10000 cB, else ftol(v * (1/127) * 3000 - 3000)
@@ -387,6 +462,27 @@ void Mixer::pause(uint32_t h) {
 void Mixer::resume(uint32_t h) {
     std::lock_guard<std::mutex> g(lock_);
     if (auto it = buffers_.find(h); it != buffers_.end()) it->second.paused = false;
+}
+
+void Mixer::voiceSound(uint32_t h, uint16_t id) {
+    std::lock_guard<std::mutex> g(lock_);
+    auto it = buffers_.find(h);
+    if (it == buffers_.end()) return;
+    Buffer& b = it->second;
+    const HapticFeel f = hapticFeel(id);
+    b.haptic = f.weight;
+    b.hapticHeavy = f.heavy;
+    if (f.weight > 0.0f && b.hapticNorm == 0.0f) {
+        int peak = 0;
+        for (const int16_t v : b.pcm) peak = std::max(peak, std::abs(int(v)));
+        b.hapticNorm = 32768.0f / float(std::max(peak, 1638)); // at most 20x (a near-silent sample stays faint)
+    }
+}
+
+void Mixer::hapticVolume(uint32_t h, int32_t v) {
+    std::lock_guard<std::mutex> g(lock_);
+    if (auto it = buffers_.find(h); it != buffers_.end())
+        it->second.hapticLevel = std::clamp(float(v) / 127.0f, 0.0f, 1.0f);
 }
 
 uint32_t Mixer::createStream(std::span<const uint8_t> mp3, uint32_t loop) {

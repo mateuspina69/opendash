@@ -33,6 +33,7 @@ struct Config {
     std::string window;
     std::string fullscreenMode;
     bool vsync = true; // vsync= 0|1 (F1 Video, --vsync): presents wait for the display's refresh
+    float haptics = 0.0f; // haptics= 0..2 (F1 Som), experimental: the DualSense actuators' strength (audio/haptics), 0 = off
     std::string keys, pad, mouse;
     // fog= remaster|classic|off (F1 Visual), fog_distance= scale of the remaster fog's distance
     std::string fog = "remaster";

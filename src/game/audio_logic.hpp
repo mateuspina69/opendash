@@ -33,6 +33,10 @@ struct SoundBackend {
     virtual void stop(uint32_t h) { (void)h; }                               // exe 0x40a950
     virtual void pause(uint32_t h) { (void)h; }                              // exe 0x40aa00
     virtual void resume(uint32_t h) { (void)h; }                             // exe 0x40aa70
+    // OpenDash: the sound id the buffer's next play sounds (the DualSense haptics pick their sounds by it)
+    virtual void voiceSound(uint32_t h, uint16_t id) { (void)h; (void)id; }
+    // OpenDash: the buffer's volume as setVolume's, before the SFX master (0..127; the haptics' strength)
+    virtual void hapticVolume(uint32_t h, int32_t v) { (void)h; (void)v; }
     // exe 0x40ab60(data, size, loop): an MP3 stream (music slot / voice clip); returns its index
     virtual uint32_t createStream(std::span<const uint8_t> mp3, uint32_t loop) { (void)mp3; (void)loop; return 0; }
     virtual void destroyStream(uint32_t s) { (void)s; }                      // exe 0x40afd0
@@ -73,6 +77,8 @@ struct RecordingSoundBackend : SoundBackend {
     void stop(uint32_t h) override;
     void pause(uint32_t h) override;
     void resume(uint32_t h) override;
+    void voiceSound(uint32_t h, uint16_t id) override; // forwarded, not recorded
+    void hapticVolume(uint32_t h, int32_t v) override; // forwarded, not recorded
     uint32_t createStream(std::span<const uint8_t> mp3, uint32_t loop) override;
     void destroyStream(uint32_t s) override;
     void streamPlay(uint32_t s) override;

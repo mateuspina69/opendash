@@ -91,7 +91,7 @@ add_custom_target(od_build_id
 
 # --- app ---
 file(GLOB_RECURSE od_app_sources CONFIGURE_DEPENDS src/app/*.cpp)
-add_executable(opendash WIN32 ${od_app_sources} src/audio/mixer.cpp src/audio/music_loops.cpp
+add_executable(opendash WIN32 ${od_app_sources} src/audio/mixer.cpp src/audio/haptics.cpp src/audio/music_loops.cpp
     src/render/nvrhi_renderer.cpp src/render/imgui_nvrhi.cpp src/render/ui_pass.cpp src/render/upscaler_none.cpp
     src/render/upscaler_builtin.cpp)
 target_include_directories(opendash PRIVATE src)
@@ -254,7 +254,7 @@ target_link_libraries(test_ps1_music PRIVATE odengine)
 target_include_directories(test_ps1_music PRIVATE tests)
 add_test(NAME test_ps1_music COMMAND test_ps1_music ${OPENDASH_DISC_CUE})
 
-add_executable(test_ps1_mixer tests/test_ps1_mixer.cpp src/audio/mixer.cpp src/audio/music_loops.cpp)
+add_executable(test_ps1_mixer tests/test_ps1_mixer.cpp src/audio/mixer.cpp src/audio/haptics.cpp src/audio/music_loops.cpp)
 target_link_libraries(test_ps1_mixer PRIVATE odgame SDL3::SDL3)
 target_include_directories(test_ps1_mixer PRIVATE tests)
 add_test(NAME test_ps1_mixer COMMAND test_ps1_mixer ${OPENDASH_DISC_CUE})

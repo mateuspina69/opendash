@@ -275,6 +275,9 @@ uint32_t angleTo(const int32_t a[3], const int32_t b[3]) {
     return uint32_t(x87::atanAngle(atanScale(), dx, dz)) & 0xfff; // engine/x87
 }
 
+// OpenDash: the last voice volume set before the SFX master (the DualSense haptics do not follow the volume options)
+uint8_t unmasteredVolume = 0;
+
 // exe 0x5d4af0(voice, l, r): the pan from the two sides' volumes, the volume the louder one's, by the SFX master
 void setVoicePanVolume(SfxVoice& v, int32_t l, int32_t r) {
     if (l == 0 && r == 0) {
@@ -287,6 +290,7 @@ void setVoicePanVolume(SfxVoice& v, int32_t l, int32_t r) {
         v.volume = uint8_t(r);
         v.pan = uint8_t(ftol(double(f32(double(f32(double(f32(double(l) / double(r))) * 64.0)) + 63.0))));
     }
+    unmasteredVolume = v.volume;
     v.volume = uint8_t(int32_t(v.volume) * int32_t(soundMasters().sfx) / kSoundMasterFull);
 }
 
@@ -385,6 +389,7 @@ void startVoice(const Start& s) {
     v.buffer = e.buffer;
     const uint8_t vol = e.volume;
     SoundContext& ctx = soundContext();
+    be().voiceSound(v.buffer, ctx.request.id);
     if (ctx.request.kind == uint16_t(SoundRequestKind::Loop)) {
         LoopVoices& loops = loopVoices();
         const uint32_t k = uint32_t(s.voice) - kFirstLoopVoice;
@@ -402,6 +407,7 @@ void startVoice(const Start& s) {
     case SoundMode::Flat:
         v.volume = vol;
         v.pan = kCentrePan;
+        unmasteredVolume = vol;
         break;
     case SoundMode::Panned: explicitPan(v, vol, ctx.request.x, ctx.request.z); break;
     case SoundMode::AtPoint: {
@@ -418,6 +424,7 @@ void startVoice(const Start& s) {
     default: break;
     }
     be().setVolume(v.buffer, int32_t(v.volume) * int32_t(soundMasters().sfx) >> 7);
+    be().hapticVolume(v.buffer, unmasteredVolume);
     be().setPan(v.buffer, v.pan);
     v.loop = 0;
     v.playing = be().play(v.buffer, v.frequency) ? 1 : 0;
@@ -634,6 +641,7 @@ void updateLoopVoices() {
         be().setFrequency(v.buffer, freq);
         be().setPan(v.buffer, v.pan);
         be().setVolume(v.buffer, (int32_t(v.volume) * int32_t(soundMasters().sfx)) >> 7);
+        be().hapticVolume(v.buffer, unmasteredVolume);
         lv.keep = uint8_t(keep);
     }
 }
@@ -764,6 +772,12 @@ void RecordingSoundBackend::setFrequency(uint32_t h, uint32_t f) {
 void RecordingSoundBackend::stop(uint32_t h) {
     calls.push_back({SoundCall::Stop, h, 0});
     if (next) next->stop(h);
+}
+void RecordingSoundBackend::voiceSound(uint32_t h, uint16_t id) {
+    if (next) next->voiceSound(h, id);
+}
+void RecordingSoundBackend::hapticVolume(uint32_t h, int32_t v) {
+    if (next) next->hapticVolume(h, v);
 }
 void RecordingSoundBackend::pause(uint32_t h) {
     calls.push_back({SoundCall::Pause, h, 0});
