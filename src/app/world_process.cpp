@@ -735,6 +735,9 @@ int run(const WorldArgs& w) {
             const auto state = m.playerState.empty() ? std::nullopt : od::port::decodePlayerState(m.playerState);
             switch (m.type) {
             case WorldMessageType::Join:
+                // the owner's game starts its updates over when it binds a room: the mirror of an earlier stay here would
+                // take every new update as old and keep the player as it last was
+                if (m.playerId < od::port::kPlayerSlots) mirrors[m.playerId] = RemoteMirror{};
                 if (state && m.playerId < od::port::kPlayerSlots) od::port::remotePlayerJoin(m.playerId, state->snapshot);
                 break;
             case WorldMessageType::State:
@@ -746,6 +749,7 @@ int run(const WorldArgs& w) {
                 {
                     od::port::eventOwnerLeft(m.playerId);
                     od::port::remotePlayerLeave(m.playerId);
+                    mirrors[m.playerId] = RemoteMirror{};
                 }
                 break;
             case WorldMessageType::StageState:
