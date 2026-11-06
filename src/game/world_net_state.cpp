@@ -26,6 +26,7 @@
 #include "game/shots/hyper_shell_state.hpp"
 #include "game/loaded_data.hpp"
 #include "game/model_data.hpp"
+#include "game/modern_aim.hpp"
 #include "game/stage_state.hpp"
 
 #include "game/light_column.hpp"
@@ -508,7 +509,9 @@ template <class Pool> void captureMeshPool(NetWorldTable& table, Pool& pool, siz
                 for (size_t i = 0; i < 4; ++i) s.effectStart.params[i] = a.params[i];
                 // what the fire aimed at (as a client's fire hands them to the world: remote_combat's NetFire)
                 const ShotActor& shot = static_cast<const ShotActor&>(a);
-                s.effectStart.trail = {shot.aimPoint.x, shot.aimPoint.y, shot.aimPoint.z, shot.aimPoint.spare, 0, 0, 0, 0};
+                // ... and the angles it left with (its owner's crosshair): a client's copy aims as the owner's did
+                s.effectStart.trail = {shot.aimPoint.x, shot.aimPoint.y, shot.aimPoint.z, shot.aimPoint.spare,
+                                       shot.rotation.x, shot.rotation.y, 1, 0};
                 s.effectStart.second = shot.target && (shot.target->flags & kActorLive) ? shot.target->slot : kNetNoParent;
             }
         }
@@ -1489,6 +1492,8 @@ void PoolNetActors::effect(const NetEffect& e) {
     }
     if (e.pool == kShotClass) {
         head.loopFlags = e.loopFlags;
+        // its class aims it (its first state) as its owner did: the angles it left the owner's hand with
+        if (e.trail[6] != 0) setPlayerShotAim(head.ownerPlayer, true, e.trail[4], e.trail[5]);
         ShotActor& shot = asShot(head);
         shot.aimPoint.x = e.trail[0];
         shot.aimPoint.y = e.trail[1];

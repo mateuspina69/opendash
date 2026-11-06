@@ -28,6 +28,9 @@ void modernAimCollectTargets(uint32_t count);
 // the angles from `from` (16.16) to the aim point, as a shot's rotation; false: no free aim now, or the point is too
 // close to the muzzle to give a direction
 bool modernAimAngles(const int32_t from[3], int16_t& pitch, int16_t& yaw);
+// a session: the angles another machine's player (this table's) fired with, which their shots here take (set: false: the
+// shot left along the body, as the exe's)
+void setPlayerShotAim(size_t player, bool set, int16_t pitch, int16_t yaw);
 // the crosshair, while the player can fire with the free aim: white, red over a target
 std::vector<hud::Prim> modernAimDraw();
 

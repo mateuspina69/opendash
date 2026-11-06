@@ -3,6 +3,7 @@
 #include "game/player/remote_combat.hpp"
 
 #include "game/actor_pools.hpp"
+#include "game/modern_aim.hpp"
 #include "game/player/player_state.hpp"
 
 namespace od::port {
@@ -107,6 +108,8 @@ NetFire netFireOf(const ShotActor& shot, uint8_t clientSlot, uint16_t serial) {
     for (size_t i = 0; i < 4; ++i) f.params[i] = shot.params[i];
     f.aimPoint = {shot.aimPoint.x, shot.aimPoint.y, shot.aimPoint.z, shot.aimPoint.spare};
     f.target = shot.target ? shot.target->slot : uint8_t(0);
+    f.pitch = shot.rotation.x;
+    f.yaw = shot.rotation.y;
     return f;
 }
 
@@ -115,6 +118,7 @@ ShotActor* startFiredShot(size_t playerId, const NetFire& fire) {
     if (address == 0) return nullptr;
     ShotActor& shot = shotActorAt(address);
     shot.ownerPlayer = uint8_t(playerId);
+    setPlayerShotAim(playerId, true, fire.pitch, fire.yaw); // its class aims it as the owner did
     shot.flags = fire.flags;
     shot.type = fire.type;
     shot.variant = fire.variant;
@@ -190,6 +194,8 @@ std::vector<uint8_t> encode(const NetFire& v) {
     for (const uint8_t p : v.params) o.u8(p);
     for (const int16_t c : v.aimPoint) o.i16(c);
     o.u8(v.target);
+    o.i16(v.pitch);
+    o.i16(v.yaw);
     return std::move(o.b);
 }
 std::optional<NetFire> decodeFire(std::span<const uint8_t> b) {
@@ -204,6 +210,8 @@ std::optional<NetFire> decodeFire(std::span<const uint8_t> b) {
     for (uint8_t& p : v.params) p = r.u8();
     for (int16_t& c : v.aimPoint) c = r.i16();
     v.target = r.u8();
+    v.pitch = r.i16();
+    v.yaw = r.i16();
     return r.done() ? std::optional(v) : std::nullopt;
 }
 

@@ -34,6 +34,7 @@ struct NetFire {
     std::array<uint8_t, 4> params{};
     std::array<int16_t, 4> aimPoint{};
     uint8_t target = 0;       // the target's slot id (0: none)
+    int16_t pitch = 0, yaw = 0; // the angles the shot left the owner's hand with (their crosshair's, with the free aim)
     friend bool operator==(const NetFire&, const NetFire&) = default;
 };
 NetFire netFireOf(const ShotActor& shot, uint8_t clientSlot, uint16_t serial);

@@ -12,6 +12,7 @@
 #include "game/modern_play.hpp"
 #include "game/player/player_state.hpp"
 #include "game/player/player_weapons.hpp"
+#include "game/player/remote_player.hpp"
 
 namespace od::port {
 
@@ -67,7 +68,18 @@ bool aimPoint(float out[3]) {
 
 bool freeAimOn() { return g_ray.on && modernPlay() && player().lockedActor == nullptr; }
 
+// another machine's player (a session): the angles their own shot left with, from their crosshair
+struct ShotAim {
+    bool set = false;
+    int16_t pitch = 0, yaw = 0;
+};
+std::array<ShotAim, kPlayerSlots> g_shotAim{};
+
 } // namespace
+
+void setPlayerShotAim(size_t player, bool set, int16_t pitch, int16_t yaw) {
+    if (player < g_shotAim.size()) g_shotAim[player] = {set, pitch, yaw};
+}
 
 void modernAimSetRay(const AimRay& ray) { g_ray = ray; }
 
@@ -92,6 +104,14 @@ void modernAimCollectTargets(uint32_t count) {
 }
 
 bool modernAimAngles(const int32_t from[3], int16_t& pitch, int16_t& yaw) {
+    // a session's other player: their crosshair is on their machine, the angles their shot left with came with it
+    if (const size_t acting = playerId(actingPlayer()); playerIsRemote(acting)) {
+        const ShotAim& a = g_shotAim[acting];
+        if (!a.set) return false;
+        pitch = a.pitch;
+        yaw = a.yaw;
+        return true;
+    }
     if (!freeAimOn()) return false;
     float at[3];
     aimPoint(at);
