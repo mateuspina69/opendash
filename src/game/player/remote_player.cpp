@@ -7,6 +7,7 @@
 #include "game/actor_pools.hpp"
 #include "game/event.hpp"
 #include "game/player/player_animation.hpp"
+#include "game/player/player_input.hpp"
 #include "game/player/player_interaction.hpp"
 #include "game/world_net_state.hpp"
 #include "game/world_view.hpp"
@@ -31,6 +32,8 @@ void remotePlayerJoin(size_t id, const PlayerSnapshot& s) {
     const CollisionBoxRef box = player().collisionBox;
     const int16_t maxHitPoints = player().maxHitPoints;
     joinPlayer(id);
+    // its owner's buttons come as what they do (applyNetArm: the special held): the game's map names their bits here
+    copyDefaultButtonMap(playerById(id));
     g_remote[id] = true;
     setWorldPlayerCamera(id, {});
     Player& p = playerById(id);
