@@ -751,10 +751,15 @@ int run(const WorldArgs& w) {
             const auto state = m.playerState.empty() ? std::nullopt : od::port::decodePlayerState(m.playerState);
             switch (m.type) {
             case WorldMessageType::Join:
-                // the owner's game starts its updates over when it binds a room: the mirror of an earlier stay here would
-                // take every new update as old and keep the player as it last was
-                if (m.playerId < od::port::kPlayerSlots) mirrors[m.playerId] = RemoteMirror{};
-                if (state && m.playerId < od::port::kPlayerSlots) od::port::remotePlayerJoin(m.playerId, state->snapshot);
+                // the owner's game starts its numbering over when it binds a room (its first updates then carry every
+                // field); when it did not (a scene's or a warp's join) it goes on with what changed: the mirror keeps its
+                // fields and takes the next update whatever its number
+                if (m.playerId < od::port::kPlayerSlots) mirrors[m.playerId].from.acceptRestart();
+                if (state && m.playerId < od::port::kPlayerSlots) {
+                    od::port::remotePlayerJoin(m.playerId, state->snapshot);
+                    // what they wore here before (their game tells it on a change only)
+                    if (!equipOf[m.playerId].empty()) od::port::applyEquipment(od::port::playerById(m.playerId), equipOf[m.playerId]);
+                }
                 break;
             case WorldMessageType::State:
                 if (state && m.playerId < od::port::kPlayerSlots && od::port::playerIsRemote(m.playerId))
@@ -765,8 +770,8 @@ int run(const WorldArgs& w) {
                 {
                     od::port::eventOwnerLeft(m.playerId);
                     od::port::remotePlayerLeave(m.playerId);
-                    mirrors[m.playerId] = RemoteMirror{};
-                    equipOf[m.playerId].clear();
+                    mirrors[m.playerId].heard = false; // not shown to the others until they are back and heard
+                    mirrors[m.playerId].from.acceptRestart(); // (what they wear stays: their game tells it on a change only)
                 }
                 break;
             case WorldMessageType::StageState:

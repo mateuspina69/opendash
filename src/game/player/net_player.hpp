@@ -98,6 +98,9 @@ public:
     // an update: its head, or nothing for a stale or a bad one
     std::optional<NetPlayerHeard> apply(std::span<const uint8_t> bytes);
     const NetPlayerFields& fields() const { return fields_; }
+    // the sender may have started its numbering over (its game bound a room): the next update counts whatever its number,
+    // onto the fields held (a sender that did not start over goes on with what changed since them)
+    void acceptRestart() { any_ = false; }
 
 private:
     NetPlayerFields fields_;
