@@ -705,9 +705,10 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
         if (!filter_(slot)) continue;
         Known& k = known_[i];
         const NetWorldActor& a = table.actors[i];
-        // a client's own shot, and what it started: the client runs those itself
-        const bool withheld = a.live && a.owner == ownShotsOf_ &&
-                              ((slot >= kShotClass && slot < kShotClass + ShotPool::size()) || a.startedByShot);
+        // a client's own shot: the client runs it itself. What a player's shot started: every client runs it itself, from
+        // its own shot or from the copy it runs of another player's (the world's hits; its pictures would be a second set)
+        const bool shotSlot = slot >= kShotClass && slot < kShotClass + ShotPool::size();
+        const bool withheld = a.live && ((shotSlot && a.owner == ownShotsOf_) || (a.startedByShot && ownShotsOf_ != kNetNoPlayer));
         const bool live = a.live && !withheld;
         const bool same = k.told && live && a.generation == k.generation;
         if (same && !k.effect && a.flashTick != k.flashTold) {

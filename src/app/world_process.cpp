@@ -31,6 +31,7 @@
 #include "game/actors.hpp"
 #include "game/demo_playback.hpp"
 #include "game/display.hpp"
+#include "game/modern_aim.hpp"
 #include "game/encounter.hpp"
 #include "game/event.hpp"
 #include "game/global_state.hpp"
@@ -564,6 +565,7 @@ int run(const WorldArgs& w) {
             for (size_t c = 0; c < 2; ++c) m.tracks[c].step(f.channels[c], f.stageAnims, m.ownerTick);
             od::port::remotePlayerState(id, od::port::netPlayerSnapshot(f, m.tracks));
             od::port::applyNetArm(od::port::playerById(id), f);
+            od::port::setPlayerAimPoint(id, f.aimSet != 0, f.aimPoint); // their shots and beams aim at their crosshair
             od::port::setWorldPlayerCamera(id, f.camera);
         }
     };

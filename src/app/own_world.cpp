@@ -28,6 +28,7 @@
 #include "game/event.hpp"
 #include "game/game_state.hpp"
 #include "game/global_state.hpp"
+#include "game/modern_aim.hpp"
 #include "game/pickups.hpp"
 #include "game/player/player_interaction.hpp"
 #include "game/hit_list.hpp"
@@ -564,6 +565,7 @@ void OwnWorldClient::otherPlayerRules(uint8_t id, Other& o, const od::port::Play
     const od::port::NetPlayerFields& f = o.from.fields();
     p.status = uint16_t((p.status & od::port::kStatusMarkerMask) | f.status);
     od::port::applyNetArm(p, f);
+    od::port::setPlayerAimPoint(table, f.aimSet != 0, f.aimPoint); // their shots and beams here aim at their crosshair
     if (actors_->shotRunsFor(table)) { // the world's copy says when it ends, the owner's fields come later
         p.specialFiring = 1;
         p.held |= p.button(od::port::PlayerButton::Special);

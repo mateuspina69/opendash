@@ -7,6 +7,7 @@
 // exe's aim: the ray is off while one is held.
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <vector>
 
@@ -31,6 +32,10 @@ bool modernAimAngles(const int32_t from[3], int16_t& pitch, int16_t& yaw);
 // a session: the angles another machine's player (this table's) fired with, which their shots here take (set: false: the
 // shot left along the body, as the exe's)
 void setPlayerShotAim(size_t player, bool set, int16_t pitch, int16_t yaw);
+// ... and the point another machine's player's crosshair is on now (set false: no free aim)
+void setPlayerAimPoint(size_t player, bool set, const std::array<int16_t, 3>& point);
+// this machine's player: the point the crosshair is on (false: no free aim now)
+bool modernAimPointNow(std::array<int16_t, 3>& out);
 // the crosshair, while the player can fire with the free aim: white, red over a target
 std::vector<hud::Prim> modernAimDraw();
 

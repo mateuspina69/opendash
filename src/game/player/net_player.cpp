@@ -8,6 +8,7 @@
 #include "game/animation_data.hpp"
 #include "game/actor_state.hpp"
 #include "game/player/player_animation.hpp"
+#include "game/modern_aim.hpp"
 #include "game/player/player_state.hpp"
 
 namespace od::port {
@@ -16,7 +17,8 @@ namespace {
 
 constexpr uint32_t kKeyBytes = 4;
 constexpr uint16_t kX = 1 << 0, kY = 1 << 1, kZ = 1 << 2, kYaw = 1 << 3, kPitch = 1 << 4, kLean = 1 << 5, kFlags = 1 << 6, kLight = 1 << 7,
-                   kMaskStageAnims = 1 << 8, kFace = 1 << 9, kLook = 1 << 10, kChannel0 = 1 << 11, kChannel1 = 1 << 12, kFight = 1 << 13, kCamera = 1 << 14;
+                   kMaskStageAnims = 1 << 8, kFace = 1 << 9, kLook = 1 << 10, kChannel0 = 1 << 11, kChannel1 = 1 << 12, kFight = 1 << 13, kCamera = 1 << 14,
+                   kAim = 1 << 15;
 constexpr uint8_t kChannelAge = 1, kChannelKey = 2, kChannelHeld = 4;
 
 struct Out {
@@ -73,6 +75,7 @@ uint16_t maskOf(const NetPlayerFields& n, const NetPlayerFields& o) {
     if (!(n.channels[1] == o.channels[1])) m |= kChannel1;
     if (n.status != o.status || n.charge != o.charge || n.specialFiring != o.specialFiring || n.downed != o.downed || n.specialHeld != o.specialHeld) m |= kFight;
     if (n.camera.known && !(n.camera == o.camera)) m |= kCamera;
+    if (n.aimSet != o.aimSet || (n.aimSet && n.aimPoint != o.aimPoint)) m |= kAim;
     return m;
 }
 
@@ -114,6 +117,7 @@ NetPlayerFields NetPlayerWatch::see(const Player& p, uint32_t tick) {
     f.downed = playerIsDowned(p) ? 1 : 0;
     f.specialHeld = p.holds(PlayerButton::Special) && (p.armFlags & kArmSpecial) ? 1 : 0;
     f.specialFiring = uint8_t(p.specialFiring);
+    f.aimSet = modernAimPointNow(f.aimPoint) ? 1 : 0;
     const std::array<const AnimChannel*, 2> channels = {&p.body, &p.upper};
     for (size_t i = 0; i < 2; ++i) {
         const AnimChannel& ch = *channels[i];
@@ -173,8 +177,10 @@ std::vector<uint8_t> NetPlayerSender::update(uint8_t playerId, uint32_t tick, co
     o.u16(sequence);
     o.u32(tick);
     // started over (a receiver that may hold anything): every field until one update is acknowledged
-    constexpr uint16_t kAll = uint16_t(kCamera | (kCamera - 1));
-    const uint16_t mask = full_ ? kAll : uint16_t(maskOf(now, acked_) | maskOf(now, sent_));
+    constexpr uint16_t kAll = uint16_t(kAim | (kAim - 1));
+    // (a camera not known yet is not sent: the receiver would take it as one)
+    const uint16_t mask = full_ ? uint16_t(now.camera.known ? kAll : (kAll & ~kCamera))
+                                : uint16_t(maskOf(now, acked_) | maskOf(now, sent_));
     o.u16(mask);
     if (mask & kX) o.i16(now.pos[0]);
     if (mask & kY) o.i16(now.pos[1]);
@@ -235,6 +241,11 @@ std::vector<uint8_t> NetPlayerSender::update(uint8_t playerId, uint32_t tick, co
         const std::array<uint16_t, 3>& a = now.camera.angles;
         o.u32(uint32_t(a[0] & 0xfff) | uint32_t(a[1] & 0xfff) << 12 | uint32_t(a[2] & 0xff) << 24);
         o.u8(uint8_t((a[2] & 0xfff) >> 8));
+    }
+    if (mask & kAim) {
+        o.u8(now.aimSet);
+        if (now.aimSet)
+            for (const int16_t v : now.aimPoint) o.i16(v);
     }
     inFlight_.push_back({sequence, now});
     while (inFlight_.size() > 64) inFlight_.pop_front();
@@ -326,6 +337,11 @@ std::optional<NetPlayerHeard> NetPlayerReceiver::apply(std::span<const uint8_t> 
         const uint8_t high = r.u8();
         f.camera.angles = {uint16_t(a & 0xfff), uint16_t(a >> 12 & 0xfff), uint16_t((a >> 24) | uint32_t(high & 0xf) << 8)};
         f.camera.known = true;
+    }
+    if (mask & kAim) {
+        f.aimSet = r.u8();
+        if (f.aimSet)
+            for (int16_t& v : f.aimPoint) v = r.i16();
     }
     if (!r.ok || r.at != bytes.size()) return std::nullopt;
     fields_ = f;

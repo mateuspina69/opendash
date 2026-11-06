@@ -68,17 +68,53 @@ bool aimPoint(float out[3]) {
 
 bool freeAimOn() { return g_ray.on && modernPlay() && player().lockedActor == nullptr; }
 
-// another machine's player (a session): the angles their own shot left with, from their crosshair
-struct ShotAim {
-    bool set = false;
+// another machine's player (a session): the angles their shot just fired left with (taken by its first aim, once), and
+// the point their crosshair is on now (what a held beam follows)
+struct RemoteAim {
+    bool shotSet = false;
     int16_t pitch = 0, yaw = 0;
+    bool pointSet = false;
+    float point[3]{};
 };
-std::array<ShotAim, kPlayerSlots> g_shotAim{};
+std::array<RemoteAim, kPlayerSlots> g_remoteAim{};
+
+// the angles from `from` (16.16) to the point `at`, about the body's facing `body` (false: too near for a direction)
+bool anglesTo(const int32_t from[3], const float at[3], int body, int16_t& pitch, int16_t& yaw) {
+    float dist = 0.0f;
+    int32_t to[3];
+    for (int q = 0; q < 3; ++q) {
+        to[q] = int32_t(std::clamp(at[q], -32767.0f, 32767.0f) * 65536.0f); // the far end may leave the 16.16 range
+        const float d = at[q] - float(from[q]) / 65536.0f;
+        dist += d * d;
+    }
+    if (dist < kMinAimDistance * kMinAimDistance) return false;
+    const int off = signedAngle(angleOf(from[0], from[2], to[0], to[2]) - kHalfTurn - body);
+    yaw = signedAngle(body + std::clamp(off, -kMaxYawOff, kMaxYawOff));
+    pitch = int16_t(std::clamp(int(signedAngle(pitchOf(from, to) - kHalfTurn)), -kMaxPitch, kMaxPitch));
+    return true;
+}
 
 } // namespace
 
 void setPlayerShotAim(size_t player, bool set, int16_t pitch, int16_t yaw) {
-    if (player < g_shotAim.size()) g_shotAim[player] = {set, pitch, yaw};
+    if (player >= g_remoteAim.size()) return;
+    g_remoteAim[player].shotSet = set;
+    g_remoteAim[player].pitch = pitch;
+    g_remoteAim[player].yaw = yaw;
+}
+
+void setPlayerAimPoint(size_t player, bool set, const std::array<int16_t, 3>& point) {
+    if (player >= g_remoteAim.size()) return;
+    g_remoteAim[player].pointSet = set;
+    for (int q = 0; q < 3; ++q) g_remoteAim[player].point[q] = float(point[q]);
+}
+
+bool modernAimPointNow(std::array<int16_t, 3>& out) {
+    if (!freeAimOn()) return false;
+    float at[3];
+    aimPoint(at);
+    for (int q = 0; q < 3; ++q) out[q] = int16_t(std::clamp(std::lround(at[q]), -32767L, 32767L));
+    return true;
 }
 
 void modernAimSetRay(const AimRay& ray) { g_ray = ray; }
@@ -104,30 +140,22 @@ void modernAimCollectTargets(uint32_t count) {
 }
 
 bool modernAimAngles(const int32_t from[3], int16_t& pitch, int16_t& yaw) {
-    // a session's other player: their crosshair is on their machine, the angles their shot left with came with it
+    // a session's other player: their crosshair is on their machine. A shot of theirs that just fired takes the angles it
+    // left their hand with (once); else (a held beam, their upper body) the point their crosshair is on now
     if (const size_t acting = playerId(actingPlayer()); playerIsRemote(acting)) {
-        const ShotAim& a = g_shotAim[acting];
-        if (!a.set) return false;
-        pitch = a.pitch;
-        yaw = a.yaw;
-        return true;
+        RemoteAim& a = g_remoteAim[acting];
+        if (a.shotSet) {
+            a.shotSet = false;
+            pitch = a.pitch;
+            yaw = a.yaw;
+            return true;
+        }
+        return a.pointSet && anglesTo(from, a.point, actingPlayer().rotation.y, pitch, yaw);
     }
     if (!freeAimOn()) return false;
     float at[3];
     aimPoint(at);
-    float dist = 0.0f;
-    int32_t to[3];
-    for (int q = 0; q < 3; ++q) {
-        to[q] = int32_t(std::clamp(at[q], -32767.0f, 32767.0f) * 65536.0f); // the far end may leave the 16.16 range
-        const float d = at[q] - float(from[q]) / 65536.0f;
-        dist += d * d;
-    }
-    if (dist < kMinAimDistance * kMinAimDistance) return false;
-    const int body = player().rotation.y;
-    const int off = signedAngle(angleOf(from[0], from[2], to[0], to[2]) - kHalfTurn - body);
-    yaw = signedAngle(body + std::clamp(off, -kMaxYawOff, kMaxYawOff));
-    pitch = int16_t(std::clamp(int(signedAngle(pitchOf(from, to) - kHalfTurn)), -kMaxPitch, kMaxPitch));
-    return true;
+    return anglesTo(from, at, player().rotation.y, pitch, yaw);
 }
 
 std::vector<hud::Prim> modernAimDraw() {

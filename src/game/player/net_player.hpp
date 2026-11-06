@@ -43,6 +43,10 @@ struct NetPlayerFields {
     uint8_t downed = 0; // down, for a teammate to revive
     uint8_t specialHeld = 0; // the special button held with the arm out: a swing, a beam, a suction goes on
     PlayerCamera camera;     // the owner's camera, for what their world counts as seen (it goes no further)
+    // the owner's free aim (game/modern_aim): the point their crosshair is on, which their shots aim at on every machine
+    // (a held beam follows it); aimSet 0: no free aim now (a lock-on, the classic aim)
+    uint8_t aimSet = 0;
+    std::array<int16_t, 3> aimPoint{};
     friend bool operator==(const NetPlayerFields&, const NetPlayerFields&) = default;
 };
 
