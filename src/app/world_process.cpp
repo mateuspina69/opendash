@@ -764,7 +764,10 @@ int run(const WorldArgs& w) {
                 }
                 break;
             case WorldMessageType::NetJoin:
+                // a client that joins (again: its game bound the room anew) holds nothing yet: it is told all of it
+                netClients.erase(m.playerId);
                 netClients.try_emplace(m.playerId, od::port::netSlotNetworked, m.playerId);
+                std::erase_if(playerSenders, [&](const auto& s) { return s.first.first == m.playerId; });
                 if (sceneOn) sceneStartMessage(m.playerId); // joining during a scene: they watch it
                 for (size_t f = 0; f < roomPlayerFields.size(); ++f)
                     if (roomPlayerFields[f]) roomPlayerMessage(m.playerId, od::port::RoomPlayerField(f), *roomPlayerFields[f]);

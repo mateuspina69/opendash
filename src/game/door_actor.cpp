@@ -67,7 +67,9 @@ void doorUpdate(StaticActor& actor) {
     case DoorState::Closed: {
         const uint32_t back = (uint16_t(actor.rotation.y) - uint32_t(kHalfTurn)) & kAngleMask;
         bool asked = false; // a player facing the door whose talk target it is
-        forEachPlayer([&](const Player& p) {
+        // a session's world: a door is each player's own game's (its yes, its scene, its room change); the world's copy
+        // only stands there
+        if (!worldHasNoView()) forEachPlayer([&](const Player& p) {
             const uint32_t facing = (uint16_t(p.rotation.y) + kFacingBias) & kAngleMask;
             int d = int(facing) - int(back);
             if (d < 0) d = int(back) - int(facing);
