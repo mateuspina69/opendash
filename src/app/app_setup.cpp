@@ -388,20 +388,12 @@ int App::init() {
             } catch (const std::invalid_argument& e) {
                 SDL_Log("netplay settings: %s (netplay off)", e.what());
             }
-            // a netplay session is co-op: the host's game runs the session's worlds (from the save it loads in game), a
-            // client follows the host's save and room
-            const std::filesystem::path self = std::filesystem::path(SDL_GetBasePath() ? SDL_GetBasePath() : "") / "opendash.exe";
             gameDir = cfg.exePath.parent_path(); // the game's saves, for a save named by its slot
+            netplay.start(NetSettings{}, mirrorArg, cfg.datDir, cfg.exePath, cfg.data == "disc" ? playerView.disc.get() : nullptr);
             if (net.mode != NetMode::Off || !devWorldSave.empty()) {
-                playerView.ownWorld = std::make_shared<OwnWorldClient>(self, resolveSavePath(devWorldSave));
-                for (const auto& f : coopSetup) f(*playerView.ownWorld);
-                netplay.setWorldMode(true);
-            }
-            netplay.start(net, mirrorArg, cfg.datDir, cfg.exePath, cfg.data == "disc" ? playerView.disc.get() : nullptr);
-            if (playerView.ownWorld) {
-                playerView.ownWorld->useSession(netplay.session(), net.mode == NetMode::Host);
-                if (net.mode != NetMode::Off && !netplay.session()) // the session did not start: say so
-                    playerView.ownWorld->notice("Netplay did not start: " + netplay.error());
+                const std::string why = sessionStart(net);
+                if (!why.empty() && playerView.ownWorld) // the session did not start: say so
+                    playerView.ownWorld->notice("Netplay did not start: " + why);
             }
         }
         stages = scanStages();
@@ -523,6 +515,17 @@ int App::init() {
     titleScreen.gameDir = gameDir;
     titleScreen.savesDir = savesDir;
     titleScreen.bindHost(&playerView.fadeTask);
+    if (!scripted) { // the title menu's multiplayer row (a scripted run keeps the game's four rows)
+        lobby.setDefaults(lobbyDefaults(cfg, netFlags));
+        lobby.setHooks({[this](const NetSettings& net) {
+                            std::string why = sessionStart(net);
+                            if (!why.empty()) sessionStop(); // the lobby says why, and nothing of it stays
+                            return why;
+                        },
+                        [this] { sessionStop(); },
+                        [this] { return netplay.sessionActive(); }, [this] { return netplay.status(SDL_GetTicksNS()); }});
+        titleScreen.host.lobby = [this](std::vector<od::port::ScreenPrim>* draw) { return lobby.frame(draw); };
+    }
     if (playerView.ok && !playerView.play && !motionSelfTest &&
         (titleModeArg >= 0 || (!skipTitle && loadArg.empty() && newGameArg < 0 && !startPlay && !stageGiven))) {
         titleScreen.start(uint8_t(std::clamp(titleModeArg, 0, 5)));
@@ -802,6 +805,26 @@ void App::applyFlags() {
             if (playerView.ownWorld) playerView.ownWorld->startFlag(f, false, od::port::gameState().stage);
             SDL_Log("flag 0x%x cleared", f);
         }
+}
+
+std::string App::sessionStart(const NetSettings& net) {
+    // a netplay session is co-op: the host's game runs the session's worlds (from the game it starts), a client follows
+    // the host's state and room
+    sessionStop();
+    const std::filesystem::path self = std::filesystem::path(SDL_GetBasePath() ? SDL_GetBasePath() : "") / "opendash.exe";
+    playerView.ownWorld = std::make_shared<OwnWorldClient>(self, resolveSavePath(devWorldSave));
+    for (const auto& f : coopSetup) f(*playerView.ownWorld);
+    netplay.setWorldMode(true);
+    netplay.startSession(net, cfg.datDir, cfg.exePath, cfg.data == "disc" ? playerView.disc.get() : nullptr);
+    playerView.ownWorld->useSession(netplay.session(), net.mode == NetMode::Host);
+    if (net.mode != NetMode::Off && !netplay.session()) return netplay.error().empty() ? "the session did not start" : netplay.error();
+    return "";
+}
+
+void App::sessionStop() {
+    netplay.stop();
+    playerView.ownWorld.reset();
+    netplay.setWorldMode(false);
 }
 
 void App::leaveTitle() {

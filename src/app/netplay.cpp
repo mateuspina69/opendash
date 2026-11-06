@@ -54,10 +54,29 @@ NetSettings resolveNetSettings(const od::Config& cfg, const NetFlags& flags) {
     return s;
 }
 
+NetSettings lobbyDefaults(const od::Config& cfg, const NetFlags& flags) {
+    NetSettings s;
+    const int port = flags.port ? *flags.port : cfg.netPort;
+    s.port = port > 0 && port <= 65535 ? uint16_t(port) : kDefaultNetPort;
+    s.join = flags.join ? *flags.join : cfg.netJoin;
+    s.name = flags.name ? *flags.name : cfg.netName;
+    if (s.name.empty()) s.name = userName();
+    s.key = flags.key ? *flags.key : cfg.netKey;
+    s.sim = flags.sim;
+    return s;
+}
+
 void Netplay::start(const NetSettings& settings, const std::optional<MirrorSettings>& mirror,
                     const std::filesystem::path& datDir, const std::filesystem::path& exe, const od::DiscImage* disc) {
     mirror_ = mirror;
     if (mirror_) claimSlot(Source::Kind::Mirror, 0, "mirror");
+    startSession(settings, datDir, exe, disc);
+}
+
+void Netplay::startSession(const NetSettings& settings, const std::filesystem::path& datDir, const std::filesystem::path& exe,
+                           const od::DiscImage* disc) {
+    session_.reset();
+    error_.clear();
     if (settings.mode == NetMode::Off) return;
     try {
         od::net::SessionConfig c;

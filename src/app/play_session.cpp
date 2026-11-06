@@ -86,6 +86,7 @@
 #include "game/projection_state.hpp"
 #include "game/room_grid.hpp"
 #include "game/save_slots.hpp"
+#include "game/script_engine.hpp"
 #include "game/script_state.hpp"
 #include "game/stage_files.hpp"
 #include "game/stage_state.hpp"
@@ -767,7 +768,9 @@ void PlayerView::bindRoom(const RoomMesh& mesh) {
 // a grey-blue frame of sky / fog for half a second -- and the script's first step cuts to black anyway
 bool PlayerView::cutsceneHold() const {
     const od::port::GameState& game = od::port::gameState();
-    return play && game.gameMode() == od::port::GameMode::Field && game.modeStep < 2 && od::port::scriptState().id != 0;
+    // ... and a session's scene the room started here that waits for everyone (nothing of the field before it plays)
+    return play && game.gameMode() == od::port::GameMode::Field &&
+           ((game.modeStep < 2 && od::port::scriptState().id != 0) || (ownWorld && ownWorld->sceneHeld()));
 }
 
 float PlayerView::fade() const {
@@ -867,11 +870,22 @@ void PlayerView::setupHooks() {
     // the talking NPC's save menu (Maybe_WriteSaveFile 0x5493b0): OpenDash's saves dir, never the game's
     od::port::setSaveWriteHook([this](uint8_t slot, std::span<const uint8_t> img) { return writeSaveSlot(slot, img); });
     if (ownWorld) ownWorld->setFade(&fadeTask);
+    // a session's host: its state as it is now is the session's (the save buffer the game's menus use is left as it was)
+    if (ownWorld)
+        ownWorld->setLiveState([this]() -> std::optional<std::vector<uint8_t>> {
+            if (!play) return std::nullopt;
+            od::port::SaveImage& buffer = od::port::saveImageAt(od::port::kSaveBuf);
+            const auto kept = buffer.bytes();
+            od::port::saveSerialise(od::port::kSaveBuf); // the state only, as F2's session state
+            const auto now = buffer.bytes();
+            buffer.setBytes(kept);
+            return std::vector<uint8_t>(now.begin(), now.end());
+        });
     hooks.frame = [this] { // FUN_00542280 after the script runner
         using od::port::ActorPool;
         od::port::setWorldIsElsewhere(ownWorld && ownWorld->inWorld());
         if (ownWorld && ownWorld->inWorld()) { // a client: its Mega Man and the effects; the rest is the world's
-            const bool watching = ownWorld->watchingScene(); // as a script holds it in the game: no input, no fall
+            const bool watching = ownWorld->watchingScene(); // the world is starting: no input, no fall
             if (!watching) od::port::playerInputAndDispatch(env);
             ownWorld->localActors(env, actors, false);
             od::port::actorCollision();
@@ -879,7 +893,6 @@ void PlayerView::setupHooks() {
             od::port::remotePlayersUpdate(); // the others' bones, for what follows them here
             od::port::updatePool(env, actors, ActorPool::Shots);
             od::port::cameraUpdate();
-            ownWorld->showSceneView();
             ownWorld->localActors(env, actors, true);
             od::port::fieldHudFrame();
             ownWorld->endFrame();
@@ -914,6 +927,10 @@ void PlayerView::setupHooks() {
         if (param >= 0 && room && room->camera) od::port::cameraRoomInit(*room->camera);
     };
     hooks.camera = [this] { od::port::cameraUpdate(); };
+    // a session: the room's first field tick ran its scripts here; a scene they started plays here from this tick
+    hooks.roomScripts = [this] {
+        if (ownWorld) ownWorld->roomScriptsRan();
+    };
     // the in-stage warp (the ST0E train track wraps every ~128 ticks): the game moved everything by (dx, 0, dz), so
     // the interpolation's previous positions / camera follow -- no cut, no snap, no AA history reset
     hooks.warp = [this](int dx, int dz) {
@@ -1763,6 +1780,16 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
                 assetsDirty = true;
             }
             ownWorld->turn(SDL_GetTicksNS());
+            if (const auto scene = ownWorld->takeSceneStart()) {
+                // a story scene in the room's world: this game plays it as the normal game does. The world's actors go,
+                // the room's own come as a room load spawns them (this player stays where it is), and the script starts
+                // (one the room started here and held for everyone is already there, at its start)
+                od::port::killAllActors();
+                od::port::actorSystem().boneBlocksUsed = 0;
+                od::port::roomSetupActors(0, od::port::kSpawnSkipPlayer);
+                reportUnported();
+                if (!(od::port::scriptState().flags & od::port::kScriptRunning)) od::port::scriptStart(*scene);
+            }
         }
         gameFrame();
         if (afterFrame) afterFrame(); // FUN_005410b0 (the soft reset, game/title)

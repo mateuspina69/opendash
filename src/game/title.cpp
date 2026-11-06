@@ -64,6 +64,8 @@ constexpr uint8_t kCursorSlideTicks = 3;
 constexpr uint8_t kPaceSteps = 3; // the pace's complement the timers scale by
 // the menu's rows / the difficulty choice's last row
 constexpr int kMenuLastRow = 3;
+constexpr int kMultiplayerRow = 4; // OpenDash: the row after the game's four (only with a lobby: TitleHost::lobby)
+int menuLastRow() { return H && H->lobby ? kMultiplayerRow : kMenuLastRow; }
 constexpr uint16_t kMaxDifficultyRows = 3;
 constexpr uint16_t kTitleMusic = 0;
 constexpr uint16_t kGameOverSound = 0xc;
@@ -194,6 +196,25 @@ void drawMenu() {
         const bool on = i == cur;
         gTitleRow = int16_t(i);
         sprite(0xd4, 0x110 + i * 0x28, 0xd8, 0x28, 0, i * 0x28, on ? 0x20a : 0x20b, on ? 0x7c00 : 0x7c40, col);
+    }
+    if (H->lobby) { // OpenDash's fifth row, in the game's font: the multiplayer lobby
+        const int y = 0x110 + kMultiplayerRow * 0x28;
+        ScreenPrim hit; // the mouse's target: the row's box
+        hit.kind = ScreenPrim::Sprite;
+        hit.hitOnly = true;
+        hit.row = int16_t(kMultiplayerRow);
+        hit.x = 0xd4;
+        hit.y = int16_t(y);
+        hit.w = 0xd8;
+        hit.h = 0x28;
+        D->push_back(hit);
+        ScreenPrim text;
+        text.kind = ScreenPrim::Text;
+        text.utf8 = "MULTIPLAYER";
+        text.x = text.ax = 0xd4 + 0x24;
+        text.y = int16_t(y + 0xe);
+        text.colour = cur == kMultiplayerRow ? col : grey(uint32_t(t.brightness) * 0x58 >> 7);
+        D->push_back(text);
     }
     const int row = (int(t.previousRow) - cur) * int(int8_t(t.slideTicks)) + cur * 4;
     sprite(cursorWobble() + 0xac, 0x114 + row * 10, 0x20, 0x20, 0xe0, 0, 0x20a, 0x7c01, col);
@@ -585,7 +606,7 @@ void titleMenu() {
     case TitleMenuStep::Choose: {
         const uint16_t p = pad0().pressed;
         if (!(p & (kPadCircle | kPadCross | kPadStart))) {
-            cursorStep(t.menuRow, kMenuLastRow);
+            cursorStep(t.menuRow, menuLastRow());
         } else if (p & kPadConfirm) {
             t.step = uint8_t(uint8_t(t.menuRow) + t.step + 1u);
         } else {
@@ -624,7 +645,36 @@ void titleMenu() {
         draws();
         leave(TitleState::Options);
         return;
+    case TitleMenuStep::Multiplayer: // OpenDash: the lobby, over the title's background
+        draws();
+        soundPlayFlat(UiSound::Confirm);
+        t.enter(TitleState::Lobby);
+        t.clearArgs();
+        return;
     default: return;
+    }
+}
+// OpenDash: the multiplayer lobby (TitleHost::lobby); the host's start takes the menu's own ways (a new game, the load
+// menu), so the session starts from the game the host starts
+void titleLobby() {
+    TitleBlock& t = titleBlock();
+    drawTitleBackground();
+    const LobbyChoice c = H->lobby ? H->lobby(drawing() ? D : nullptr) : LobbyChoice::Back;
+    switch (c) {
+    case LobbyChoice::Stay: return;
+    case LobbyChoice::Back:
+        t.enter(TitleState::Menu, uint8_t(TitleMenuStep::Brighten));
+        t.clearArgs();
+        soundPlayFlat(UiSound::Cancel);
+        return;
+    case LobbyChoice::NewGame:
+        t.enter(TitleState::Menu, uint8_t(TitleMenuStep::NewGame));
+        t.clearArgs();
+        return;
+    case LobbyChoice::Load:
+        t.enter(TitleState::Menu, uint8_t(TitleMenuStep::Continue));
+        t.clearArgs();
+        return;
     }
 }
 // exe 0x4294b0: the difficulty choice
@@ -804,6 +854,7 @@ void frame() {
         case TitleState::Continue: titleContinue(); break;
         case TitleState::Options: titleOptions(); break;
         case TitleState::GameOver: titleGameOver(); break;
+        case TitleState::Lobby: titleLobby(); break;
         default: throw std::logic_error("title port: title state " + std::to_string(t.state));
         }
         applyActorFrees(); // exe 0x5e15f0

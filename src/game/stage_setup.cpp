@@ -222,7 +222,9 @@ void stageSetup() {
     encounterSlotsSetup(uint32_t(s.kinds));
 }
 
-void roomSetupActors(int32_t param) {
+void roomSetupActors(int32_t param) { roomSetupActors(param, int32_t(int8_t(transitionRequest().keepPosition))); }
+
+void roomSetupActors(int32_t param, int32_t placement) {
     (void)param; // param >= 0: the room camera's set up too (the host's)
     const GameState& g = gameState();
     const int st = g.stage;
@@ -230,8 +232,7 @@ void roomSetupActors(int32_t param) {
     const RoomSetupEntry& r = kRoomSetup[st];
     skyLayersSetup();
     const uint32_t room = roomIndex(st, g.room);
-    spawnList(dataScalar<uint32_t>(dataSource().stateAddress({TableId::RoomSpawnList, room})),
-              int32_t(int8_t(transitionRequest().keepPosition)));
+    spawnList(dataScalar<uint32_t>(dataSource().stateAddress({TableId::RoomSpawnList, room})), placement);
     for (uint32_t i = 0; i < r.helperCount && i < kTableHelpers; ++i) {
         const RoutineId h = tableHelper(r, i);
         if (notAHelper(h)) continue;

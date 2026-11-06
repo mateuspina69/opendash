@@ -443,8 +443,7 @@ int run(const WorldArgs& w) {
     std::vector<uint8_t> lastScreen;
     uint16_t scenePad = 0;
     uint8_t sceneOwner = 0;
-    od::port::NetPlayerWatch sceneWatch;
-    od::port::NetPlayerFields sceneFields;
+    uint8_t sceneScript = 0; // the scene's script: each game starts it itself
     std::map<uint8_t, od::port::NetStateSender> netClients;
     // on a link: no player of its own; the coordinator's come and go, and its silence ends the world
     std::unique_ptr<WorldLink> link;
@@ -554,19 +553,17 @@ int run(const WorldArgs& w) {
     };
     const auto playersToOthers = [&](uint32_t netTick) {
         // all the others in one datagram: u8 length, an update
+        if (sceneOn) return; // in a scene every game runs its own Mega Man under the script; the others are hidden
         for (auto& [client, sender] : netClients) {
             WorldMessage m{WorldMessageType::NetPlayer};
             m.playerId = client;
             for (uint8_t id = 0; id < od::port::kPlayerSlots; ++id) {
-                // in a scene its Mega Man is everyone's, its owner's too; the others are hidden
-                if (sceneOn && id != 0) continue;
-                const bool sceneMan = sceneOn && id == 0;
-                if (!sceneMan && (id == client || !mirrors[id].heard || !od::port::playerPresent(id))) continue;
-                od::port::NetPlayerFields told = sceneMan ? sceneFields : mirrors[id].from.fields();
+                if (id == client || !mirrors[id].heard || !od::port::playerPresent(id)) continue;
+                od::port::NetPlayerFields told = mirrors[id].from.fields();
                 told.camera = {}; // an owner's camera is for their world only
-                if (!sceneMan) // the owner's ticks in this world's: the others' timelines run on this world's ticks
-                    for (od::port::NetPlayerChannel& c : told.channels)
-                        if (c.tick != od::port::kNetPlayerNoTick) c.tick = uint32_t(c.tick + (netTick - mirrors[id].ownerTick));
+                // the owner's ticks in this world's: the others' timelines run on this world's ticks
+                for (od::port::NetPlayerChannel& c : told.channels)
+                    if (c.tick != od::port::kNetPlayerNoTick) c.tick = uint32_t(c.tick + (netTick - mirrors[id].ownerTick));
                 const std::vector<uint8_t> one = playerSenders[{client, id}].update(id, netTick, told);
                 m.netState.push_back(uint8_t(one.size()));
                 m.netState.insert(m.netState.end(), one.begin(), one.end());
@@ -621,11 +618,11 @@ int run(const WorldArgs& w) {
     const auto sceneStartMessage = [&](uint8_t client) {
         WorldMessage start{WorldMessageType::NetSceneStart};
         start.playerId = client;
-        start.netState = {sceneOwner};
+        start.netState = {sceneOwner, sceneScript};
         link->sendReliable(start);
     };
     // a script runs in the room: a scene, played once, with one Mega Man, for everyone in it
-    const auto sceneTurn = [&](uint32_t netTick) {
+    const auto sceneTurn = [&] {
         const bool now = od::port::scriptState().inUse() && od::port::scriptState().id != 0;
         if (now && !sceneOn && sceneGated && od::port::storyScriptGated(od::port::scriptState().id)) { // everyone first
             if (!sceneAsked) link->sendReliable({WorldMessageType::NetSceneGate});
@@ -642,6 +639,7 @@ int run(const WorldArgs& w) {
             }
             od::port::remotePlayersSceneStart();
             scenePad = 0;
+            sceneScript = od::port::scriptState().id;
             SDL_Log("world: a scene starts (script %02x), its owner is player %u", unsigned(od::port::scriptState().id), unsigned(sceneOwner));
             for (const auto& [client, sender] : netClients) sceneStartMessage(client);
         } else if (!now && sceneOn) {
@@ -670,15 +668,6 @@ int run(const WorldArgs& w) {
             if (sceneOwner != 0) od::port::leavePlayer(0);
             od::port::remotePlayersSceneEnd();
         }
-        if (!sceneOn) return;
-        sceneFields = sceneWatch.see(od::port::player(), netTick);
-        const std::vector<uint8_t> view = od::port::encode(od::port::sceneViewNow());
-        for (const auto& [client, sender] : netClients) {
-            WorldMessage m{WorldMessageType::NetSceneView};
-            m.playerId = client;
-            m.netState = view;
-            link->sendLatest(m);
-        }
     };
     const auto netTurn = [&](uint32_t netTick) {
         if (poses.f) od::port::writeNetPoses(poses.f, netTick, od::port::netSlotVisibleOrShot, false);
@@ -696,7 +685,7 @@ int run(const WorldArgs& w) {
                                      size_t(od::port::SegmentListHeader(grid.segments).segmentCount) * od::kSegmentEntrySize);
         if (link) {
             fightTurn();
-            sceneTurn(netTick);
+            sceneTurn();
             if (od::port::hudScriptWhiteNow() != worldWhite) {
                 worldWhite = !worldWhite;
                 present.white(worldWhite);
@@ -712,7 +701,9 @@ int run(const WorldArgs& w) {
                     }
                 }
             }
-            if (!present.empty()) {
+            if (sceneOn) {
+                (void)present.take(); // a scene's windows, fades and sounds are each game's own: it runs the scene
+            } else if (!present.empty()) {
                 const std::vector<uint8_t> batch = present.take();
                 for (const auto& [client, sender] : netClients) {
                     WorldMessage m{WorldMessageType::NetPresent};
@@ -768,7 +759,8 @@ int run(const WorldArgs& w) {
                 netClients.erase(m.playerId);
                 netClients.try_emplace(m.playerId, od::port::netSlotNetworked, m.playerId);
                 std::erase_if(playerSenders, [&](const auto& s) { return s.first.first == m.playerId; });
-                if (sceneOn) sceneStartMessage(m.playerId); // joining during a scene: they watch it
+                if (sceneOn) sceneStartMessage(m.playerId); // joining during a scene: their game runs it too
+                lastScreen.clear();                          // ... and is told the screen again
                 for (size_t f = 0; f < roomPlayerFields.size(); ++f)
                     if (roomPlayerFields[f]) roomPlayerMessage(m.playerId, od::port::RoomPlayerField(f), *roomPlayerFields[f]);
                 break;
@@ -779,7 +771,14 @@ int run(const WorldArgs& w) {
             case WorldMessageType::NetScenePad:
                 if (sceneOn && m.playerId == sceneOwner && m.netState.size() == 2) {
                     scenePad = uint16_t(m.netState[0] | m.netState[1] << 8);
-                    present.pad(scenePad);
+                    // every game runs the scene itself: the others' copies take the owner's pad
+                    for (const auto& [client, sender] : netClients) {
+                        if (client == sceneOwner) continue;
+                        WorldMessage pad{WorldMessageType::NetScenePad};
+                        pad.playerId = client;
+                        pad.netState = m.netState;
+                        link->sendReliable(pad);
+                    }
                 }
                 break;
             case WorldMessageType::NetFire:

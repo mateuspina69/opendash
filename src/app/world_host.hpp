@@ -68,6 +68,8 @@ public:
     // everyone is down, once: the players told by the caller. Every world stops and the session's state goes back to this save
     bool takeEveryoneDown();
     void reloadFrom(const std::vector<uint8_t>& save, const std::filesystem::path& savePath);
+    // the save a world started from now on starts from (the host's live state, written there; the running worlds go on)
+    void setSavePath(std::filesystem::path savePath) { storySave_ = std::move(savePath); }
     // test instrument: this flag is clear from the session's start, whatever the save says
     void testClearFlag(uint32_t flag);
     // ... or set it now, told to the worlds as a change of the session

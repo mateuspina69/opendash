@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "engine/dat.hpp"
+#include "game/save_image.hpp"
 
 namespace od::app {
 
@@ -67,14 +68,30 @@ std::vector<uint8_t> readSave(const std::filesystem::path& storySave) {
 } // namespace
 
 CoopHost::CoopHost(std::filesystem::path exe, std::filesystem::path storySave)
-    : worlds_(exe, storySave, od::port::saveZenny(readSave(storySave))), save_(readSave(storySave)), savePath_(storySave) {
+    : worlds_(exe, storySave, od::port::saveZenny(readSave(storySave))), save_(readSave(storySave)), written_(save_),
+      savePath_(storySave) {
     lastSavePath_ = exe.parent_path() / "opendash-session-save.dat";
 }
 
-void CoopHost::hostSaved(std::span<const uint8_t> save) { save_.assign(save.begin(), save.end()); }
+void CoopHost::hostSaved(std::span<const uint8_t> save) { written_.assign(save.begin(), save.end()); }
+
+const std::vector<uint8_t>& CoopHost::liveSave() {
+    if (live_)
+        if (std::optional<std::vector<uint8_t>> now = live_(); now && now->size() == od::port::kSaveSize) save_ = std::move(*now);
+    return save_;
+}
+
+void CoopHost::liveSaveFile() {
+    const std::vector<uint8_t>& save = liveSave();
+    if (save.empty()) return;
+    std::ofstream out(lastSavePath_, std::ios::binary | std::ios::trunc);
+    out.write(reinterpret_cast<const char*>(save.data()), std::streamsize(save.size()));
+    if (out) worlds_.setSavePath(lastSavePath_);
+}
 
 void CoopHost::hostLoaded(std::span<const uint8_t> save, uint64_t nowNs) {
     save_.assign(save.begin(), save.end());
+    written_ = save_;
     {
         std::ofstream out(lastSavePath_, std::ios::binary);
         out.write(reinterpret_cast<const char*>(save_.data()), std::streamsize(save_.size()));
@@ -94,7 +111,10 @@ void CoopHost::hostLoaded(std::span<const uint8_t> save, uint64_t nowNs) {
 
 std::optional<std::vector<uint8_t>> CoopHost::takeReload() { return std::exchange(reload_, std::nullopt); }
 
-void CoopHost::enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& state) { worlds_.enter(playerId, room, state); }
+void CoopHost::enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& state) {
+    liveSaveFile(); // a world started now starts from the host's state as it is
+    worlds_.enter(playerId, room, state);
+}
 
 void CoopHost::sendReliable(uint8_t playerId, WorldMessageType type, std::vector<uint8_t> bytes) {
     if (type == WorldMessageType::NetJoin) worlds_.netJoin(playerId);
@@ -114,12 +134,13 @@ void CoopHost::sendLatest(uint8_t playerId, WorldMessageType type, std::vector<u
 std::vector<WorldMessage> CoopHost::take(uint8_t playerId) { return worlds_.takeNet(playerId); }
 
 void CoopHost::sendSave(uint8_t id, uint64_t nowNs) {
-    // the host's game: what exists comes from its save, in chunks; the last one is shorter than kSaveChunk
-    for (size_t at = 0; at <= save_.size(); at += kSaveChunk) {
+    // the host's game: what exists is its state now, in chunks; the last one is shorter than kSaveChunk
+    const std::vector<uint8_t>& save = liveSave();
+    for (size_t at = 0; at <= save.size(); at += kSaveChunk) {
         WorldMessage m{WorldMessageType::NetSave};
         m.playerId = id;
-        const size_t n = std::min(kSaveChunk, save_.size() - at);
-        m.netState.assign(save_.begin() + ptrdiff_t(at), save_.begin() + ptrdiff_t(at + n));
+        const size_t n = std::min(kSaveChunk, save.size() - at);
+        m.netState.assign(save.begin() + ptrdiff_t(at), save.begin() + ptrdiff_t(at + n));
         session_->sendWorld(nowNs, id, true, encodeWorldMessage(m));
     }
 }
@@ -131,6 +152,7 @@ void CoopHost::fromClient(uint8_t id, const WorldMessage& m, uint64_t nowNs) {
             const bool first = clients_.insert(id).second, stays = m.netState[2] != 0;
             if (told_.insert(id).second) sendSave(id, nowNs);
             const bool place = first || placeNext_.erase(id) != 0;
+            liveSaveFile(); // a world started now starts from the host's state as it is
             worlds_.enter(id, WorldRoom{m.netState[0], m.netState[1]}, std::vector<uint8_t>(m.netState.begin() + 3, m.netState.end()));
             if (place && !stays) worlds_.placeNextToHost(id); // joining, or the session started over: next to the host
         }
@@ -159,13 +181,14 @@ void CoopHost::fromClient(uint8_t id, const WorldMessage& m, uint64_t nowNs) {
 void CoopHost::poll(uint64_t nowNs) {
     worlds_.poll(nowNs);
     if (worlds_.takeEveryoneDown()) {
-        // the worlds start from the file: the host's last save
+        // the worlds start from the file: the host's last save (a game over's way back)
         {
-            std::ofstream out(lastSavePath_, std::ios::binary);
-            out.write(reinterpret_cast<const char*>(save_.data()), std::streamsize(save_.size()));
+            std::ofstream out(lastSavePath_, std::ios::binary | std::ios::trunc);
+            out.write(reinterpret_cast<const char*>(written_.data()), std::streamsize(written_.size()));
         }
-        worlds_.reloadFrom(save_, lastSavePath_);
-        reload_ = save_;
+        worlds_.reloadFrom(written_, lastSavePath_);
+        save_ = written_;
+        reload_ = written_;
         if (session_)
             for (const uint8_t id : clients_) {
                 WorldMessage m{WorldMessageType::NetReload};
@@ -182,8 +205,10 @@ void CoopHost::poll(uint64_t nowNs) {
     for (const od::net::PlayerStatus& p : status.players) {
         if (p.playerId < WorldHost::kPlayers) worlds_.setPlayerName(p.playerId, p.name);
         // a game that connects is told the session's save at once: at its title it starts from it
-        if (p.playerId != 0 && p.playerId < WorldHost::kPlayers && !save_.empty() && told_.insert(p.playerId).second)
+        if (p.playerId != 0 && p.playerId < WorldHost::kPlayers && !told_.contains(p.playerId) && !liveSave().empty()) {
+            told_.insert(p.playerId);
             sendSave(p.playerId, nowNs);
+        }
     }
     std::erase_if(told_, [&](uint8_t id) {
         return std::none_of(status.players.begin(), status.players.end(), [&](const od::net::PlayerStatus& p) { return p.playerId == id; });

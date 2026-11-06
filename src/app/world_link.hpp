@@ -36,9 +36,9 @@ enum class WorldMessageType : uint8_t {
     // where the room's players stand, from each world to the coordinator (WorldBrief); one who is down asks to come back and
     // is told where; a teammate has revived them; everyone is down
     PlayerBrief = 29, NetRespawnAsk = 30, NetRespawnAt = 31, NetRevive = 32, NetRevived = 33, NetGameOver = 34,
-    // what a world shows (game/presentation); a scene starts with its owner, its view, its owner's pad, its end with where its
-    // Mega Man stands; a transition asked in a world; a player is moved there
-    NetPresent = 35, NetSceneStart = 36, NetSceneView = 37, NetScenePad = 38, NetSceneEnd = 39, NetWorldExit = 40, NetMoveTo = 41,
+    // what a world shows (game/presentation); a scene starts with its owner and its script, its owner's pad, its end with where
+    // its Mega Man stands; a transition asked in a world; a player is moved there
+    NetPresent = 35, NetSceneStart = 36, NetScenePad = 38, NetSceneEnd = 39, NetWorldExit = 40, NetMoveTo = 41,
     // the box carrier holds a player, or lets go (ST16's catch): carrier's slot, grip pose, holds
     NetHold = 42,
     // the gates: a player stands at a gated exit (where it leads, whether it is a mission's), or has walked off it; the host

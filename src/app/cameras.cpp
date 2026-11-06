@@ -58,7 +58,7 @@ uint16_t PlayerView::steer(uint16_t ps1, float lx, float ly) {
     // the game drives the player (a door / exit transition 0xa6d2e0 walking it with the replay pad, a script, the
     // player's script-driven bit +0xc2 & 0x80): no steering, the body yaw stays the game's
     od::port::Player& pl = od::port::player();
-    if (od::port::transitionRequest().state != 0 || (od::port::scriptState().flags & (od::port::kScriptRunning | od::port::kScriptWatched)) ||
+    if (od::port::transitionRequest().state != 0 || (od::port::scriptState().flags & od::port::kScriptRunning) ||
         (pl.inputMode & od::port::kInputOff))
         return ps1;
     if (fireFacing(ps1, lx, ly)) return ps1; // the buster firing: face the camera, strafe (app/fire_facing)
@@ -110,9 +110,7 @@ uint16_t PlayerView::steer(uint16_t ps1, float lx, float ly) {
 }
 
 bool PlayerView::gameCameraActive() const {
-    // a session's scene is watched here: its camera is the world's, shown as the game's own (game/presentation)
-    return od::port::cameraState().mode() != od::port::CameraMode::Follow || od::port::eventState().active != 0 ||
-           (od::port::scriptState().flags & od::port::kScriptWatched);
+    return od::port::cameraState().mode() != od::port::CameraMode::Follow || od::port::eventState().active != 0;
 }
 
 bool PlayerView::orbitCamera(const RoomMesh& mesh, od::Camera& cam, float alpha, float dt) {
@@ -369,7 +367,7 @@ void PlayerView::trackPosition(bool snapNow) {
 
 bool PlayerView::freeView(const RoomMesh& mesh) const {
     return play && roomStage == mesh.stage && roomSub == mesh.sub && !gameCameraActive() &&
-           !(od::port::scriptState().flags & (od::port::kScriptRunning | od::port::kScriptWatched));
+           !(od::port::scriptState().flags & od::port::kScriptRunning);
 }
 
 void PlayerView::pivotAt(const RoomMesh& mesh, float out[3]) const {

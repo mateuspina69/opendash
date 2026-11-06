@@ -5,7 +5,11 @@
 #include <array>
 
 #include "game/game_state.hpp"
+#include "game/player/player_state.hpp"
 #include "game/rewards.hpp"
+#include "game/save_image.hpp"
+#include "game/shop.hpp"
+#include "game/world_view.hpp"
 #include "game/story_flags.hpp"
 
 namespace od::port {
@@ -40,8 +44,15 @@ const Masks& masks() {
 
 uint8_t flagByte(size_t i) { return storyFlagByte(uint32_t(i) << 3); }
 
-// the values that belong to the session: the story, the balances, the message scripts' counters, the entries collected
-constexpr size_t kValueBytes = 2 + 2 + 2 + 2 + 8 + 1 + 0x20 + 4;
+// the values that belong to the session: the story, the balances, the message scripts' counters, the entries collected,
+// and the inventory past its flags (the items and parts owned are flags 0x380.. : they travel as flags): the canisters'
+// charges and the weapons' developed levels, as the save keeps them. Each player wears their own parts from the pool
+constexpr size_t kChargeBytes = 4 + 4, kLevelBytes = kSaveWeaponLevels * kSaveLevelBytes;
+constexpr size_t kValueBytes = 2 + 2 + 2 + 2 + 8 + 1 + 0x20 + 4 + kChargeBytes + kLevelBytes;
+static_assert(kValueBytes <= 0x100, "a value's index is one byte");
+// the weapons' levels, last: a world's player slots wear what their players' games tell them (their equipment), so a
+// world neither tells these nor takes them
+bool playersValue(size_t at) { return at >= kValueBytes - kLevelBytes; }
 using Values = std::array<uint8_t, kValueBytes>;
 template <class F> void eachValue(F&& f) {
     GameState& g = gameState();
@@ -68,6 +79,15 @@ template <class F> void eachValue(F&& f) {
     for (size_t i = 0; i < g.entryLog.size(); ++i) byte(g.entryLog[i]);
     word(g.scriptCounters[0]);
     word(g.scriptCounters[1]);
+    ShopUpgrades& charges = shopUpgrades();
+    byte(charges.first.level);
+    byte(charges.first.bought);
+    byte(charges.second.level);
+    byte(charges.second.bought);
+    for (size_t i = 0; i < charges.unreadBytes.size(); ++i) byte(charges.unreadBytes[i]);
+    Player& p = player();
+    for (size_t k = 0; k < kSaveWeaponLevels; ++k)
+        for (size_t i = 0; i < kSaveLevelBytes; ++i) byte(p.weaponLevels[k * 8 + i]);
 }
 Values valuesNow() {
     Values v{};
@@ -188,7 +208,7 @@ GlobalChange globalWatchTake(uint8_t stage) {
     }
     const Values values = valuesNow();
     for (size_t i = 0; i < kValueBytes; ++i)
-        if (values[i] != w.values[i]) c.values.push_back({uint8_t(i), values[i]});
+        if (values[i] != w.values[i] && !(worldHasNoView() && playersValue(i))) c.values.push_back({uint8_t(i), values[i]});
     w.values = values;
     const int32_t zenny = gameState().zenny;
     if (zenny != w.zenny) c.zennyDelta = zenny - w.zenny;
@@ -209,6 +229,7 @@ void globalWatchApply(const GlobalChange& c) {
     }
     if (!c.values.empty()) {
         eachValue([&](size_t at, uint8_t& v) {
+            if (worldHasNoView() && playersValue(at)) return;
             for (const GlobalChange::Value& x : c.values)
                 if (x.at == at) v = x.value;
         });

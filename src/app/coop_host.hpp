@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <set>
@@ -53,6 +54,8 @@ public:
     void hostLoaded(std::span<const uint8_t> save, uint64_t nowNs);
     // everyone was down: the host's game goes on from this save
     std::optional<std::vector<uint8_t>> takeReload();
+    // the host's game state as a save image, now (none: no game is played): what the session is, never a file it began with
+    void setLiveState(std::function<std::optional<std::vector<uint8_t>>()> live) { live_ = std::move(live); }
 
     std::optional<uint8_t> playerId() const override { return uint8_t(0); }
     void enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& state) override;
@@ -64,9 +67,14 @@ public:
 private:
     void fromClient(uint8_t id, const WorldMessage& m, uint64_t nowNs);
     void sendSave(uint8_t id, uint64_t nowNs);
+    // the host's live state (else the last one known: the game is not played now), and the file a world starts from
+    const std::vector<uint8_t>& liveSave();
+    void liveSaveFile();
 
     WorldHost worlds_;
-    std::vector<uint8_t> save_;
+    std::vector<uint8_t> save_;    // the host's state as last known (its live state while it plays)
+    std::vector<uint8_t> written_; // the host's last written save (or the one its game started from): a game over's
+    std::function<std::optional<std::vector<uint8_t>>()> live_;
     od::net::Session* session_ = nullptr;
     std::set<uint8_t> clients_;
     std::set<uint8_t> told_;      // the players told the session's save (on connecting, at the title or in a game)

@@ -159,6 +159,11 @@ void App::rumble() {
 }
 
 void App::handleEvents() {
+    if (lobby.editing() != lobbyTyping) { // the lobby's field: the keyboard's text goes to it
+        lobbyTyping = lobby.editing();
+        if (lobbyTyping) SDL_StartTextInput(window);
+        else SDL_StopTextInput(window);
+    }
     for (SDL_Event e; SDL_PollEvent(&e);) {
         ImGui_ImplSDL3_ProcessEvent(&e);
         notePromptEvent(e); // the device the button prompts show
@@ -167,6 +172,16 @@ void App::handleEvents() {
         if (e.type == SDL_EVENT_QUIT) running = false;
         if (e.type == SDL_EVENT_WINDOW_FOCUS_LOST) windowFocused = false;
         if (e.type == SDL_EVENT_WINDOW_FOCUS_GAINED) windowFocused = true;
+        if (lobby.editing() && !io.WantTextInput) { // typed into the lobby: none of it is the game's
+            if (e.type == SDL_EVENT_TEXT_INPUT) lobby.textInput(e.text.text);
+            if (e.type == SDL_EVENT_KEY_DOWN) {
+                const SDL_Scancode k = e.key.scancode;
+                if (k == SDL_SCANCODE_BACKSPACE) lobby.backspace();
+                else if (!e.key.repeat && (k == SDL_SCANCODE_RETURN || k == SDL_SCANCODE_KP_ENTER)) lobby.endEdit(true);
+                else if (!e.key.repeat && k == SDL_SCANCODE_ESCAPE) lobby.endEdit(false);
+            }
+            if (e.type == SDL_EVENT_KEY_DOWN || e.type == SDL_EVENT_KEY_UP || e.type == SDL_EVENT_TEXT_INPUT) continue;
+        }
         if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.scancode == SDL_SCANCODE_ESCAPE &&
             !io.WantTextInput) {
             // Esc opens the status sub-screen in the field (Start) and backs out of the sub-screens (cancel: a level

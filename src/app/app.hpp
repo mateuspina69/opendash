@@ -24,6 +24,7 @@
 
 #include "app/ghost_view.hpp"
 #include "app/input.hpp"
+#include "app/lobby.hpp"
 #include "app/model_clearance.hpp"
 #include "app/netplay.hpp"
 #include "app/play_session.hpp"
@@ -224,6 +225,11 @@ struct App {
     PlayerView playerView;
     GhostView ghosts; // the ghost players (posed after the tick loop, drawn next to the player)
     Netplay netplay;  // the session and the ghosts' sources (app/netplay)
+    Lobby lobby;      // the title menu's multiplayer lobby (app/lobby)
+    bool lobbyTyping = false; // SDL's text input is on for the lobby's field
+    // a netplay session started / ended from the lobby (as the start's: the world client with it); "" or why not
+    std::string sessionStart(const NetSettings& net);
+    void sessionStop();
     bool classicControls = false; // F1: the original tank controls + the game's follow camera
     std::vector<StageInfo> stages;
     RoomMesh current;

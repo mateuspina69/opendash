@@ -96,7 +96,6 @@ std::vector<uint8_t> encodeWorldMessage(const WorldMessage& m) {
     case WorldMessageType::NetGameOver:
     case WorldMessageType::NetPresent:
     case WorldMessageType::NetSceneStart:
-    case WorldMessageType::NetSceneView:
     case WorldMessageType::NetScenePad:
     case WorldMessageType::NetSceneEnd:
     case WorldMessageType::NetWorldExit:
@@ -174,7 +173,6 @@ std::optional<WorldMessage> decodeWorldMessage(std::span<const uint8_t> bytes) {
     case WorldMessageType::NetGameOver:
     case WorldMessageType::NetPresent:
     case WorldMessageType::NetSceneStart:
-    case WorldMessageType::NetSceneView:
     case WorldMessageType::NetScenePad:
     case WorldMessageType::NetSceneEnd:
     case WorldMessageType::NetWorldExit:

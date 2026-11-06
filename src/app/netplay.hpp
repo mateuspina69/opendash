@@ -55,6 +55,8 @@ struct NetSettings {
 };
 // opendash.ini's net keys under the flags; throws std::invalid_argument on a bad net= / net_port= / join
 NetSettings resolveNetSettings(const od::Config& cfg, const NetFlags& flags);
+// the lobby's defaults (the mode its choice): the port, the host's address, the name and the key the flags / ini give
+NetSettings lobbyDefaults(const od::Config& cfg, const NetFlags& flags);
 
 // --ghost-mirror <delay ticks> <dx> <dz> [--ghost-look <costume> <variant> <weapon>]
 struct MirrorSettings {
@@ -73,7 +75,10 @@ public:
     void start(const NetSettings& settings, const std::optional<MirrorSettings>& mirror,
                const std::filesystem::path& datDir, const std::filesystem::path& exe,
                const od::DiscImage* disc = nullptr);
-    void stop(); // Bye to the others (shutdown)
+    // the session alone (the lobby's host / join): a running one ends first
+    void startSession(const NetSettings& settings, const std::filesystem::path& datDir, const std::filesystem::path& exe,
+                      const od::DiscImage* disc = nullptr);
+    void stop(); // Bye to the others (shutdown, the lobby's back)
 
     // after every logic tick (between ticks): the local player's state; reads the game state only
     void afterTick();

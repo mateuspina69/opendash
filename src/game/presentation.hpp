@@ -67,15 +67,4 @@ void setSoundOwner(uint8_t owner);
 // A player's game: what its effect classes play comes from the world instead
 void setLocalEffectsMuted(bool muted);
 
-// The view a scene is watched through
-struct SceneView {
-    int32_t x = 0, y = 0, z = 0;
-    int16_t distance = 0, yaw = 0, pitch = 0, roll = 0;
-    friend bool operator==(const SceneView&, const SceneView&) = default;
-};
-SceneView sceneViewNow();
-void sceneViewShow(const SceneView& v);
-std::vector<uint8_t> encode(const SceneView& v);
-bool decodeSceneView(std::span<const uint8_t> bytes, SceneView& v);
-
 } // namespace od::port

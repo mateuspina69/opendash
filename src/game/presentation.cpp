@@ -291,38 +291,4 @@ void netScreenApply(std::span<const uint8_t> b) {
     }
 }
 
-SceneView sceneViewNow() {
-    const CameraState& cam = cameraState();
-    const CameraViewArgs a = cameraViewArgs();
-    return {cam.target.x, cam.target.y, cam.target.z, int16_t(a.distance), int16_t(a.yaw), int16_t(a.pitch), int16_t(a.roll)};
-}
-
-void sceneViewShow(const SceneView& v) {
-    CameraState& cam = cameraState();
-    cam.target.x = v.x;
-    cam.target.y = v.y;
-    cam.target.z = v.z;
-    cameraBuildView(v.distance, v.yaw, v.pitch, uint16_t(v.roll));
-}
-
-std::vector<uint8_t> encode(const SceneView& v) {
-    std::vector<uint8_t> o;
-    put32(o, uint32_t(v.x));
-    put32(o, uint32_t(v.y));
-    put32(o, uint32_t(v.z));
-    put16(o, uint16_t(v.distance));
-    put16(o, uint16_t(v.yaw));
-    put16(o, uint16_t(v.pitch));
-    put16(o, uint16_t(v.roll));
-    return o;
-}
-
-bool decodeSceneView(std::span<const uint8_t> b, SceneView& v) {
-    if (b.size() != 20) return false;
-    const auto word = [&](size_t at) { return int32_t(uint32_t(b[at]) | uint32_t(b[at + 1]) << 8 | uint32_t(b[at + 2]) << 16 | uint32_t(b[at + 3]) << 24); };
-    const auto half = [&](size_t at) { return int16_t(uint16_t(b[at] | b[at + 1] << 8)); };
-    v = {word(0), word(4), word(8), half(12), half(14), half(16), half(18)};
-    return true;
-}
-
 } // namespace od::port

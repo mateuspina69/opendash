@@ -17,7 +17,9 @@
 #include "game/hit_effects.hpp"
 #include "game/story_flags.hpp"
 #include "game/story_table.hpp"
+#include "game/script_engine.hpp"
 #include "game/script_state.hpp"
+#include "game/world_view.hpp"
 #include "content/nino/st16_script33.hpp"
 #include "game/player/player_input.hpp"
 #include "game/distances.hpp"
@@ -120,6 +122,10 @@ void OwnWorldClient::roomBound(int stage, int sub) {
         warping_ = false;
         return;
     }
+    if (localScene_) { // a room the scene's script went to: its actors are this game's, as in the normal game
+        room_ = WorldRoom{stage, sub};
+        return;
+    }
     od::port::presentationLoopsClear();
     if (const auto at = std::exchange(doorArrival_, std::nullopt); at && (*at)[0] == stage && (*at)[1] == sub) {
         // through a gated door together: the door's script arrived at the exit's spot, the coordinator's is beside the others
@@ -135,6 +141,39 @@ void OwnWorldClient::roomBound(int stage, int sub) {
         SDL_Log("own world: ST%02X runs on this machine alone", unsigned(stage));
         return;
     }
+    bindWorld(stage, sub);
+    // the room's first field tick runs its scripts as the normal game does (the room setup's actors still here): a scene
+    // they start plays here from that tick; else the world takes the room over (roomScriptsRan)
+    entering_ = true;
+    od::port::setWorldIsElsewhere(false);
+}
+
+void OwnWorldClient::roomScriptsRan() {
+    if (!entering_) return;
+    entering_ = false;
+    const od::port::ScriptState& s = od::port::scriptState();
+    if ((s.flags & od::port::kScriptRunning) && s.id != 0) {
+        startedHere(s.id);
+        return;
+    }
+    freeLocalActors();
+}
+
+void OwnWorldClient::startedHere(uint8_t script) {
+    localScene_ = true;
+    scene_ = true;
+    sceneOwner_ = 0; // the world's rule: the first player in the room, the host when here; the world's start says who
+    scenePad_ = sentPad_ = 0;
+    sceneRoom_ = room_;
+    sceneEndAt_.reset();
+    sceneHeard_ = false;
+    // a scene that waits for everyone: held here as in the world, until the world starts it
+    heldHere_ = !od::port::storyOptionalStage(uint8_t(room_->stage)) && od::port::storyScriptGated(script);
+    if (heldHere_) od::port::setScriptsGated(true);
+    SDL_Log("own world: the room starts a scene here (script %02x)%s", unsigned(script), heldHere_ ? ", held until everyone is in" : "");
+}
+
+void OwnWorldClient::freeLocalActors() {
     // the room setup's actors go, but what a client keeps
     od::port::StaticPool& statics = od::port::staticPool();
     for (size_t i = 0; i < od::port::StaticPool::size(); ++i)
@@ -148,6 +187,9 @@ void OwnWorldClient::roomBound(int stage, int sub) {
     for (size_t i = 0; i < od::port::ControllerPool::size(); ++i)
         if (od::port::controllerPool()[i].flags & od::port::kActorLive) od::port::freeActor(od::port::controllerPool()[i]);
     od::port::applyActorFrees();
+}
+
+void OwnWorldClient::bindWorld(int stage, int sub) {
     actors_ = std::make_unique<od::port::PoolNetActors>(true);
     for (uint8_t id = 1; id < od::port::kPlayerSlots; ++id)
         if (od::port::playerIsRemote(id)) od::port::remotePlayerLeave(id);
@@ -169,8 +211,8 @@ void OwnWorldClient::roomBound(int stage, int sub) {
     bossFight_ = false;
     od::port::globalWatchRebase();
     scene_ = false;
-    sceneViewHeard_ = false;
-    od::port::scriptState().flags &= uint8_t(~od::port::kScriptWatched);
+    sceneHeard_ = false;
+    if (std::exchange(heldHere_, false)) od::port::setScriptsGated(false);
 }
 
 void OwnWorldClient::joinRoom() {
@@ -189,7 +231,7 @@ void OwnWorldClient::awayTurn(uint64_t nowNs) {
 }
 
 void OwnWorldClient::turn(uint64_t nowNs) {
-    if (!room_) return;
+    if (!room_ || entering_) return; // entering: the room's first field tick decides first (roomScriptsRan)
     pipe_->poll(nowNs);
     if (!joined_) {
         const std::optional<uint8_t> id = pipe_->playerId();
@@ -238,7 +280,10 @@ void OwnWorldClient::turn(uint64_t nowNs) {
     if (guest_ && coordinator_) (void)pipe_->take(kGuestId);
     for (const WorldMessage& m : pipe_->take(playerId_)) handle(m, nowNs);
     sceneTurn();
-    gateTurn();
+    localSceneTurn();
+    if (!room_) return;
+    // a scene's own room changes are the game's, as in the normal game; one held for everyone waits at the gate
+    if (!localScene_ || heldHere_) gateTurn();
     od::port::presentationLoopsTick();
     // what happened in this game goes to the session; not what a stage's load does; in a scene the world does it all
     if (scene_) {
@@ -252,7 +297,7 @@ void OwnWorldClient::turn(uint64_t nowNs) {
         reported_ = report;
         pipe_->sendReliable(playerId_, WorldMessageType::NetReport, od::port::encode(report));
     }
-    if (clock_->running()) {
+    if (clock_->running() && !localScene_) { // in a scene the room's actors are this game's own
         const int64_t at = int64_t(clock_->at(nowNs));
         while (at >= 0 && (!shownAny_ || int64_t(shown_) < at)) {
             shown_ = shownAny_ ? shown_ + 1 : uint32_t(at);
@@ -266,6 +311,13 @@ void OwnWorldClient::turn(uint64_t nowNs) {
 }
 
 void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
+    // a scene this game runs itself: what the world shows of its actors, its warps and its events are not this game's now
+    // (the room is told all of it again once the scene is over)
+    if (localScene_ && (m.type == WorldMessageType::NetEvents || m.type == WorldMessageType::NetUpdate ||
+                        m.type == WorldMessageType::NetPresent || m.type == WorldMessageType::NetWarp ||
+                        m.type == WorldMessageType::NetScreen || m.type == WorldMessageType::NetHold ||
+                        m.type == WorldMessageType::NetEventStart))
+        return;
     switch (m.type) {
     case WorldMessageType::NetEvents:
         if (!state_->applyEvents(m.netState)) SDL_Log("own world: a bad event batch");
@@ -371,18 +423,38 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
         if (fade_) od::port::applyPresentation(m.netState, *fade_, playerId_, scenePad_);
         break;
     case WorldMessageType::NetSceneStart:
-        if (!m.netState.empty()) {
-            scene_ = true;
+        if (m.netState.size() < 2) break;
+        if (localScene_) { // started here on the room's first tick: the world's start confirms it and names its owner
+            if (sceneHeard_) break;
+            sceneHeard_ = true;
             sceneOwner_ = m.netState[0];
-            scenePad_ = sentPad_ = 0;
-            SDL_Log("own world: a scene starts, its owner is player %u", unsigned(sceneOwner_));
+            if (std::exchange(heldHere_, false)) { // everyone is in: it plays from its start, with the room as it began
+                od::port::setScriptsGated(false);
+                sceneStart_ = m.netState[1];
+            }
+            SDL_Log("own world: the world starts the scene too (script %02x), its owner is player %u", unsigned(m.netState[1]),
+                    unsigned(sceneOwner_));
+            break;
         }
+        scene_ = true;
+        sceneOwner_ = m.netState[0];
+        scenePad_ = sentPad_ = 0;
+        localScene_ = true;
+        sceneHeard_ = true;
+        sceneStart_ = m.netState[1];
+        sceneRoom_ = room_;
+        sceneEndAt_.reset();
+        od::port::presentationLoopsClear(); // the world's sounds: the scene's are this game's own
+        SDL_Log("own world: a scene starts (script %02x), its owner is player %u: it runs here", unsigned(m.netState[1]),
+                unsigned(sceneOwner_));
         break;
-    case WorldMessageType::NetSceneView:
-        sceneViewHeard_ = od::port::decodeSceneView(m.netState, sceneView_);
+    case WorldMessageType::NetScenePad:
+        if (m.netState.size() == 2) scenePad_ = uint16_t(m.netState[0] | m.netState[1] << 8);
         break;
     case WorldMessageType::NetSceneEnd:
-        sceneEnd(m.netState);
+        // this game's copy ends once its script has too (until then what it changes is the world's to say)
+        if (localScene_) sceneEndAt_ = m.netState;
+        else scene_ = false;
         break;
     case WorldMessageType::NetMoveTo:
         if (gateAsked_ && gateAtDoor_) {
@@ -485,6 +557,10 @@ void OwnWorldClient::otherPlayerRules(uint8_t id, Other& o, const od::port::Play
 }
 
 void OwnWorldClient::showPlayers(GhostView& ghosts, uint64_t localFingerprint, uint64_t nowNs) {
+    if (localScene_) { // a scene has one Mega Man, this game's: the others are hidden until it ends
+        for (int slot = 0; slot < od::ghost::kMaxGhosts; ++slot) ghosts.clearRemote(slot);
+        return;
+    }
     for (size_t id = 0, slot = 0; id < others_.size() && slot < size_t(od::ghost::kMaxGhosts); ++id) {
         Other& o = others_[id];
         if (o.buffer.empty()) continue;
@@ -551,11 +627,7 @@ void OwnWorldClient::endFrame() {
 }
 
 void OwnWorldClient::sceneTurn() {
-    od::port::Player& p = od::port::player();
-    if (scene_) { // frozen and hidden: the scene has one Mega Man, and it plays in the world
-        od::port::scriptState().flags |= od::port::kScriptWatched;
-        p.inputMode |= od::port::kInputOff;
-        p.flags &= uint8_t(~od::port::kActorDrawn);
+    if (localScene_) { // the scene runs in this game as in the normal game; the owner's pad drives every copy of it
         if (sceneOwner_ == playerId_) {
             const uint16_t held = od::port::pad0().held;
             if (held != sentPad_) {
@@ -596,13 +668,35 @@ void OwnWorldClient::movedTo(const std::vector<uint8_t>& to) {
     SDL_Log("own world: moved to ST%02X sub %d at %d %d %d", unsigned(to[0]), int(to[1]), int(x), int(y), int(z));
 }
 
+// The world's scene is over (or the world never started the one this game's room started), and the one this game ran
+// is too (its script done, no room change pending, the field playing): what the scene left goes, this game is in its
+// room's world again and is told all of it (a fresh join)
+void OwnWorldClient::localSceneTurn() {
+    if (!localScene_ || (!sceneEndAt_ && sceneHeard_)) return;
+    const od::port::GameState& g = od::port::gameState();
+    if (od::port::scriptState().inUse() || od::port::transitionRequest().state != od::port::kTransitionNone ||
+        g.gameMode() != od::port::GameMode::Field || g.fieldStep() != od::port::FieldStep::Playing)
+        return;
+    const std::optional<std::vector<uint8_t>> at = std::exchange(sceneEndAt_, std::nullopt);
+    const bool sameRoom = sceneRoom_ && room_ && *sceneRoom_ == *room_;
+    localScene_ = false;
+    sceneRoom_.reset();
+    const WorldRoom here = *room_;
+    if (od::port::storyStageRunsAlone(uint8_t(here.stage))) { // the scene went to a race: it runs here alone
+        if (joined_) pipe_->sendReliable(playerId_, WorldMessageType::NetLeave, {});
+        room_.reset();
+        joined_ = false;
+        return;
+    }
+    od::port::presentationLoopsClear();
+    freeLocalActors();
+    bindWorld(here.stage, here.sub);
+    if (sameRoom && at) sceneEnd(*at);
+    SDL_Log("own world: the scene ended, back in the room's world");
+}
+
 void OwnWorldClient::sceneEnd(const std::vector<uint8_t>& at) {
-    scene_ = false;
-    od::port::scriptState().flags &= uint8_t(~od::port::kScriptWatched);
-    sceneViewHeard_ = false;
     od::port::Player& p = od::port::player();
-    p.inputMode &= uint8_t(~od::port::kInputOff);
-    p.flags |= od::port::kActorLiveDrawn;
     if (at.size() == 9) { // next to where the scene's Mega Man stands; its owner there
         const auto half = [&](size_t i) { return int16_t(uint16_t(at[i] | at[i + 1] << 8)); };
         constexpr int kBeside = 0x80;
@@ -614,16 +708,10 @@ void OwnWorldClient::sceneEnd(const std::vector<uint8_t>& at) {
         p.rotation.y = yaw;
         p.prevRotation.y = yaw;
     }
-    others_[playerId_] = Other{}; // this game's own entry was the scene's Mega Man
-    SDL_Log("own world: the scene ended");
 }
 
 void OwnWorldClient::overridePad(uint16_t& buttons) {
-    if (scene_ && sceneOwner_ != playerId_) buttons = scenePad_;
-}
-
-void OwnWorldClient::showSceneView() {
-    if (scene_ && sceneViewHeard_) od::port::sceneViewShow(sceneView_);
+    if (localScene_ && sceneOwner_ != playerId_) buttons = scenePad_;
 }
 
 // An exit this player has taken: not while a story boss is being fought; at a gate they wait, with who is at it

@@ -29,5 +29,7 @@ void stageSetup();
 // 0x50f320), the stage's code beyond the template, the exits, the weapon mode and the stage's tail. Not: the room
 // parameters, the sky, the room camera (the host's).
 void roomSetupActors(int32_t param);
+// ... with this placement of the player in the spawn list (game/spawn kSpawnSkipPlayer: the player left where it is)
+void roomSetupActors(int32_t param, int32_t placement);
 
 } // namespace od::port

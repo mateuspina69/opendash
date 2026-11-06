@@ -7,6 +7,7 @@
 #include <array>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -36,6 +37,10 @@ public:
     std::optional<std::vector<uint8_t>> takeReload();
     // this game has written a save: on the host, it is what a game over goes back to
     void gameSaved(std::span<const uint8_t> image) { if (coordinator_) coordinator_->hostSaved(image); }
+    // on the host: this game's state as a save image, now (none: not played): what the session's state is
+    void setLiveState(std::function<std::optional<std::vector<uint8_t>>()> live) {
+        if (coordinator_) coordinator_->setLiveState(std::move(live));
+    }
     // this game started from this save (a load, a new game): on the host the session starts over from it
     void gameStarted(std::span<const uint8_t> image);
     // a client away from a game (at its title): the host's save once it has come whole
@@ -48,10 +53,19 @@ public:
     // the room's files are bound and its spawn has run: the local actors go, this room's world takes over
     void roomBound(int stage, int sub);
     // the room's logic is this room's world's (else this game runs the room itself: a race of its own)
-    bool inWorld() const { return room_.has_value(); }
-    // a scene of the world plays, or the room's world has not said anything yet (it is starting): this game's Mega Man
-    // waits where it is, as a script holds it in the game (the scene's Mega Man is the world's)
-    bool watchingScene() const { return scene_ || (room_ && (!joined_ || !state_ || !state_->heard())); }
+    // ... and not while a story scene plays: every game runs the scene itself, as the normal game does
+    // ... and not on the room's first field tick, whose scripts run here as in the normal game (roomScriptsRan)
+    bool inWorld() const { return room_.has_value() && !localScene_ && !entering_; }
+    // the room's world has not said anything yet (it is starting): this game's Mega Man waits where it is
+    bool watchingScene() const { return !localScene_ && !entering_ && room_ && (!joined_ || !state_ || !state_->heard()); }
+    // the room's scripts have run (game/transition roomScripts): on the room's first field tick, a scene they started
+    // plays here from that tick, as in the normal game; else the room's world takes over
+    void roomScriptsRan();
+    // a scene the room started here that waits for everyone (the session's gate): nothing of the field is shown
+    bool sceneHeld() const { return localScene_ && heldHere_; }
+    // a story scene starts here (the world said so): its script, once (the game frees the world's actors, spawns the
+    // room's own and starts the script as the normal game would)
+    std::optional<uint8_t> takeSceneStart() { return std::exchange(sceneStart_, std::nullopt); }
     // the turn before a tick: the player's state to the world, what the world sent, the timeline up to now
     void turn(uint64_t nowNs);
     // a turn away from a game (the title, a load): the session's save and what it says; nothing of a room
@@ -66,9 +80,8 @@ public:
     void addGuest(int dx, int dz);
     // what the session has to say to this player, over the picture (between ImGui's frame calls)
     void drawNotice() const;
-    // a scene watched here: the pad is the scene owner's; the view is the world's
+    // a scene that another player owns: this game's copy runs on the owner's pad
     void overridePad(uint16_t& buttons);
-    void showSceneView();
     void setFade(od::port::FadeTask* fade) { fade_ = fade; }
     // test instrument: on joining, stay where this game is
     void setGateTeleport(bool teleport) { if (coordinator_) coordinator_->setGateTeleport(teleport); }
@@ -158,8 +171,18 @@ private:
     bool scene_ = false;
     uint8_t sceneOwner_ = 0;
     uint16_t scenePad_ = 0, sentPad_ = 0;
-    od::port::SceneView sceneView_{};
-    bool sceneViewHeard_ = false;
+    // a story scene this game runs itself: from the world's start to its end and the script's here (then the world again)
+    bool localScene_ = false;
+    std::optional<uint8_t> sceneStart_;   // the script to start, for the game to take
+    std::optional<WorldRoom> sceneRoom_;  // the room it started in
+    std::optional<std::vector<uint8_t>> sceneEndAt_; // the world's end: where its Mega Man stands, its owner
+    bool sceneHeard_ = false; // the world has started it too (a scene started here: the world's start confirms it)
+    bool heldHere_ = false;   // started here, held until the world starts it (it waits for everyone)
+    bool entering_ = false;   // the room is bound, its first field tick has not run its scripts yet
+    void localSceneTurn();
+    void startedHere(uint8_t script);
+    void freeLocalActors();
+    void bindWorld(int stage, int sub);
     std::vector<uint8_t> pendingMove_;
     uint32_t testLifeTick_ = 0;
     int16_t testLife_ = 0;

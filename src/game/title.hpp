@@ -100,6 +100,7 @@ enum class TitleState : uint8_t {
     Continue = 4,   // exe 0x429650: the load menu (game/save_menus)
     Options = 5,    // exe 0x429750: the status sub-screen's options page
     GameOver = 6,   // exe 0x429830: G_OVER00.DAT's picture, then Load
+    Lobby = 7,      // OpenDash: the multiplayer lobby (the menu's fifth row; TitleHost::lobby runs it)
 };
 // +1 of Load
 enum class TitleLoadStep : uint8_t { WaitSounds = 0, RequestDat = 1, SetUp = 2 };
@@ -108,7 +109,10 @@ enum class PressEnterStep : uint8_t { FadeIn = 0, Brighten = 1, Idle = 2 };
 // +1 of Menu (Choose + 1 + the row chosen: the rows' own steps)
 enum class TitleMenuStep : uint8_t {
     FadeIn = 0, Music = 1, Brighten = 2, Choose = 3, NewGame = 4, Continue = 5, Tutorial = 6, Options = 7,
+    Multiplayer = 8, // OpenDash's row
 };
+// what the lobby's frame left the title to do: stay, back to the menu, or the host's start (a new game / the load menu)
+enum class LobbyChoice : uint8_t { Stay, Back, NewGame, Load };
 // +1 of Difficulty
 enum class DifficultyStep : uint8_t { Enter = 0, Choose = 1, Start = 2 };
 // +1 of Continue
@@ -169,6 +173,8 @@ struct TitleHost {
     std::function<uint32_t()> scanSaves;
     // exe 0x548de0 (slot, buffer, size) for the load menu (game/save_menus loadMenuTick): -1 = failed
     std::function<int(uint32_t slot, uint8_t* out, uint32_t size)> readSave;
+    // OpenDash: one frame of the multiplayer lobby over the title's background (its primitives into `draw`, nullptr: none)
+    std::function<LobbyChoice(std::vector<ScreenPrim>* draw)> lobby;
 };
 
 struct TitleTasks {
