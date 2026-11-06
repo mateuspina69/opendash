@@ -289,6 +289,7 @@ void App::simStep(int gameFrames) {
         if (auto save = playerView.ownWorld->takeHostSaveAway()) {
             SDL_Log("own world: the host's game is on: this game starts from it");
             leaveTitle();
+            od::port::titleBlock().playerRun = true; // the session's game
             playerView.startGame(&*save, 0);
         }
     }

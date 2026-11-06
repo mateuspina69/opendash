@@ -565,7 +565,8 @@ void PlayerView::clutAnimationSync(const RoomMesh& mesh, od::Renderer& r) {
 void PlayerView::bindRoomData(const RoomMesh& mesh, int param) {
     bindRoomFiles(mesh);
     spawnNative(mesh, param); // a branch the port does not cover throws: play stops with the error
-    if (ownWorld) ownWorld->roomBound(mesh.stage, mesh.sub);
+    // the title's own runs (the intro, the attract, the demo) are this machine's alone: no world of the session
+    if (ownWorld && od::port::titleBlock().playerRun) ownWorld->roomBound(mesh.stage, mesh.sub);
     weaponPolicy();
     od::port::actorCollisionReset();
     audioBindRoom(mesh);
@@ -877,7 +878,12 @@ void PlayerView::setupHooks() {
     // a session's host: its state as it is now is the session's (the save buffer the game's menus use is left as it was)
     if (ownWorld)
         ownWorld->setLiveState([this]() -> std::optional<std::vector<uint8_t>> {
-            if (!play) return std::nullopt;
+            // only a game of the session in its field play: while a room loads (or the title's own run plays) the state
+            // is not the game's yet, and the session keeps the save it started from
+            using od::port::GameMode;
+            const GameMode mode = od::port::gameState().gameMode();
+            if (!play || !od::port::titleBlock().playerRun || mode < GameMode::Field || mode == GameMode::GameOver)
+                return std::nullopt;
             od::port::SaveImage& buffer = od::port::saveImageAt(od::port::kSaveBuf);
             const auto kept = buffer.bytes();
             od::port::saveSerialise(od::port::kSaveBuf); // the state only, as F2's session state
@@ -1774,6 +1780,7 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
             if (auto hostSave = ownWorld->takeHostSave(storySave)) { // what exists is the host's
                 storySave = std::move(*hostSave);
                 startFromStorySave = true;
+                od::port::titleBlock().playerRun = true; // the session's game from here (the title's own run ends)
                 if (room) enterPlay(*room);
             }
             if (const int weapon = ownWorld->takeTestWeapon(); weapon >= 0) { // a test instrument: a special weapon equipped

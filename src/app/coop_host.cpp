@@ -149,6 +149,7 @@ void CoopHost::sendSave(uint8_t id, uint64_t nowNs) {
 
 void CoopHost::fromClient(uint8_t id, const WorldMessage& m, uint64_t nowNs) {
     if (!hostPlaying_) return; // no world is anyone's before the host's game is on
+    if (!told_.contains(id)) return; // not given the session's game yet: what it sends is of its own
     if (stale_.contains(id)) {
         // a game from before the session's save: nothing of it counts until it enters the save's room
         const bool saveRoom = m.type == WorldMessageType::NetEnter && m.netState.size() > 3 && save_.size() > 0x129 &&
