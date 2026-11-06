@@ -59,6 +59,7 @@
 #include "game/geometry_scratch.hpp"
 #include "game/hit_list.hpp"
 #include "game/matrix.hpp"
+#include "game/net_effect_links.hpp"
 #include "game/player/player_state.hpp"
 #include "game/player/players.hpp"
 #include "game/port_gap.hpp"
@@ -874,5 +875,19 @@ void ballExplosionUpdate(const PlayerEnv&, uint32_t actor) { blastTick(projectil
 void rockWarningRingUpdate(const PlayerEnv&, uint32_t actor) { warningRing(effectActorAt(actor)); }
 
 void rockLandingDustUpdate(const PlayerEnv&, uint32_t actor) { landingDust(effectActorAt(actor)); }
+
+void registerSt5cRockNetLinks() {
+    // the warning ring follows its rock (whose report ends its hold): the client's copy, the rock's copy there
+    registerNetEffectLinks(RoutineId::StageDustEffectUpdate,
+                           {[](EffectActor& e, std::array<const ActorHeader*, 2>& held) {
+                                if (e.type != kRockEffectType || e.variant != kWarningRingVariant) return true;
+                                held[0] = classState<WarningRingParams>(e).rock.get();
+                                return held[0] != nullptr; // no rock: nothing to show
+                            },
+                            [](EffectActor& e, const std::array<ActorHeader*, 2>& held) {
+                                if (e.type == kRockEffectType && e.variant == kWarningRingVariant)
+                                    classState<WarningRingParams>(e).rock = held[0] ? &asAnimated(*held[0]) : nullptr;
+                            }});
+}
 
 } // namespace od::port

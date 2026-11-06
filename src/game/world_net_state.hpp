@@ -159,7 +159,8 @@ struct NetActorState {
     uint32_t pathTick = 0;        // on a path: pos and rot are the actor's on this tick, and it goes on by these steps
     std::array<int16_t, 3> posStep{}, rotStep{};
     int16_t fallStep = 0;         // ... its y step growing by this each tick (a fall, an arc)
-    uint8_t told = 0;             // a client's: which of the visual's fields the world has said (kNetTold...)
+    uint8_t report = 0;           // an animated actor's stepCounter: what a boss tells the parts it started
+    uint8_t told = 0;            // a client's: which of the visual's fields the world has said (kNetTold...)
     friend bool operator==(const NetActorState&, const NetActorState&) = default;
 };
 constexpr uint8_t kNetToldScale = 1, kNetToldTint = 2, kNetToldParts = 4, kNetToldLook = 8;
@@ -212,6 +213,7 @@ public:
         std::array<int16_t, 3> pos{}, rot{};
         uint8_t anim = 0;
         bool shown = false;
+        uint8_t report = 0;   // NetActorState::report
         uint16_t key = 0;     // the animation's place
         uint8_t ticksLeft = 0;
         uint32_t keyAt = 0;

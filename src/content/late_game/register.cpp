@@ -29,6 +29,7 @@
 
 namespace od::port {
 void registerSt5cShockNetLinks();
+void registerSt5cRockNetLinks();
 } // namespace od::port
 
 namespace od::port {
@@ -42,6 +43,7 @@ using namespace od::port;
 void registerLateGameClasses(ContentRegistry& r) {
     od::port::registerRaceNetScreen();
     od::port::registerSt5cShockNetLinks();
+    od::port::registerSt5cRockNetLinks();
     r.addClasses({
         // the pool-e0 type-0xa enemy spawners of the area's stages
         {RoutineId::SpawnerSt45Update, &spawnerSt45Update},

@@ -81,7 +81,7 @@ constexpr uint8_t kMaskX = 0x01, kMaskY = 0x02, kMaskZ = 0x04, kMaskYaw = 0x08, 
 constexpr uint8_t kMoreAnimExtra = 0x01, kMoreLock = 0x02, kMoreSolids = 0x04, kMoreScale = 0x08, kMoreTint = 0x10, kMoreParts = 0x20,
                   kMoreAim = 0x40, kMorePath = 0x80;
 constexpr uint8_t kExtraAge = 0x01, kExtraKey = 0x02, kExtraHeld = 0x04, kExtraPaint = 0x08, kExtraLook = 0x10,
-                  kExtraUniformScale = 0x20; // what else
+                  kExtraUniformScale = 0x20, kExtraReport = 0x40; // what else
 constexpr uint8_t kLookBoneScale = 0x01;
 constexpr uint8_t kLockPositionsOnly = 0x80, kLockWide = 0x40, kLockOwners = 0x20, kLockCountMask = 0x1f;
 constexpr int kLockGrain = 4;   // the units a narrow lock offset counts in
@@ -150,6 +150,7 @@ void NetWorldTable::seen(uint8_t slot, const Seen& s) {
     a.state.rot = s.rot;
     a.state.anim = s.anim;
     a.state.shown = s.shown;
+    a.state.report = s.report;
     const uint16_t tintBefore = occupantChanged ? s.bound.tint : a.state.visual.tint;
     a.state.visual = s.visual;
     if (s.visual.tint == kTintFlash) { // a hit's flash: its own event, so that it is seen however often the updates go
@@ -407,7 +408,8 @@ bool netEffectClass(RoutineId id) {
     case RoutineId::SparkEmitterUpdate:
     case RoutineId::MissileTrailUpdate:
     case RoutineId::DarkTrailUpdate:
-    case RoutineId::WaterSplashUpdate: return true;
+    case RoutineId::WaterSplashUpdate:
+    case RoutineId::BossBladeUpdate: return true;
     default: return false;
     }
 }
@@ -491,6 +493,12 @@ template <class Pool> void captureMeshPool(NetWorldTable& table, Pool& pool, siz
                 if (h && h.id() == RoutineId::DarkTrailUpdate) {
                     const auto* trail = heldClassStateOf<hyper_shell_state::DarkTrailFields>(a);
                     if (trail && uint32_t(trail->parent) != 0) s.effectStart.parent = actorHeaderAt(trail->parent).slot;
+                    else s.effectGoes = false;
+                }
+                if (h && h.id() == RoutineId::BossBladeUpdate) {
+                    // the boss it follows, in its parameters' word: the client's copy follows the boss's copy there
+                    const uint32_t boss = a.paramsWord();
+                    if (boss != 0 && (actorHeaderAt(boss).flags & kActorLive)) s.effectStart.parent = actorHeaderAt(boss).slot;
                     else s.effectGoes = false;
                 }
                 if (h && h.id() == RoutineId::WaterSplashUpdate)
@@ -585,6 +593,7 @@ void captureNetWorld(NetWorldTable& table, uint32_t tick) {
         const bool hasModel = a.boneBlocks != 0;
         NetWorldTable::Seen s = seenOf(a, hasModel ? a.model : 0, hasModel ? a.animTable.value() : 0);
         s.anim = a.anim;
+        s.report = a.stepCounter;
         s.animScript = hasModel ? a.animScript.value() : 0;
         const NetWorldActor& held = table.actors[slot];
         s.modelEntry = held.live && held.model == s.model && held.animTable == s.animTable && held.identity.type == a.type
@@ -830,6 +839,7 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
         k.flashTold = a.flashTick;
         k.acked = a.state;
         k.acked.visual = a.bound; // a client's bind gives it; a class's change goes in an update
+        k.acked.report = 0;       // ... and a new occupant holds none
         k.acked.aim.clear();
         k.acked.lock.clear();
         k.acked.solids.clear();
@@ -883,6 +893,7 @@ std::vector<uint8_t> NetStateSender::update(const NetWorldTable& table) {
             return a.state.visual.boneScale != o.boneScale || a.state.visual.rootScale != o.rootScale || a.state.visual.semi != o.semi;
         };
         if (lookDiffers(k.acked.visual) || lookDiffers(k.sent.visual)) extra |= kExtraLook;
+        if (differs(&NetActorState::report)) extra |= kExtraReport;
         if (a.state.lock != k.acked.lock || a.state.lock != k.sent.lock) more |= kMoreLock;
         if (a.state.solids != k.acked.solids || a.state.solids != k.sent.solids) more |= kMoreSolids;
         const NetActorVisual &v = a.state.visual, &va = k.acked.visual, &vs = k.sent.visual;
@@ -964,6 +975,7 @@ std::vector<uint8_t> NetStateSender::update(const NetWorldTable& table) {
             for (const uint8_t c : a.state.visual.rootScale) e.u8(c);
             e.u8(a.state.visual.semi);
         }
+        if (extra & kExtraReport) e.u8(a.state.report);
         count(&UpdateBytes::paint);
         if (more & kMoreSolids) {
             e.u8(uint8_t(a.state.solids.size()));
@@ -1266,6 +1278,7 @@ std::optional<uint16_t> NetStateClient::applyParsed(std::span<const uint8_t> byt
             s.visual.semi = r.u8();
             s.told |= kNetToldLook;
         }
+        if (extra & kExtraReport) s.report = r.u8();
         if (more & kMoreSolids) {
             s.solids.resize(r.u8());
             for (NetSolid& v : s.solids) {
@@ -1587,6 +1600,7 @@ void PoolNetActors::effect(const NetEffect& e) {
         classState<FootstepDustFields>(asStatic(head)).parent = parent;
     if (parent && e.pool == kStaticClass && handlerIs(RoutineId::DarkTrailUpdate))
         classState<hyper_shell_state::DarkTrailFields>(asStatic(head)).parent = parent->at;
+    if (e.pool == kStaticClass && handlerIs(RoutineId::BossBladeUpdate)) head.setParamsWord(parent ? parent->at : 0);
     if (e.pool == kEffectClass) {
         EffectActor& fx = asEffect(head);
         fx.pos.x = e.pos[0];
@@ -1669,6 +1683,7 @@ void PoolNetActors::tick(uint8_t slot, const NetActorState& state, const std::op
         }
         return;
     }
+    asAnimated(a).stepCounter = state.report; // the copies of the parts it started read it (a boss's blades)
     if (!animates_[slot]) return;
     AnimatedActor& animated = asAnimated(a);
     if (state.told & kNetToldScale) {
