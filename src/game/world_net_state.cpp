@@ -1660,6 +1660,14 @@ void PoolNetActors::tick(uint8_t slot, const NetActorState& state, const std::op
 
 void PoolNetActors::endTick() { applyActorFrees(); }
 
+bool PoolNetActors::heldShot(size_t index) const {
+    if (index >= ShotPool::size()) return false;
+    const uint32_t at = shotPool()[index].at;
+    for (size_t i = kShotClass; i < kShotClass + ShotPool::size(); ++i)
+        if (ownSlot_[i] == at) return true;
+    return false;
+}
+
 bool PoolNetActors::shotRunsFor(uint8_t tablePlayer) const {
     for (size_t i = kShotClass; i < kShotClass + ShotPool::size(); ++i) {
         if (ownSlot_[i] == 0) continue;

@@ -424,6 +424,8 @@ public:
     ActorHeader* mirrorOf(uint8_t slot) const { return slotOf(slot); }
     // a shot of this player of the table runs here from its event (a swing, a beam): it lasts until the world's ends
     bool shotRunsFor(uint8_t tablePlayer) const;
+    // shot pool slot `index` holds a world's shot started here from its event (another player's): not this machine's fire
+    bool heldShot(size_t index) const;
     // the solids of the actors held here, for the actor collision pass
     void submitSolids();
     uint64_t effectsStarted() const { return effectsStarted_; }

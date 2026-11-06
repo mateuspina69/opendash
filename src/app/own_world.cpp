@@ -630,7 +630,10 @@ void OwnWorldClient::endFrame() {
     od::port::hitListLockOnOnly();
     for (size_t i = 0; i < ownShots_.size(); ++i) {
         const od::port::ShotActor& shot = od::port::shotPool()[i];
-        const bool mine = (shot.flags & od::port::kActorLive) && (shot.runFlags & od::port::kActorRun);
+        // this machine's Mega Man's (table 0): the others' shots run in this pool too, from the world's events, and are
+        // never this player's to fire again
+        const bool mine = (shot.flags & od::port::kActorLive) && (shot.runFlags & od::port::kActorRun) && shot.ownerPlayer == 0 &&
+                          !actors_->heldShot(i);
         if (mine && !ownShots_[i].live) {
             ownShots_[i] = {true, nextSerial_++};
             pipe_->sendReliable(playerId_, WorldMessageType::NetFire, od::port::encode(od::port::netFireOf(shot, uint8_t(i), ownShots_[i].serial)));
