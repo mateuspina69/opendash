@@ -35,6 +35,14 @@ struct Datagram {
     std::vector<uint8_t> bytes;
 };
 
+// one IPv4 network this machine is on (up, not the loopback): its address and the network's broadcast address
+struct LocalNetwork {
+    uint32_t address = 0;
+    uint32_t broadcast = 0;
+};
+// the machine's IPv4 networks now (empty when they cannot be read)
+std::vector<LocalNetwork> localNetworks();
+
 class UdpSocket {
 public:
     // binds 0.0.0.0:port (0 = any free port) non-blocking; throws std::runtime_error naming the port and the
@@ -46,6 +54,8 @@ public:
 
     // the bound port (the one the system chose for port 0)
     uint16_t port() const { return port_; }
+    // lets sendTo reach a broadcast address (SO_BROADCAST)
+    void enableBroadcast();
     // sends one datagram (at most kMaxDatagram bytes); false when the system did not take it (a full send buffer,
     // an unreachable network): UDP, the caller's protocol resends what must arrive
     bool sendTo(const Endpoint& to, std::span<const uint8_t> bytes);

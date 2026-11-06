@@ -175,6 +175,8 @@ struct TitleHost {
     std::function<int(uint32_t slot, uint8_t* out, uint32_t size)> readSave;
     // OpenDash: one frame of the multiplayer lobby over the title's background (its primitives into `draw`, nullptr: none)
     std::function<LobbyChoice(std::vector<ScreenPrim>* draw)> lobby;
+    // OpenDash: a netplay session is on (the idle's attract / demo do not run: a game of the session is the host's)
+    std::function<bool()> sessionOn;
 };
 
 struct TitleTasks {

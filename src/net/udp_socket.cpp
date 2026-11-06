@@ -5,10 +5,13 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <mswsock.h>
+#include <iphlpapi.h>
 #else
 #include <arpa/inet.h>
 #include <cerrno>
 #include <fcntl.h>
+#include <ifaddrs.h>
+#include <net/if.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -134,6 +137,53 @@ UdpSocket::UdpSocket(uint16_t port) : socket_(uintptr_t(INVALID_SOCKET)) {
     getsockname(s, reinterpret_cast<sockaddr*>(&bound), &len);
     socket_ = uintptr_t(s);
     port_ = ntohs(bound.sin_port);
+}
+
+std::vector<LocalNetwork> localNetworks() {
+    std::vector<LocalNetwork> out;
+#ifdef _WIN32
+    ULONG size = 16 * 1024;
+    std::vector<uint8_t> buf;
+    ULONG rc = ERROR_BUFFER_OVERFLOW;
+    for (int tries = 0; tries < 3 && rc == ERROR_BUFFER_OVERFLOW; ++tries) {
+        buf.resize(size);
+        rc = GetAdaptersAddresses(AF_INET, GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER,
+                                  nullptr, reinterpret_cast<IP_ADAPTER_ADDRESSES*>(buf.data()), &size);
+    }
+    if (rc != NO_ERROR) return out;
+    for (auto* a = reinterpret_cast<IP_ADAPTER_ADDRESSES*>(buf.data()); a; a = a->Next) {
+        if (a->OperStatus != IfOperStatusUp || a->IfType == IF_TYPE_SOFTWARE_LOOPBACK) continue;
+        for (IP_ADAPTER_UNICAST_ADDRESS* u = a->FirstUnicastAddress; u; u = u->Next) {
+            if (u->Address.lpSockaddr->sa_family != AF_INET) continue;
+            const uint32_t address = ntohl(reinterpret_cast<const sockaddr_in*>(u->Address.lpSockaddr)->sin_addr.s_addr);
+            const unsigned prefix = u->OnLinkPrefixLength;
+            if (prefix == 0 || prefix > 30) continue;
+            const uint32_t mask = prefix >= 32 ? 0xffffffffu : ~(0xffffffffu >> prefix);
+            out.push_back({address, address | ~mask});
+        }
+    }
+#else
+    ifaddrs* list = nullptr;
+    if (getifaddrs(&list) != 0) return out;
+    for (const ifaddrs* i = list; i; i = i->ifa_next) {
+        if (!i->ifa_addr || i->ifa_addr->sa_family != AF_INET || !(i->ifa_flags & IFF_UP) || (i->ifa_flags & IFF_LOOPBACK) ||
+            !(i->ifa_flags & IFF_BROADCAST) || !i->ifa_broadaddr)
+            continue;
+        out.push_back({ntohl(reinterpret_cast<const sockaddr_in*>(i->ifa_addr)->sin_addr.s_addr),
+                       ntohl(reinterpret_cast<const sockaddr_in*>(i->ifa_broadaddr)->sin_addr.s_addr)});
+    }
+    freeifaddrs(list);
+#endif
+    return out;
+}
+
+void UdpSocket::enableBroadcast() {
+#ifdef _WIN32
+    BOOL on = TRUE;
+#else
+    int on = 1;
+#endif
+    setsockopt(SOCKET(socket_), SOL_SOCKET, SO_BROADCAST, reinterpret_cast<const char*>(&on), sizeof on);
 }
 
 UdpSocket::~UdpSocket() {

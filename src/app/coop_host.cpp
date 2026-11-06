@@ -92,6 +92,7 @@ void CoopHost::liveSaveFile() {
 void CoopHost::hostLoaded(std::span<const uint8_t> save, uint64_t nowNs) {
     save_.assign(save.begin(), save.end());
     written_ = save_;
+    hostPlaying_ = true;
     {
         std::ofstream out(lastSavePath_, std::ios::binary);
         out.write(reinterpret_cast<const char*>(save_.data()), std::streamsize(save_.size()));
@@ -101,6 +102,7 @@ void CoopHost::hostLoaded(std::span<const uint8_t> save, uint64_t nowNs) {
             int(save_.size() > 0x129 ? save_[0x129] : 0));
     if (!session_) return;
     for (const uint8_t id : told_) {
+        stale_.insert(id);
         WorldMessage m{WorldMessageType::NetReload};
         m.playerId = id;
         session_->sendWorld(nowNs, id, true, encodeWorldMessage(m));
@@ -146,6 +148,14 @@ void CoopHost::sendSave(uint8_t id, uint64_t nowNs) {
 }
 
 void CoopHost::fromClient(uint8_t id, const WorldMessage& m, uint64_t nowNs) {
+    if (!hostPlaying_) return; // no world is anyone's before the host's game is on
+    if (stale_.contains(id)) {
+        // a game from before the session's save: nothing of it counts until it enters the save's room
+        const bool saveRoom = m.type == WorldMessageType::NetEnter && m.netState.size() > 3 && save_.size() > 0x129 &&
+                              m.netState[0] == save_[0x128] && m.netState[1] == save_[0x129];
+        if (!saveRoom) return;
+        stale_.erase(id);
+    }
     switch (m.type) {
     case WorldMessageType::NetEnter:
         if (m.netState.size() > 3) {
@@ -191,6 +201,7 @@ void CoopHost::poll(uint64_t nowNs) {
         reload_ = written_;
         if (session_)
             for (const uint8_t id : clients_) {
+                stale_.insert(id);
                 WorldMessage m{WorldMessageType::NetReload};
                 m.playerId = id;
                 session_->sendWorld(nowNs, id, true, encodeWorldMessage(m));
@@ -204,15 +215,19 @@ void CoopHost::poll(uint64_t nowNs) {
     const od::net::SessionStatus status = session_->status(nowNs);
     for (const od::net::PlayerStatus& p : status.players) {
         if (p.playerId < WorldHost::kPlayers) worlds_.setPlayerName(p.playerId, p.name);
-        // a game that connects is told the session's save at once: at its title it starts from it
-        if (p.playerId != 0 && p.playerId < WorldHost::kPlayers && !told_.contains(p.playerId) && !liveSave().empty()) {
+        // a game that connects is told the session's save once the host's game is on: at its title it starts from it
+        if (hostPlaying_ && p.playerId != 0 && p.playerId < WorldHost::kPlayers && !told_.contains(p.playerId) &&
+            !liveSave().empty()) {
             told_.insert(p.playerId);
+            stale_.insert(p.playerId);
             sendSave(p.playerId, nowNs);
         }
     }
-    std::erase_if(told_, [&](uint8_t id) {
+    const auto gone = [&](uint8_t id) {
         return std::none_of(status.players.begin(), status.players.end(), [&](const od::net::PlayerStatus& p) { return p.playerId == id; });
-    });
+    };
+    std::erase_if(told_, gone);
+    std::erase_if(stale_, gone);
     for (auto it = clients_.begin(); it != clients_.end();) {
         const bool there = std::any_of(status.players.begin(), status.players.end(), [&](const od::net::PlayerStatus& p) { return p.playerId == *it; });
         if (there) {

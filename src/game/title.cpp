@@ -506,6 +506,7 @@ void titlePressEnter() {
         drawTitleBackground();
         drawPressEnter();
         t.ticks -= 1u;
+        if (t.ticks == 0 && H && H->sessionOn && H->sessionOn()) t.ticks = paceTicks(kIdleTicksPerPace); // no attract
         if (t.ticks == 0) {
             fade(kWipe20Request, 0);
             const uint8_t run = t.attractToggle ^ 1u;

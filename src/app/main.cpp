@@ -178,7 +178,10 @@ void App::handleEvents() {
             if (e.type == SDL_EVENT_TEXT_INPUT) lobby.textInput(e.text.text);
             if (e.type == SDL_EVENT_KEY_DOWN) {
                 const SDL_Scancode k = e.key.scancode;
-                if (k == SDL_SCANCODE_BACKSPACE) lobby.backspace();
+                const bool ctrl = (e.key.mod & SDL_KMOD_CTRL) != 0;
+                if (ctrl && k == SDL_SCANCODE_V) lobby.paste();
+                else if (ctrl && k == SDL_SCANCODE_C && !e.key.repeat) lobby.copy();
+                else if (k == SDL_SCANCODE_BACKSPACE) lobby.backspace();
                 else if (!e.key.repeat && (k == SDL_SCANCODE_RETURN || k == SDL_SCANCODE_KP_ENTER)) lobby.endEdit(true);
                 else if (!e.key.repeat && k == SDL_SCANCODE_ESCAPE) lobby.endEdit(false);
             }

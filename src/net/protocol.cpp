@@ -60,6 +60,12 @@ void writeBody(ByteWriter& w, const Message& m) {
                 w.u32(v.next);
             } else if constexpr (std::is_same_v<T, WorldEvent>) {
                 w.blob(v.payload);
+            } else if constexpr (std::is_same_v<T, Probe>) {
+            } else if constexpr (std::is_same_v<T, Offer>) {
+                w.string(v.name);
+                w.string(v.buildId);
+                w.u8(v.players);
+                w.u16(v.port);
             } else {
                 static_assert(kAlways<T>, "a message type without a layout");
             }
@@ -125,6 +131,16 @@ std::optional<Message> readBody(MessageType t, ByteReader& r) {
     case MessageType::Bye: m = Bye{}; break;
     case MessageType::Ack: m = Ack{r.u32()}; break;
     case MessageType::WorldEvent: m = WorldEvent{r.blob()}; break;
+    case MessageType::Probe: m = Probe{}; break;
+    case MessageType::Offer: {
+        Offer o;
+        o.name = r.string();
+        o.buildId = r.string();
+        o.players = r.u8();
+        o.port = r.u16();
+        m = std::move(o);
+        break;
+    }
     default: return std::nullopt;
     }
     if (!r.done()) return std::nullopt;

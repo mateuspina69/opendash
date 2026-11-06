@@ -35,6 +35,8 @@ enum class MessageType : uint8_t {
     Bye = 10,        // leaving (reliable)
     Ack = 11,        // the reliable messages received in order so far (unreliable)
     WorldEvent = 12, // what must arrive between a player's game and the coordinator (reliable)
+    Probe = 13,      // a lobby looking for hosts on the local network (broadcast, unreliable)
+    Offer = 14,      // host -> that lobby: its session (unreliable)
 };
 // the types that travel on the reliable channel (they carry a sequence number after the header)
 bool isReliable(MessageType t);
@@ -115,10 +117,22 @@ struct WorldEvent {
     bool operator==(const WorldEvent&) const = default;
 };
 
-using Message = std::variant<Hello, Welcome, Refuse, PeerJoined, PeerLeft, PlayerState, WorldState, Ping, Pong, Bye, Ack, WorldEvent>;
+struct Probe {
+    bool operator==(const Probe&) const = default;
+};
+struct Offer {
+    std::string name;    // the host player's
+    std::string buildId; // the host's build (a lobby of another build shows it as such)
+    uint8_t players = 1; // in the session, the host included
+    uint16_t port = 0;   // the session's
+    bool operator==(const Offer&) const = default;
+};
+
+using Message = std::variant<Hello, Welcome, Refuse, PeerJoined, PeerLeft, PlayerState, WorldState, Ping, Pong, Bye, Ack,
+                             WorldEvent, Probe, Offer>;
 static_assert(std::is_same_v<std::variant_alternative_t<0, Message>, Hello> &&
               std::is_same_v<std::variant_alternative_t<size_t(MessageType::Ack) - 1, Message>, Ack> &&
-              std::variant_size_v<Message> == size_t(MessageType::WorldEvent),
+              std::variant_size_v<Message> == size_t(MessageType::Offer),
               "Message lists the types in MessageType order from Hello = 1 (typeOf)");
 MessageType typeOf(const Message& m);
 

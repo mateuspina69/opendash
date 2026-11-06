@@ -206,6 +206,13 @@ std::vector<PeerEvent> Session::takePeerEvents() { return std::exchange(events_,
 // ---- host ----------------------------------------------------------------------------------------------------------
 
 void Session::hostReceive(uint64_t nowNs, const Endpoint& from, Decoded d) {
+    if (std::holds_alternative<Probe>(d.message)) { // a lobby looking for hosts: this session, to it alone
+        uint8_t players = 1;
+        for (const auto& [e, c] : clients_) players += c.accepted ? 1 : 0;
+        transmit(nowNs, from, encode(Offer{config_.name, config_.buildId, players, socket_.port()}));
+        return;
+    }
+    if (std::holds_alternative<Offer>(d.message)) return;
     auto it = clients_.find(from);
     if (const Hello* h = std::get_if<Hello>(&d.message)) {
         if (it != clients_.end() && it->second.nonce != h->nonce) { // the same address, a new connection

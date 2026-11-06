@@ -1567,7 +1567,7 @@ bool PlayerView::startGameFromState(int stage, int sub) {
 
         beginPlay();
         snap = true;
-        if (ownWorld && ownWorld->hosts()) {
+        if (ownWorld && ownWorld->hosts() && game.frontEnd != od::port::kFrontEndDemo) { // the title's demo is no game of the session
             if (sessionImage.empty()) {
                 od::port::saveBuildImage(0);
                 const auto b = od::port::saveImageAt(od::port::kSaveBuf).bytes();

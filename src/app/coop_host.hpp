@@ -77,6 +77,10 @@ private:
     std::function<std::optional<std::vector<uint8_t>>()> live_;
     od::net::Session* session_ = nullptr;
     std::set<uint8_t> clients_;
+    bool hostPlaying_ = false;    // the host's game has started (until then a client waits in its lobby)
+    // the clients told a save they have not started from yet: what they send is of a game the session no longer has,
+    // dropped until they enter the save's own room
+    std::set<uint8_t> stale_;
     std::set<uint8_t> told_;      // the players told the session's save (on connecting, at the title or in a game)
     std::set<uint8_t> placeNext_; // ... who come next to the host when they enter (the session started over)
     std::filesystem::path savePath_, lastSavePath_;

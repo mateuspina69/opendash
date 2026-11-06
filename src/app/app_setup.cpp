@@ -526,6 +526,7 @@ int App::init() {
                         [this] { sessionStop(); },
                         [this] { return netplay.sessionActive(); }, [this] { return netplay.status(SDL_GetTicksNS()); }});
         titleScreen.host.lobby = [this](std::vector<od::port::ScreenPrim>* draw) { return lobby.frame(draw); };
+        titleScreen.host.sessionOn = [this] { return netplay.sessionActive(); };
     }
     if (playerView.ok && !playerView.play && !motionSelfTest &&
         (titleModeArg >= 0 || (!skipTitle && loadArg.empty() && newGameArg < 0 && !startPlay && !stageGiven))) {
