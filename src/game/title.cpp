@@ -377,6 +377,7 @@ void logoMode() {
             if (m.logoTicks >= 0) return;
         }
         fade(kWipe20Request + 2, 0);
+        titleBlock().playerRun = false; // the intro: the title's own run
         GameState& g = gameState();
         g.loadSave = 0;
         g.stage = kAttractStage;
@@ -433,6 +434,7 @@ void loadMode(uint16_t dat, bool toTitle, TitleState title, uint8_t frontEnd) {
 // the stage / story bytes a run starts with: a new game (not loaded), the entry mode, the stage and room, the story and
 // the next story, the dock and the player's kind cleared, the difficulty
 void setRun(EntryMode entry, uint8_t stageId, uint8_t room, uint8_t story, uint8_t nextStory, uint8_t difficulty) {
+    titleBlock().playerRun = entry != EntryMode::Demo; // the attract clears it after
     GameState& g = gameState();
     g.loadSave = 0;
     g.entryMode = uint8_t(entry);
@@ -513,6 +515,7 @@ void titlePressEnter() {
             t.attractToggle = run;
             if (run == kAttractRun) { // the attract intro (scripts 3 / 4)
                 setRun(EntryMode::NewGame, kAttractStage, 0, 0, 0, kNormalDifficulty);
+                t.playerRun = false;
                 mainTask().switchMode(MainMode::ToGame);
                 taskSwitch(TaskEntry::Main);
                 return;
@@ -749,6 +752,7 @@ void titleContinue() {
         GameState& g = gameState();
         g.loadSave = 1;
         g.entryMode = uint8_t(EntryMode::NewGame);
+        t.playerRun = true;
         mainTask().switchMode(MainMode::ToGame);
         taskSwitch(TaskEntry::Main);
         return;

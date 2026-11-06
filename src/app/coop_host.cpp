@@ -216,8 +216,9 @@ void CoopHost::poll(uint64_t nowNs) {
     for (const od::net::PlayerStatus& p : status.players) {
         if (p.playerId < WorldHost::kPlayers) worlds_.setPlayerName(p.playerId, p.name);
         // a game that connects is told the session's save once the host's game is on: at its title it starts from it
+        // (the host back at its title or lobby: no game to give; the one that connects waits in its lobby)
         if (hostPlaying_ && p.playerId != 0 && p.playerId < WorldHost::kPlayers && !told_.contains(p.playerId) &&
-            !liveSave().empty()) {
+            (!live_ || live_().has_value()) && !liveSave().empty()) {
             told_.insert(p.playerId);
             stale_.insert(p.playerId);
             sendSave(p.playerId, nowNs);

@@ -134,6 +134,8 @@ struct TitleBlock {
     int8_t difficultyRow = 0;
     uint16_t brightness = 0;    // the pictures' brightness (0..0x80)
     uint8_t attractToggle = 0;  // the idle's alternation: 0 the attract, 1 the demo
+    bool playerRun = true;      // OpenDash: the run now is the player's (a new game, a load, the tutorial), not the
+                                // title's own (the intro, the attract, the demo): only the player's is a session's game
     uint8_t slideTicks = 0;     // the cursor's slide between two rows (counted down)
     int16_t previousRow = 0;    // the row the cursor slides from
     StateArray<uint8_t, 0xc> unread14{}; // +0x14..+0x1f, up to the controller pool: no code writes them (only the

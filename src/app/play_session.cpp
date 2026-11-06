@@ -30,6 +30,7 @@
 #include "engine/texture_pack.hpp"
 #include "engine/room.hpp"
 #include "engine/vram.hpp"
+#include "game/title.hpp"
 #include "game/actor_collision.hpp"
 #include "game/actor_pools.hpp"
 #include "game/actor_state.hpp"
@@ -1567,7 +1568,8 @@ bool PlayerView::startGameFromState(int stage, int sub) {
 
         beginPlay();
         snap = true;
-        if (ownWorld && ownWorld->hosts() && game.frontEnd != od::port::kFrontEndDemo) { // the title's demo is no game of the session
+        // only the player's run is the session's game (the title's intro, attract and demo are not)
+        if (ownWorld && ownWorld->hosts() && od::port::titleBlock().playerRun && game.frontEnd != od::port::kFrontEndDemo) {
             if (sessionImage.empty()) {
                 od::port::saveBuildImage(0);
                 const auto b = od::port::saveImageAt(od::port::kSaveBuf).bytes();

@@ -6,6 +6,7 @@
 #include <algorithm>
 #include "app/build_id.hpp"
 #include "game/audio_logic.hpp"
+#include "game/menu_draw.hpp"
 #include "game/menu_pointer.hpp"
 #include "game/player/player_input.hpp"
 
@@ -113,11 +114,13 @@ std::string Lobby::hostAddress() const {
 
 void Lobby::screen(const std::string& title, int rows) {
     if (!draw_) return;
+    // the whole window: the 640 x 480 frame and the widescreen sides (the title's background opened them)
+    const int side = od::port::screenExtra() * 2;
     ScreenPrim dim; // the title's background, dimmed: a screen of its own
     dim.kind = ScreenPrim::Flat;
-    dim.x = 0;
+    dim.x = int16_t(-side);
     dim.y = 0;
-    dim.w = kScreenW;
+    dim.w = int16_t(kScreenW + 2 * side);
     dim.h = kScreenH;
     dim.colour = 0;
     dim.semi = true;
