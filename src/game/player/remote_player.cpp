@@ -6,6 +6,7 @@
 
 #include "game/actor_pools.hpp"
 #include "game/event.hpp"
+#include "game/player/player_animation.hpp"
 #include "game/player/player_interaction.hpp"
 #include "game/world_net_state.hpp"
 #include "game/world_view.hpp"
@@ -77,6 +78,16 @@ bool g_scene = false;
 
 void remotePlayersSceneStart() {
     g_scene = true;
+    if (g_remote[0] && playerPresent(0)) {
+        // the scene plays this Mega Man here from now: its channels read its owner's two frame bytes (remotePlayerState),
+        // not an animation's keys -- each starts its animation over on its keys (one this world cannot read: the idle)
+        Player& p = playerById(0);
+        const auto playable = [&](uint8_t anim) {
+            return anim != uint8_t(PlayerAnim::None) && (anim < kStageAnims || p.stageAnims != 0) ? anim : uint8_t(PlayerAnim::Idle);
+        };
+        startUpperAnimation(p, uint8_t(p.channelMix), PlayerAnim(playable(p.upper.anim)), 0);
+        startBodyAnimation(p, PlayerAnim(playable(p.body.anim)), 0);
+    }
     g_remote[0] = false;
 }
 
