@@ -369,6 +369,10 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
     case WorldMessageType::NetHit:
         if (const auto hit = od::port::decodeHitResult(m.netState)) od::port::applyPlayerHit(od::port::player(), *hit);
         break;
+    case WorldMessageType::NetEquip: // another player's equipment: u8 their id, then what they wear
+        if (!m.netState.empty() && m.netState[0] < others_.size() && m.netState[0] != playerId_)
+            others_[m.netState[0]].equipment.assign(m.netState.begin() + 1, m.netState.end());
+        break;
     case WorldMessageType::NetShotHit: {
         const auto hit = od::port::decodeShotHit(m.netState);
         if (hit && hit->clientSlot < ownShots_.size() && ownShots_[hit->clientSlot].live && ownShots_[hit->clientSlot].serial == hit->serial)
@@ -552,6 +556,7 @@ void OwnWorldClient::otherPlayerRules(uint8_t id, Other& o, const od::port::Play
         od::port::remotePlayerState(table, shown);
     }
     od::port::Player& p = od::port::playerById(table);
+    if (!o.equipment.empty()) od::port::applyEquipment(p, o.equipment); // their shots here take their weapons
     const od::port::NetPlayerFields& f = o.from.fields();
     p.status = uint16_t((p.status & od::port::kStatusMarkerMask) | f.status);
     od::port::applyNetArm(p, f);

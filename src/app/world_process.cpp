@@ -446,6 +446,7 @@ int run(const WorldArgs& w) {
     uint8_t sceneScript = 0; // the scene's script: each game starts it itself
     std::map<uint8_t, od::port::NetStateSender> netClients;
     std::map<uint8_t, uint16_t> netSequenceOf; // each client's update numbering, kept across its joins and leaves
+    std::array<std::vector<uint8_t>, od::port::kPlayerSlots> equipOf{}; // what each player here wears (their NetEquip)
     const auto dropNetClient = [&](uint8_t id) {
         if (const auto c = netClients.find(id); c != netClients.end()) {
             netSequenceOf[id] = c->second.nextSequence();
@@ -454,6 +455,14 @@ int run(const WorldArgs& w) {
     };
     // on a link: no player of its own; the coordinator's come and go, and its silence ends the world
     std::unique_ptr<WorldLink> link;
+    // player `about`'s equipment to client `to`: u8 about, then the equipment
+    const auto equipMessage = [&](uint8_t to, uint8_t about) {
+        WorldMessage e{WorldMessageType::NetEquip};
+        e.playerId = to;
+        e.netState.push_back(about);
+        e.netState.insert(e.netState.end(), equipOf[about].begin(), equipOf[about].end());
+        link->sendReliable(e);
+    };
     std::array<std::optional<int16_t>, 2> roomPlayerFields{}; // in the water, the burden: what a joining player is told
     const auto roomPlayerMessage = [&](uint8_t client, od::port::RoomPlayerField field, int16_t value) {
         WorldMessage m{WorldMessageType::NetRoomPlayer};
@@ -757,6 +766,7 @@ int run(const WorldArgs& w) {
                     od::port::eventOwnerLeft(m.playerId);
                     od::port::remotePlayerLeave(m.playerId);
                     mirrors[m.playerId] = RemoteMirror{};
+                    equipOf[m.playerId].clear();
                 }
                 break;
             case WorldMessageType::StageState:
@@ -774,6 +784,8 @@ int run(const WorldArgs& w) {
                 }
                 for (auto& [key, sender] : playerSenders) // the numbering goes on: an update of before is older here
                     if (key.first == m.playerId) sender.restart();
+                for (uint8_t other = 0; other < od::port::kPlayerSlots; ++other) // what the others wear
+                    if (other != m.playerId && !equipOf[other].empty()) equipMessage(m.playerId, other);
                 if (sceneOn) sceneStartMessage(m.playerId); // joining during a scene: their game runs it too
                 lastScreen.clear();                          // ... and is told the screen again
                 for (size_t f = 0; f < roomPlayerFields.size(); ++f)
@@ -830,8 +842,13 @@ int run(const WorldArgs& w) {
                 break;
             }
             case WorldMessageType::NetEquip:
-                if (m.playerId < od::port::kPlayerSlots && od::port::playerIsRemote(m.playerId))
+                if (m.playerId < od::port::kPlayerSlots && od::port::playerIsRemote(m.playerId)) {
                     od::port::applyEquipment(od::port::playerById(m.playerId), m.netState);
+                    // the others' games run this player's shots too: they wear it there as well
+                    equipOf[m.playerId] = m.netState;
+                    for (const auto& [client, sender] : netClients)
+                        if (client != m.playerId) equipMessage(client, m.playerId);
+                }
                 break;
             case WorldMessageType::NetReport:
                 if (const auto report = od::port::decodeReport(m.netState);

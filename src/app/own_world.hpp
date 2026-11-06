@@ -140,6 +140,7 @@ private:
         std::array<od::port::NetPlayerTrack, 2> tracks{};
         int64_t stepped = -1;
         bool joined = false;
+        std::vector<uint8_t> equipment; // what they wear (the world's NetEquip of them): their shots here are theirs
     };
     void otherPlayerRules(uint8_t id, Other& o, const od::port::PlayerSnapshot& shown);
     void downedTurn();
