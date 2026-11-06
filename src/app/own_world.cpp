@@ -205,8 +205,10 @@ void OwnWorldClient::bindWorld(int stage, int sub) {
     room_ = WorldRoom{stage, sub};
     joined_ = false;
     lastEquipment_.clear();
-    uplink_ = {};
-    guestUplink_ = {};
+    // the numbering goes on (a room bound again after a scene is the same world, told of no join: an update numbered
+    // over from the start would be older there than every one before), every field goes again until one is acknowledged
+    uplink_.restart();
+    guestUplink_.restart();
     for (Other& o : others_) o = Other{};
     ownShots_ = {};
     reported_ = {};
