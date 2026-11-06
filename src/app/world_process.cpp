@@ -445,6 +445,13 @@ int run(const WorldArgs& w) {
     uint8_t sceneOwner = 0;
     uint8_t sceneScript = 0; // the scene's script: each game starts it itself
     std::map<uint8_t, od::port::NetStateSender> netClients;
+    std::map<uint8_t, uint16_t> netSequenceOf; // each client's update numbering, kept across its joins and leaves
+    const auto dropNetClient = [&](uint8_t id) {
+        if (const auto c = netClients.find(id); c != netClients.end()) {
+            netSequenceOf[id] = c->second.nextSequence();
+            netClients.erase(c);
+        }
+    };
     // on a link: no player of its own; the coordinator's come and go, and its silence ends the world
     std::unique_ptr<WorldLink> link;
     std::array<std::optional<int16_t>, 2> roomPlayerFields{}; // in the water, the burden: what a joining player is told
@@ -760,8 +767,11 @@ int run(const WorldArgs& w) {
                 break;
             case WorldMessageType::NetJoin:
                 // a client that joins (again: its game bound the room anew) holds nothing yet: it is told all of it
-                netClients.erase(m.playerId);
-                netClients.try_emplace(m.playerId, od::port::netSlotNetworked, m.playerId);
+                dropNetClient(m.playerId);
+                {
+                    od::port::NetStateSender& fresh = netClients.try_emplace(m.playerId, od::port::netSlotNetworked, m.playerId).first->second;
+                    if (const auto s = netSequenceOf.find(m.playerId); s != netSequenceOf.end()) fresh.continueFrom(s->second);
+                }
                 for (auto& [key, sender] : playerSenders) // the numbering goes on: an update of before is older here
                     if (key.first == m.playerId) sender.restart();
                 if (sceneOn) sceneStartMessage(m.playerId); // joining during a scene: their game runs it too
@@ -849,7 +859,7 @@ int run(const WorldArgs& w) {
             case WorldMessageType::NetSpeaker:
                 if (m.netState.size() == 1 && m.playerId < od::port::kPlayerSlots) od::port::eventOfOwner(m.playerId).speakerAnimation = m.netState[0];
                 break;
-            case WorldMessageType::NetLeave: netClients.erase(m.playerId); break;
+            case WorldMessageType::NetLeave: dropNetClient(m.playerId); break;
             case WorldMessageType::NetAck:
                 if (const auto c = netClients.find(m.playerId); c != netClients.end()) c->second.acknowledge(m.netSequence);
                 break;

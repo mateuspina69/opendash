@@ -283,6 +283,11 @@ void OwnWorldClient::turn(uint64_t nowNs) {
         SDL_Log("own world: actor %02x appeared: type %02x subtype %02x variant %02x model %02x%s", unsigned(a.slot),
                 unsigned(a.identity.type), unsigned(a.identity.subtype), unsigned(a.identity.variant),
                 unsigned(a.identity.modelEntry), a.bound ? "" : " (its model does not bind here)");
+    for (const od::port::PoolNetActors::Started& s : actors_->takeStarted())
+        SDL_Log("own world: %s of player %u (type %02x variant %02x)%s", s.pool == od::port::kShotClass ? "shot" : "effect",
+                unsigned(s.owner), unsigned(s.type), unsigned(s.variant),
+                s.parent == od::port::kNetNoParent ? ""
+                                                   : (" on player " + std::to_string(s.parent) + ", here " + std::to_string(s.parentTable)).c_str());
     sceneTurn();
     localSceneTurn();
     if (!room_) return;

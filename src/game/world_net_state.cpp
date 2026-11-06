@@ -1434,7 +1434,7 @@ void PoolNetActors::appear(uint8_t slot, const NetActorIdentity& identity, const
     a.rotation.z = state.rot[2];
     const bool bound = identity.modelEntry != kNetNoModel && bindActorModelEntry(a, identity.modelEntry);
     animates_[slot] = bound && actorSlotClass(slot) == kAnimatedClass;
-    if (netSlotVisible(slot)) appeared_.push_back({slot, identity, bound});
+    if (netSlotVisibleOrShot(slot)) appeared_.push_back({slot, identity, bound});
 }
 
 void PoolNetActors::go(uint8_t slot) {
@@ -1469,6 +1469,9 @@ void PoolNetActors::effect(const NetEffect& e) {
                              : e.pool == kShotClass ? allocActor10()
                                                     : allocActor60(e.loopFlags);
     if (address == 0) return; // the pool is full here: this one is not seen
+    const bool onPlayer = e.parent != kNetNoParent && actorSlotClass(e.parent) == kPlayerClass;
+    if (e.pool == kShotClass || onPlayer)
+        started_.push_back({e.pool, e.type, e.variant, e.owner, e.parent, onPlayer ? tableOfPlayer(e.parent) : kNetNoParent});
     ActorHeader& head = actorHeaderAt(address);
     head.flags = e.flags;
     head.type = e.type;

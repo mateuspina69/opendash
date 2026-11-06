@@ -252,6 +252,10 @@ public:
     // the client holds update `sequence`
     void acknowledge(uint16_t sequence);
     uint64_t updatesCut() const { return updatesCut_; } // updates that did not hold every change
+    // the numbering of the updates: a sender made for a client that joins again goes on from its earlier one's, so an update
+    // of before still on its way is older than every one after
+    uint16_t nextSequence() const { return nextSequence_; }
+    void continueFrom(uint16_t next) { nextSequence_ = next; }
     // the bytes of the largest update, by kind of field (measuring)
     struct UpdateBytes {
         uint32_t total = 0, head = 0, position = 0, rotation = 0, animation = 0, visual = 0, aim = 0, paint = 0, solids = 0, lock = 0, path = 0;
@@ -431,9 +435,16 @@ public:
         bool bound = false;
     };
     std::vector<Appeared> takeAppeared() { return std::exchange(appeared_, {}); }
+    // the world's shots, and its effects on a player, started here since the last call: whose they are (world ids) and
+    // which player of this machine's table they hang from
+    struct Started {
+        uint8_t pool = 0, type = 0, variant = 0, owner = 0, parent = kNetNoParent, parentTable = kNetNoParent;
+    };
+    std::vector<Started> takeStarted() { return std::exchange(started_, {}); }
 
 private:
     std::vector<Appeared> appeared_;
+    std::vector<Started> started_;
     ActorHeader* slotOf(uint8_t slot) const;
     bool shotsInOwnSlots_;
     uint8_t ownPlayerId_ = 0;
