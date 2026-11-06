@@ -14,8 +14,8 @@
 #include <memory>
 #include <unordered_map>
 
-#ifdef _WIN32
 #include "engine/texture_pack.hpp"
+#ifdef _WIN32
 #include "device_d3d12.hpp"
 #else
 #include "device_vulkan.hpp"
