@@ -436,7 +436,7 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
     case WorldMessageType::NetRevived:
         if (od::port::playerIsDowned(od::port::player())) {
             SDL_Log("own world: revived");
-            od::port::playerRevive(od::port::player(), int16_t(od::port::player().maxHitPoints / 2));
+            od::port::playerRevive(od::port::player(), 0); // the game's danger state, as a respawn: the next hit downs them
         }
         break;
     case WorldMessageType::NetRespawnAt:
