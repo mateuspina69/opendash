@@ -93,6 +93,8 @@ void App::frame() {
         scriptFailed = true;
     }
     handleEvents();
+    // the buttons on every rendered frame, the game frames' poll ORs them in (a tap between two of them is not lost)
+    if (!showMenu && od::port::menuUnified()) tapLatch |= pollButtons(pad, playerView.play || titleScreen.active, false, false);
     now = SDL_GetTicksNS();
     // --shot: a fixed clock (half a sim step per frame) so images are reproducible
     const uint64_t step = ptSpeed > 0 && !playScript.empty() ? kSimStepNs * uint64_t(ptSpeed)

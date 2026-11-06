@@ -540,10 +540,10 @@ void titlePressEnter() {
 // the row (wrapping) with the cursor's slide and the sound
 void cursorStep(int8_t& row, int last) {
     TitleBlock& t = titleBlock();
-    const uint16_t p = pad0().pressed;
+    const uint16_t p = menuDirections(); // OpenDash: a held direction repeats (player_input setMenuUnified)
     if (t.slideTicks != 0) {
         t.slideTicks -= 1u;
-        return;
+        if (!menuUnified()) return; // OpenDash: a move during the slide starts the next one from here
     }
     if (MenuPointer& pt = menuPointer(); pt.moved && pt.row < kListCell) { // OpenDash: the mouse's row
         pt.moved = false;

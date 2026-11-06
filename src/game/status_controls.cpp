@@ -215,7 +215,7 @@ int twoColumnListStep(StatusScreen& s, int level, int count, int cols) {
     int8_t c = s.rowStep;
     if (c != 0) {
         s.rowStep = int8_t(c < 1 ? c + 1 : c - 1);
-        return 0;
+        if (!menuUnified()) return 0; // OpenDash: a move during the row's step (player_input setMenuUnified)
     }
     c = s.scrollStep;
     if (c != 0) {
@@ -271,18 +271,23 @@ int twoColumnListStep(StatusScreen& s, int level, int count, int cols) {
         ns = 0;
         if (rows <= nr) nr = rows - 1;
     }
+    bool moved = false; // OpenDash: the move sound on a move only (the unified menus' steps run during the animations)
     if (nr >= 0) {
         if (nr == row) {
-            if (ns != scroll) s.scrollStep = int8_t(scrollSteps(int8_t(ns - int(s.listScroll))));
+            if (ns != scroll) {
+                s.scrollStep = int8_t(scrollSteps(int8_t(ns - int(s.listScroll))));
+                moved = true;
+            }
         } else {
             s.listRow = uint8_t(nr);
             s.rowStep = int8_t(nr - r0);
+            moved = true;
         }
     }
     c = s.cursorStep;
     if (c != 0) {
         s.cursorStep = int8_t(c < 1 ? c + 1 : c - 1);
-        return 0;
+        if (!menuUnified()) return 0; // OpenDash: a move during the column's step
     }
     int col = s.cursor;
     if (rep & kPadLeft) --col;
@@ -293,10 +298,13 @@ int twoColumnListStep(StatusScreen& s, int level, int count, int cols) {
     else if (count % per != 0 && rows == int(s.listRow) + 1 + scroll) per = count % per;
     if (col < 0) col = per - 1;
     if (per - 1 < col) col = 0;
-    if (col != s.cursor) s.cursorStep = int8_t(moveSteps(col <= s.cursor));
+    if (col != s.cursor) {
+        s.cursorStep = int8_t(moveSteps(col <= s.cursor));
+        moved = true;
+    }
     s.cursorKept = uint8_t(col);
     s.cursor = int8_t(col);
-    if (s.cursorStep != 0 || s.rowStep != 0 || s.scrollStep != 0) soundPlayFlat(UiSound::Cursor);
+    if (menuUnified() ? moved : (s.cursorStep != 0 || s.rowStep != 0 || s.scrollStep != 0)) soundPlayFlat(UiSound::Cursor);
     s.cursorShown = 1;
     int r = (menuPadPressed() & kPadConfirm) != 0;
     if (pt.click && !pt.moved && s.cursorStep == 0 && s.rowStep == 0 && s.scrollStep == 0) { // OpenDash: a click
@@ -318,7 +326,7 @@ int oneColumnListStep(StatusScreen& s) {
     int8_t c = s.rowStep;
     if (c != 0) {
         s.rowStep = int8_t(c > 0 ? c - 1 : c + 1);
-        return 0;
+        if (!menuUnified()) return 0; // OpenDash: a move during the row's step (player_input setMenuUnified)
     }
     c = s.scrollStep;
     if (c != 0) {

@@ -63,6 +63,9 @@ bool optionsPictures();
 // the options page's overlay (the screen dimmed and lined, the box of `rows` lines, the cursor bar on line s.step, the
 // corner brackets; `icons`: the video row's pictures where the source has them): the questions of the sub-screen use it
 void optionsOverlay(const StatusScreen& s, int rows, bool icons);
+// OpenDash: the mouse on an overlay's lines (its rows base + line): onto a line the cursor (+3) moves there with the
+// move sound; true = the mouse moved onto one this step (the d-pad's move is not taken)
+bool optionsOverlayPointer(StatusScreen& s, int rows, int base = 0);
 // the source's own message headers are the PS1's (their window columns are in 2 px units): its options page has the
 // PS1's nine rows
 bool optionsSourceHeadersPs1();

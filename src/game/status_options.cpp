@@ -24,6 +24,7 @@
 #include "game/menu_draw.hpp"
 #include "game/message.hpp"
 #include "game/menu_help.hpp"
+#include "game/menu_pointer.hpp"
 #include "game/message_state.hpp"
 #include "game/player/player_input.hpp"
 #include "game/player/player_state.hpp"
@@ -388,6 +389,11 @@ void volumeBarDraw(const StatusScreen& s, int x, int y) {
     otSprite(c, x, y, kVolumeSetBoxArt, 0x40, 0x10);
     labelNext(kLblVolLevel, 1);
     otSprite(c, x, y + 1, kVolumeSetLevelArt, s.cursor * 3 + 8, 0xe);
+    // OpenDash: the bar's 17 levels are the mouse's rows (the level's cursor row: game/status_controls menuCursorStep)
+    for (int k = 0; k <= 0x10; ++k) {
+        const int x0 = k == 0 ? x - 4 : x + 3 * k + 6, x1 = k == 0x10 ? x + 0x44 : x + 3 * k + 9;
+        otHitRow(c, x0, y - 2, x1 - x0, 0x14, k);
+    }
 }
 // exe 0x5edce0 (state 0): set up; the title fades in first
 void optionsSetUp(StatusScreen& s) {
@@ -584,11 +590,13 @@ void optionsVolume(StatusScreen& s) {
 }
 // the overlay of the video row (and of OpenDash's rows): the screen dimmed and lined, the box, the cursor bar on the
 // line, the corner brackets (exe 0x5ee620's packets)
-void overlayFrame(const StatusScreen& s, int rows, bool icons) {
+void overlayFrame(const StatusScreen& s, int rows, bool icons, int hitBase = 0) {
     if (!drawing()) return;
     const size_t c = otOpen(kOtOverlay);
     otDrawMode(c, kOptMode);
     otTile(c, 0, 0, kScreenWidth, kScreenHeight, 0, kTileSemi);
+    for (int k = 0; k < rows; ++k) // OpenDash: the lines are the mouse's rows (hitBase + line)
+        otHitRow(c, 0x28, 0x48 + k * 0x20, 0xf4, 0x20, hitBase + k);
     const DrawArea buf = displayDrawArea();
     for (int k = 0; k < 0x14; ++k) { // the grid: 0x14 vertical, 0xf horizontal lines (LINE 0x40, opaque grey)
         ScreenPrim& p = otPut(c, ScreenPrim::Quad);
@@ -630,7 +638,18 @@ void optionsVideo(StatusScreen& s) {
         s.sub = uint8_t(RowStep::Cursor);
         s.step = 0;
     } else if (st == uint8_t(RowStep::Cursor)) {
-        const uint8_t p = uint8_t(menuPadPressed());
+        uint8_t p = uint8_t(menuDirections() | (menuPadPressed() & ~(kPadUp | kPadDown | kPadLeft | kPadRight)));
+        // OpenDash: the mouse -- onto a line moves there, a click on a line steps its value and applies it
+        MenuPointer& pt = menuPointer();
+        bool clickApply = false;
+        optionsOverlayPointer(s, 3, kValueCell);
+        if (pt.click) {
+            pt.click = false;
+            if (pt.row == kValueCell + int8_t(s.step)) {
+                p = kPadRight;
+                clickApply = true;
+            }
+        }
         if (p & (kPadLeft | kPadRight)) {
             soundPlayFlat(UiSound::Cursor);
             const int step = (p & kPadLeft) ? -1 : 1;
@@ -651,6 +670,11 @@ void optionsVideo(StatusScreen& s) {
                 }
             } else if (line == 2) {
                 gVideoEdit.display = DM((int(gVideoEdit.display) + step + 3) % 3);
+            }
+            if (clickApply && !(gVideoEdit == gVideoShown) && gHost.videoApply) {
+                gHost.videoApply(gVideoEdit);
+                if (gHost.video) gVideoEdit = gHost.video();
+                gVideoShown = gVideoEdit;
             }
         } else if (p & kPadUp) {
             soundPlayFlat(UiSound::Cursor);
@@ -693,7 +717,7 @@ void optionsVideo(StatusScreen& s) {
     asciiTextDraw(aa, 0x50, 0x52, true);
     asciiTextDraw(mode, 0x50, 0x72, true);
     asciiTextDraw((pt ? kDisplayPt : kDisplayEn)[int(gVideoEdit.display)], 0x50, 0x92, true);
-    overlayFrame(s, 3, true);
+    overlayFrame(s, 3, true, kValueCell);
     s.cursor = int8_t(s.cursorKept);
 }
 // state 0xb (exe 0x5eec80): the defaults -- the question (window 0), then (yes) the settings and the bindings back to
@@ -755,7 +779,7 @@ void optionsLanguage(StatusScreen& s) {
         s.sub = uint8_t(RowStep::Cursor);
         s.step = uint8_t(gHost.language ? gHost.language() : 0);
     } else if (st == uint8_t(RowStep::Cursor)) {
-        const uint8_t p = uint8_t(menuPadPressed());
+        const uint8_t p = optionsOverlayPointer(s, n) ? 0 : uint8_t(menuDirections()); // OpenDash: the mouse's line
         if (p & kPadUp) {
             soundPlayFlat(UiSound::Cursor);
             s.step = uint8_t((int8_t(s.step) + n - 1) % n);
@@ -798,6 +822,17 @@ void optionsLanguage(StatusScreen& s) {
 OptionsHost& optionsHost() { return gHost; }
 
 void optionsOverlay(const StatusScreen& s, int rows, bool icons) { overlayFrame(s, rows, icons); }
+
+bool optionsOverlayPointer(StatusScreen& s, int rows, int base) {
+    MenuPointer& pt = menuPointer();
+    if (!pt.moved || pt.row < base || pt.row >= base + rows) return false;
+    pt.moved = false;
+    if (pt.row - base != int8_t(s.step)) {
+        s.step = uint8_t(pt.row - base);
+        soundPlayFlat(UiSound::Cursor);
+    }
+    return true;
+}
 
 bool optionsSourceHeadersPs1() { return sourceRows() == kPs1Rows; }
 

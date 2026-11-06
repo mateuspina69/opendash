@@ -130,6 +130,7 @@ void App::parseArgs(int argc, char** argv) {
         else if (a == "--hd-text") messageUi.hdText = std::stoi(argv[++i]) != 0; // 0 = the PS1 bitmap font
         else if (a == "--hd-art") hdArtArg = std::stoi(argv[++i]) != 0; // 0 = the containers' pixel art
         else if (a == "--menu-snappy") od::port::setMenuSnappy(std::stoi(argv[++i]) != 0); // 0 = the PS1 cursor
+        else if (a == "--menu-unified") od::port::setMenuUnified(std::stoi(argv[++i]) != 0); // experimental, 1 = on
         // the session's co-op (app/own_world) starts by itself in a netplay session; these are test instruments for it
         else if (a == "--dev-world-alone" && i + 1 < argc) // dev: this game alone with a world process, from this save
             devWorldSave = argv[++i];

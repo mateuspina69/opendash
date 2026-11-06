@@ -405,7 +405,7 @@ int cursor(DevRoomMenu& m) {
     const int8_t c8 = l.rowStep;
     if (c8 != 0) {
         l.rowStep = int8_t(c8 < 1 ? c8 + 1 : c8 - 1);
-        return 0;
+        if (!menuUnified()) return 0; // OpenDash: a move during the hand's step (player_input setMenuUnified)
     }
     const int8_t c9 = l.scrollStep;
     if (c9 != 0) {

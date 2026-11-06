@@ -122,7 +122,7 @@ od::port::LobbyChoice Lobby::frame(std::vector<ScreenPrim>* draw) {
                 od::port::soundPlayFlat(od::port::UiSound::Cursor);
             }
         }
-        const uint16_t p = pad.pressed;
+        const uint16_t p = pad.pressed | od::port::menuDirections(); // a held direction repeats (as the game's menus)
         if (p & (od::port::kPadUp | od::port::kPadDown)) {
             cursor_ = (cursor_ + ((p & od::port::kPadUp) ? rows - 1 : 1)) % rows;
             od::port::soundPlayFlat(od::port::UiSound::Cursor);

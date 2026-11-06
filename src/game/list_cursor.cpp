@@ -16,7 +16,7 @@ ListAnswer listCursorStep(ListCursor& list) {
     const int8_t c8 = list.rowStep;
     if (c8 != 0) {
         list.rowStep = int8_t(c8 > 0 ? c8 - 1 : c8 + 1);
-        return ListAnswer::None;
+        if (!menuUnified()) return ListAnswer::None; // OpenDash: a move during the hand's step (setMenuUnified)
     }
     const int8_t c9 = list.scrollStep;
     if (c9 != 0) {

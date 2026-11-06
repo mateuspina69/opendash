@@ -185,6 +185,8 @@ struct App {
     // the mouse on the sub-screens (game/menu_pointer MenuPointer): the row under it, a click's press waiting for its tick
     int hoverRow = -1;
     uint16_t clickPress = 0; // PS1 bit: 0x2000 confirm (left), 0x4000 cancel (right)
+    uint32_t tapLatch = 0;   // the buttons held on a rendered frame since the last game frame (simStep): a tap shorter
+                             // than a game frame (33 ms) is not lost
     int clickDelay = 0;      // sim steps before the press (the cursor first moves onto the clicked row)
     bool subScreenOpen() const;
     bool pointerScreen() const; // a sub-screen or a message window's choice: the mouse is free and picks

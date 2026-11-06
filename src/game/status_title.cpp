@@ -101,7 +101,8 @@ void panelTitleQuestion(StatusScreen& s) {
         s.sub = uint8_t(QuestionStep::Cursor);
         s.step = kAnswerNo;
     } else if (st == uint8_t(QuestionStep::Cursor)) {
-        const uint8_t p = uint8_t(menuPadPressed());
+        // OpenDash: the mouse's line (yes / no), a held direction repeats (player_input setMenuUnified)
+        const uint8_t p = optionsOverlayPointer(s, 2) ? 0 : uint8_t(menuDirections());
         if (p & (kPadUp | kPadDown)) {
             soundPlayFlat(UiSound::Cursor);
             s.step ^= 1u;

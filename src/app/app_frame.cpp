@@ -29,6 +29,7 @@
 #include "game/choice_pointer.hpp"
 #include "game/menu_draw.hpp"
 #include "game/menu_pointer.hpp"
+#include "game/input_bindings.hpp"
 #include "game/message.hpp"
 #include "game/camera_state.hpp"
 #include "game/fade.hpp"
@@ -83,19 +84,16 @@ void App::menuMouse(const SDL_Event& e) {
     const float density = SDL_GetWindowPixelDensity(window);
     if (e.type == SDL_EVENT_MOUSE_MOTION) {
         const int row = menuRowAt(e.motion.x * density, e.motion.y * density);
-        if (row >= 0 && row != hoverRow) { // onto a new row: the cursor follows
-            od::port::menuPointer().row = row;
-            od::port::menuPointer().moved = true;
-        }
+        if (row >= 0 && row != hoverRow) od::port::menuPointer() = {row, true, false}; // onto a new row: the cursor follows
         hoverRow = row;
+    } else if (od::port::inputBindings().rawDevices != 0) { // a binding being captured: its buttons are the binding's
+        return;
     } else if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
         const int row = menuRowAt(e.button.x * density, e.button.y * density);
         if (e.button.button == SDL_BUTTON_LEFT && row >= 0) { // onto the row, then its confirm
-            od::port::menuPointer().row = row;
-            od::port::menuPointer().moved = true;
-            if (row >= 0x100) { // a scrolling list's cell: the list confirms once its cursor is there
-                od::port::menuPointer().click = true;
-            } else {
+            const bool cell = row >= od::port::kValueCell; // a list's / a value's cell: the screen takes the click
+            od::port::menuPointer() = {row, true, cell};
+            if (!cell) {
                 clickPress = 0x2000;
                 clickDelay = 2;
             }
@@ -121,9 +119,10 @@ bool App::titleMouse(const SDL_Event& e) {
         return true;
     }
     if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+        if (od::port::inputBindings().rawDevices != 0) return true; // a binding being captured (the options' keys)
         const int row = at(e.button.x, e.button.y);
         if (e.button.button == SDL_BUTTON_LEFT && row >= 0) { // onto the row, then its confirm
-            const bool cell = row >= od::port::kListCell; // a list's cell: the list confirms once it is there
+            const bool cell = row >= od::port::kValueCell; // a list's / a value's cell: the screen takes the click
             od::port::menuPointer() = {row, true, cell};
             if (!cell) {
                 clickPress = 0x2000;
@@ -140,6 +139,11 @@ bool App::titleMouse(const SDL_Event& e) {
         }
         return true;
     }
+    if (e.type == SDL_EVENT_MOUSE_WHEEL && e.wheel.y != 0.0f) { // the wheel: up / down (as on the sub-screens)
+        clickPress = e.wheel.y > 0.0f ? 0x10 : 0x40;
+        clickDelay = 1;
+        return true;
+    }
     return false;
 }
 
@@ -149,7 +153,9 @@ void App::simStep(int gameFrames) {
     const bool aimHeld = captured && (mouse & SDL_BUTTON_RMASK);
     if (!(mouse & SDL_BUTTON_LMASK)) captureClick = false;
     const bool fireHeld = captured && (mouse & SDL_BUTTON_LMASK) && !captureClick;
-    const uint32_t held = pollButtons(pad, playerView.play || titleScreen.active, aimHeld, fireHeld);
+    // a key / button down and up again between two game frames: held for this one (app/main tapLatch)
+    const uint32_t held = pollButtons(pad, playerView.play || titleScreen.active, aimHeld, fireHeld) | tapLatch;
+    tapLatch = 0;
     input.pressed = held & ~input.held;
     input.held = held;
     pollStick(pad, input);

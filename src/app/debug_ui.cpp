@@ -250,6 +250,11 @@ void App::drawDebugMenu() {
                 bool snappy = od::port::menuSnappy();
                 if (ImGui::Checkbox("menu responsivo (desmarcado = cursor original do PS1)", &snappy))
                     od::port::setMenuSnappy(snappy);
+                bool unified = od::port::menuUnified();
+                if (ImGui::Checkbox("menus unificados (experimento)", &unified)) od::port::setMenuUnified(unified);
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("Todos os menus respondem igual: repeticao ao segurar (~270 ms, depois ~10/s),\n"
+                                      "movimento durante as animacoes do cursor e toques rapidos nao se perdem.");
             }
             {
                 ImGui::SeparatorText("Neblina");

@@ -9,7 +9,7 @@ namespace od::port {
 struct MenuPointer {
     int row = -1;
     bool moved = false;
-    bool click = false; // a scrolling list's cell clicked: confirmed once the cursor is on it
+    bool click = false; // a list's / a value's cell clicked: confirmed once the cursor is on it
 };
 // the pointer (one for the program)
 inline MenuPointer& menuPointer() {
@@ -18,5 +18,8 @@ inline MenuPointer& menuPointer() {
 }
 // the scrolling lists' cells (ScreenPrim::row): kListCell + visible row * 2 + column
 constexpr int kListCell = 0x100;
+// the value cells (kValueCell .. kListCell - 1: the video lines, the key configuration's actions): the host's click
+// sets `click` only (no confirm press), the screen decides what a click on one does
+constexpr int kValueCell = 0x80;
 
 } // namespace od::port

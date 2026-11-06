@@ -72,12 +72,14 @@ void doubleTap(PadState& pad, uint16_t bit, uint32_t k) {
 }
 
 bool gMenuSnappy = true;
+bool gMenuUnified = false;
 
 // exe 0x55d140: the auto-repeat of `bit` (slot k)
 void repeat(PadState& pad, uint16_t bit, uint32_t k) {
     GameState& game = gameState();
-    // a sub-screen is open
-    const bool snappy = gMenuSnappy && game.gameMode() == GameMode::StatusMenu;
+    // a sub-screen is open; OpenDash's unified menus (experimental): every menu (the title, the shop, the choices, the
+    // name entry: only the menus read the repeat bits) -- the game's 15 / 1 races at a row a tick once it starts
+    const bool snappy = gMenuUnified || (gMenuSnappy && game.gameMode() == GameMode::StatusMenu);
     if (bit & pad.held) {
         const uint8_t delay = snappy ? kSnappyRepeatDelay : uint8_t(pad.repeatDelay);
         uint8_t n = pad.repeatTicks[k];
@@ -106,6 +108,12 @@ void directionToStick(const Player& p, int8_t& axis, uint16_t mask, uint16_t neg
 // OpenDash's snappy menu repeat on / off and its state
 void setMenuSnappy(bool on) { gMenuSnappy = on; }
 bool menuSnappy() { return gMenuSnappy; }
+void setMenuUnified(bool on) { gMenuUnified = on; }
+bool menuUnified() { return gMenuUnified; }
+uint16_t menuDirections() {
+    constexpr uint16_t kDirs = kPadUp | kPadDown | kPadLeft | kPadRight;
+    return uint16_t((gMenuUnified ? pad0().repeated : pad0().pressed) & kDirs);
+}
 
 void padUpdate(PadState& pad, uint16_t buttons, uint8_t stickX, uint8_t stickY) {
     // exe 0x409c20's part: the raw state (active low) and the analog axes

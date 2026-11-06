@@ -128,6 +128,11 @@ inline ReplayPad& replayPad() {
 // OpenDash (default on; F1 "menu responsivo" / --menu-snappy 0 = the original): the sub-screens' cursors answer at
 // once -- the d-pad repeats after 8 steps (the game's 15) every 3 (its 1) while a sub-screen is open (game mode 5),
 // and the cursor lists take a move during the row change's animation (game/status_controls exe 0x5e83d0 waits for its 4 steps)
+// OpenDash, experimental (default off; F1 "menus unificados" / --menu-unified 1): every menu answers alike -- the
+// sub-screen's repeat on every menu (the title, the shop / development room lists, the choices, the name entry, the
+// lobby), the title's and the options' overlays repeat a held direction too (the game: a press only), the cursors take
+// a move during their move animations (the title's slide, the lists' row / column steps), and the host keeps a tap
+// shorter than a game frame (app/main tapLatch)
 // The host's input capture flag (exe 0x40a3f0 returns it; set outside the ported code)
 struct HostInput {
     uint32_t captured = 0;
@@ -153,6 +158,10 @@ inline PadVibration& padVibration() {
 
 void setMenuSnappy(bool on);
 bool menuSnappy();
+void setMenuUnified(bool on);
+bool menuUnified();
+// the menu's direction bits: the repeat bits with the unified menus (a held direction repeats), else the presses
+uint16_t menuDirections();
 
 // exe 0x55cef0: the pad's raw state (the buttons held, active high, and the analog axes) run through the pipeline:
 // held / pressed / released, the double taps, the auto-repeat, the sticks

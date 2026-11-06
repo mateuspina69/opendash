@@ -9,6 +9,7 @@
 #include "game/input_bindings.hpp"
 #include "game/menu_banks.hpp"
 #include "game/menu_draw.hpp"
+#include "game/menu_pointer.hpp"
 #include "game/player/player_input.hpp"
 #include "game/state_array.hpp"
 #include "game/status_controls.hpp"
@@ -171,6 +172,15 @@ void keyConfigure(StatusScreen& s, uint32_t act) {
             otSprite(c, 0x88, 0x38, kMousePictureArt, 0x34, 0x5a, kNeutral, kSpriteFree);
         }
         otTile(c, 0x14, 0x37, 0x118, 0x60, kPanelColour, kTileSemi);
+        // OpenDash: the actions are the mouse's value cells (kValueCell + action): onto one the cursor moves there
+        if (col == kMouseColumn) {
+            for (uint32_t k = 0; k < kMouseActions; ++k) otHitRow(c, int(k) * 0x84 + 0x1c, 0x5e, 0x84, 0x10, kValueCell + int(k));
+        } else {
+            for (uint32_t k = 0; k < (col == kPadColumn ? kPadActions : kKeyActions); ++k) {
+                if (col == kPadColumn && k == kPadUpperAction) otHitRow(c, 0x1c, 0x7e, 0xa4, 0x10, kValueCell + int(k));
+                else otHitRow(c, int(k / 5) * 0x84 + 0x1c, int(k % 5) * 0x10 + 0x3e, 0x84, 0x10, kValueCell + int(k));
+            }
+        }
         if (col == kMouseColumn) otTile(c, int(act) * 0x84 + 0x1c, 0x5e, 0x84, 0x10, kCursorColour, kTileSemi);
         else if (col == kPadColumn && act == kPadUpperAction) otTile(c, 0x1c, 0x7e, 0xa4, 0x10, kCursorColour, kTileSemi);
         else otTile(c, int(act / 5) * 0x84 + 0x1c, int(act % 5) * 0x10 + 0x3e, 0x84, 0x10, kCursorColour, kTileSemi);
@@ -261,8 +271,17 @@ void keyConfigState(StatusScreen& s) {
         levelBack(s, 2);
         break;
     case KeyConfigStep::Action: {
-        const uint8_t p = uint8_t(pressed);
+        uint8_t p = uint8_t(menuDirections()); // OpenDash: a held direction repeats (player_input setMenuUnified)
         int32_t a = kept.action;
+        if (MenuPointer& pt = menuPointer(); pt.moved || pt.click) { // OpenDash: the mouse's action (a click binds
+            const int n = int(s.cursor == kMouseColumn ? kMouseActions : s.cursor == kPadColumn ? kPadActions : kKeyActions);
+            if (pt.moved && pt.row >= kValueCell && pt.row < kValueCell + n) { // the mouse column's button, nothing else)
+                if (pt.row - kValueCell != a) soundPlayFlat(UiSound::Cursor);
+                a = pt.row - kValueCell;
+                p = 0;
+            }
+            pt.moved = pt.click = false;
+        }
         if (p & (kPadLeft | kPadRight)) {
             soundPlayFlat(UiSound::Cursor);
             if (s.cursor == kMouseColumn) {
