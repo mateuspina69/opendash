@@ -441,6 +441,17 @@ int run(const WorldArgs& w) {
 
     od::port::PresentationBatch present;
     bool sceneOn = false, sceneGated = false, sceneAsked = false, worldWhite = false;
+    uint32_t sceneEndedTicksAgo = 0xffffffffu; // a scene's script asks its room change as it ends: that is still the scene's
+    static constexpr uint32_t kSceneExitTicks = 2; // ... taken by the field mode within these ticks of the script's end
+    // the player whose game last changed the room's state (a talk's answer, an event's end, a Use): a scene the room's
+    // logic starts right after is what they did
+    uint8_t lastActor = 0xff;
+    uint32_t lastActorTicksAgo = 0xffffffffu;
+    static constexpr uint32_t kSceneCauseTicks = 4;
+    const auto noteActor = [&](uint8_t id) {
+        lastActor = id;
+        lastActorTicksAgo = 0;
+    };
     std::vector<uint8_t> lastScreen;
     uint16_t scenePad = 0;
     uint8_t sceneOwner = 0;
@@ -512,6 +523,9 @@ int run(const WorldArgs& w) {
             // no exit of the room's table and no place named: not a room change this world carries out (a scene's, whose
             // script moves each player's game itself, or a door's that its player's game asks the gate for)
             if (r.exitId == 0 && r.destStage == 0 && r.destRoom == 0) return;
+            // a scene's room change: every game in the room plays the scene and its script changes that game's room
+            // itself (moved again from here, each would be put beside the others: a narrow door's sides are out of it)
+            if (sceneOn || sceneEndedTicksAgo <= kSceneExitTicks) return;
             const auto half = [](int16_t v, std::vector<uint8_t>& o) {
                 o.push_back(uint8_t(v));
                 o.push_back(uint8_t(uint16_t(v) >> 8));
@@ -686,10 +700,26 @@ int run(const WorldArgs& w) {
     };
     // a script runs in the room: a scene, played once, with one Mega Man, for everyone in it
     const auto sceneTurn = [&] {
+        if (sceneEndedTicksAgo != 0xffffffffu) ++sceneEndedTicksAgo;
+        if (lastActorTicksAgo != 0xffffffffu) ++lastActorTicksAgo;
         const bool now = od::port::scriptState().inUse() && od::port::scriptState().id != 0;
         if (now && !sceneOn && sceneGated && od::port::storyScriptGated(od::port::scriptState().id)) { // everyone first
             if (!sceneAsked) link->sendReliable({WorldMessageType::NetSceneGate});
             sceneAsked = true;
+            return;
+        }
+        if (now && !sceneOn && !od::port::storyScriptGated(od::port::scriptState().id) && lastActorTicksAgo <= kSceneCauseTicks &&
+            lastActor < od::port::kPlayerSlots && netClients.contains(lastActor)) {
+            // a scene of what one player just did (their talk's answer, a door's): not the story's, so it is theirs alone
+            // -- their game plays it, and its room change is theirs; the others go on in the room as it is
+            const uint8_t script = od::port::scriptState().id;
+            od::port::scriptState().clearBlockBytes();
+            WorldMessage start{WorldMessageType::NetSceneStart};
+            start.playerId = lastActor;
+            start.netState = {lastActor, script, 1};
+            link->sendReliable(start);
+            SDL_Log("world: player %u's scene (script %02x): theirs alone", unsigned(lastActor), unsigned(script));
+            lastActorTicksAgo = 0xffffffffu;
             return;
         }
         if (now && !sceneOn) {
@@ -707,6 +737,7 @@ int run(const WorldArgs& w) {
             for (const auto& [client, sender] : netClients) sceneStartMessage(client);
         } else if (!now && sceneOn) {
             sceneOn = false;
+            sceneEndedTicksAgo = 0;
             sceneAsked = false;
             sceneGated = !od::port::storyOptionalStage(uint8_t(w.stage));
             od::port::setScriptsGated(sceneGated);
@@ -908,12 +939,21 @@ int run(const WorldArgs& w) {
                     od::port::applyPlayerReport(od::port::playerById(m.playerId), *report);
                 break;
             case WorldMessageType::GlobalChange:
-                if (const auto change = od::port::decodeGlobalChange(m.netState)) od::port::globalWatchApply(*change);
+                if (const auto change = od::port::decodeGlobalChange(m.netState)) {
+                    od::port::globalWatchApply(*change);
+                    if (!change->flags.empty()) noteActor(m.playerId);
+                }
                 break;
             case WorldMessageType::NetUse:
-                if (m.playerId < od::port::kPlayerSlots && od::port::playerIsRemote(m.playerId)) od::port::remotePlayerUse(m.playerId);
+                if (m.playerId < od::port::kPlayerSlots && od::port::playerIsRemote(m.playerId)) {
+                    od::port::remotePlayerUse(m.playerId);
+                    noteActor(m.playerId);
+                }
                 break;
-            case WorldMessageType::NetEventEnd: od::port::eventOwnerEnded(m.playerId); break;
+            case WorldMessageType::NetEventEnd:
+                od::port::eventOwnerEnded(m.playerId);
+                noteActor(m.playerId);
+                break;
             case WorldMessageType::NetRevive: {
                 const uint8_t target = m.netState.empty() ? uint8_t(0xff) : m.netState[0];
                 if (target < od::port::kPlayerSlots && od::port::playerIsRemote(target) && m.playerId < od::port::kPlayerSlots &&

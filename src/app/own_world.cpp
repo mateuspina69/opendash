@@ -468,7 +468,9 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
         sceneOwner_ = m.netState[0];
         scenePad_ = sentPad_ = 0;
         localScene_ = true;
-        sceneHeard_ = true;
+        // (a scene of this player's alone, m.netState[2]: the world does not play it, no end of it comes from there --
+        // it ends here with its script)
+        sceneHeard_ = !(m.netState.size() > 2 && m.netState[2] != 0);
         sceneStart_ = m.netState[1];
         sceneRoom_ = room_;
         sceneEndAt_.reset();
