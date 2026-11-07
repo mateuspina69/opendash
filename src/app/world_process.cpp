@@ -20,6 +20,7 @@
 #include "app/log_file.hpp"
 #include "app/play_session.hpp"
 #include "app/room_mesh.hpp"
+#include "app/scene_pads.hpp"
 #include "app/world_link.hpp"
 #include "net/wire.hpp"
 #include "content/registry.hpp"
@@ -457,7 +458,14 @@ int run(const WorldArgs& w) {
     std::vector<uint8_t> lastScreen;
     std::vector<uint8_t> lastGauges;                   // the enemy gauges last told
     static constexpr int kGaugesAgainTicks = 30;       // ... told again this often (a lost one is replaced)
-    uint16_t scenePad = 0;
+    ScenePads scenePads; // the scene's owner's pad, as this world's copy plays it
+    // what a player's game sent of a scene it started on the room's first tick, before this world's own start: the
+    // owner's are its scene's first
+    struct EarlyPad {
+        uint8_t player;
+        std::vector<uint8_t> bytes;
+    };
+    std::vector<EarlyPad> earlyPads;
     uint8_t sceneOwner = 0;
     uint8_t sceneScript = 0; // the scene's script: each game starts it itself
     std::map<uint8_t, od::port::NetStateSender> netClients;
@@ -722,10 +730,21 @@ int run(const WorldArgs& w) {
         const od::FileDataBlock pristine(od::roomBlock(*current.roomFile));
         netTable->roomShadow.assign(pristine.data(), pristine.data() + pristine.size());
     }
+    const auto relayScenePad = [&](const std::vector<uint8_t>& bytes) {
+        // every game runs the scene itself: the others' copies take the owner's pad
+        for (const auto& [client, sender] : netClients) {
+            if (client == sceneOwner) continue;
+            WorldMessage pad{WorldMessageType::NetScenePad};
+            pad.playerId = client;
+            pad.netState = bytes;
+            link->sendReliable(pad);
+        }
+    };
     const auto sceneStartMessage = [&](uint8_t client) {
         WorldMessage start{WorldMessageType::NetSceneStart};
         start.playerId = client;
-        start.netState = {sceneOwner, sceneScript};
+        const uint32_t at = scenePads.tick(); // a client joining during the scene: this many ticks in
+        start.netState = {sceneOwner, sceneScript, 0, uint8_t(at), uint8_t(at >> 8), uint8_t(at >> 16), uint8_t(at >> 24)};
         link->sendReliable(start);
     };
     // a script runs in the room: a scene, played once, with one Mega Man, for everyone in it
@@ -761,10 +780,16 @@ int run(const WorldArgs& w) {
                 od::port::remotePlayerJoin(0, od::port::capturePlayerSnapshot(od::port::playerById(sceneOwner)));
             }
             od::port::remotePlayersSceneStart();
-            scenePad = 0;
+            scenePads.start();
             sceneScript = od::port::scriptState().id;
             SDL_Log("world: a scene starts (script %02x), its owner is player %u", unsigned(od::port::scriptState().id), unsigned(sceneOwner));
             for (const auto& [client, sender] : netClients) sceneStartMessage(client);
+            for (const EarlyPad& e : std::exchange(earlyPads, {})) {
+                const auto pad = ScenePads::decode(e.bytes);
+                if (e.player != sceneOwner || !pad || pad->script != sceneScript) continue;
+                scenePads.heard(pad->at, pad->pad);
+                relayScenePad(e.bytes);
+            }
         } else if (!now && sceneOn) {
             sceneOn = false;
             sceneEndedTicksAgo = 0;
@@ -920,16 +945,16 @@ int run(const WorldArgs& w) {
                 od::port::setScriptsGated(false);
                 break;
             case WorldMessageType::NetScenePad:
-                if (sceneOn && m.playerId == sceneOwner && m.netState.size() == 2) {
-                    scenePad = uint16_t(m.netState[0] | m.netState[1] << 8);
-                    // every game runs the scene itself: the others' copies take the owner's pad
-                    for (const auto& [client, sender] : netClients) {
-                        if (client == sceneOwner) continue;
-                        WorldMessage pad{WorldMessageType::NetScenePad};
-                        pad.playerId = client;
-                        pad.netState = m.netState;
-                        link->sendReliable(pad);
-                    }
+                if (const auto pad = ScenePads::decode(m.netState); !pad) {
+                    break;
+                } else if (!sceneOn) {
+                    // (a script still to run here; one of another scene -- theirs alone -- goes when one starts)
+                    earlyPads.push_back({m.playerId, m.netState});
+                    constexpr size_t kEarlyPads = 256; // a scene's start comes ticks after: what is older is of no scene here
+                    if (earlyPads.size() > kEarlyPads) earlyPads.erase(earlyPads.begin());
+                } else if (m.playerId == sceneOwner && pad->script == sceneScript) {
+                    scenePads.heard(pad->at, pad->pad);
+                    relayScenePad(m.netState);
                 }
                 break;
             case WorldMessageType::NetFire: {
@@ -1064,7 +1089,7 @@ int run(const WorldArgs& w) {
     while (view->play && !stopped && (w.ticks == 0 || tick < w.ticks)) {
         if (link) linkTurn(tick);
         const uint64_t at = SDL_GetTicksNS();
-        const uint16_t pad = sceneOn ? scenePad : tick < w.pad.size() ? w.pad[size_t(tick)] : uint16_t(0);
+        const uint16_t pad = sceneOn ? scenePads.step() : tick < w.pad.size() ? w.pad[size_t(tick)] : uint16_t(0);
         // the directions as the stick the logic reads when no stick is held, as the windowed game hands them
         const float lx = float(((pad & 0x20) != 0) - ((pad & 0x80) != 0));
         const float ly = float(((pad & 0x40) != 0) - ((pad & 0x10) != 0));

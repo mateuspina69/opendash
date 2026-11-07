@@ -17,7 +17,7 @@ namespace od::port {
 
 namespace {
 
-enum class Record : uint8_t { WindowOpen = 1, WindowClose = 2, Fade = 3, Sound = 4, Pad = 5, LoopStart = 6, LoopMove = 7, LoopStop = 8, Shake = 9, Banner = 10, White = 11 };
+enum class Record : uint8_t { WindowOpen = 1, WindowClose = 2, Fade = 3, Sound = 4, LoopStart = 6, LoopMove = 7, LoopStop = 8, Shake = 9, Banner = 10, White = 11 };
 struct HeldLoop {
     uint32_t local = 0;
     bool hasPoint = false;
@@ -70,10 +70,6 @@ void PresentationBatch::sound(const SoundRequest& r, uint8_t owner) {
     bytes_.push_back(r.modeHigh);
     bytes_.push_back(owner);
 }
-void PresentationBatch::pad(uint16_t bits) {
-    bytes_.push_back(uint8_t(Record::Pad));
-    put16(bytes_, bits);
-}
 void PresentationBatch::loopStart(uint32_t handle, uint16_t id, bool hasPoint, int16_t x, int16_t y, int16_t z, uint16_t param) {
     bytes_.push_back(uint8_t(Record::LoopStart));
     put32(bytes_, handle);
@@ -115,7 +111,7 @@ void PresentationBatch::white(bool on) {
 }
 std::vector<uint8_t> PresentationBatch::take() { return std::exchange(bytes_, {}); }
 
-void applyPresentation(std::span<const uint8_t> b, FadeTask& fade, uint8_t me, uint16_t& scenePad) {
+void applyPresentation(std::span<const uint8_t> b, FadeTask& fade, uint8_t me) {
     size_t at = 0;
     const auto left = [&] { return b.size() - at; };
     const auto u8 = [&] { return b[at++]; };
@@ -158,10 +154,6 @@ void applyPresentation(std::span<const uint8_t> b, FadeTask& fade, uint8_t me, u
             if (u8() != me) soundRequestReplay(r);
             break;
         }
-        case Record::Pad:
-            if (left() < 2) return;
-            scenePad = u16_();
-            break;
         case Record::LoopStart: {
             if (left() < 15) return;
             const uint32_t low = u16_(), high = u16_();

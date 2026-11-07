@@ -16,6 +16,7 @@
 #include "app/coop_host.hpp"
 #include "app/world_host.hpp"
 #include "app/ghost_view.hpp"
+#include "app/scene_pads.hpp"
 #include "game/event_state.hpp"
 #include "game/fade.hpp"
 #include "game/presentation.hpp"
@@ -183,7 +184,9 @@ private:
     od::port::FadeTask* fade_ = nullptr;
     bool scene_ = false;
     uint8_t sceneOwner_ = 0;
-    uint16_t scenePad_ = 0, sentPad_ = 0;
+    ScenePads scenePads_;      // the owner's pad, as this game's copy of the scene plays it
+    uint16_t sentPad_ = 0;     // the owner: its pad as last sent
+    uint32_t sceneTick_ = 0;   // the owner: the scene's ticks run (the stamp of what it sends)
     // a story scene this game runs itself: from the world's start to its end and the script's here (then the world again)
     bool localScene_ = false;
     std::optional<uint8_t> sceneStart_;   // the script to start, for the game to take

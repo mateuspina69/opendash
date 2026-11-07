@@ -185,7 +185,9 @@ void OwnWorldClient::startedHere(uint8_t script) {
     localScene_ = true;
     scene_ = true;
     sceneOwner_ = 0; // the world's rule: the first player in the room, the host when here; the world's start says who
-    scenePad_ = sentPad_ = 0;
+    scenePads_.start();
+    sentPad_ = 0;
+    sceneTick_ = 0;
     sceneRoom_ = room_;
     sceneScript_ = script;
     sceneEndAt_.reset();
@@ -486,10 +488,14 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
         if (fade_) od::port::fadeStart(*fade_, kReloadFade, 0);
         break;
     case WorldMessageType::NetPresent:
-        if (fade_) od::port::applyPresentation(m.netState, *fade_, playerId_, scenePad_);
+        if (fade_) od::port::applyPresentation(m.netState, *fade_, playerId_);
         break;
-    case WorldMessageType::NetSceneStart:
+    case WorldMessageType::NetSceneStart: {
         if (m.netState.size() < 2) break;
+        // how many ticks into the scene the world is (one joining it late)
+        const uint32_t at = m.netState.size() >= 7 ? uint32_t(m.netState[3]) | uint32_t(m.netState[4]) << 8 |
+                                                        uint32_t(m.netState[5]) << 16 | uint32_t(m.netState[6]) << 24
+                                                  : 0u;
         if (localScene_) { // started here on the room's first tick: the world's start confirms it and names its owner
             if (sceneHeard_) break;
             sceneHeard_ = true;
@@ -497,6 +503,9 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
             if (std::exchange(heldHere_, false)) { // everyone is in: it plays from its start, with the room as it began
                 od::port::setScriptsGated(false);
                 sceneStart_ = m.netState[1];
+                scenePads_.start(at); // its ticks count from here, everywhere
+                sentPad_ = 0;
+                sceneTick_ = at;
             }
             SDL_Log("own world: the world starts the scene too (script %02x), its owner is player %u", unsigned(m.netState[1]),
                     unsigned(sceneOwner_));
@@ -504,7 +513,9 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
         }
         scene_ = true;
         sceneOwner_ = m.netState[0];
-        scenePad_ = sentPad_ = 0;
+        scenePads_.start(at);
+        sentPad_ = 0;
+        sceneTick_ = at;
         localScene_ = true;
         // (a scene of this player's alone, m.netState[2]: the world does not play it, no end of it comes from there --
         // it ends here with its script)
@@ -517,8 +528,9 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
         SDL_Log("own world: a scene starts (script %02x), its owner is player %u: it runs here", unsigned(m.netState[1]),
                 unsigned(sceneOwner_));
         break;
+    }
     case WorldMessageType::NetScenePad:
-        if (m.netState.size() == 2) scenePad_ = uint16_t(m.netState[0] | m.netState[1] << 8);
+        if (const auto pad = ScenePads::decode(m.netState); pad && pad->script == sceneScript_) scenePads_.heard(pad->at, pad->pad);
         break;
     case WorldMessageType::NetSceneEnd:
         // this game's copy ends once its script has too (until then what it changes is the world's to say)
@@ -715,16 +727,7 @@ void OwnWorldClient::endFrame() {
 }
 
 void OwnWorldClient::sceneTurn() {
-    if (localScene_) { // the scene runs in this game as in the normal game; the owner's pad drives every copy of it
-        if (sceneOwner_ == playerId_) {
-            const uint16_t held = od::port::pad0().held;
-            if (held != sentPad_) {
-                sentPad_ = held;
-                pipe_->sendReliable(playerId_, WorldMessageType::NetScenePad, {uint8_t(held), uint8_t(held >> 8)});
-            }
-        }
-        return;
-    }
+    if (localScene_) return; // the scene runs in this game as in the normal game; the owner's pad drives every copy (overridePad)
     // a move the coordinator asked: once this game is playing
     const od::port::GameState& g = od::port::gameState();
     if (!pendingMove_.empty() && g.gameMode() == od::port::GameMode::Field && g.fieldStep() == od::port::FieldStep::Playing &&
@@ -806,7 +809,16 @@ void OwnWorldClient::sceneEnd(const std::vector<uint8_t>& at) {
 }
 
 void OwnWorldClient::overridePad(uint16_t& buttons) {
-    if (localScene_ && sceneOwner_ != playerId_) buttons = scenePad_;
+    if (!localScene_ || heldHere_) return;
+    if (sceneOwner_ == playerId_) { // what drives every copy: each change, stamped with the scene's tick it was made on
+        if (buttons != sentPad_) {
+            sentPad_ = buttons;
+            pipe_->sendReliable(playerId_, WorldMessageType::NetScenePad, ScenePads::encode(buttons, sceneTick_, sceneScript_));
+        }
+        ++sceneTick_;
+        return;
+    }
+    buttons = scenePads_.step();
 }
 
 // An exit this player has taken: not while a story boss is being fought; at a gate they wait, with who is at it

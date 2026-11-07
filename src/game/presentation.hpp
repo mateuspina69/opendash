@@ -23,7 +23,6 @@ public:
     void windowClosed(int8_t win, int how);
     void fadeStarted(uint32_t request, uint8_t param);
     void sound(const SoundRequest& r, uint8_t owner); // owner: the player whose shot made it, who has played it already
-    void pad(uint16_t bits);
     void loopStart(uint32_t handle, uint16_t id, bool hasPoint, int16_t x, int16_t y, int16_t z, uint16_t param);
     void loopMove(uint32_t handle, bool hasPoint, int16_t x, int16_t y, int16_t z, uint16_t param);
     void loopStop(uint32_t handle);
@@ -41,8 +40,8 @@ void setPresentationBatch(PresentationBatch* batch);
 PresentationBatch* presentationBatch();
 
 // What a player's game does of a batch: the windows and fades only while a scene runs; the sounds always, but those of its own
-// shots. The last pad bits of the scene's owner come back
-void applyPresentation(std::span<const uint8_t> bytes, FadeTask& fade, uint8_t me, uint16_t& scenePad);
+// shots
+void applyPresentation(std::span<const uint8_t> bytes, FadeTask& fade, uint8_t me);
 
 // A player's game, each tick: the world's loops kept going; what it had of a world it has left dropped
 void presentationLoopsTick();
