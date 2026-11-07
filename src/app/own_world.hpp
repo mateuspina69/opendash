@@ -188,6 +188,8 @@ private:
     bool localScene_ = false;
     std::optional<uint8_t> sceneStart_;   // the script to start, for the game to take
     std::optional<WorldRoom> sceneRoom_;  // the room it started in
+    uint8_t sceneScript_ = 0;             // its script
+    bool sceneMoved_ = false;             // its script went to another room, whose first field tick has not run yet
     std::optional<std::vector<uint8_t>> sceneEndAt_; // the world's end: where its Mega Man stands, its owner
     bool sceneHeard_ = false; // the world has started it too (a scene started here: the world's start confirms it)
     bool heldHere_ = false;   // started here, held until the world starts it (it waits for everyone)

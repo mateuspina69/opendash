@@ -130,6 +130,7 @@ void OwnWorldClient::roomBound(int stage, int sub) {
     }
     if (localScene_) { // a room the scene's script went to: its actors are this game's, as in the normal game
         room_ = WorldRoom{stage, sub};
+        sceneMoved_ = true;
         return;
     }
     od::port::presentationLoopsClear();
@@ -155,9 +156,22 @@ void OwnWorldClient::roomBound(int stage, int sub) {
 }
 
 void OwnWorldClient::roomScriptsRan() {
+    const od::port::ScriptState& s = od::port::scriptState();
+    if (std::exchange(sceneMoved_, false) && localScene_) {
+        // the scene's script went here and is over: the room's own scene started (a boss's next stage). The scene that
+        // brought this game is done; this one is the room's, as the world's for the first one in: the world's start of it
+        // confirms it, it plays once
+        if ((s.flags & od::port::kScriptRunning) && s.id != 0 && s.id != sceneScript_) {
+            localScene_ = false;
+            sceneRoom_.reset();
+            od::port::presentationLoopsClear();
+            bindWorld(room_->stage, room_->sub);
+            startedHere(s.id);
+        }
+        return;
+    }
     if (!entering_) return;
     entering_ = false;
-    const od::port::ScriptState& s = od::port::scriptState();
     if ((s.flags & od::port::kScriptRunning) && s.id != 0) {
         startedHere(s.id);
         return;
@@ -171,6 +185,7 @@ void OwnWorldClient::startedHere(uint8_t script) {
     sceneOwner_ = 0; // the world's rule: the first player in the room, the host when here; the world's start says who
     scenePad_ = sentPad_ = 0;
     sceneRoom_ = room_;
+    sceneScript_ = script;
     sceneEndAt_.reset();
     sceneHeard_ = false;
     // a scene that waits for everyone: held here as in the world, until the world starts it
@@ -492,6 +507,7 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
         // it ends here with its script)
         sceneHeard_ = !(m.netState.size() > 2 && m.netState[2] != 0);
         sceneStart_ = m.netState[1];
+        sceneScript_ = m.netState[1];
         sceneRoom_ = room_;
         sceneEndAt_.reset();
         od::port::presentationLoopsClear(); // the world's sounds: the scene's are this game's own
@@ -503,8 +519,10 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
         break;
     case WorldMessageType::NetSceneEnd:
         // this game's copy ends once its script has too (until then what it changes is the world's to say)
-        if (localScene_) sceneEndAt_ = m.netState;
-        else scene_ = false;
+        // (the world's end of a scene comes after its start: one before it is the end of the one this game left, sent by
+        // that room's world before it heard of the move)
+        if (localScene_ && sceneHeard_) sceneEndAt_ = m.netState;
+        else if (!localScene_) scene_ = false;
         break;
     case WorldMessageType::NetMoveTo:
         if (gateAsked_ && gateAtDoor_) {
@@ -756,8 +774,12 @@ void OwnWorldClient::localSceneTurn() {
         return;
     }
     od::port::presentationLoopsClear();
-    freeLocalActors();
+    // its script went to a room whose first field tick is still to come: that tick decides, as on any entry (the room
+    // setup's actors stay for a scene it starts)
+    const bool firstTickToCome = std::exchange(sceneMoved_, false);
+    if (!firstTickToCome) freeLocalActors();
     bindWorld(here.stage, here.sub);
+    entering_ = firstTickToCome;
     if (sameRoom && at) sceneEnd(*at);
     SDL_Log("own world: the scene ended, back in the room's world");
 }
