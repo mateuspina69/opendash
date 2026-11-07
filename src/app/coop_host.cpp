@@ -81,8 +81,15 @@ const std::vector<uint8_t>& CoopHost::liveSave() {
     return save_;
 }
 
-void CoopHost::liveSaveFile() {
+void CoopHost::hostBound(WorldRoom room) {
     const std::vector<uint8_t>& save = liveSave();
+    if (save.empty()) bound_.reset();
+    else bound_ = Bound{room, save};
+}
+
+void CoopHost::liveSaveFile(WorldRoom room) {
+    const std::vector<uint8_t>& live = liveSave();
+    const std::vector<uint8_t>& save = bound_ && bound_->room == room ? bound_->save : live;
     if (save.empty()) return;
     std::ofstream out(lastSavePath_, std::ios::binary | std::ios::trunc);
     out.write(reinterpret_cast<const char*>(save.data()), std::streamsize(save.size()));
@@ -114,7 +121,7 @@ void CoopHost::hostLoaded(std::span<const uint8_t> save, uint64_t nowNs) {
 std::optional<std::vector<uint8_t>> CoopHost::takeReload() { return std::exchange(reload_, std::nullopt); }
 
 void CoopHost::enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& state) {
-    liveSaveFile(); // a world started now starts from the host's state as it is
+    liveSaveFile(room); // a world started now starts from the host's state as it is
     worlds_.enter(playerId, room, state);
 }
 
@@ -163,8 +170,8 @@ void CoopHost::fromClient(uint8_t id, const WorldMessage& m, uint64_t nowNs) {
             const bool first = clients_.insert(id).second, stays = m.netState[2] != 0;
             if (told_.insert(id).second) sendSave(id, nowNs);
             const bool place = first || placeNext_.erase(id) != 0;
-            liveSaveFile(); // a world started now starts from the host's state as it is
-            worlds_.enter(id, WorldRoom{m.netState[0], m.netState[1]}, std::vector<uint8_t>(m.netState.begin() + 3, m.netState.end()));
+            liveSaveFile(WorldRoom{m.netState[0], m.netState[1]}); // a world started now starts from the host's state as it is
+            worlds_.enter(id, WorldRoom{m.netState[0], m.netState[1]},std::vector<uint8_t>(m.netState.begin() + 3, m.netState.end()));
             if (place && !stays) worlds_.placeNextToHost(id); // joining, or the session started over: next to the host
         }
         break;

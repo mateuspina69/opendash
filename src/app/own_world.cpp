@@ -128,6 +128,8 @@ void OwnWorldClient::roomBound(int stage, int sub) {
         warping_ = false;
         return;
     }
+    // the room is loaded, its first field tick still to come (also one a scene's script went to)
+    if (coordinator_) coordinator_->hostBound(WorldRoom{stage, sub});
     if (localScene_) { // a room the scene's script went to: its actors are this game's, as in the normal game
         room_ = WorldRoom{stage, sub};
         sceneMoved_ = true;
@@ -315,8 +317,9 @@ void OwnWorldClient::turn(uint64_t nowNs) {
     sceneTurn();
     localSceneTurn();
     if (!room_) return;
-    // a scene's own room changes are the game's, as in the normal game; one held for everyone waits at the gate
-    if (!localScene_ || heldHere_) gateTurn();
+    // a scene's own room changes are the game's, as in the normal game; one held for everyone waits at the gate; once its
+    // script is done (its world's end still to come) an exit is the player's own
+    if (!localScene_ || heldHere_ || !od::port::scriptState().inUse()) gateTurn();
     od::port::presentationLoopsTick();
     // what happened in this game goes to the session; not what a stage's load does; in a scene the world does it all
     if (scene_) {

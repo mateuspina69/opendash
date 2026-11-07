@@ -56,6 +56,9 @@ public:
     std::optional<std::vector<uint8_t>> takeReload();
     // the host's game state as a save image, now (none: no game is played): what the session is, never a file it began with
     void setLiveState(std::function<std::optional<std::vector<uint8_t>>()> live) { live_ = std::move(live); }
+    // the host's game is in this room, its first field tick still to run: a world of the room starts from the state now
+    // (what that tick changes -- a room's script, its flags -- the world's own first tick does as the game does)
+    void hostBound(WorldRoom room);
 
     std::optional<uint8_t> playerId() const override { return uint8_t(0); }
     void enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& state) override;
@@ -69,7 +72,13 @@ private:
     void sendSave(uint8_t id, uint64_t nowNs);
     // the host's live state (else the last one known: the game is not played now), and the file a world starts from
     const std::vector<uint8_t>& liveSave();
-    void liveSaveFile();
+    // ... the file a world of this room starts from (the state the host's game entered it with, when it is there)
+    void liveSaveFile(WorldRoom room);
+    struct Bound {
+        WorldRoom room;
+        std::vector<uint8_t> save;
+    };
+    std::optional<Bound> bound_;
 
     WorldHost worlds_;
     std::vector<uint8_t> save_;    // the host's state as last known (its live state while it plays)
