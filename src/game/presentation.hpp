@@ -69,5 +69,6 @@ void netScreenApply(std::span<const uint8_t> bytes);
 void setSoundOwner(uint8_t owner);
 // A player's game: what its effect classes play comes from the world instead
 void setLocalEffectsMuted(bool muted);
+bool localEffectsMuted();
 
 } // namespace od::port

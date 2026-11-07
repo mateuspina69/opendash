@@ -343,6 +343,7 @@ int updatePool(const PlayerEnv& env, ActorContext& ctx, ActorPool pool) {
             }
             continue;
         }
+        bool keptHere = false; // (below: a kept class's sounds)
         try {
             const ScopedActingPlayer acting(actor.ownerPlayer);
             // a remote player's shot reads its owner's arm (its animation scripts come with their weapon's files)
@@ -354,6 +355,10 @@ int updatePool(const PlayerEnv& env, ActorContext& ctx, ActorPool pool) {
 #endif
             if (worldHasNoView()) eventSelectFor(actor.slot);
             ActorSystemState& sys = actorSystem();
+            // what a game keeps of its own (a door it opens, the weather) plays its own sounds: the world's copy is not
+            // driven, it plays none
+            keptHere = localEffectsMuted() && netClientKeepsClassOf(h.id());
+            if (keptHere) setLocalEffectsMuted(false);
             sys.updatingWorldCopy = actor.worldCopy;
             sys.updatingClientRun = worldHasNoView() && netStartsOnClients(actor, pool);
             if (pool == ActorPool::Shots) {
@@ -361,6 +366,7 @@ int updatePool(const PlayerEnv& env, ActorContext& ctx, ActorPool pool) {
                 if (worldIsElsewhere() && actor.ownerPlayer != 0) setLocalEffectsMuted(true); // heard from the world
             }
             fn(env, actor.at);
+            if (keptHere) setLocalEffectsMuted(true);
             sys.updatingWorldCopy = sys.updatingClientRun = false;
             if (worldHasNoView()) eventSelectNone();
             if (pool == ActorPool::Shots) {
@@ -371,6 +377,7 @@ int updatePool(const PlayerEnv& env, ActorContext& ctx, ActorPool pool) {
         } catch (const std::logic_error& e) {
             if (pool == ActorPool::Shots) actorSystem().shotCursor = 0;
             actorSystem().updatingWorldCopy = actorSystem().updatingClientRun = false;
+            if (keptHere) setLocalEffectsMuted(true);
             ctx.disabled.insert(h.id());
             if (ctx.log) ctx.log(std::string("PORT GAP: actor class disabled: ") + e.what());
         }

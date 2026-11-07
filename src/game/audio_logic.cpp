@@ -1114,6 +1114,7 @@ void soundQueueClear() {
 
 void setSoundOwner(uint8_t owner) { g_soundOwner = owner; }
 void setLocalEffectsMuted(bool muted) { g_localEffectsMuted = muted; }
+bool localEffectsMuted() { return g_localEffectsMuted; }
 
 void soundRequestReplay(const SoundRequest& r) {
     SoundQueue& q = soundQueue();

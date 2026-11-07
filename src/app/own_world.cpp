@@ -216,7 +216,8 @@ void OwnWorldClient::freeLocalActors() {
     for (size_t i = 0; i < od::port::ProjectilePool::size(); ++i)
         if (od::port::projectilePool()[i].flags & od::port::kActorLive) od::port::freeActor(od::port::projectilePool()[i]);
     for (size_t i = 0; i < od::port::EffectPool::size(); ++i)
-        if (od::port::effectPool()[i].flags & od::port::kActorLive) od::port::freeActor(od::port::effectPool()[i]);
+        if ((od::port::effectPool()[i].flags & od::port::kActorLive) && !od::port::netClientKeepsEffect(od::port::effectPool()[i]))
+            od::port::freeActor(od::port::effectPool()[i]);
     for (size_t i = 0; i < od::port::ControllerPool::size(); ++i)
         if (od::port::controllerPool()[i].flags & od::port::kActorLive) od::port::freeActor(od::port::controllerPool()[i]);
     od::port::applyActorFrees();

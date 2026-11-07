@@ -382,7 +382,7 @@ NetWorldTable::Seen seenOf(const Actor& a, uint32_t model, uint32_t animTable) {
 bool netClientKeepsClass(RoutineId id) {
     return id == RoutineId::ChargeMarkerUpdate || id == RoutineId::DrainBurnMarkerUpdate || id == RoutineId::SlowMarkerUpdate ||
            id == RoutineId::DoorActorUpdate || id == RoutineId::SnowUpdate || id == RoutineId::DoorLeafHingedUpdate || id == RoutineId::DoorLeafDoubleUpdate ||
-           id == RoutineId::DoorLeafSlidingUpdate;
+           id == RoutineId::DoorLeafSlidingUpdate || id == RoutineId::BlizzardLayerUpdate;
 }
 
 // the statics that are effects: seen, not played with, and the same on every machine's own random numbers
@@ -677,6 +677,10 @@ void captureNetWorld(NetWorldTable& table, uint32_t tick) {
                 if (held[1]) s.effectStart.second = held[1]->slot;
             }
         }
+        // what each game keeps of its own room (the weather's layer): the world's is not sent
+        if (const RoutineRef h = actorHandler(e, (e.loopFlags & kActorLateLoop) ? ActorPool::EffectsLate : ActorPool::Effects, false);
+            h && netClientKeepsClass(h.id()))
+            s.effectGoes = false;
         s.effectStart.subState = e.subState;
         s.effectStart.step = e.step;
         s.effectStart.stepCounter = e.stepCounter;
@@ -1822,9 +1826,16 @@ bool netClientKeepsActor(const StaticActor& a) {
     return h && netClientKeepsClass(h.id());
 }
 
+bool netClientKeepsEffect(const EffectActor& e) {
+    const RoutineRef h = actorHandler(e, (e.loopFlags & kActorLateLoop) ? ActorPool::EffectsLate : ActorPool::Effects, false);
+    return h && netClientKeepsClass(h.id());
+}
+
 bool netClientKeepsAnyActor(const Actor& a) {
     return actorSlotClass(a.slot) == kStaticClass && netClientKeepsActor(static_cast<const StaticActor&>(a));
 }
+
+bool netClientKeepsClassOf(RoutineId id) { return netClientKeepsClass(id); }
 
 void PoolNetActors::submitLockPoints() {
     size_t box = 0;

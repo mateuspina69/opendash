@@ -474,6 +474,9 @@ private:
 // the actors a client keeps from its own room setup and runs itself: the door actor and its leaves (a door asks its own player)
 bool netClientKeepsActor(const StaticActor& a);
 bool netClientKeepsAnyActor(const Actor& a); // of any pool
+bool netClientKeepsEffect(const EffectActor& e);
+// ... its class (what it plays it plays here: the world's copy of it is not driven)
+bool netClientKeepsClassOf(RoutineId id);
 
 // One tick of what runs on a client: the effects, and the statics started as effects (the world's actors are held with their
 // run flag off, so the pool loops pass them by). A class that throws ends its own actor, not the client; the classes that
