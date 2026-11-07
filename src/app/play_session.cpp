@@ -900,13 +900,12 @@ void PlayerView::setupHooks() {
         using od::port::ActorPool;
         od::port::setWorldIsElsewhere(ownWorld && ownWorld->inWorld());
         if (ownWorld && ownWorld->inWorld()) { // a client: its Mega Man and the effects; the rest is the world's
-            // the world is starting: no input, no fall -- but for a walk this game's own script drives (a door's arrival:
-            // the replay pad), which goes on with its script (held, the script would walk its time out with him still)
-            const bool watching = ownWorld->watchingScene() && !(od::port::player().inputMode & od::port::kInputReplay);
-            if (!watching) od::port::playerInputAndDispatch(env);
+            // (a world that is still starting holds nothing up: the room's ground is this game's own, the world's actors
+            // come when it is heard)
+            od::port::playerInputAndDispatch(env);
             ownWorld->localActors(env, actors, false);
             od::port::actorCollision();
-            if (!watching) od::port::playerUpdate(env);
+            od::port::playerUpdate(env);
             od::port::remotePlayersUpdate(); // the others' bones, for what follows them here
             od::port::updatePool(env, actors, ActorPool::Shots);
             od::port::cameraUpdate();

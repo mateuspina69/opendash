@@ -69,8 +69,6 @@ public:
     // ... and not while a story scene plays: every game runs the scene itself, as the normal game does
     // ... and not on the room's first field tick, whose scripts run here as in the normal game (roomScriptsRan)
     bool inWorld() const { return room_.has_value() && !localScene_ && !entering_; }
-    // the room's world has not said anything yet (it is starting): this game's Mega Man waits where it is
-    bool watchingScene() const { return !localScene_ && !entering_ && room_ && (!joined_ || !state_ || !state_->heard()); }
     // the room's scripts have run (game/transition roomScripts): on the room's first field tick, a scene they started
     // plays here from that tick, as in the normal game; else the room's world takes over
     void roomScriptsRan();
