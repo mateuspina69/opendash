@@ -272,6 +272,8 @@ private:
     uint32_t followSinceEnd_ = 0;         // ... this game's ticks since it was heard (one still waiting for its player)
     bool eventTicking() const;
     void followEnd();
+    uint8_t inputBeforeEvent_ = 0; // this player's input mode as the world's event began
+    void restoreEventInput(const od::port::EventState& ev);
     uint32_t testLevelTick_ = 0;
     int8_t testLevel_ = 0;
     int testWeapon_ = -1;

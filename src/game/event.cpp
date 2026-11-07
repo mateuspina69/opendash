@@ -187,6 +187,7 @@ uint8_t g_updatingSlot = 0;
 bool g_inActor = false; // an actor's class is being updated (else the room's own logic runs)
 std::array<bool, kPlayerSlots> g_ownerEventEnding{};
 std::array<uint8_t, kEventSlots> g_speakerSlot{}; // the actor that started each player's event
+std::array<bool, kEventSlots> g_roomEvent{};      // ... or the room's own logic: what it waits on is that event
 
 // what a world does of an event that runs on its player's machine
 void ownerEventTick(size_t player) {
@@ -200,6 +201,7 @@ void ownerEventTick(size_t player) {
     g_ownerEventEnding[player] = false;
     ev.active = 0;
     g_speakerSlot[player + 1] = 0;
+    g_roomEvent[player + 1] = false;
 }
 
 } // namespace
@@ -226,6 +228,10 @@ void eventSelectFor(uint8_t actorSlot) {
 }
 void eventSelectNone() {
     eventSlots().current = 0;
+    // the room's own logic runs between the actors: the event it started (on its player's machine) is the one it sees
+    if (g_ownerHook)
+        for (size_t k = 1; k < kEventSlots; ++k)
+            if (g_roomEvent[k] && eventSlots().slots[k].active != 0) eventSlots().current = k;
     g_updatingSlot = 0;
     g_inActor = false;
 }
@@ -309,6 +315,8 @@ void eventStart(const Fixed16Vec3* pos, ShortVec3* rot, uint32_t param, uint16_t
         }
         EventState& ev = eventSlots().slots[owner + 1];
         g_speakerSlot[owner + 1] = g_updatingSlot;
+        g_roomEvent[owner + 1] = !g_inActor;
+        if (!g_inActor) eventSlots().current = owner + 1; // the room's logic waits for its end from its next step on
         ev.setModeWord(uint16_t(int32_t(param) >> 16));
         ev.active = 1;
         ev.flags = uint8_t(param);

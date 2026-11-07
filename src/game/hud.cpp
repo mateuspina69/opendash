@@ -641,6 +641,13 @@ void setGaugeColour(HudElementRecord& g, uint32_t colour, uint8_t shift) {
 }
 } // namespace
 
+void HudBanner::hide() {
+    shown = 0;
+    kind = 0;
+    progress = 0;
+    if (PresentationBatch* batch = presentationBatch()) batch->bannerHidden();
+}
+
 void hudBannerShow(uint16_t x, uint16_t y, HudBannerStyle style) {
     if (od::port::PresentationBatch* batch = od::port::presentationBatch()) batch->banner(x, y, uint8_t(style));
     const uint32_t kind = uint32_t(style);

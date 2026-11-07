@@ -17,7 +17,7 @@ namespace od::port {
 
 namespace {
 
-enum class Record : uint8_t { WindowOpen = 1, WindowClose = 2, Fade = 3, Sound = 4, LoopStart = 6, LoopMove = 7, LoopStop = 8, Shake = 9, Banner = 10, White = 11, MusicFade = 12 };
+enum class Record : uint8_t { WindowOpen = 1, WindowClose = 2, Fade = 3, Sound = 4, LoopStart = 6, LoopMove = 7, LoopStop = 8, Shake = 9, Banner = 10, White = 11, MusicFade = 12, BannerHidden = 13 };
 struct HeldLoop {
     uint32_t local = 0;
     bool hasPoint = false;
@@ -105,6 +105,7 @@ void PresentationBatch::banner(uint16_t x, uint16_t y, uint8_t style) {
     put16(bytes_, y);
     bytes_.push_back(style);
 }
+void PresentationBatch::bannerHidden() { bytes_.push_back(uint8_t(Record::BannerHidden)); }
 void PresentationBatch::white(bool on) {
     bytes_.push_back(uint8_t(Record::White));
     bytes_.push_back(on ? 1 : 0);
@@ -214,6 +215,7 @@ void applyPresentation(std::span<const uint8_t> b, FadeTask& fade, uint8_t me) {
             hudBannerShow(x, y, HudBannerStyle(u8()));
             break;
         }
+        case Record::BannerHidden: hudBanner().hide(); break;
         case Record::White:
             if (left() < 1) return;
             g_white = u8() != 0;

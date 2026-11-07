@@ -28,6 +28,7 @@ public:
     void loopStop(uint32_t handle);
     void shake(uint32_t amount, uint16_t decay, bool force);
     void banner(uint16_t x, uint16_t y, uint8_t style);
+    void bannerHidden();
     void white(bool on);
     // a fade of the music channels (audio_logic soundFadeOut / In / Dip / Restore): the stage music cut for the battle
     // music, and back

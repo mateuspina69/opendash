@@ -223,12 +223,8 @@ struct HudBanner {
     StateArray<HudBannerSprite, 0x20> sprites{};
     DataPtr<> layout; // the kind's layout (exe data: HudBannerLayoutSprite records)
 
-    // exe 0x5f2680: hidden (the head's dword cleared: shown, kind, progress)
-    void hide() {
-        shown = 0;
-        kind = 0;
-        progress = 0;
-    }
+    // exe 0x5f2680: hidden (the head's dword cleared: shown, kind, progress); a session's world tells its players' games
+    void hide();
 };
 inline HudBanner& hudBanner() {
     static HudBanner s;

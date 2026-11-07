@@ -505,6 +505,7 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
             eventPoint_.x = e->x;
             eventPoint_.y = e->y;
             eventPoint_.z = e->z;
+            if (!ownEvent_ && !followEvent_) inputBeforeEvent_ = od::port::player().inputMode;
             od::port::eventStart(e->hasPos ? &eventPoint_ : nullptr, nullptr, e->param, e->window, e->message);
             eventMenus_ = e->menus; // what its talker's choices open plays here, with the event
             eventHints_ = e->hintsMessage;
@@ -842,6 +843,7 @@ void OwnWorldClient::endFrame() {
             ev.speakerAnimation = od::port::kNoSpeakerAnimation;
         }
         if (ev.active == 0) {
+            restoreEventInput(ev);
             pipe_->sendReliable(playerId_, WorldMessageType::NetEventEnd,
                                 {uint8_t(eventTick_), uint8_t(eventTick_ >> 8), uint8_t(eventTick_ >> 16), uint8_t(eventTick_ >> 24)});
             ownEvent_ = false;
@@ -853,6 +855,7 @@ void OwnWorldClient::endFrame() {
         // over here as on its owner's game; else ended where it did (a while later: the pad comes late), or at once
         constexpr uint32_t kFollowGraceTicks = 30;
         if (ev.active == 0) {
+            restoreEventInput(ev);
             followEvent_ = false;
             od::port::setScriptStartsBlocked(false);
         } else if (followEndAt_ && (*followEndAt_ == 0 || followPads_.tick() > *followEndAt_ + kFollowGraceTicks ||
@@ -1045,11 +1048,19 @@ bool OwnWorldClient::eventTicking() const {
     return ev.active != 0 && !(ev.eventMode() == od::port::EventMode::Talk && ev.state == uint8_t(od::port::TalkEventState::WaitPlayer));
 }
 
+// An event of the world's leaves this game's input as it found it: one that keeps the input off as it ends (a mission's
+// briefing) is followed in the normal game by the room's logic giving it back -- in a session that logic runs in the
+// world, on the world's players
+void OwnWorldClient::restoreEventInput(const od::port::EventState& ev) {
+    if (ev.flags & od::port::kEventKeepsInput) od::port::player().inputMode = inputBeforeEvent_;
+}
+
 void OwnWorldClient::followEnd() {
     od::port::EventState& ev = od::port::eventState();
     if (ev.active) {
         od::port::windowClose(int8_t(ev.window), od::port::WindowClose::Force);
         od::port::eventAbort();
+        restoreEventInput(ev);
     }
     followEvent_ = false;
     od::port::setScriptStartsBlocked(false);
