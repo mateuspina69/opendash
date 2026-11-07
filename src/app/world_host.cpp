@@ -8,6 +8,8 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <memory>
+#include <span>
 #include <stdexcept>
 #include <string>
 
@@ -29,12 +31,17 @@ WorldHost::WorldHost(std::filesystem::path exe, std::filesystem::path storySave,
 
 WorldHost::~WorldHost() {
     for (auto& [room, world] : worlds_) world->link.sendReliable({WorldMessageType::Stop});
+    if (standby_) standby_->link.sendReliable({WorldMessageType::Stop});
     const uint64_t until = SDL_GetTicksNS() + 2'000'000'000;
     while (SDL_GetTicksNS() < until) {
         bool settled = true;
         for (auto& [room, world] : worlds_) {
             world->link.poll(SDL_GetTicksNS());
             settled = settled && world->link.settled();
+        }
+        if (standby_ && standby_->link.hasPeer()) {
+            standby_->link.poll(SDL_GetTicksNS());
+            settled = settled && standby_->link.settled();
         }
         if (settled) break;
         SDL_DelayNS(5'000'000);
@@ -45,53 +52,70 @@ WorldHost::~WorldHost() {
 WorldHost::World& WorldHost::worldOf(WorldRoom room, const std::vector<uint8_t>& banks) {
     const auto it = worlds_.find(room);
     if (it != worlds_.end()) return *it->second;
-    auto world = std::make_unique<World>();
-    char stage[8], sub[8], port[8];
+    const auto hex = [](std::span<const uint8_t> bytes) {
+        std::string out;
+        char byte[3];
+        for (const uint8_t b : bytes) {
+            std::snprintf(byte, sizeof byte, "%02x", unsigned(b));
+            out += byte;
+        }
+        return out;
+    };
+    char stage[8], sub[8];
     std::snprintf(stage, sizeof stage, "%02X", unsigned(room.stage));
     std::snprintf(sub, sizeof sub, "%d", room.sub);
-    std::snprintf(port, sizeof port, "%u", unsigned(world->link.port()));
-    const std::string exe = exe_.string(), save = storySave_.string();
-    std::vector<const char*> args = {exe.c_str(), "--world", stage, sub, "--world-link", port};
-    std::string recordHex; // a world started on a stage in use takes what the stage's other worlds hold
+    // the room's world: its room, what the stage's other worlds hold, what the session's state is by now, the save, the
+    // stage's alternate banks the entering player's game holds
+    std::vector<std::string> args = {"--world", stage, sub};
     if (const auto it = stageRecords_.find(room.stage); it != stageRecords_.end()) {
-        char byte[3];
-        for (const uint8_t b : od::port::encodeStageRecord(it->second)) {
-            std::snprintf(byte, sizeof byte, "%02x", unsigned(b));
-            recordHex += byte;
-        }
         args.push_back("--stage-record");
-        args.push_back(recordHex.c_str());
+        args.push_back(hex(od::port::encodeStageRecord(it->second)));
     }
-    std::string globalHex; // what the session's state is by now
-    {
-        char byte[3];
-        for (const uint8_t b : od::port::encode(global_.all(uint8_t(room.stage)))) {
-            std::snprintf(byte, sizeof byte, "%02x", unsigned(b));
-            globalHex += byte;
-        }
-        args.push_back("--global-state");
-        args.push_back(globalHex.c_str());
-    }
-    if (!save.empty()) {
+    args.push_back("--global-state");
+    args.push_back(hex(od::port::encode(global_.all(uint8_t(room.stage)))));
+    if (const std::string save = storySave_.string(); !save.empty()) {
         args.push_back("--story-save");
-        args.push_back(save.c_str());
+        args.push_back(save);
     }
-    std::string banksHex; // the stage's alternate banks the entering player's game holds
     if (!banks.empty()) {
-        char byte[3];
-        for (const uint8_t b : banks) {
-            std::snprintf(byte, sizeof byte, "%02x", unsigned(b));
-            banksHex += byte;
-        }
         args.push_back("--stage-banks");
-        args.push_back(banksHex.c_str());
+        args.push_back(hex(banks));
     }
-    args.push_back(nullptr);
-    world->process = SDL_CreateProcess(args.data(), false);
-    if (!world->process) throw std::runtime_error(std::string("world process: ") + SDL_GetError());
-    SDL_Log("coordinator: world ST%s sub %s started", stage, sub);
+    std::unique_ptr<World> world;
+    if (standby_ && !standby_->link.silent(SDL_GetTicksNS())) {
+        // the process waiting with the game's files loaded takes the room: what a room's world is told on its command line
+        world = std::move(standby_);
+        WorldMessage assign{WorldMessageType::Assign};
+        for (const std::string& a : args) {
+            assign.netState.insert(assign.netState.end(), a.begin(), a.end());
+            assign.netState.push_back(0);
+        }
+        world->link.sendReliable(assign);
+        SDL_Log("coordinator: world ST%s sub %s given to the waiting process", stage, sub);
+    } else {
+        standby_.reset();
+        world = startWorldProcess(args);
+        SDL_Log("coordinator: world ST%s sub %s started", stage, sub);
+    }
     world->startedNs = SDL_GetTicksNS();
-    return *worlds_.emplace(room, std::move(world)).first->second;
+    World& placed = *worlds_.emplace(room, std::move(world)).first->second;
+    standby_ = startWorldProcess({"--world-standby"}); // the next room's, ready when it is entered
+    return placed;
+}
+
+std::unique_ptr<WorldHost::World> WorldHost::startWorldProcess(const std::vector<std::string>& args) {
+    auto world = std::make_unique<World>();
+    char port[8];
+    std::snprintf(port, sizeof port, "%u", unsigned(world->link.port()));
+    const std::string exe = exe_.string();
+    std::vector<const char*> argv = {exe.c_str()};
+    for (const std::string& a : args) argv.push_back(a.c_str());
+    argv.push_back("--world-link");
+    argv.push_back(port);
+    argv.push_back(nullptr);
+    world->process = SDL_CreateProcess(argv.data(), false);
+    if (!world->process) throw std::runtime_error(std::string("world process: ") + SDL_GetError());
+    return world;
 }
 
 void WorldHost::dropEmptiedStage(int stage) {
@@ -529,6 +553,17 @@ void WorldHost::poll(uint64_t nowNs) {
         const int stage = it->first.stage;
         it = worlds_.erase(it);
         dropEmptiedStage(stage);
+    }
+    if (standby_) { // the waiting process: kept alive; one that ended (or never answered) is replaced at the next room
+        (void)standby_->link.poll(nowNs);
+        if (nowNs - standby_->lastKeepAliveNs >= kKeepAliveNs) {
+            standby_->lastKeepAliveNs = nowNs;
+            standby_->link.sendLatest({WorldMessageType::KeepAlive});
+        }
+        if (SDL_WaitProcess(standby_->process, false, nullptr)) {
+            SDL_Log("coordinator: the waiting world process ended");
+            standby_.reset();
+        }
     }
     gameOverTurn();
     gateTurn(nowNs);

@@ -65,10 +65,13 @@ enum class WorldMessageType : uint8_t {
     NetStoryMove = 60,
     // an event the room or everyone sees (game/event EventReach): its owner's pad (app/scene_pads, on the event's ticks), to
     // the world and on to the others' games, whose copies play it; its end (NetEventEnd) carries the owner's last tick
-    NetEventPad = 61
+    NetEventPad = 61,
+    // coordinator -> a world process waiting with the game's files loaded (--world-standby): its room, as the command line
+    // of a room's world gives it (each argument, then a zero byte)
+    Assign = 62
 };
 // the last type: what a decoder takes (a type added after it is the new last)
-constexpr WorldMessageType kLastWorldMessageType = WorldMessageType::NetEventPad;
+constexpr WorldMessageType kLastWorldMessageType = WorldMessageType::Assign;
 
 // What a world says of its players to the coordinator
 struct WorldBrief {

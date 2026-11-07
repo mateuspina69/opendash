@@ -95,6 +95,7 @@ struct WorldArgs {
     std::string poseLog;       // test instrument: each actor's pose per tick, in this local file
     std::string netStats;      // test instrument: the bytes of the network state for one client, in this local file
     std::string effectLog;     // test instrument: the effects a receiver starts, in this local file
+    bool standby = false;      // the game's files loaded, it waits on its link for its room (WorldMessageType::Assign)
 };
 
 // "<ticks> <hex PS1 pad bits>; ..."
@@ -174,9 +175,11 @@ WorldArgs parseArgs(int argc, char** argv) {
             w.hostAway = true;
         } else if (a == "--story-save" && more) {
             w.storySave = argv[++i];
+        } else if (a == "--world-standby") {
+            w.standby = true;
         }
     }
-    if (w.stage < 0) throw std::invalid_argument("--world <stage> <sub>");
+    if (w.stage < 0 && !w.standby) throw std::invalid_argument("--world <stage> <sub>");
     return w;
 }
 
@@ -400,8 +403,9 @@ int runClient(const WorldArgs& w) {
     return 0;
 }
 
-int run(const WorldArgs& w) {
-    if (w.client) return runClient(w);
+int run(const WorldArgs& given) {
+    if (given.client) return runClient(given);
+    WorldArgs w = given;
     od::Config cfg = od::loadConfig();
     if (!ensureGameFiles(cfg, false)) return 1;
     auto view = std::make_unique<PlayerView>();
@@ -416,6 +420,55 @@ int run(const WorldArgs& w) {
     view->langDir = cfg.langDir;
     view->restoredVoices = cfg.restoredVoices;
     view->setLanguage(od::lang::parseLanguage(cfg.lang));
+    // a process started ahead of its room: what came with the room (its joins, its players' first messages) is played once
+    // the room runs
+    std::unique_ptr<WorldLink> waitingLink;
+    std::vector<WorldMessage> cameWithRoom;
+    if (w.standby) {
+        if (w.linkPort == 0) throw std::invalid_argument("--world-standby needs --world-link");
+        waitingLink = std::make_unique<WorldLink>(uint16_t(w.linkPort));
+        waitingLink->sendReliable({WorldMessageType::Hello});
+        SDL_Log("world: ready, waiting for a room");
+        bool assigned = false;
+        uint64_t lastSaid = 0;
+        while (!assigned) {
+            const uint64_t now = SDL_GetTicksNS();
+            for (WorldMessage& m : waitingLink->poll(now)) {
+                if (assigned) {
+                    cameWithRoom.push_back(std::move(m));
+                } else if (m.type == WorldMessageType::Assign) {
+                    std::vector<std::string> args{"opendash"};
+                    for (size_t at = 0; at < m.netState.size();) {
+                        const auto end = std::find(m.netState.begin() + ptrdiff_t(at), m.netState.end(), uint8_t(0));
+                        args.emplace_back(m.netState.begin() + ptrdiff_t(at), end);
+                        at = size_t(end - m.netState.begin()) + 1;
+                    }
+                    std::vector<char*> argv;
+                    for (std::string& a : args) argv.push_back(a.data());
+                    WorldArgs room = parseArgs(int(argv.size()), argv.data());
+                    room.linkPort = w.linkPort;
+                    w = room;
+                    assigned = true;
+                    char log[48];
+                    std::snprintf(log, sizeof log, "opendash-world-ST%02X-%d.log", w.stage, w.sub);
+                    renameLogFile(log);
+                    SDL_Log("world: given ST%02X sub %d", w.stage, w.sub);
+                } else if (m.type == WorldMessageType::Stop) {
+                    discardLogFile();
+                    return 0;
+                }
+            }
+            if (!assigned && waitingLink->silent(now)) { // the coordinator is gone
+                discardLogFile();
+                return 0;
+            }
+            if (!assigned && now - lastSaid >= 1'000'000'000) { // (its keep-alive: the coordinator hears it waits)
+                lastSaid = now;
+                waitingLink->sendLatest({WorldMessageType::KeepAlive});
+            }
+            if (!assigned) SDL_DelayNS(2'000'000);
+        }
+    }
     if (!w.storySave.empty()) {
         view->storySave = od::readFile(w.storySave);
         if (view->storySave.size() != od::port::kSaveSize || od::port::saveChecksumBad(view->storySave))
@@ -563,7 +616,7 @@ int run(const WorldArgs& w) {
             if (client != e.player) eventFollowMessage(client);
     };
     if (w.linkPort != 0) {
-        link = std::make_unique<WorldLink>(uint16_t(w.linkPort));
+        link = waitingLink ? std::move(waitingLink) : std::make_unique<WorldLink>(uint16_t(w.linkPort));
         if (!w.keepPlayer) {
             od::port::setWorldHasNoView(true);
             od::port::leavePlayer(0);
@@ -999,7 +1052,9 @@ int run(const WorldArgs& w) {
     };
     const auto linkTurn = [&](uint64_t tick) {
         const uint64_t now = SDL_GetTicksNS();
-        for (const WorldMessage& m : link->poll(now)) {
+        std::vector<WorldMessage> arrived = std::exchange(cameWithRoom, {});
+        for (WorldMessage& m : link->poll(now)) arrived.push_back(std::move(m));
+        for (const WorldMessage& m : arrived) {
             const auto state = m.playerState.empty() ? std::nullopt : od::port::decodePlayerState(m.playerState);
             switch (m.type) {
             case WorldMessageType::Join:
@@ -1295,7 +1350,7 @@ int run(const WorldArgs& w) {
 
 bool worldProcessRequested(int argc, char** argv) {
     for (int i = 1; i < argc; ++i)
-        if (std::string_view(argv[i]) == "--world") return true;
+        if (std::string_view(argv[i]) == "--world" || std::string_view(argv[i]) == "--world-standby") return true;
     return false;
 }
 
@@ -1304,8 +1359,9 @@ int runWorldProcess(int argc, char** argv) {
     try {
         const WorldArgs w = parseArgs(argc, argv);
         char log[48];
-        std::snprintf(log, sizeof log, w.client ? "opendash-client-ST%02X-%d.log" : "opendash-world-ST%02X-%d.log", w.stage,
-                      w.sub);
+        if (w.standby) std::snprintf(log, sizeof log, "opendash-world-waiting-%d.log", w.linkPort); // (named for its room later)
+        else
+            std::snprintf(log, sizeof log, w.client ? "opendash-client-ST%02X-%d.log" : "opendash-world-ST%02X-%d.log", w.stage, w.sub);
         startLogFile(log);
         od::content::registerAll(); // the game code dispatches into the content through its registry
         if (!SDL_Init(0)) throw std::runtime_error(SDL_GetError());

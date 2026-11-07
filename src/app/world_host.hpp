@@ -109,6 +109,11 @@ private:
         ~World();
     };
     World& worldOf(WorldRoom room, const std::vector<uint8_t>& banks = {});
+    // a world process with these arguments (its link's port added)
+    std::unique_ptr<World> startWorldProcess(const std::vector<std::string>& args);
+    // a world process that has loaded the game's files and waits for its room (WorldMessageType::Assign): the next room
+    // entered starts at once from it
+    std::unique_ptr<World> standby_;
     void removeFromWorld(uint8_t playerId);
     void dropEmptiedStage(int stage);
     void globalChanged(const od::port::GlobalChange& change, const World* fromWorld, std::optional<uint8_t> fromPlayer);

@@ -21,6 +21,7 @@ namespace od::app {
 namespace {
 
 std::FILE* g_file = nullptr;
+std::string g_path; // the file's path
 SDL_LogOutputFunction g_console = nullptr;
 void* g_consoleData = nullptr;
 
@@ -71,9 +72,34 @@ void startLogFile(const char* fileName) {
     const char* base = SDL_GetBasePath();
     const std::string path = std::string(base ? base : "") + fileName;
     g_file = std::fopen(path.c_str(), "w");
+    g_path = path;
     SDL_GetLogOutputFunction(&g_console, &g_consoleData);
     SDL_SetLogOutputFunction(writeLine, nullptr);
     if (!g_file) SDL_Log("log: cannot write %s", path.c_str());
+}
+
+void discardLogFile() {
+    if (!g_file) return;
+    std::fclose(g_file);
+    g_file = nullptr;
+    std::remove(g_path.c_str());
+}
+
+void renameLogFile(const char* fileName) {
+    if (!g_file) return;
+    const char* base = SDL_GetBasePath();
+    const std::string dir = base ? base : "";
+    std::fclose(g_file);
+    g_file = nullptr;
+    const std::string to = dir + fileName;
+    std::remove(to.c_str());
+    if (std::rename(g_path.c_str(), to.c_str()) != 0) {
+        g_file = std::fopen(g_path.c_str(), "a"); // kept where it was
+        SDL_Log("log: cannot rename to %s", to.c_str());
+        return;
+    }
+    g_path = to;
+    g_file = std::fopen(g_path.c_str(), "a");
 }
 
 } // namespace od::app
