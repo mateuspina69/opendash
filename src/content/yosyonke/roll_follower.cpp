@@ -54,8 +54,11 @@ void setSub(AnimatedActor& a, uint8_t s) {
     a.restartStep();
 }
 template <class Sub> void setSub(AnimatedActor& a, Sub s) { setSub(a, uint8_t(s)); }
-// the talk event at the actor (exe 0x543af0(a, 0, 0, message))
-void talk(AnimatedActor& a, uint16_t message) { eventStartAtActor(a, 0, 0, message); }
+// the talk event at the actor (exe 0x543af0(a, 0, 0, message)): Roll's, everyone's in a session
+void talk(AnimatedActor& a, uint16_t message, uint32_t param = 0) {
+    setEventReach(EventReach::Everyone);
+    eventStartAtActor(a, param, 0, message);
+}
 void moveForward(AnimatedActor& a, int z) { moveAlongYaw(a.pos, a.rotation.y, 0, 0, z); }
 // a point given by its integer x / z (the exe's stack 16.16 point: the low words 0)
 int32_t wholeToFixed(int16_t v) { return int32_t(uint32_t(uint16_t(v)) << 16); }
@@ -1112,7 +1115,7 @@ void fieldRoll(const PlayerEnv& env, AnimatedActor& a) {
             notPortedAt(kRollPort, "0x4e5bc0 sub-state", a.subState);
         }
         if (!(f.behaviour & kRollNoTalk) && anyPlayerTalksTo(a) && eventState().active == 0) {
-            eventStartAtActor(a, 0x10, 0, uint16_t(int16_t(f.faintedMessage.get())));
+            talk(a, uint16_t(int16_t(f.faintedMessage.get())), 0x10);
             setSub(a, FaintedSub::Talk);
         }
         break;

@@ -47,6 +47,7 @@ bool isReliable(WorldMessageType t) {
     case WorldMessageType::NetSceneStart:
     case WorldMessageType::NetSceneEnd:
     case WorldMessageType::NetScenePad:
+    case WorldMessageType::NetEventPad:
     case WorldMessageType::NetMoveTo:
     case WorldMessageType::NetHold:
     case WorldMessageType::NetGateAsk:
@@ -150,6 +151,7 @@ std::vector<WorldMessage> CoopHost::take(uint8_t playerId) { return worlds_.take
 void CoopHost::sendSave(uint8_t id, uint64_t nowNs) {
     // the host's game: what exists is its state now, in chunks; the last one is shorter than kSaveChunk
     const std::vector<uint8_t>& save = liveSave();
+    if (save.size() > 0x129) sentRoom_[id] = {save[0x128], save[0x129]};
     for (size_t at = 0; at <= save.size(); at += kSaveChunk) {
         WorldMessage m{WorldMessageType::NetSave};
         m.playerId = id;
@@ -163,9 +165,11 @@ void CoopHost::fromClient(uint8_t id, const WorldMessage& m, uint64_t nowNs) {
     if (!hostPlaying_) return; // no world is anyone's before the host's game is on
     if (!told_.contains(id)) return; // not given the session's game yet: what it sends is of its own
     if (stale_.contains(id)) {
-        // a game from before the session's save: nothing of it counts until it enters the save's room
-        const bool saveRoom = m.type == WorldMessageType::NetEnter && m.netState.size() > 3 && save_.size() > 0x129 &&
-                              m.netState[0] == save_[0x128] && m.netState[1] == save_[0x129];
+        // a game from before the session's save: nothing of it counts until it enters the room of the save it was sent
+        // (the host may have gone on to another room since)
+        const auto sent = sentRoom_.find(id);
+        const bool saveRoom = m.type == WorldMessageType::NetEnter && m.netState.size() > 3 && sent != sentRoom_.end() &&
+                              m.netState[0] == sent->second.first && m.netState[1] == sent->second.second;
         if (!saveRoom) return;
         stale_.erase(id);
     }
@@ -195,7 +199,8 @@ void CoopHost::fromClient(uint8_t id, const WorldMessage& m, uint64_t nowNs) {
     case WorldMessageType::NetEventEnd:
     case WorldMessageType::NetSpeaker:
     case WorldMessageType::NetRevive:
-    case WorldMessageType::NetScenePad: worlds_.netSend(id, m.type, m.netState); break;
+    case WorldMessageType::NetScenePad:
+    case WorldMessageType::NetEventPad: worlds_.netSend(id, m.type, m.netState); break;
     case WorldMessageType::NetRespawnAsk: worlds_.respawnAsk(id); break;
     case WorldMessageType::NetGateAsk: worlds_.gateAsk(id, m.netState); break;
     case WorldMessageType::NetStoryMove: worlds_.storyMove(id, m.netState); break;

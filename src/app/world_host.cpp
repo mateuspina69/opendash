@@ -342,7 +342,19 @@ void WorldHost::gateForce(uint64_t nowNs) {
     if (gate_ && gate_->forceAtNs == 0) gate_->forceAtNs = nowNs + kForceCountdownNs;
 }
 
+void WorldHost::sceneGate(WorldRoom room) {
+    // a scene (an event of everyone's) wants the room: who is here is waiting for the rest
+    const auto it = worlds_.find(room);
+    if (it == worlds_.end()) return;
+    Gate g;
+    g.scene = true;
+    g.room = room;
+    g.first = it->second->players.empty() ? uint8_t(0) : it->second->players[0];
+    gate_ = g;
+}
+
 void WorldHost::gateTurn(uint64_t nowNs) {
+    while (!gate_ && !sceneAsks_.empty()) sceneGate(sceneAsks_.extract(sceneAsks_.begin()).value());
     if (!gate_) return;
     Gate& g = *gate_;
     size_t all = 0, here = 0;
@@ -422,6 +434,7 @@ void WorldHost::poll(uint64_t nowNs) {
                  m.type == WorldMessageType::NetHit || m.type == WorldMessageType::NetShotHit ||
                  m.type == WorldMessageType::NetPlayer || m.type == WorldMessageType::NetPlayerAck ||
                  m.type == WorldMessageType::NetGift || m.type == WorldMessageType::NetEventStart ||
+                 m.type == WorldMessageType::NetEventPad || m.type == WorldMessageType::NetEventEnd ||
                  m.type == WorldMessageType::NetRevived || m.type == WorldMessageType::NetPresent ||
                  m.type == WorldMessageType::NetSceneStart || m.type == WorldMessageType::NetScenePad ||
                  m.type == WorldMessageType::NetSceneEnd || m.type == WorldMessageType::NetHold ||
@@ -433,13 +446,10 @@ void WorldHost::poll(uint64_t nowNs) {
                 playerRoom_[m.playerId] == it->first)
                 netInbox_[m.playerId].push_back(m);
             if (m.type == WorldMessageType::NetSceneGate) {
-                if (!gate_) {
-                    // a scene wants the room: who is here is waiting for the rest
-                    Gate g;
-                    g.scene = true;
-                    g.room = it->first;
-                    g.first = world.players.empty() ? uint8_t(0) : world.players[0];
-                    gate_ = g;
+                if (gate_ && !gate_->scene) {
+                    sceneAsks_.insert(it->first); // a door's gate is on: the scene's (an event's of everyone's) comes after it
+                } else if (!gate_) {
+                    sceneGate(it->first);
                 }
                 continue;
             }

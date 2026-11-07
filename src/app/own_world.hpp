@@ -257,6 +257,21 @@ private:
     int reviveTicks_ = 0;
     bool ownEvent_ = false; // an event the world asked of this player runs here
     od::port::Fixed16Vec3 eventPoint_{};
+    // ... one the room or everyone sees (game/event EventReach): this game, its owner, sends its pad on the event's ticks
+    // (they count from its window: the wait for a free player is each game's own); the others' copies play it so
+    bool sharedEvent_ = false;
+    uint32_t eventTick_ = 0;
+    uint16_t sentEventPad_ = 0;
+    uint16_t padBefore_ = 0; // this game's pad on the frame before
+    uint16_t eventHeld_ = 0; // ... what was held as the event began, until let go
+    // another player's event of the room or of everyone's, played here on their pad: what it does is theirs (the
+    // session hears it from their game), its room changes and the scripts it starts too
+    bool followEvent_ = false;
+    ScenePads followPads_;
+    std::optional<uint32_t> followEndAt_; // the owner's last tick of it (0: at once)
+    uint32_t followSinceEnd_ = 0;         // ... this game's ticks since it was heard (one still waiting for its player)
+    bool eventTicking() const;
+    void followEnd();
     uint32_t testLevelTick_ = 0;
     int8_t testLevel_ = 0;
     int testWeapon_ = -1;

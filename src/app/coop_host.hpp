@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <map>
 #include <memory>
 #include <optional>
 #include <set>
@@ -91,6 +92,7 @@ private:
     // the clients told a save they have not started from yet: what they send is of a game the session no longer has,
     // dropped until they enter the save's own room
     std::set<uint8_t> stale_;
+    std::map<uint8_t, std::pair<uint8_t, uint8_t>> sentRoom_; // the stage and room of the save each client was last sent
     std::set<uint8_t> told_;      // the players told the session's save (on connecting, at the title or in a game)
     std::set<uint8_t> placeNext_; // ... who come next to the host when they enter (the session started over)
     std::filesystem::path savePath_, lastSavePath_;

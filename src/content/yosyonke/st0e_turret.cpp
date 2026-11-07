@@ -909,7 +909,8 @@ void endSub(AnimatedActor& a, TurretFields& f) {
         return;
     }
     a.step = 1;
-    eventStartAtActor(a, 0x12, 0, 1); // exe 0x543af0(actor, 0x12, 0, 1)
+    setEventReach(EventReach::Everyone); // the boss's last words: everyone's in a session
+    eventStartAtActor(a, 0x12, 0, 1);    // exe 0x543af0(actor, 0x12, 0, 1)
     stageBlock().part<VehicleChaseBlock>().carriedHp = int32_t(actorAt(target).hitPoints);
 }
 void turretSub(AnimatedActor& a, TurretFields& f, uint8_t s) {

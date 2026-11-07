@@ -135,6 +135,8 @@ private:
         uint64_t forceAtNs = 0, nextNoticeNs = 0;
     };
     std::optional<Gate> gate_;
+    std::set<WorldRoom> sceneAsks_; // the rooms whose scene asked while a door's gate was on: theirs come next
+    void sceneGate(WorldRoom room);
     bool gateTeleport_ = false;
     std::array<std::string, kPlayers> names_{};
     uint64_t lastNowNs_ = 0;

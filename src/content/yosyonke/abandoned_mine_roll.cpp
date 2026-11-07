@@ -68,6 +68,7 @@ void setSub(AnimatedActor& a, RuinRollSub s) {
 void talkCheck(AnimatedActor& a, RuinRollFields& f) {
     if ((f.talking & kTalkingBit) || !anyPlayerTalksTo(a) || eventState().active != 0) return;
     const uint8_t param = uint8_t(((f.lookParam & 0x97u) | 0x10u) >> 3);
+    setEventReach(EventReach::Everyone); // Roll's: everyone's in a session
     eventStartAtActor(a, param, 0, f.message);
     setSub(a, RuinRollSub::Talk);
 }

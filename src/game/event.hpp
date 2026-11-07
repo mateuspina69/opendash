@@ -32,8 +32,15 @@ void eventStartAtActor(const Actor& actor, uint32_t param, uint16_t window, uint
 // actor's yaw restored, the player's invulnerability / input mode by the event's flags)
 void eventAbort();
 
+// Who a world's event is for: the player who started it (a townsperson's talk, a chest); everyone in the room with them (what
+// the room's own logic says: a mission's opening, its failure); everyone in the session, brought to the room (the story's
+// people: Roll, the cast, a boss's last words)
+enum class EventReach : uint8_t { Owner = 0, Room = 1, Everyone = 2 };
+constexpr uint8_t kEventOwnRun = 0xff; // OwnerEvent::follows: the event is this game's player's own
+
 // A session's world: the events run on the machine of the player they are for, who has the windows and the camera; here the
-// event only holds the room's classes and turns its speaker
+// event only holds the room's classes and turns its speaker. One of the room's or everyone's plays in the others' games too,
+// on its owner's pad (follows: the owner, on those copies)
 struct OwnerEvent {
     size_t player = 0;
     bool hasPos = false;
@@ -41,8 +48,12 @@ struct OwnerEvent {
     uint32_t param = 0;
     uint16_t window = 0, message = 0;
     uint8_t menus = 0, hintsMessage = 0; // the talker's menus its message's choices open (kEventMenus*), its hints
+    EventReach reach = EventReach::Owner;
+    uint8_t follows = kEventOwnRun;
     friend bool operator==(const OwnerEvent&, const OwnerEvent&) = default;
 };
+// a class, before its eventStart: who the event is for (a story person's: everyone)
+void setEventReach(EventReach reach);
 // what a talker's message opens on its choices (the save menu, the hints): its own class runs them, in the player's game
 // when its event plays there
 constexpr uint8_t kEventMenusNone = 0, kEventMenusTalker = 1, kEventMenusStageTalker = 2;

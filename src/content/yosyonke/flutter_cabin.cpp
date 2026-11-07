@@ -287,6 +287,7 @@ void flutterRoll(const PlayerEnv& env, AnimatedActor& a) {
         break;
     case 1: // exe 0x4e7010
         if (!(f.mode & kFlutterRollNoTalk) && anyPlayerTalksTo(a) && eventState().active == 0) {
+            setEventReach(EventReach::Everyone); // Roll's: everyone's in a session
             eventStartAtActor(a, uint32_t((int32_t(int8_t(f.pose)) & kPoseTalkFlag) >> 2), 0, f.message);
             a.subState = uint8_t(FlutterRollSub::Talk);
             a.restartStep();

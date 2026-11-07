@@ -90,8 +90,11 @@ void place(AnimatedActor& a, int16_t x, int16_t z, int16_t yaw) {
     a.pos.z.whole = z;
     a.rotation.y = yaw;
 }
-// her remark (the talk event at her: exe 0x543af0(a, 0, 0, message))
-void remark(AnimatedActor& a, uint16_t message) { eventStartAtActor(a, 0, 0, message); }
+// her remark (the talk event at her: exe 0x543af0(a, 0, 0, message)) as one comes in: in a session, the room's
+void remark(AnimatedActor& a, uint16_t message) {
+    setEventReach(EventReach::Room);
+    eventStartAtActor(a, 0, 0, message);
+}
 
 // exe 0x41b0b0 (ST08): Roll by the player's arrival point; 1..4 = the known entrances, 5 = elsewhere
 int placeST08(AnimatedActor& a) {

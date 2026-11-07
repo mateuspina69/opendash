@@ -182,7 +182,9 @@ void standEvent(EventState& ev) {
 std::function<void(const OwnerEvent&)> g_ownerHook;
 size_t g_owner = 0;
 uint8_t g_nextMenus = 0, g_nextHints = 0; // setEventTalkerMenus: the next event's
+std::optional<EventReach> g_nextReach;    // setEventReach: the next event's
 uint8_t g_updatingSlot = 0;
+bool g_inActor = false; // an actor's class is being updated (else the room's own logic runs)
 std::array<bool, kPlayerSlots> g_ownerEventEnding{};
 std::array<uint8_t, kEventSlots> g_speakerSlot{}; // the actor that started each player's event
 
@@ -208,6 +210,7 @@ void setEventTalkerMenus(uint8_t menus, uint8_t hintsMessage) {
     g_nextMenus = menus;
     g_nextHints = hintsMessage;
 }
+void setEventReach(EventReach reach) { g_nextReach = reach; }
 void eventOwnerEnded(size_t player) {
     if (player < kPlayerSlots) g_ownerEventEnding[player] = true;
 }
@@ -219,10 +222,12 @@ void eventSelectFor(uint8_t actorSlot) {
     for (size_t k = 1; k < kEventSlots; ++k)
         if (g_speakerSlot[k] == actorSlot && actorSlot != 0 && eventSlots().slots[k].active != 0) eventSlots().current = k;
     g_updatingSlot = actorSlot;
+    g_inActor = true;
 }
 void eventSelectNone() {
     eventSlots().current = 0;
     g_updatingSlot = 0;
+    g_inActor = false;
 }
 
 std::vector<uint8_t> encode(const OwnerEvent& e) {
@@ -240,11 +245,13 @@ std::vector<uint8_t> encode(const OwnerEvent& e) {
     put(e.message, 2);
     put(e.menus, 1);
     put(e.hintsMessage, 1);
+    put(uint8_t(e.reach), 1);
+    put(e.follows, 1);
     return out;
 }
 
 std::optional<OwnerEvent> decodeOwnerEvent(std::span<const uint8_t> b) {
-    if (b.size() != 24) return std::nullopt;
+    if (b.size() != 26) return std::nullopt;
     size_t at = 0;
     const auto get = [&](size_t n) {
         uint32_t v = 0;
@@ -262,6 +269,10 @@ std::optional<OwnerEvent> decodeOwnerEvent(std::span<const uint8_t> b) {
     e.message = uint16_t(get(2));
     e.menus = uint8_t(get(1));
     e.hintsMessage = uint8_t(get(1));
+    const uint32_t reach = get(1);
+    if (reach > uint32_t(EventReach::Everyone)) return std::nullopt;
+    e.reach = EventReach(reach);
+    e.follows = uint8_t(get(1));
     return e;
 }
 
@@ -286,6 +297,7 @@ void eventTick() {
 
 void eventStart(const Fixed16Vec3* pos, ShortVec3* rot, uint32_t param, uint16_t window, uint16_t message) {
     const uint8_t menus = std::exchange(g_nextMenus, 0), hints = std::exchange(g_nextHints, 0);
+    const std::optional<EventReach> reach = std::exchange(g_nextReach, std::nullopt);
     const GameMode mode = gameState().gameMode();
     if (int8_t(mode) < int8_t(GameMode::Field) || int8_t(mode) > int8_t(GameMode::Pause)) return;
     if (g_ownerHook && !scriptState().inUse()) {
@@ -305,6 +317,9 @@ void eventStart(const Fixed16Vec3* pos, ShortVec3* rot, uint32_t param, uint16_t
         ev.speakerPosition = nullptr;
         ev.turnedRotation = nullptr;
         OwnerEvent e{owner, false, 0, 0, 0, param, window, message, menus, hints};
+        // the story's people speak to everyone; the room's own logic's message to who is in it; the rest to its player
+        if (reach) e.reach = *reach;
+        else if (!g_inActor && ev.eventMode() == EventMode::Talk) e.reach = EventReach::Room;
         if (pos) {
             e.hasPos = true;
             e.x = pos->x;

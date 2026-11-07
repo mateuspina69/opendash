@@ -26,6 +26,8 @@
 #include "game/player/player_downed.hpp"
 #include "game/transition_state.hpp"
 #include "game/event.hpp"
+#include "game/event_state.hpp"
+#include "game/message.hpp"
 #include "game/game_state.hpp"
 #include "game/global_state.hpp"
 #include "game/hud.hpp"
@@ -247,6 +249,8 @@ void OwnWorldClient::bindWorld(int stage, int sub) {
     doorPass_ = false;
     bossFight_ = false;
     od::port::globalWatchRebase();
+    sharedEvent_ = false;
+    if (followEvent_) followEnd(); // another's event of the room left
     scene_ = false;
     sceneHeard_ = false;
     if (std::exchange(heldHere_, false)) od::port::setScriptsGated(false);
@@ -355,7 +359,7 @@ void OwnWorldClient::turn(uint64_t nowNs) {
     if (!localScene_ || heldHere_ || !od::port::scriptState().inUse()) gateTurn();
     od::port::presentationLoopsTick();
     // what happened in this game goes to the session; not what a stage's load does; in a scene the world does it all
-    if (scene_) {
+    if (scene_ || followEvent_) { // (another's event played here: what it does comes from their game)
         od::port::globalWatchRebase();
     } else if (const od::port::GameState& g = od::port::gameState(); int(g.stage) == room_->stage && g.gameMode() != od::port::GameMode::StageLoad) {
         if (const od::port::GlobalChange change = od::port::globalWatchTake(uint8_t(room_->stage)); !change.empty())
@@ -495,16 +499,39 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
         break;
     case WorldMessageType::NetEventStart:
         if (const auto e = od::port::decodeOwnerEvent(m.netState)) {
+            const bool follows = e->follows != od::port::kEventOwnRun;
+            if (follows && ownEvent_) break; // this player's own event runs here: theirs is not seen over it
+            if (follows && followEvent_) followEnd();
             eventPoint_.x = e->x;
             eventPoint_.y = e->y;
             eventPoint_.z = e->z;
             od::port::eventStart(e->hasPos ? &eventPoint_ : nullptr, nullptr, e->param, e->window, e->message);
-            SDL_Log("own world: an event of the room's world, message %u", unsigned(e->message));
-            ownEvent_ = true;
             eventMenus_ = e->menus; // what its talker's choices open plays here, with the event
             eventHints_ = e->hintsMessage;
             eventSaveMenu_ = {};
+            if (follows) {
+                SDL_Log("own world: player %u's event, message %u: played here on their pad", unsigned(e->follows), unsigned(e->message));
+                followEvent_ = true;
+                followPads_.start();
+                followEndAt_.reset();
+                followSinceEnd_ = 0;
+                od::port::setScriptStartsBlocked(true);
+            } else {
+                SDL_Log("own world: an event of the room's world, message %u%s", unsigned(e->message),
+                        e->reach == od::port::EventReach::Owner ? "" : " (the others see it too)");
+                ownEvent_ = true;
+                sharedEvent_ = e->reach != od::port::EventReach::Owner;
+                eventTick_ = 0;
+                sentEventPad_ = 0;
+            }
         }
+        break;
+    case WorldMessageType::NetEventPad:
+        if (const auto pad = ScenePads::decode(m.netState); pad && followEvent_) followPads_.heard(pad->at, pad->pad);
+        break;
+    case WorldMessageType::NetEventEnd: // the owner's event of what this game plays ended at their tick
+        if (followEvent_ && m.netState.size() == 4)
+            followEndAt_ = uint32_t(m.netState[0]) | uint32_t(m.netState[1]) << 8 | uint32_t(m.netState[2]) << 16 | uint32_t(m.netState[3]) << 24;
         break;
     case WorldMessageType::NetRevived:
         if (od::port::playerIsDowned(od::port::player())) {
@@ -815,8 +842,22 @@ void OwnWorldClient::endFrame() {
             ev.speakerAnimation = od::port::kNoSpeakerAnimation;
         }
         if (ev.active == 0) {
-            pipe_->sendReliable(playerId_, WorldMessageType::NetEventEnd, {});
+            pipe_->sendReliable(playerId_, WorldMessageType::NetEventEnd,
+                                {uint8_t(eventTick_), uint8_t(eventTick_ >> 8), uint8_t(eventTick_ >> 16), uint8_t(eventTick_ >> 24)});
             ownEvent_ = false;
+            sharedEvent_ = false;
+        }
+    } else if (followEvent_) {
+        od::port::EventState& ev = od::port::eventState();
+        ev.speakerAnimation = od::port::kNoSpeakerAnimation; // the speaker is the world's: its owner's game asks it
+        // over here as on its owner's game; else ended where it did (a while later: the pad comes late), or at once
+        constexpr uint32_t kFollowGraceTicks = 30;
+        if (ev.active == 0) {
+            followEvent_ = false;
+            od::port::setScriptStartsBlocked(false);
+        } else if (followEndAt_ && (*followEndAt_ == 0 || followPads_.tick() > *followEndAt_ + kFollowGraceTicks ||
+                                    ++followSinceEnd_ > 4 * kFollowGraceTicks)) {
+            followEnd();
         }
     }
     downedTurn();
@@ -846,6 +887,7 @@ void OwnWorldClient::sceneTurn() {
     const od::port::GameState& g = od::port::gameState();
     if (!pendingMove_.empty() && g.gameMode() == od::port::GameMode::Field && g.fieldStep() == od::port::FieldStep::Playing &&
         od::port::transitionRequest().state == od::port::kTransitionNone && !hostSaveWhole_) {
+        if (followEvent_) followEnd(); // the session moves this player: another's event played here is over for them
         movedTo(pendingMove_);
         pendingMove_.clear();
     }
@@ -948,6 +990,11 @@ void OwnWorldClient::storyMoveTurn() {
         return;
     }
     if (storyMoveSent_ || !room_ || (r.destStage == uint8_t(room_->stage) && r.destRoom == room_->sub)) return;
+    if (followEvent_) { // another's event played here: its room change is theirs, and the session brings this one along
+        od::port::transitionRequest().state = od::port::kTransitionNone;
+        od::port::clearStoryFlag(od::port::kFlagTransitionArmed);
+        return;
+    }
     const bool ownStory = ownEvent_ || (localScene_ && !sceneHeard_ && sceneOwner_ == playerId_);
     if (!ownStory) return;
     std::vector<uint8_t> move = {r.destStage, r.destRoom};
@@ -993,7 +1040,39 @@ void OwnWorldClient::liftPlace() {
     od::port::carryAtHandsOf(p, od::port::actorLayoutOf(*copy), at[0], at[1], at[2]);
 }
 
+bool OwnWorldClient::eventTicking() const {
+    const od::port::EventState& ev = od::port::eventState();
+    return ev.active != 0 && !(ev.eventMode() == od::port::EventMode::Talk && ev.state == uint8_t(od::port::TalkEventState::WaitPlayer));
+}
+
+void OwnWorldClient::followEnd() {
+    od::port::EventState& ev = od::port::eventState();
+    if (ev.active) {
+        od::port::windowClose(int8_t(ev.window), od::port::WindowClose::Force);
+        od::port::eventAbort();
+    }
+    followEvent_ = false;
+    od::port::setScriptStartsBlocked(false);
+}
+
 void OwnWorldClient::overridePad(uint16_t& buttons) {
+    const uint16_t raw = buttons;
+    const uint16_t before = std::exchange(padBefore_, raw);
+    if (ownEvent_ && sharedEvent_ && eventTicking()) { // what drives the others' copies, stamped with the event's tick
+        // what was held as it began (the press that started it) is nobody's press in it until let go: the copies start
+        // from nothing held, and so does it here
+        if (eventTick_ == 0) eventHeld_ = uint16_t(raw & before);
+        eventHeld_ &= raw;
+        buttons = uint16_t(raw & ~eventHeld_);
+        if (buttons != sentEventPad_) {
+            sentEventPad_ = buttons;
+            pipe_->sendReliable(playerId_, WorldMessageType::NetEventPad, ScenePads::encode(buttons, eventTick_, 0));
+        }
+        ++eventTick_;
+    } else if (followEvent_) {
+        buttons = eventTicking() ? followPads_.step() : 0;
+        return;
+    }
     if (!localScene_ || heldHere_) return;
     if (sceneOwner_ == playerId_) { // what drives every copy: each change, stamped with the scene's tick it was made on
         if (buttons != sentPad_) {

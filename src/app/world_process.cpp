@@ -512,6 +512,56 @@ int run(const WorldArgs& w) {
         m.netState = {uint8_t(field), uint8_t(value), uint8_t(uint16_t(value) >> 8)};
         link->sendReliable(m);
     };
+    // an event the room or everyone sees (game/event EventReach): its owner's game plays it, the others' a copy of it on the
+    // owner's pad; one of everyone's waits for everyone to be in the room first (the scenes' gate)
+    struct SharedEvent {
+        od::port::OwnerEvent start;
+        std::vector<std::vector<uint8_t>> pads; // the owner's, as heard: a game joining during it is told them all
+    };
+    std::optional<SharedEvent> sharedEvent;
+    std::optional<od::port::OwnerEvent> heldEvent;
+    const auto eventFollowMessage = [&](uint8_t client) {
+        od::port::OwnerEvent copy = sharedEvent->start;
+        copy.follows = uint8_t(copy.player);
+        copy.menus = od::port::kEventMenusNone; // what its choices open (the save, the hints) is its owner's
+        WorldMessage start{WorldMessageType::NetEventStart};
+        start.playerId = client;
+        start.netState = od::port::encode(copy);
+        link->sendReliable(start);
+        for (const std::vector<uint8_t>& pad : sharedEvent->pads) {
+            WorldMessage p{WorldMessageType::NetEventPad};
+            p.playerId = client;
+            p.netState = pad;
+            link->sendReliable(p);
+        }
+    };
+    // the shared event's owner ended it at this tick of theirs (0: at once, they are gone): its copies end there too
+    const auto endSharedEvent = [&](uint8_t owner, std::vector<uint8_t> at) {
+        if (heldEvent && heldEvent->player == owner && at.empty()) heldEvent.reset();
+        if (!sharedEvent || sharedEvent->start.player != owner) return;
+        if (at.size() != 4) at = {0, 0, 0, 0};
+        for (const auto& [client, sender] : netClients) {
+            if (client == owner) continue;
+            WorldMessage end{WorldMessageType::NetEventEnd};
+            end.playerId = client;
+            end.netState = at;
+            link->sendReliable(end);
+        }
+        sharedEvent.reset();
+    };
+    const auto startOwnerEvent = [&](const od::port::OwnerEvent& e) {
+        WorldMessage m{WorldMessageType::NetEventStart};
+        m.playerId = uint8_t(e.player);
+        m.netState = od::port::encode(e);
+        link->sendReliable(m);
+        if (e.reach == od::port::EventReach::Owner) return;
+        if (sharedEvent) endSharedEvent(uint8_t(sharedEvent->start.player), {}); // one at a time: the one before ends there
+        sharedEvent = SharedEvent{e, {}};
+        SDL_Log("world: player %zu's event (message %u) plays for %s", e.player, unsigned(e.message),
+                e.reach == od::port::EventReach::Everyone ? "everyone" : "the room");
+        for (const auto& [client, sender] : netClients)
+            if (client != e.player) eventFollowMessage(client);
+    };
     if (w.linkPort != 0) {
         link = std::make_unique<WorldLink>(uint16_t(w.linkPort));
         if (!w.keepPlayer) {
@@ -599,12 +649,15 @@ int run(const WorldArgs& w) {
             half(int(uint32_t(yWord) >> 16));
             link->sendReliable(at);
         });
-        // an event of this room runs on its player's machine
+        // an event of this room runs on its player's machine; one of everyone's once everyone is here
         od::port::setEventOwnerHook([&](const od::port::OwnerEvent& e) {
-            WorldMessage m{WorldMessageType::NetEventStart};
-            m.playerId = uint8_t(e.player);
-            m.netState = od::port::encode(e);
-            link->sendReliable(m);
+            if (e.reach == od::port::EventReach::Everyone && !od::port::storyOptionalStage(uint8_t(w.stage))) {
+                heldEvent = e;
+                link->sendReliable({WorldMessageType::NetSceneGate});
+                SDL_Log("world: player %zu's event (message %u) is everyone's: it waits for them", e.player, unsigned(e.message));
+                return;
+            }
+            startOwnerEvent(e);
         });
     }
     bool stopped = false;
@@ -968,6 +1021,7 @@ int run(const WorldArgs& w) {
                 if (m.playerId < od::port::kPlayerSlots && od::port::playerIsRemote(m.playerId))
                 {
                     od::port::eventOwnerLeft(m.playerId);
+                    endSharedEvent(m.playerId, {});
                     od::port::remotePlayerLeave(m.playerId);
                     mirrors[m.playerId].heard = false; // not shown to the others until they are back and heard
                     mirrors[m.playerId].from.acceptRestart(); // (what they wear stays: their game tells it on a change only)
@@ -991,14 +1045,35 @@ int run(const WorldArgs& w) {
                 for (uint8_t other = 0; other < od::port::kPlayerSlots; ++other) // what the others wear
                     if (other != m.playerId && !equipOf[other].empty()) equipMessage(m.playerId, other);
                 if (sceneOn) sceneStartMessage(m.playerId); // joining during a scene: their game runs it too
+                if (sharedEvent && sharedEvent->start.player != m.playerId) eventFollowMessage(m.playerId); // ... an event
                 lastScreen.clear();                          // ... and is told the screen again
                 banksMessage(m.playerId);                    // ... and the stage's banks
                 for (size_t f = 0; f < roomPlayerFields.size(); ++f)
                     if (roomPlayerFields[f]) roomPlayerMessage(m.playerId, od::port::RoomPlayerField(f), *roomPlayerFields[f]);
                 break;
-            case WorldMessageType::NetSceneGo:
-                sceneGated = false;
-                od::port::setScriptsGated(false);
+            case WorldMessageType::NetSceneGo: {
+                const bool forEvent = heldEvent.has_value();
+                if (heldEvent) { // everyone is here: the event of everyone's plays (its owner still in it)
+                    const od::port::OwnerEvent e = *std::exchange(heldEvent, std::nullopt);
+                    if (od::port::playerPresent(e.player) && od::port::eventOfOwner(e.player).active) startOwnerEvent(e);
+                }
+                if (sceneAsked || !forEvent) { // the scene's: its script starts
+                    sceneGated = false;
+                    od::port::setScriptsGated(false);
+                }
+                break;
+            }
+            case WorldMessageType::NetEventPad:
+                if (sharedEvent && m.playerId == sharedEvent->start.player && ScenePads::decode(m.netState)) {
+                    sharedEvent->pads.push_back(m.netState);
+                    for (const auto& [client, sender] : netClients) {
+                        if (client == m.playerId) continue;
+                        WorldMessage pad{WorldMessageType::NetEventPad};
+                        pad.playerId = client;
+                        pad.netState = m.netState;
+                        link->sendReliable(pad);
+                    }
+                }
                 break;
             case WorldMessageType::NetScenePad:
                 if (const auto pad = ScenePads::decode(m.netState); !pad) {
@@ -1090,6 +1165,7 @@ int run(const WorldArgs& w) {
             case WorldMessageType::NetEventEnd:
                 od::port::eventOwnerEnded(m.playerId);
                 noteActor(m.playerId);
+                endSharedEvent(m.playerId, m.netState);
                 break;
             case WorldMessageType::NetRevive: {
                 const uint8_t target = m.netState.empty() ? uint8_t(0xff) : m.netState[0];
@@ -1105,7 +1181,10 @@ int run(const WorldArgs& w) {
             case WorldMessageType::NetSpeaker:
                 if (m.netState.size() == 1 && m.playerId < od::port::kPlayerSlots) od::port::eventOfOwner(m.playerId).speakerAnimation = m.netState[0];
                 break;
-            case WorldMessageType::NetLeave: dropNetClient(m.playerId); break;
+            case WorldMessageType::NetLeave:
+                endSharedEvent(m.playerId, {}); // its owner's game left the room's world: its copies end
+                dropNetClient(m.playerId);
+                break;
             case WorldMessageType::NetAck:
                 if (const auto c = netClients.find(m.playerId); c != netClients.end()) c->second.acknowledge(m.netSequence);
                 break;

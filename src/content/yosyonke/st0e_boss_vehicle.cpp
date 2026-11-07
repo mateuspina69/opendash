@@ -496,7 +496,8 @@ void endSub(AnimatedActor& a, VehicleFields& f) {
         if (f.timer != 0) {
             --f.timer;
         } else {
-            eventStartAtActor(a, 0x12, 0, 2); // exe 0x543af0(actor, 0x12, 0, 2)
+            setEventReach(od::port::EventReach::Everyone); // the boss's last words: everyone's in a session
+            eventStartAtActor(a, 0x12, 0, 2);              // exe 0x543af0(actor, 0x12, 0, 2)
             a.step = uint8_t(EndStep::Done);
             countDefeat(); // exe 0x5e53e0
         }
