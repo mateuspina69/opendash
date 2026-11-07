@@ -51,6 +51,10 @@ OwnWorldClient::OwnWorldClient(std::filesystem::path exe, std::filesystem::path 
     od::port::setUseNothingHook([this] {
         if (room_ && joined_) pipe_->sendReliable(playerId_, WorldMessageType::NetUse, {});
     });
+    // ... the lift too: the world's actors are what can be lifted
+    od::port::setLiftNothingHook([this] {
+        if (room_ && joined_ && !localScene_) pipe_->sendReliable(playerId_, WorldMessageType::NetLift, {});
+    });
     ghostSlotOfTable_.fill(-1);
     od::port::setRemotePlayerFiles([this](size_t table) { return filesOfTable(table); });
 }
@@ -619,6 +623,21 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
         break;
     case WorldMessageType::NetAlert:
         notice(std::string(m.netState.begin(), m.netState.end()));
+        break;
+    case WorldMessageType::NetLifted:
+        // the world's class took this player's lift: the actor's copy here goes up in this Mega Man's hands, as the
+        // class's lift starts a player's (game/carry playerLiftTargetCheck); the throw goes back in this player's state
+        if (m.netState.size() == 2) {
+            od::port::Player& p = od::port::player();
+            od::port::ActorHeader* copy = actors_->mirrorOf(m.netState[0]);
+            if (copy && (copy->flags & od::port::kActorLive) && p.airborne == 0 && p.carryFlags == 0) {
+                p.interactionTarget.set(uint32_t(od::port::kInteractLift) << 24, *copy);
+                p.liftMode = m.netState[1];
+                p.subState = uint8_t(od::port::PlayerSub::Lift);
+                p.enterStep(0);
+                SDL_Log("own world: lifted the world's actor %02x", unsigned(m.netState[0]));
+            }
+        }
         break;
     case WorldMessageType::NetSave:
         if (std::exchange(saveEnded_, false)) { // the first chunk of another save

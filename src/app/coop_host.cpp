@@ -31,6 +31,8 @@ bool isReliable(WorldMessageType t) {
     case WorldMessageType::GlobalChange:
     case WorldMessageType::NetGift:
     case WorldMessageType::NetUse:
+    case WorldMessageType::NetLift:
+    case WorldMessageType::NetLifted:
     case WorldMessageType::NetEventStart:
     case WorldMessageType::NetEventEnd:
     case WorldMessageType::NetSpeaker:
@@ -182,6 +184,7 @@ void CoopHost::fromClient(uint8_t id, const WorldMessage& m, uint64_t nowNs) {
     case WorldMessageType::NetReport:
     case WorldMessageType::NetEquip:
     case WorldMessageType::NetUse:
+    case WorldMessageType::NetLift:
     case WorldMessageType::NetEventEnd:
     case WorldMessageType::NetSpeaker:
     case WorldMessageType::NetRevive:

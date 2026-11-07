@@ -25,5 +25,9 @@ int tryLiftTarget(Player& p);
 void setUseNothingHook(std::function<void()> hook);
 // a world: the owner of this player pressed Use: its target among the world's actors, but those `skip` says are the owner's
 int pickTalkTargetFor(Player& p, bool (*skip)(const Actor&));
+// a session's game: the lift (the special button with no special weapon) was pressed and nothing of this machine's took it
+void setLiftNothingHook(std::function<void()> hook);
+// a world: the owner of this player pressed the lift: its target among the world's liftable actors (1)
+int pickLiftTargetFor(Player& p);
 
 } // namespace od::port

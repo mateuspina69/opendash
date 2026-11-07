@@ -61,6 +61,7 @@ int targetScore(const Player& p, const Actor& a, int16_t yaw, int reach) {
 // kTalkReach, the body's yaw; mode 1: the liftable ones, kLiftReach, the move direction) -> interactionTarget = the
 // query's mode | the actor
 std::function<void()> g_useNothing;
+std::function<void()> g_liftNothing;
 int pickTarget(Player& p, int mode, bool (*skip)(const Actor&) = nullptr) {
     int16_t yaw = p.rotation.y;
     int reach;
@@ -169,10 +170,17 @@ int tryLiftTarget(Player& p) {
     const int busy = weaponBusy(p);
     if (busy < 0) return 0;
     p.interactionTarget.clear();
-    if (busy == 0 && eventState().active == 0 && p.holds(PlayerButton::Special) && p.activeSpecial == 0)
-        return pickTarget(p, 1);
+    if (busy == 0 && eventState().active == 0 && p.holds(PlayerButton::Special) && p.activeSpecial == 0) {
+        const int picked = pickTarget(p, 1);
+        if (picked == 0 && g_liftNothing && p.pressedNow(PlayerButton::Special)) g_liftNothing();
+        return picked;
+    }
     return 0;
 }
+
+void setLiftNothingHook(std::function<void()> hook) { g_liftNothing = std::move(hook); }
+
+int pickLiftTargetFor(Player& p) { return pickTarget(p, 1); }
 
 void talkMotion(Player& p) {
     EventState& event = eventState();

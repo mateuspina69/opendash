@@ -104,9 +104,35 @@ void remotePlayerUse(size_t id) {
     if (pickTalkTargetFor(p, netClientKeepsAnyActor) != 0) setEventOwner(id);
 }
 
+namespace {
+// the ticks a remote player's lift target waits for a class to take it, then for its owner's game to hold it
+constexpr uint16_t kLiftWaitTicks = 0x40;
+std::array<uint16_t, kPlayerSlots> g_liftWait{};
+std::function<void(size_t, const ActorHeader&, uint8_t)> g_remoteLift;
+} // namespace
+
+void remotePlayerLift(size_t id) {
+    Player& p = playerById(id);
+    if (p.interactionTarget.none() && pickLiftTargetFor(p) != 0) g_liftWait[id] = kLiftWaitTicks;
+}
+
+void setRemoteLiftHook(std::function<void(size_t, const ActorHeader&, uint8_t)> hook) { g_remoteLift = std::move(hook); }
+
+void remotePlayerLifted(size_t id, const ActorHeader& actor, uint8_t mode) {
+    if (id < kPlayerSlots && g_remote[id] && g_remoteLift) g_remoteLift(id, actor, mode);
+}
+
 void remotePlayersTalkDone() {
-    for (size_t id = 0; id < kPlayerSlots; ++id)
-        if (g_remote[id] && playerPresent(id) && playerById(id).carryFlags == 0) playerById(id).interactionTarget.clear();
+    for (size_t id = 0; id < kPlayerSlots; ++id) {
+        if (!g_remote[id] || !playerPresent(id)) continue;
+        Player& p = playerById(id);
+        // the owner's game holds what it lifted: its target stays; its throw (or a drop) lets it go, which the carried
+        // class reads as thrown (game/carry carryReleased)
+        const bool holds = (p.carryFlags & kCarryHolding) && !(p.carryFlags & (kCarryThrowing | kCarryReleased));
+        if (holds) g_liftWait[id] = 0;
+        else if (g_liftWait[id] != 0) --g_liftWait[id];
+        if (!holds && g_liftWait[id] == 0) p.interactionTarget.clear();
+    }
 }
 
 namespace {

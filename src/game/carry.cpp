@@ -11,6 +11,7 @@
 #include "game/actor_state.hpp"
 #include "game/angles.hpp"
 #include "game/audio_logic.hpp"
+#include "game/player/remote_player.hpp"
 #include "game/camera_state.hpp"
 #include "game/encounter.hpp"
 #include "game/hud.hpp"
@@ -53,6 +54,7 @@ bool playerLiftTargetCheck(const Actor& actor, uint8_t mode) { // exe 0x573a60
         lifter->subState = uint8_t(PlayerSub::Lift);
         lifter->enterStep(0);
         const_cast<Actor&>(actor).ownerPlayer = uint8_t(playerId(*lifter)); // the slot is the pool's
+        remotePlayerLifted(playerId(*lifter), actor, mode); // a world's remote player: its owner's game lifts it too
     }
     return true;
 }

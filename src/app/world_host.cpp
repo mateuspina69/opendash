@@ -403,7 +403,7 @@ void WorldHost::poll(uint64_t nowNs) {
                  m.type == WorldMessageType::NetSceneEnd || m.type == WorldMessageType::NetHold ||
                  m.type == WorldMessageType::NetWarp || m.type == WorldMessageType::NetScreen ||
                  m.type == WorldMessageType::NetRoomPlayer || m.type == WorldMessageType::NetEquip ||
-                 m.type == WorldMessageType::NetGauges) &&
+                 m.type == WorldMessageType::NetGauges || m.type == WorldMessageType::NetLifted) &&
                 m.playerId < kPlayers &&
                 playerRoom_[m.playerId] == it->first)
                 netInbox_[m.playerId].push_back(m);

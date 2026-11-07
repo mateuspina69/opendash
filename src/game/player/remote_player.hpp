@@ -8,6 +8,8 @@
 
 #include "engine/file_data.hpp"
 
+#include "game/actor_state.hpp"
+
 #include "game/player/player_snapshot.hpp"
 
 namespace od::port {
@@ -32,6 +34,12 @@ void setRemotePlayerFiles(std::function<LoadedFileData*(size_t id)> filesOf);
 LoadedFileData* remotePlayerFiles(size_t id);
 // the owner pressed Use by nothing of theirs: this tick the classes see what it picks among the world's actors
 void remotePlayerUse(size_t id);
+// the owner pressed the lift by nothing of theirs: the liftable actor it picks among the world's is its target, kept
+// until the owner's game holds it (or no class takes it), let go with the owner's throw
+void remotePlayerLift(size_t id);
+// a world: a class lifted onto this remote player (game/carry playerLiftTargetCheck): its owner's game lifts it too
+void setRemoteLiftHook(std::function<void(size_t id, const ActorHeader& actor, uint8_t mode)> hook);
+void remotePlayerLifted(size_t id, const ActorHeader& actor, uint8_t mode);
 // the tick is over: what it picked is let go
 void remotePlayersTalkDone();
 
