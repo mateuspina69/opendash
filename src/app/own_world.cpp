@@ -345,6 +345,7 @@ void OwnWorldClient::turn(uint64_t nowNs) {
         roomRebuild_ = true;
         SDL_Log("own world: a script of this game's started in the room's world (script %02x): a scene here", unsigned(script));
     }
+    storyMoveTurn();
     sceneTurn();
     liftTurn();
     localSceneTurn();
@@ -911,6 +912,34 @@ void OwnWorldClient::sceneEnd(const std::vector<uint8_t>& at) {
         p.rotation.y = yaw;
         p.prevRotation.y = yaw;
     }
+}
+
+// A room change of this player's own event (its message's warp) or of a scene only this game plays: the story goes
+// there, and so does everyone (the coordinator moves the others next to where this one arrives)
+void OwnWorldClient::storyMoveTurn() {
+    const od::port::TransitionRequest& r = od::port::transitionRequest();
+    const bool asked = r.state == od::port::kTransitionAsked || r.state == od::port::kTransitionAccepted;
+    if (!asked) {
+        storyMoveSent_ = false;
+        return;
+    }
+    if (storyMoveSent_ || !room_ || (r.destStage == uint8_t(room_->stage) && r.destRoom == room_->sub)) return;
+    const bool ownStory = ownEvent_ || (localScene_ && !sceneHeard_ && sceneOwner_ == playerId_);
+    if (!ownStory) return;
+    std::vector<uint8_t> move = {r.destStage, r.destRoom};
+    const auto half = [&](int16_t v) {
+        move.push_back(uint8_t(v));
+        move.push_back(uint8_t(uint16_t(v) >> 8));
+    };
+    half(r.destination.x);
+    half(r.destination.y);
+    half(r.destination.z);
+    half(r.destination.yaw);
+    move.push_back(r.fadeIn);
+    move.push_back(r.fadeOut);
+    pipe_->sendReliable(playerId_, WorldMessageType::NetStoryMove, std::move(move));
+    storyMoveSent_ = true;
+    SDL_Log("own world: this player's story goes to ST%02X sub %u: the others come", unsigned(r.destStage), unsigned(r.destRoom));
 }
 
 // What this Mega Man lifted of the world's: while it holds it, the actor's copy is there; one the world has done with

@@ -236,6 +236,8 @@ private:
     std::optional<Lifted> lifted_;
     static constexpr uint8_t kLiftRefused = 1; // NetLift's byte: this game could not lift what the world's class took
     void liftTurn();
+    void storyMoveTurn();
+    bool storyMoveSent_ = false; // the room change of this player's own story was told
     void liftPlace();
     std::optional<std::vector<uint8_t>> sceneEndAt_; // the world's end: where its Mega Man stands, its owner
     bool sceneHeard_ = false; // the world has started it too (a scene started here: the world's start confirms it)

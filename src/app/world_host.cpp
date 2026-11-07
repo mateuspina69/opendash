@@ -321,6 +321,15 @@ void WorldHost::gateAsk(uint8_t playerId, const std::vector<uint8_t>& move) {
             unsigned(gate_->move[1]), gate_->mission ? " (a mission's)" : "");
 }
 
+void WorldHost::storyMove(uint8_t playerId, const std::vector<uint8_t>& move) {
+    if (move.size() < 12) return;
+    const std::vector<uint8_t> where(move.begin(), move.begin() + 12);
+    SDL_Log("coordinator: player %u's story goes to ST%02X sub %u: everyone goes", unsigned(playerId), unsigned(where[0]), unsigned(where[1]));
+    size_t k = 1; // beside the one who goes there by its own
+    for (uint8_t id = 0; id < kPlayers; ++id)
+        if (id != playerId && playerRoom_[id]) moveTo(id, arrivalBeside(where, k++));
+}
+
 void WorldHost::gateLeave(uint8_t playerId) {
     if (!gate_ || gate_->scene) return;
     gate_->waiting.erase(playerId);

@@ -59,10 +59,13 @@ enum class WorldMessageType : uint8_t {
     // mode
     NetLift = 57, NetLifted = 58,
     // the stage's alternate model banks the world holds (app/stage_banks): its players' games hold the same
-    NetStageBanks = 59
+    NetStageBanks = 59,
+    // a player's own event or scene (its message's warp, a script only their game plays) changes the room: where it goes
+    // (as a gate's ask): the others go there too
+    NetStoryMove = 60
 };
 // the last type: what a decoder takes (a type added after it is the new last)
-constexpr WorldMessageType kLastWorldMessageType = WorldMessageType::NetStageBanks;
+constexpr WorldMessageType kLastWorldMessageType = WorldMessageType::NetStoryMove;
 
 // What a world says of its players to the coordinator
 struct WorldBrief {

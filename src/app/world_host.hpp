@@ -84,6 +84,8 @@ public:
     void setPlayerName(uint8_t playerId, const std::string& name) { names_.at(playerId) = name; }
     void gateAsk(uint8_t playerId, const std::vector<uint8_t>& move);
     void gateLeave(uint8_t playerId);
+    // this player's own event or scene goes to another room (move: as a gate's ask): everyone else in the session goes too
+    void storyMove(uint8_t playerId, const std::vector<uint8_t>& move);
     // the host starts it without those missing, after a visible countdown
     void gateForce(uint64_t nowNs);
     // the turn between frames: the links, the worlds' reports, the keep-alives; a world that ended on its own is forgotten

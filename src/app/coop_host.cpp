@@ -34,6 +34,7 @@ bool isReliable(WorldMessageType t) {
     case WorldMessageType::NetLift:
     case WorldMessageType::NetLifted:
     case WorldMessageType::NetStageBanks:
+    case WorldMessageType::NetStoryMove:
     case WorldMessageType::NetEventStart:
     case WorldMessageType::NetEventEnd:
     case WorldMessageType::NetSpeaker:
@@ -133,6 +134,7 @@ void CoopHost::sendReliable(uint8_t playerId, WorldMessageType type, std::vector
     else if (type == WorldMessageType::GlobalChange) worlds_.globalFromPlayer(playerId, bytes);
     else if (type == WorldMessageType::NetRespawnAsk) worlds_.respawnAsk(playerId);
     else if (type == WorldMessageType::NetGateAsk) worlds_.gateAsk(playerId, bytes);
+    else if (type == WorldMessageType::NetStoryMove) worlds_.storyMove(playerId, bytes);
     else if (type == WorldMessageType::NetGateLeave) worlds_.gateLeave(playerId);
     else if (type == WorldMessageType::NetGateForce) worlds_.gateForce(SDL_GetTicksNS());
     else worlds_.netSend(playerId, type, std::move(bytes));
@@ -196,6 +198,7 @@ void CoopHost::fromClient(uint8_t id, const WorldMessage& m, uint64_t nowNs) {
     case WorldMessageType::NetScenePad: worlds_.netSend(id, m.type, m.netState); break;
     case WorldMessageType::NetRespawnAsk: worlds_.respawnAsk(id); break;
     case WorldMessageType::NetGateAsk: worlds_.gateAsk(id, m.netState); break;
+    case WorldMessageType::NetStoryMove: worlds_.storyMove(id, m.netState); break;
     case WorldMessageType::NetGateLeave: worlds_.gateLeave(id); break;
     case WorldMessageType::GlobalChange: worlds_.globalFromPlayer(id, m.netState); break;
     case WorldMessageType::NetPlayer:
