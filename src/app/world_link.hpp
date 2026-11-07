@@ -57,10 +57,12 @@ enum class WorldMessageType : uint8_t {
     NetGauges = 56,
     // a player pressed the lift by nothing of their own; a world's class lifted onto a player: the actor's slot, the lift's
     // mode
-    NetLift = 57, NetLifted = 58
+    NetLift = 57, NetLifted = 58,
+    // the stage's alternate model banks the world holds (app/stage_banks): its players' games hold the same
+    NetStageBanks = 59
 };
 // the last type: what a decoder takes (a type added after it is the new last)
-constexpr WorldMessageType kLastWorldMessageType = WorldMessageType::NetLifted;
+constexpr WorldMessageType kLastWorldMessageType = WorldMessageType::NetStageBanks;
 
 // What a world says of its players to the coordinator
 struct WorldBrief {

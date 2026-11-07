@@ -44,7 +44,8 @@ public:
     ~WorldHost(); // every world stopped
 
     // the player enters the room in this state (from another room, if they were in one): its world starts if it has none
-    void enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& playerState);
+    // ... its game holding these stage banks (app/stage_banks, encoded): a world started for them starts with them
+    void enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& playerState, const std::vector<uint8_t>& banks = {});
     // the player's state of this tick, to their world
     void state(uint8_t playerId, const std::vector<uint8_t>& playerState);
     // the player is out of the session: the world they were in stops if they were its last
@@ -104,7 +105,7 @@ private:
         uint64_t lastKeepAliveNs = 0;
         ~World();
     };
-    World& worldOf(WorldRoom room);
+    World& worldOf(WorldRoom room, const std::vector<uint8_t>& banks = {});
     void removeFromWorld(uint8_t playerId);
     void dropEmptiedStage(int stage);
     void globalChanged(const od::port::GlobalChange& change, const World* fromWorld, std::optional<uint8_t> fromPlayer);

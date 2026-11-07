@@ -190,6 +190,7 @@ void OwnWorldClient::roomScriptsRan() {
 
 void OwnWorldClient::startedHere(uint8_t script) {
     localScene_ = true;
+    sceneRan_ = false;
     scene_ = true;
     sceneOwner_ = 0; // the world's rule: the first player in the room, the host when here; the world's start says who
     scenePads_.start();
@@ -250,9 +251,10 @@ void OwnWorldClient::bindWorld(int stage, int sub) {
 }
 
 void OwnWorldClient::joinRoom() {
-    pipe_->enter(playerId_, *room_, playerState());
+    const std::vector<uint8_t> banks = heldBanks_ ? heldBanks_() : std::vector<uint8_t>{};
+    pipe_->enter(playerId_, *room_, playerState(), banks);
     pipe_->sendReliable(playerId_, WorldMessageType::NetJoin, {});
-    if (guest_ && coordinator_) pipe_->enter(kGuestId, *room_, playerState());
+    if (guest_ && coordinator_) pipe_->enter(kGuestId, *room_, playerState(), banks);
     joined_ = true;
 }
 
@@ -537,6 +539,7 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
         sentPad_ = 0;
         sceneTick_ = at;
         localScene_ = true;
+        sceneRan_ = false;
         // (a scene of this player's alone, m.netState[2]: the world does not play it, no end of it comes from there --
         // it ends here with its script)
         sceneHeard_ = !(m.netState.size() > 2 && m.netState[2] != 0);
@@ -626,6 +629,10 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
         break;
     case WorldMessageType::NetAlert:
         notice(std::string(m.netState.begin(), m.netState.end()));
+        break;
+    case WorldMessageType::NetStageBanks:
+        // the world's banks: its actors' model entries are of them (a scene this game runs loads its own)
+        if (!localScene_ && takeBanks_) takeBanks_(m.netState);
         break;
     case WorldMessageType::NetLifted:
         if (m.netState.size() == 10) { // how the class places it: this game places its copy at this Mega Man's hands so
@@ -814,6 +821,9 @@ void OwnWorldClient::movedTo(const std::vector<uint8_t>& to) {
 // this one did, later; its start, told again on the join, is not played a second time here
 void OwnWorldClient::localSceneTurn() {
     if (!localScene_) return;
+    // a scene is over once its script has run here and ended (one the world started begins on the game's next frame)
+    if (od::port::scriptState().inUse()) sceneRan_ = true;
+    if (!sceneRan_ || sceneStart_) return;
     const od::port::GameState& g = od::port::gameState();
     if (od::port::scriptState().inUse() || od::port::transitionRequest().state != od::port::kTransitionNone ||
         g.gameMode() != od::port::GameMode::Field || g.fieldStep() != od::port::FieldStep::Playing)

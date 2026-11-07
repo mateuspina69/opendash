@@ -22,8 +22,9 @@ public:
     virtual ~WorldPipe() = default;
     // the session has given this game its player id (a host or a game with no session: at once)
     virtual std::optional<uint8_t> playerId() const = 0;
-    // the player enters the room in this state; its world starts if it has none
-    virtual void enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& state) = 0;
+    // the player enters the room in this state, its game holding these stage banks (app/stage_banks, encoded); the
+    // room's world starts (with those banks) if it has none
+    virtual void enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& state, const std::vector<uint8_t>& banks) = 0;
     // what must arrive
     virtual void sendReliable(uint8_t playerId, WorldMessageType type, std::vector<uint8_t> bytes) = 0;
     // what the next one replaces
@@ -61,7 +62,7 @@ public:
     void hostBound(WorldRoom room);
 
     std::optional<uint8_t> playerId() const override { return uint8_t(0); }
-    void enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& state) override;
+    void enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& state, const std::vector<uint8_t>& banks) override;
     void sendReliable(uint8_t playerId, WorldMessageType type, std::vector<uint8_t> bytes) override;
     void sendLatest(uint8_t playerId, WorldMessageType type, std::vector<uint8_t> bytes) override;
     void poll(uint64_t nowNs) override;
@@ -102,7 +103,7 @@ public:
     explicit SessionPipe(od::net::Session& session) : session_(session) {}
 
     std::optional<uint8_t> playerId() const override;
-    void enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& state) override;
+    void enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& state, const std::vector<uint8_t>& banks) override;
     void sendReliable(uint8_t playerId, WorldMessageType type, std::vector<uint8_t> bytes) override;
     void sendLatest(uint8_t playerId, WorldMessageType type, std::vector<uint8_t> bytes) override;
     void poll(uint64_t nowNs) override;

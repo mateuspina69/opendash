@@ -875,6 +875,11 @@ void PlayerView::setupHooks() {
     // the talking NPC's save menu (Maybe_WriteSaveFile 0x5493b0): OpenDash's saves dir, never the game's
     od::port::setSaveWriteHook([this](uint8_t slot, std::span<const uint8_t> img) { return writeSaveSlot(slot, img); });
     if (ownWorld) ownWorld->setFade(&fadeTask);
+    if (ownWorld)
+        ownWorld->setStageBanks([this] { return encodeStageBanks(stageBanks()); },
+                                [this](std::span<const uint8_t> bytes) {
+                                    if (const auto banks = decodeStageBanks(bytes)) applyStageBanks(*banks);
+                                });
     // a session's host: its state as it is now is the session's (the save buffer the game's menus use is left as it was)
     if (ownWorld)
         ownWorld->setLiveState([this]() -> std::optional<std::vector<uint8_t>> {
@@ -1681,6 +1686,46 @@ void PlayerView::gameFrame() {
     od::port::displayMaskTick(); // 0x53f500: fade type 0 keeps the display off a few frames
 }
 
+StageBanks PlayerView::stageBanks() const {
+    StageBanks b;
+    if (!room) return b;
+    b.stage = uint8_t(room->stage);
+    b.names = g_altBankDat;
+    b.bankBuffer = od::port::stage().bankBuffer;
+    b.modelBank = od::port::stage().modelBank;
+    b.stageAnims = od::port::player().stageAnims;
+    b.stageAnimsExtra = od::port::player().stageAnimsExtra;
+    return b;
+}
+
+void PlayerView::applyStageBanks(const StageBanks& b) {
+    if (!room || b.stage != uint8_t(room->stage) || b == stageBanks()) return;
+    for (size_t k = 0; k < b.names.size(); ++k) {
+        if (b.names[k] == g_altBankDat[k]) continue;
+        if (!b.names[k].empty()) {
+            try { // the DAT's model part in the buffer, as the script's load maps it (processDatQueue)
+                const od::GameFile f = od::dataSource().gameFile(b.names[k]);
+                for (const od::FilePart& sg : f.parts) {
+                    if (sg.kind != od::FilePart::Kind::Models) continue;
+                    const std::span<const uint8_t> d(sg.bytes);
+                    if (!files.mapped(kAltBankBuffers[k], 0x18000)) files.zero(kAltBankBuffers[k], 0x18000);
+                    files.map(kAltBankBuffers[k], d.first(std::min<size_t>(d.size(), 0x18000)));
+                }
+            } catch (const std::exception& e) {
+                SDL_Log("stage banks: %s: %s", b.names[k].c_str(), e.what());
+                continue;
+            }
+        }
+        g_altBankDat[k] = b.names[k];
+        assetsDirty = true;
+    }
+    od::port::stage().bankBuffer = b.bankBuffer;
+    od::port::stage().modelBank = b.modelBank;
+    od::port::player().stageAnims = b.stageAnims;
+    od::port::player().stageAnimsExtra = b.stageAnimsExtra;
+    SDL_Log("stage banks: %s / %s (the session's)", b.names[0].empty() ? "-" : b.names[0].c_str(), b.names[1].empty() ? "-" : b.names[1].c_str());
+}
+
 void PlayerView::processDatQueue() {
     od::port::DatLoadQueue& queue = od::port::datLoadQueue();
     if (queue.requests[0].kind == 0) return;
@@ -1806,6 +1851,7 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
                     // the scene talks to): its handler from the room's entry, with the flags of then, until it stops
                     // advancing; the flags are the session's again after
                     const od::port::StoryFlags now = od::port::storyFlags();
+                    const bool scriptBefore = od::port::scriptState().inUse(); // (what it would start is the world's)
                     od::port::storyFlags() = entry->flags;
                     od::port::clearStoryFlag(od::port::kFlagTransitionArmed); // the arrival is done: no door's script again
                     od::port::clearStoryFlag(od::port::kFlagTransitionArriving);
@@ -1821,6 +1867,9 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
                             break;
                     }
                     od::port::storyFlags() = now;
+                    // a script it started has not run a tick (scriptStart sets its block only): the world's scene is
+                    // what starts here
+                    if (!scriptBefore) od::port::scriptState().flags = 0;
                     od::port::applyActorFrees();
                 }
                 reportUnported();

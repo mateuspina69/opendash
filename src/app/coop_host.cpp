@@ -33,6 +33,7 @@ bool isReliable(WorldMessageType t) {
     case WorldMessageType::NetUse:
     case WorldMessageType::NetLift:
     case WorldMessageType::NetLifted:
+    case WorldMessageType::NetStageBanks:
     case WorldMessageType::NetEventStart:
     case WorldMessageType::NetEventEnd:
     case WorldMessageType::NetSpeaker:
@@ -122,9 +123,9 @@ void CoopHost::hostLoaded(std::span<const uint8_t> save, uint64_t nowNs) {
 
 std::optional<std::vector<uint8_t>> CoopHost::takeReload() { return std::exchange(reload_, std::nullopt); }
 
-void CoopHost::enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& state) {
+void CoopHost::enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& state, const std::vector<uint8_t>& banks) {
     liveSaveFile(room); // a world started now starts from the host's state as it is
-    worlds_.enter(playerId, room, state);
+    worlds_.enter(playerId, room, state, banks);
 }
 
 void CoopHost::sendReliable(uint8_t playerId, WorldMessageType type, std::vector<uint8_t> bytes) {
@@ -173,7 +174,11 @@ void CoopHost::fromClient(uint8_t id, const WorldMessage& m, uint64_t nowNs) {
             if (told_.insert(id).second) sendSave(id, nowNs);
             const bool place = first || placeNext_.erase(id) != 0;
             liveSaveFile(WorldRoom{m.netState[0], m.netState[1]}); // a world started now starts from the host's state as it is
-            worlds_.enter(id, WorldRoom{m.netState[0], m.netState[1]},std::vector<uint8_t>(m.netState.begin() + 3, m.netState.end()));
+            // {stage, sub, stays, the banks' length, the banks, the state}
+            const size_t banksLen = m.netState[3];
+            if (m.netState.size() < 4 + banksLen) break;
+            const std::vector<uint8_t> banks(m.netState.begin() + 4, m.netState.begin() + ptrdiff_t(4 + banksLen));
+            worlds_.enter(id, WorldRoom{m.netState[0], m.netState[1]}, std::vector<uint8_t>(m.netState.begin() + ptrdiff_t(4 + banksLen), m.netState.end()), banks);
             if (place && !stays) worlds_.placeNextToHost(id); // joining, or the session started over: next to the host
         }
         break;
@@ -258,10 +263,11 @@ std::optional<uint8_t> SessionPipe::playerId() const {
     return s.connection == od::net::Connection::Connected ? std::optional(s.localId) : std::nullopt;
 }
 
-void SessionPipe::enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& state) {
+void SessionPipe::enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& state, const std::vector<uint8_t>& banks) {
     WorldMessage m{WorldMessageType::NetEnter};
     m.playerId = playerId;
-    m.netState = {uint8_t(room.stage), uint8_t(room.sub), uint8_t(stays_ ? 1 : 0)};
+    m.netState = {uint8_t(room.stage), uint8_t(room.sub), uint8_t(stays_ ? 1 : 0), uint8_t(banks.size())};
+    m.netState.insert(m.netState.end(), banks.begin(), banks.end());
     m.netState.insert(m.netState.end(), state.begin(), state.end());
     session_.sendWorld(nowNs_, 0, true, encodeWorldMessage(m));
 }

@@ -42,7 +42,7 @@ WorldHost::~WorldHost() {
     // ~World: a world that did not take the stop in time is ended
 }
 
-WorldHost::World& WorldHost::worldOf(WorldRoom room) {
+WorldHost::World& WorldHost::worldOf(WorldRoom room, const std::vector<uint8_t>& banks) {
     const auto it = worlds_.find(room);
     if (it != worlds_.end()) return *it->second;
     auto world = std::make_unique<World>();
@@ -75,6 +75,16 @@ WorldHost::World& WorldHost::worldOf(WorldRoom room) {
     if (!save.empty()) {
         args.push_back("--story-save");
         args.push_back(save.c_str());
+    }
+    std::string banksHex; // the stage's alternate banks the entering player's game holds
+    if (!banks.empty()) {
+        char byte[3];
+        for (const uint8_t b : banks) {
+            std::snprintf(byte, sizeof byte, "%02x", unsigned(b));
+            banksHex += byte;
+        }
+        args.push_back("--stage-banks");
+        args.push_back(banksHex.c_str());
     }
     args.push_back(nullptr);
     world->process = SDL_CreateProcess(args.data(), false);
@@ -113,9 +123,9 @@ void WorldHost::removeFromWorld(uint8_t playerId) {
     dropEmptiedStage(was->stage);
 }
 
-void WorldHost::enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& playerState) {
+void WorldHost::enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& playerState, const std::vector<uint8_t>& banks) {
     if (playerRoom_.at(playerId) == room) return;
-    World& world = worldOf(room); // before the old world goes: a move inside a stage does not empty it
+    World& world = worldOf(room, banks); // before the old world goes: a move inside a stage does not empty it
     if (const auto from = playerRoom_.at(playerId)) {
         WorldMessage leaving{WorldMessageType::NetLeave};
         leaving.playerId = playerId;
@@ -403,7 +413,8 @@ void WorldHost::poll(uint64_t nowNs) {
                  m.type == WorldMessageType::NetSceneEnd || m.type == WorldMessageType::NetHold ||
                  m.type == WorldMessageType::NetWarp || m.type == WorldMessageType::NetScreen ||
                  m.type == WorldMessageType::NetRoomPlayer || m.type == WorldMessageType::NetEquip ||
-                 m.type == WorldMessageType::NetGauges || m.type == WorldMessageType::NetLifted) &&
+                 m.type == WorldMessageType::NetGauges || m.type == WorldMessageType::NetLifted ||
+                 m.type == WorldMessageType::NetStageBanks) &&
                 m.playerId < kPlayers &&
                 playerRoom_[m.playerId] == it->first)
                 netInbox_[m.playerId].push_back(m);

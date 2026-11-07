@@ -20,6 +20,7 @@
 #include <utility>
 #include <vector>
 
+#include "app/stage_banks.hpp"
 #include "app/menu_vram.hpp"
 #include "app/room_mesh.hpp"
 #include "audio/mixer.hpp"
@@ -248,6 +249,10 @@ struct PlayerView {
     void drawMiss(uint32_t a, od::port::ActorPool pool, const char* why, uint32_t model) const;
     void logEffects();
     bool enterPlay(const RoomMesh& mesh);
+    // the stage's alternate banks a script mapped, and the pointers to them (app/stage_banks): this game's; another
+    // machine's taken (a session: the world's, or a world's starting ones)
+    StageBanks stageBanks() const;
+    void applyStageBanks(const StageBanks& banks);
     // A client of a world (ADR 0006, "Client mode"): the room's files bound from the state of the story save, no actor
     // spawned and no world update; the actors come from the world (game/world_net_state)
     bool enterRoomAsClient(const RoomMesh& mesh);

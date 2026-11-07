@@ -10,6 +10,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -44,6 +45,11 @@ public:
     // this game has written a save: on the host, it is what a game over goes back to
     void gameSaved(std::span<const uint8_t> image) { if (coordinator_) coordinator_->hostSaved(image); }
     // on the host: this game's state as a save image, now (none: not played): what the session's state is
+    // this game's stage banks (app/stage_banks, encoded) and the taking of a world's
+    void setStageBanks(std::function<std::vector<uint8_t>()> held, std::function<void(std::span<const uint8_t>)> take) {
+        heldBanks_ = std::move(held);
+        takeBanks_ = std::move(take);
+    }
     void setLiveState(std::function<std::optional<std::vector<uint8_t>>()> live) {
         if (coordinator_) coordinator_->setLiveState(std::move(live));
     }
@@ -203,6 +209,7 @@ private:
     std::optional<uint8_t> sceneStart_;   // the script to start, for the game to take
     std::optional<WorldRoom> sceneRoom_;  // the room it started in
     uint8_t sceneScript_ = 0;             // its script
+    bool sceneRan_ = false;               // its script has run here (its end is the script's end, not its start)
     bool sceneMoved_ = false;             // its script went to another room, whose first field tick has not run yet
     // the scene this game played to its end before its room's world did (that world's copy of it may still run)
     struct PlayedScene {
@@ -211,6 +218,8 @@ private:
     };
     std::optional<PlayedScene> playedScene_;
     std::optional<RoomEntry> roomEntry_;
+    std::function<std::vector<uint8_t>()> heldBanks_;
+    std::function<void(std::span<const uint8_t>)> takeBanks_;
     // the world's actor this Mega Man lifted (its slot there, its type)
     struct Lifted {
         uint8_t slot = 0, type = 0;

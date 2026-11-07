@@ -21,6 +21,7 @@
 #include "app/play_session.hpp"
 #include "app/room_mesh.hpp"
 #include "app/scene_pads.hpp"
+#include "app/stage_banks.hpp"
 #include "app/world_link.hpp"
 #include "net/wire.hpp"
 #include "content/registry.hpp"
@@ -85,6 +86,7 @@ struct WorldArgs {
     int linkPort = 0; // the coordinator's port (app/world_link): its players, until it stops this world
     std::optional<od::port::StageRecord> stageRecord; // what the stage's other worlds hold
     std::optional<od::port::GlobalChange> globalState; // what the session's state is by now
+    std::optional<StageBanks> stageBanks;              // the stage's alternate banks the entering player's game holds
     int markDefeated = -1; // test instrument: this enemy id counts as defeated from the first tick on
     bool client = false;       // the receiver of a world's network state (see runClient)
     uint8_t clientId = 0;      // its client id: the player whose own shots the world does not send it
@@ -144,6 +146,12 @@ WorldArgs parseArgs(int argc, char** argv) {
             for (size_t k = 0; k + 1 < hex.size(); k += 2) bytes.push_back(uint8_t(std::stoi(hex.substr(k, 2), nullptr, 16)));
             w.globalState = od::port::decodeGlobalChange(bytes);
             if (!w.globalState) throw std::invalid_argument("--global-state");
+        } else if (a == "--stage-banks" && more) {
+            const std::string hex = argv[++i];
+            std::vector<uint8_t> bytes;
+            for (size_t k = 0; k + 1 < hex.size(); k += 2) bytes.push_back(uint8_t(std::stoi(hex.substr(k, 2), nullptr, 16)));
+            w.stageBanks = decodeStageBanks(bytes);
+            if (!w.stageBanks) throw std::invalid_argument("--stage-banks");
         } else if (a == "--world-mark-defeated" && more) {
             w.markDefeated = std::stoi(argv[++i]);
         } else if (a == "--world-client") {
@@ -432,6 +440,8 @@ int run(const WorldArgs& w) {
         SDL_Log("world: %s", view->playError.c_str());
         return 1;
     }
+    // the banks a script mapped before in the stage, as the game keeps them through its rooms (enterRoomOfState)
+    if (w.stageBanks) view->applyStageBanks(*w.stageBanks);
     const auto guestState = [](const WorldArgs::Guest& g) {
         od::port::PlayerSnapshot s = od::port::capturePlayerSnapshot(od::port::player());
         s.pos[0] = int32_t(uint32_t(s.pos[0]) + (uint32_t(g.dx) << 16));
@@ -479,6 +489,13 @@ int run(const WorldArgs& w) {
     };
     // on a link: no player of its own; the coordinator's come and go, and its silence ends the world
     std::unique_ptr<WorldLink> link;
+    std::vector<uint8_t> banksTold = encodeStageBanks(view->stageBanks()); // what the players' games were told of the banks
+    const auto banksMessage = [&](uint8_t client) {
+        WorldMessage m{WorldMessageType::NetStageBanks};
+        m.playerId = client;
+        m.netState = banksTold;
+        link->sendReliable(m);
+    };
     // player `about`'s equipment to client `to`: u8 about, then the equipment
     const auto equipMessage = [&](uint8_t to, uint8_t about) {
         WorldMessage e{WorldMessageType::NetEquip};
@@ -896,6 +913,11 @@ int run(const WorldArgs& w) {
             }
         }
         if (netStats) netStats->tick(*netTable, netTick);
+        // a script mapped other banks here: the players' games hold the same
+        if (std::vector<uint8_t> banks = encodeStageBanks(view->stageBanks()); banks != banksTold) {
+            banksTold = std::move(banks);
+            for (const auto& [client, sender] : netClients) banksMessage(client);
+        }
         for (auto& [client, sender] : netClients) {
             for (auto& batch : sender.events(*netTable)) {
                 WorldMessage events{WorldMessageType::NetEvents};
@@ -959,6 +981,7 @@ int run(const WorldArgs& w) {
                     if (other != m.playerId && !equipOf[other].empty()) equipMessage(m.playerId, other);
                 if (sceneOn) sceneStartMessage(m.playerId); // joining during a scene: their game runs it too
                 lastScreen.clear();                          // ... and is told the screen again
+                banksMessage(m.playerId);                    // ... and the stage's banks
                 for (size_t f = 0; f < roomPlayerFields.size(); ++f)
                     if (roomPlayerFields[f]) roomPlayerMessage(m.playerId, od::port::RoomPlayerField(f), *roomPlayerFields[f]);
                 break;
