@@ -29,6 +29,10 @@ public:
     void shake(uint32_t amount, uint16_t decay, bool force);
     void banner(uint16_t x, uint16_t y, uint8_t style);
     void white(bool on);
+    // a fade of the music channels (audio_logic soundFadeOut / In / Dip / Restore): the stage music cut for the battle
+    // music, and back
+    enum class MusicFade : uint8_t { Out = 0, In = 1, Dip = 2, Restore = 3 };
+    void musicFade(MusicFade kind, uint32_t mask, int16_t step, int16_t target, int16_t delay);
     std::vector<uint8_t> take();
     bool empty() const { return bytes_.empty(); }
 

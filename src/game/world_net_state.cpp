@@ -139,6 +139,7 @@ void NetWorldTable::seen(uint8_t slot, const Seen& s) {
     if (occupantChanged) {
         a.effect = s.effect;
         a.effectGoes = s.effectGoes;
+        a.effectEnds = s.effectEnds;
         a.effectStart = s.effectStart;
         a.effectStart.slot = slot;
         a.effectStart.owner = s.owner; // the player it belongs to, in the world's ids (a client maps them to its table)
@@ -409,7 +410,8 @@ bool netEffectClass(RoutineId id) {
     case RoutineId::MissileTrailUpdate:
     case RoutineId::DarkTrailUpdate:
     case RoutineId::WaterSplashUpdate:
-    case RoutineId::BossBladeUpdate: return true;
+    case RoutineId::BossBladeUpdate:
+    case RoutineId::PickupUpdate: return true;
     default: return false;
     }
 }
@@ -501,6 +503,9 @@ template <class Pool> void captureMeshPool(NetWorldTable& table, Pool& pool, siz
                     if (boss != 0 && (actorHeaderAt(boss).flags & kActorLive)) s.effectStart.parent = actorHeaderAt(boss).slot;
                     else s.effectGoes = false;
                 }
+                // a pickup: each client runs it from its event (its draw is the class's fields); who takes it is the
+                // world's, whose end of it ends the copies
+                if (h && h.id() == RoutineId::PickupUpdate) s.effectEnds = true;
                 if (h && h.id() == RoutineId::WaterSplashUpdate)
                     noteSplashSource(const_cast<StaticActor&>(static_cast<const StaticActor&>(a)), s.effectStart, s.effectGoes);
             }
@@ -769,8 +774,9 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
             k.flashTold = a.flashTick;
         }
         if (same) continue;
-        // an effect ends by itself on the client; a shot run from its event ends with the world's
-        if (k.told && k.effect && !(slot >= kShotClass && slot < kShotClass + ShotPool::size())) {
+        // an effect ends by itself on the client; a shot run from its event ends with the world's, and so does one whose
+        // end is the world's to say (a pickup taken)
+        if (k.told && k.effect && !k.effectEnds && !(slot >= kShotClass && slot < kShotClass + ShotPool::size())) {
             k.told = false;
         } else if (k.told) {
             room(kGoBytes);
@@ -783,6 +789,7 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
         if (a.effect) {
             k.told = true;
             k.effect = true;
+            k.effectEnds = a.effectEnds;
             k.generation = a.generation;
             if (!a.effectGoes) continue;
             const NetEffect& e = a.effectStart;

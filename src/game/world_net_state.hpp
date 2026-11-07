@@ -183,6 +183,7 @@ struct NetWorldActor {
     bool startedByClientRun = false; // ... and so is what a shot started
     bool effect = false;     // it runs on the client from an event
     bool effectGoes = false; // ... and this one goes (one that follows something only the world holds does not)
+    bool effectEnds = false; // ... and the world's end of it ends it there (a pickup taken, a shot's go)
     NetEffect effectStart;
 };
 
@@ -229,7 +230,7 @@ public:
         bool startedByClientRun = false;
         bool onPath = false;
         std::array<int32_t, 3> fine{}; // the 16.16 position
-        bool effect = false, effectGoes = false;
+        bool effect = false, effectGoes = false, effectEnds = false;
         NetEffect effectStart;
         uint32_t serial = 0; // a shot slot's occupant count (actor_pools shotSlotSerial): a new one is a new occupant
     };
@@ -273,6 +274,7 @@ private:
         bool told = false;      // the client was told of this occupant
         uint32_t flashTold = 0; // the newest flash it was told of
         bool effect = false;    // ... which runs there by itself from its event
+        bool effectEnds = false; // ... and ends there with the world's
         uint32_t generation = 0;
         NetActorState acked;    // the state the client is known to hold
         NetActorState sent;     // the newest state sent: a value back at the acknowledged one still has to replace this

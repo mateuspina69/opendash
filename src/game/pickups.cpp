@@ -286,7 +286,7 @@ void pickupUpdate(const PlayerEnv& env, uint32_t address) {
     switch (PickupState(actor.state)) {
     case PickupState::Launch: {
         actor.runFlags |= kActorWarpKept;
-        if (actor.variant == 0) {
+        if (actor.variant == 0 && !actor.worldCopy) { // (a world's copy flies as the world's rolled: its velocity came with it)
             uint32_t r = rngStep();
             actor.velocity.x = 0;
             actor.rotation.y = int16_t(r & kAngleMask);
@@ -387,9 +387,10 @@ void pickupUpdate(const PlayerEnv& env, uint32_t address) {
             actor.pos.y = int32_t(uint32_t(ground) << 16);
     }
     if (actor.state < uint8_t(PickupState::Collected)) {
-        // who touches it takes it: the life and the energy are theirs; of two in reach, the lower id
+        // who touches it takes it: the life and the energy are theirs; of two in reach, the lower id (a world's copy: the
+        // world's to say, its end ends this one; it blinks and times out as the world's)
         const Player* taker = nullptr;
-        forEachPlayer([&](const Player& p) {
+        if (!actor.worldCopy) forEachPlayer([&](const Player& p) {
             if (!taker && distance3(actor.pos, p.pos) < kCollectReach && p.hitPoints >= 0) taker = &p;
         });
         if (taker) {

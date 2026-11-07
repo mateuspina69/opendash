@@ -17,7 +17,7 @@ namespace od::port {
 
 namespace {
 
-enum class Record : uint8_t { WindowOpen = 1, WindowClose = 2, Fade = 3, Sound = 4, LoopStart = 6, LoopMove = 7, LoopStop = 8, Shake = 9, Banner = 10, White = 11 };
+enum class Record : uint8_t { WindowOpen = 1, WindowClose = 2, Fade = 3, Sound = 4, LoopStart = 6, LoopMove = 7, LoopStop = 8, Shake = 9, Banner = 10, White = 11, MusicFade = 12 };
 struct HeldLoop {
     uint32_t local = 0;
     bool hasPoint = false;
@@ -108,6 +108,15 @@ void PresentationBatch::banner(uint16_t x, uint16_t y, uint8_t style) {
 void PresentationBatch::white(bool on) {
     bytes_.push_back(uint8_t(Record::White));
     bytes_.push_back(on ? 1 : 0);
+}
+void PresentationBatch::musicFade(MusicFade kind, uint32_t mask, int16_t step, int16_t target, int16_t delay) {
+    bytes_.push_back(uint8_t(Record::MusicFade));
+    bytes_.push_back(uint8_t(kind));
+    put16(bytes_, uint16_t(mask));
+    put16(bytes_, uint16_t(mask >> 16));
+    put16(bytes_, uint16_t(step));
+    put16(bytes_, uint16_t(target));
+    put16(bytes_, uint16_t(delay));
 }
 std::vector<uint8_t> PresentationBatch::take() { return std::exchange(bytes_, {}); }
 
@@ -209,6 +218,21 @@ void applyPresentation(std::span<const uint8_t> b, FadeTask& fade, uint8_t me) {
             if (left() < 1) return;
             g_white = u8() != 0;
             break;
+        case Record::MusicFade: {
+            if (left() < 11) return;
+            const auto kind = PresentationBatch::MusicFade(u8());
+            const uint32_t low = u16_(), high = u16_();
+            const uint32_t mask = low | high << 16;
+            const int16_t step = int16_t(u16_()), target = int16_t(u16_()), delay = int16_t(u16_());
+            switch (kind) {
+            case PresentationBatch::MusicFade::Out: soundFadeOut(mask, step, delay); break;
+            case PresentationBatch::MusicFade::In: soundFadeIn(mask, step, delay); break;
+            case PresentationBatch::MusicFade::Dip: soundFadeDip(mask, step, target, delay); break;
+            case PresentationBatch::MusicFade::Restore: soundFadeRestore(mask, step, delay); break;
+            default: return;
+            }
+            break;
+        }
         default: return;
         }
     }

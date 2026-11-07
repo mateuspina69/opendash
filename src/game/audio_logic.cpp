@@ -1144,6 +1144,7 @@ void soundQueuePopFront() {
 }
 
 int soundFadeOut(uint32_t mask, int16_t step, int16_t delay) {
+    if (PresentationBatch* batch = presentationBatch()) batch->musicFade(PresentationBatch::MusicFade::Out, mask, step, 0, delay);
     for (size_t i = 0; i < kFades; ++i) {
         if (!(mask & (1u << i))) continue;
         auto&& f = soundFades().fades[i];
@@ -1157,6 +1158,7 @@ int soundFadeOut(uint32_t mask, int16_t step, int16_t delay) {
 }
 
 int soundFadeIn(uint32_t mask, int16_t step, int16_t delay) {
+    if (PresentationBatch* batch = presentationBatch()) batch->musicFade(PresentationBatch::MusicFade::In, mask, step, 0, delay);
     for (size_t i = 0; i < kFades; ++i) {
         if (!(mask & (1u << i))) continue;
         auto&& f = soundFades().fades[i];
@@ -1169,6 +1171,7 @@ int soundFadeIn(uint32_t mask, int16_t step, int16_t delay) {
 }
 
 int soundFadeDip(uint32_t mask, int16_t step, int16_t target, int16_t delay) {
+    if (PresentationBatch* batch = presentationBatch()) batch->musicFade(PresentationBatch::MusicFade::Dip, mask, step, target, delay);
     for (size_t i = 0; i < kFades; ++i) {
         if (!(mask & (1u << i))) continue;
         auto&& f = soundFades().fades[i];
@@ -1183,6 +1186,7 @@ int soundFadeDip(uint32_t mask, int16_t step, int16_t target, int16_t delay) {
 }
 
 int soundFadeRestore(uint32_t mask, int16_t step, int16_t delay) {
+    if (PresentationBatch* batch = presentationBatch()) batch->musicFade(PresentationBatch::MusicFade::Restore, mask, step, 0, delay);
     for (size_t i = 0; i < kFades; ++i) {
         auto&& f = soundFades().fades[i];
         if (!(mask & (1u << i)) || f.active == 0 || f.type != uint8_t(SoundFadeType::Dip)) continue;
