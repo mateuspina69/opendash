@@ -60,6 +60,7 @@ template <class Pool> void reassignOwner(Pool& pool, size_t from, size_t to) {
 
 void remotePlayerLeave(size_t id) {
     g_remote[id] = false;
+    remotePlayerLiftRefused(id); // what it held is let go
     setWorldPlayerCamera(id, {});
     leavePlayer(id);
     size_t heir = 0;
@@ -105,33 +106,71 @@ void remotePlayerUse(size_t id) {
 }
 
 namespace {
-// the ticks a remote player's lift target waits for a class to take it, then for its owner's game to hold it
-constexpr uint16_t kLiftWaitTicks = 0x40;
-std::array<uint16_t, kPlayerSlots> g_liftWait{};
+// a remote player's lift: picked (a class may take it this tick or the next ones), taken by a class (its owner's game
+// lifts the actor's copy, however late its state says so), held there
+enum class RemoteLift : uint8_t { None, Picked, Taken, Held };
+struct RemoteLiftState {
+    RemoteLift phase = RemoteLift::None;
+    uint16_t ticks = 0;
+    bool placeTold = false; // its owner's game was told how the class places it at the hands
+};
+std::function<void(size_t, const ActorHeader&, int, int32_t, int)> g_remoteCarry;
+constexpr uint16_t kLiftPickTicks = 4; // a class takes a lift on its own update: the next tick at the latest
+std::array<RemoteLiftState, kPlayerSlots> g_lift{};
 std::function<void(size_t, const ActorHeader&, uint8_t)> g_remoteLift;
 } // namespace
 
 void remotePlayerLift(size_t id) {
     Player& p = playerById(id);
-    if (p.interactionTarget.none() && pickLiftTargetFor(p) != 0) g_liftWait[id] = kLiftWaitTicks;
+    if (g_lift[id].phase == RemoteLift::None && p.interactionTarget.none() && pickLiftTargetFor(p) != 0)
+        g_lift[id] = {RemoteLift::Picked, kLiftPickTicks};
+}
+
+void remotePlayerLiftRefused(size_t id) {
+    if (id >= kPlayerSlots || g_lift[id].phase == RemoteLift::None) return;
+    g_lift[id] = {};
+    playerById(id).interactionTarget.clear(); // the carried class reads it as thrown: let go where it is
+}
+
+void setRemoteCarryHook(std::function<void(size_t, const ActorHeader&, int, int32_t, int)> hook) { g_remoteCarry = std::move(hook); }
+
+void remotePlayerCarries(size_t id, const ActorHeader& actor, int x, int32_t yWord, int z) {
+    if (id >= kPlayerSlots || !g_remote[id]) return;
+    RemoteLiftState& lift = g_lift[id];
+    if (lift.phase == RemoteLift::None || lift.placeTold) return;
+    lift.placeTold = true;
+    if (g_remoteCarry) g_remoteCarry(id, actor, x, yWord, z);
 }
 
 void setRemoteLiftHook(std::function<void(size_t, const ActorHeader&, uint8_t)> hook) { g_remoteLift = std::move(hook); }
 
 void remotePlayerLifted(size_t id, const ActorHeader& actor, uint8_t mode) {
-    if (id < kPlayerSlots && g_remote[id] && g_remoteLift) g_remoteLift(id, actor, mode);
+    if (id >= kPlayerSlots || !g_remote[id]) return;
+    g_lift[id] = {RemoteLift::Taken, 0};
+    if (g_remoteLift) g_remoteLift(id, actor, mode);
 }
 
 void remotePlayersTalkDone() {
     for (size_t id = 0; id < kPlayerSlots; ++id) {
         if (!g_remote[id] || !playerPresent(id)) continue;
         Player& p = playerById(id);
-        // the owner's game holds what it lifted: its target stays; its throw (or a drop) lets it go, which the carried
-        // class reads as thrown (game/carry carryReleased)
+        RemoteLiftState& lift = g_lift[id];
+        // the owner's game holds what it lifted: its target stays; once it held it, its throw (or a drop) lets it go,
+        // which the carried class reads as thrown (game/carry carryReleased)
         const bool holds = (p.carryFlags & kCarryHolding) && !(p.carryFlags & (kCarryThrowing | kCarryReleased));
-        if (holds) g_liftWait[id] = 0;
-        else if (g_liftWait[id] != 0) --g_liftWait[id];
-        if (!holds && g_liftWait[id] == 0) p.interactionTarget.clear();
+        switch (lift.phase) {
+        case RemoteLift::Picked:
+            if (lift.ticks == 0 || --lift.ticks == 0) lift = {}; // no class took it
+            break;
+        case RemoteLift::Taken:
+            if (holds) lift.phase = RemoteLift::Held;
+            break;
+        case RemoteLift::Held:
+            if (!holds) lift = {};
+            break;
+        default: break;
+        }
+        if (lift.phase == RemoteLift::None && !holds) p.interactionTarget.clear();
     }
 }
 

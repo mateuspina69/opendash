@@ -1187,8 +1187,9 @@ bool NetStateClient::applyEvents(std::span<const uint8_t> bytes) {
             if (std::shared_ptr<Occupant>& o = heardOf_[slot]) {
                 due_.push_back({tick, false, o, std::nullopt, std::nullopt, std::nullopt});
                 o = nullptr;
-            } else if (slot >= kShotClass && slot < kShotClass + ShotPool::size()) {
-                // a shot run here from its event (a beam, a swing: they last until the world's ends)
+            } else if (actorSlotClass(slot) != kEffectClass) {
+                // what runs here from its event and ends with the world's: a shot (a beam, a swing), a pickup taken, a
+                // bullet that hit (an effect ends by itself: the world tells no go for one)
                 Due d{tick, false, nullptr, std::nullopt, std::nullopt, std::nullopt};
                 d.goShot = slot;
                 due_.push_back(std::move(d));

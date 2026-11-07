@@ -61,6 +61,12 @@ bool playerLiftTargetCheck(const Actor& actor, uint8_t mode) { // exe 0x573a60
 
 void carryAtHands(Actor& actor, int x, int y, int z) { // exe 0x573ab0
     const Player& p = actingPlayer(); // the carrier
+    const int32_t yWord = int32_t(uint32_t(y) << 16) - int32_t(uint32_t(int32_t(actor.collisionBox->maxY)) << 15);
+    remotePlayerCarries(playerId(p), actor, x, yWord, z); // a world's remote carrier: its game places its copy so too
+    carryAtHandsOf(p, actor, x, yWord, z);
+}
+
+void carryAtHandsOf(const Player& p, Actor& actor, int x, int32_t yWord, int z) {
     const int yaw = uint16_t(p.rotation.y) & kAngleMask;
     const int sn = fixedSin(yaw), c = fixedCos(yaw);
     int32_t ox = 0, oz = 0;
@@ -74,8 +80,7 @@ void carryAtHands(Actor& actor, int x, int y, int z) { // exe 0x573ab0
     const ShortVec3& left = p.bonePoints[kLeftHand];
     const ShortVec3& right = p.bonePoints[kRightHand];
     actor.pos.x = int32_t((uint32_t(int32_t(left.x) + right.x) << sh) + uint32_t(ox));
-    actor.pos.y = int32_t((uint32_t(int32_t(left.y) + right.y) << sh) -
-                          (uint32_t(int32_t(actor.collisionBox->maxY)) << 15) + (uint32_t(y) << 16));
+    actor.pos.y = int32_t((uint32_t(int32_t(left.y) + right.y) << sh) + uint32_t(yWord));
     actor.pos.z = int32_t((uint32_t(int32_t(left.z) + right.z) << sh) + uint32_t(oz));
     actor.rotation.y = int16_t(uint16_t(uint16_t(p.rotation.y) - uint16_t(p.directionOffset.y)));
 }

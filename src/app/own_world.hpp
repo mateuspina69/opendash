@@ -211,6 +211,15 @@ private:
     };
     std::optional<PlayedScene> playedScene_;
     std::optional<RoomEntry> roomEntry_;
+    // the world's actor this Mega Man lifted (its slot there, its type)
+    struct Lifted {
+        uint8_t slot = 0, type = 0;
+        std::optional<std::array<int32_t, 3>> place; // how its class places it at the hands: x, the height word, z
+    };
+    std::optional<Lifted> lifted_;
+    static constexpr uint8_t kLiftRefused = 1; // NetLift's byte: this game could not lift what the world's class took
+    void liftTurn();
+    void liftPlace();
     std::optional<std::vector<uint8_t>> sceneEndAt_; // the world's end: where its Mega Man stands, its owner
     bool sceneHeard_ = false; // the world has started it too (a scene started here: the world's start confirms it)
     bool heldHere_ = false;   // started here, held until the world starts it (it waits for everyone)

@@ -392,7 +392,7 @@ private:
         std::optional<uint8_t> shift;
         std::optional<NetRoomPatch> patch;
         bool flash = false;
-        std::optional<uint8_t> goShot; // a shot run from its event ends (its slot: no occupant was shown for it)
+        std::optional<uint8_t> goShot; // what runs from its event ends with the world's (its slot: no occupant was shown for it)
     };
     void noteStart(Occupant& o, const NetActorState& s);
     std::optional<uint16_t> applyParsed(std::span<const uint8_t> bytes, uint32_t eventsThrough);

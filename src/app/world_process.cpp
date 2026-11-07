@@ -566,6 +566,21 @@ int run(const WorldArgs& w) {
             lifted.netState = {uint8_t(actor.slot), mode};
             link->sendReliable(lifted);
         });
+        // ... and how the class places it at their hands: their game places the copy so
+        od::port::setRemoteCarryHook([&](size_t player, const od::port::ActorHeader& actor, int x, int32_t yWord, int z) {
+            WorldMessage at{WorldMessageType::NetLifted};
+            at.playerId = uint8_t(player);
+            const auto half = [&](int v) {
+                at.netState.push_back(uint8_t(v));
+                at.netState.push_back(uint8_t(uint32_t(v) >> 8));
+            };
+            at.netState = {uint8_t(actor.slot), 0};
+            half(x);
+            half(z);
+            half(int(uint32_t(yWord) & 0xffff));
+            half(int(uint32_t(yWord) >> 16));
+            link->sendReliable(at);
+        });
         // an event of this room runs on its player's machine
         od::port::setEventOwnerHook([&](const od::port::OwnerEvent& e) {
             WorldMessage m{WorldMessageType::NetEventStart};
@@ -1030,7 +1045,9 @@ int run(const WorldArgs& w) {
                 }
                 break;
             case WorldMessageType::NetLift:
-                if (m.playerId < od::port::kPlayerSlots && od::port::playerIsRemote(m.playerId)) {
+                if (m.playerId < od::port::kPlayerSlots && od::port::playerIsRemote(m.playerId) && !m.netState.empty()) {
+                    od::port::remotePlayerLiftRefused(m.playerId); // its game could not lift what a class took
+                } else if (m.playerId < od::port::kPlayerSlots && od::port::playerIsRemote(m.playerId)) {
                     od::port::remotePlayerLift(m.playerId);
                     SDL_Log("world: player %u lifts: %s", unsigned(m.playerId),
                             od::port::playerById(m.playerId).interactionTarget.none() ? "nothing in reach" : "a target");

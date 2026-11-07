@@ -40,6 +40,12 @@ void remotePlayerLift(size_t id);
 // a world: a class lifted onto this remote player (game/carry playerLiftTargetCheck): its owner's game lifts it too
 void setRemoteLiftHook(std::function<void(size_t id, const ActorHeader& actor, uint8_t mode)> hook);
 void remotePlayerLifted(size_t id, const ActorHeader& actor, uint8_t mode);
+// a world: a class places what this player carries at their hands (game/carry carryAtHands): its owner's game is told
+// how, once a lift
+void setRemoteCarryHook(std::function<void(size_t id, const ActorHeader& actor, int x, int32_t yWord, int z)> hook);
+void remotePlayerCarries(size_t id, const ActorHeader& actor, int x, int32_t yWord, int z);
+// the owner's game could not lift what the class took (its player in the air, its hands full): the class lets it go
+void remotePlayerLiftRefused(size_t id);
 // the tick is over: what it picked is let go
 void remotePlayersTalkDone();
 

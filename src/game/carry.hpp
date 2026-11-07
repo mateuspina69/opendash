@@ -16,6 +16,8 @@
 
 namespace od::port {
 
+struct Player;
+
 // carryReleased's answer
 enum class CarryRelease : int {
     Held = 0,    // still at the player's hands
@@ -33,6 +35,9 @@ bool playerLiftTargetCheck(const Actor& actor, uint8_t mode);
 // and 7 (<< 15 - the stage shift), its box's maxY down, y up; while the player still lifts (sub-state 16) the x / z
 // offsets rotated by the player's yaw shrink with the lift animation's step; its yaw = the player's
 void carryAtHands(Actor& actor, int x, int y, int z);
+// ... at this player's hands, its height word (y << 16 less the box's half height) given: a session's game places the
+// copy of a world's actor its Mega Man holds so
+void carryAtHandsOf(const Player& p, Actor& actor, int x, int32_t yWord, int z);
 // exe 0x573950: held, thrown (the interaction target cleared) or dropped (player sub-state 14 / 15, or 16 while
 // airborne)
 CarryRelease carryReleased();

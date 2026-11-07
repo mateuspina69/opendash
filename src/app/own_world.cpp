@@ -38,6 +38,7 @@
 #include "game/player/remote_player.hpp"
 #include "game/player/player_snapshot.hpp"
 #include "game/player/player_state.hpp"
+#include "game/carry.hpp"
 
 namespace od::app {
 
@@ -323,6 +324,7 @@ void OwnWorldClient::turn(uint64_t nowNs) {
                 s.parent == od::port::kNetNoParent ? ""
                                                    : (" on player " + std::to_string(s.parent) + ", here " + std::to_string(s.parentTable)).c_str());
     sceneTurn();
+    liftTurn();
     localSceneTurn();
     if (!room_) return;
     // a scene's own room changes are the game's, as in the normal game; one held for everyone waits at the gate; once its
@@ -350,6 +352,7 @@ void OwnWorldClient::turn(uint64_t nowNs) {
         }
         actors_->endTick();
     }
+    liftPlace();
     for (; failuresLogged_ < failures_.classes.size(); ++failuresLogged_)
         SDL_Log("own world: failed: %s", failures_.classes[failuresLogged_].c_str());
 }
@@ -625,17 +628,27 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
         notice(std::string(m.netState.begin(), m.netState.end()));
         break;
     case WorldMessageType::NetLifted:
+        if (m.netState.size() == 10) { // how the class places it: this game places its copy at this Mega Man's hands so
+            const auto half = [&](size_t i) { return int16_t(uint16_t(m.netState[i] | m.netState[i + 1] << 8)); };
+            if (lifted_ && lifted_->slot == m.netState[0])
+                lifted_->place = std::array<int32_t, 3>{half(2), int32_t(uint32_t(uint16_t(half(6))) | uint32_t(uint16_t(half(8))) << 16), half(4)};
+            break;
+        }
         // the world's class took this player's lift: the actor's copy here goes up in this Mega Man's hands, as the
         // class's lift starts a player's (game/carry playerLiftTargetCheck); the throw goes back in this player's state
         if (m.netState.size() == 2) {
             od::port::Player& p = od::port::player();
             od::port::ActorHeader* copy = actors_->mirrorOf(m.netState[0]);
-            if (copy && (copy->flags & od::port::kActorLive) && p.airborne == 0 && p.carryFlags == 0) {
+            if (copy && (copy->flags & od::port::kActorLive) && p.airborne == 0 && p.carryFlags == 0 && p.hitPoints >= 0) {
                 p.interactionTarget.set(uint32_t(od::port::kInteractLift) << 24, *copy);
                 p.liftMode = m.netState[1];
                 p.subState = uint8_t(od::port::PlayerSub::Lift);
                 p.enterStep(0);
+                lifted_ = Lifted{m.netState[0], copy->type};
                 SDL_Log("own world: lifted the world's actor %02x", unsigned(m.netState[0]));
+            } else {
+                // this Mega Man cannot (in the air, its hands full, down): the world's class lets it go
+                pipe_->sendReliable(playerId_, WorldMessageType::NetLift, {kLiftRefused});
             }
         }
         break;
@@ -855,6 +868,33 @@ void OwnWorldClient::sceneEnd(const std::vector<uint8_t>& at) {
         p.rotation.y = yaw;
         p.prevRotation.y = yaw;
     }
+}
+
+// What this Mega Man lifted of the world's: while it holds it, the actor's copy is there; one the world has done with
+// (gone, another occupant in its slot) is let go here as a carried actor that goes is (the carry dropped)
+void OwnWorldClient::liftTurn() {
+    if (!lifted_) return;
+    od::port::Player& p = od::port::player();
+    const od::port::ActorHeader* copy = actors_->mirrorOf(lifted_->slot);
+    const bool carrying = p.carryFlags != 0 || p.sub() == od::port::PlayerSub::Lift;
+    const bool there = copy && (copy->flags & od::port::kActorLive) && copy->type == lifted_->type &&
+                       p.interactionTarget.actor.get() == copy;
+    if (carrying && !there) {
+        p.interactionTarget.clear();
+        p.carryFlags = 0;
+        if (p.sub() == od::port::PlayerSub::Lift) p.enterSub(od::port::PlayerSub::Idle);
+    }
+    if (!carrying || !there) lifted_.reset();
+}
+
+// ... and what it holds is at its hands here as its class puts it there in the world (the world's place of it comes late)
+void OwnWorldClient::liftPlace() {
+    if (!lifted_ || !lifted_->place) return;
+    od::port::ActorHeader* copy = actors_->mirrorOf(lifted_->slot);
+    const od::port::Player& p = od::port::player();
+    if (!copy || p.interactionTarget.actor.get() != copy || (p.carryFlags & od::port::kCarryReleased)) return;
+    const std::array<int32_t, 3>& at = *lifted_->place;
+    od::port::carryAtHandsOf(p, od::port::actorLayoutOf(*copy), at[0], at[1], at[2]);
 }
 
 void OwnWorldClient::overridePad(uint16_t& buttons) {
