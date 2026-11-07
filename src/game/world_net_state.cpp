@@ -32,6 +32,7 @@
 #include "game/light_column.hpp"
 #include "game/net_effect_links.hpp"
 #include "game/shockwave_state.hpp"
+#include "game/turret_bullet_state.hpp"
 #include "game/shots/machine_gun_state.hpp"
 #include "game/presentation.hpp"
 
@@ -422,7 +423,7 @@ bool staticIsEffect(const StaticActor& a) {
 }
 
 // the projectiles that are effects: their picture is their class's, what they hit is the world's copy's
-bool netEffectProjectileClass(RoutineId id) { return id == RoutineId::ShockwaveUpdate; }
+bool netEffectProjectileClass(RoutineId id) { return id == RoutineId::ShockwaveUpdate || id == RoutineId::TurretBulletUpdate; }
 
 // what a splash follows, by its variant's top bits: its own position (0), an actor (1), a player's bone point (2)
 void noteSplashSource(StaticActor& a, NetEffect& e, bool& goes) {
@@ -526,6 +527,19 @@ template <class Pool> void captureMeshPool(NetWorldTable& table, Pool& pool, siz
                 s.effectStart.pos = s.pos;
                 s.effectStart.rot = s.rot;
                 s.effectStart.velocity = {a.velocity.x, a.velocity.y, a.velocity.z};
+                if (h.id() == RoutineId::TurretBulletUpdate) {
+                    // a turret's homing bullet: the turret that holds it, its texture word (its owner's model's), the
+                    // wobble's phase it rolled; who it hits and when it goes are the world's
+                    const auto* bullet = heldClassStateOf<turret_bullet_state::TurretBulletFields>(a);
+                    const AnimatedActor* owner = bullet ? bullet->owner.get() : nullptr;
+                    if (owner && (owner->flags & kActorLive)) s.effectStart.parent = owner->slot;
+                    else s.effectGoes = false;
+                    const uint32_t texture = a.hitBox.result;
+                    s.effectStart.trail[0] = int16_t(uint16_t(texture));
+                    s.effectStart.trail[1] = int16_t(uint16_t(texture >> 16));
+                    s.effectStart.step = a.step;
+                    s.effectEnds = true;
+                }
             }
         }
         if constexpr (std::is_same_v<Pool, ShotPool>) {
@@ -1629,6 +1643,11 @@ void PoolNetActors::effect(const NetEffect& e) {
         p.velocity.x = e.velocity[0];
         p.velocity.y = e.velocity[1];
         p.velocity.z = e.velocity[2];
+        if (const RoutineRef h = actorHandler(head, ActorPool::Projectiles, false); h && h.id() == RoutineId::TurretBulletUpdate) {
+            p.step = e.step;
+            p.hitBox.result = uint32_t(uint16_t(e.trail[0])) | uint32_t(uint16_t(e.trail[1])) << 16;
+            classState<turret_bullet_state::TurretBulletFields>(p).owner = parent ? &asAnimated(*parent) : nullptr;
+        }
     } else {
         StaticActor& s = asStatic(head);
         s.pos.x = int32_t(uint32_t(uint16_t(e.pos[0])) << 16);

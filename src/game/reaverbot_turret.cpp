@@ -33,6 +33,7 @@
 #include "game/port_gap.hpp"
 #include "game/random.hpp"
 #include "game/turret_bullet.hpp"
+#include "game/turret_bullet_state.hpp"
 
 namespace od::port {
 
@@ -599,6 +600,7 @@ void weapons(AnimatedActor& a, TurretFields& f) {
                 f.flags = uint16_t(f.flags & kTurretWeaponBitsKept);
                 f.bulletSlot = s.slot;
                 f.bulletHold = 0x20;
+                classState<turret_bullet_state::TurretBulletFields>(s).owner = &a;
                 return;
             }
         }

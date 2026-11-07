@@ -5,6 +5,7 @@
 #include "game/turret_bullet_state.hpp"
 
 #include "engine/data_source.hpp"
+#include "game/actor_animation.hpp"
 #include "game/actor_movement.hpp"
 #include "game/actor_pools.hpp"
 #include "game/actor_state.hpp"
@@ -80,7 +81,7 @@ void homing(const PlayerEnv& env, ProjectileActor& a, TurretBulletFields& f) { /
     case TurretBulletState::Start: {
         a.state = uint8_t(TurretBulletState::Held);
         a.subState = 1;
-        a.step = uint8_t(rngStep() & 0xff);
+        if (!a.worldCopy) a.step = uint8_t(rngStep() & 0xff); // (a world's copy: the world's, which came with it)
         a.rotation.z = 0;
         a.rotation.y = 0;
         a.rotation.x = 0;
@@ -108,6 +109,19 @@ void homing(const PlayerEnv& env, ProjectileActor& a, TurretBulletFields& f) { /
         s.setColour(uint8_t(((int(sin64(ph & 0x3f)) >> 7) + 0x50) * k >> 5),
                     uint8_t(((int(cos64((ph >> 1) & 0x3f)) >> 7) + 0x50) * k >> 5),
                     uint8_t(((int(trig64Tables().sine[ph >> 2]) >> 7) + 0x50) * k >> 5));
+        if (a.worldCopy) {
+            // a client's copy: the turret's copy holds it at its bone as the world's turret does (exe 0x458400's
+            // weapon), until it homes; a release before is the world's, whose end of the bullet ends this one
+            if (f.owner) {
+                if (const BoneBlock* b = boneBlockOf(*f.owner, 0)) {
+                    const ShortVec4& bp = b->points[1];
+                    a.pos.x = wholeToFixed16(bp.x);
+                    a.pos.y = wholeToFixed16(int32_t(bp.y) - 0x50);
+                    a.pos.z = wholeToFixed16(bp.z);
+                }
+            }
+            a.subState = 1;
+        }
         if (a.subState == 0) { // the owner let go
             f.bits |= uint8_t(kBulletFree | kBulletSpent);
             return;

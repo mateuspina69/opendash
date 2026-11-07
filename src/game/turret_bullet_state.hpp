@@ -34,6 +34,9 @@ struct TurretBulletFields : ActorClassState, TurretBulletParams {
     int8_t trailLength = 0;
     HitBoxHead hitBox;
     StateArray<BulletTrailEntry, kTrailEntries> trail{};
+    // OpenDash's co-op: the turret that fired it, which holds it until it homes (a client's copy is held by the turret's
+    // copy there)
+    ActorRef<AnimatedActor> owner;
 
     // its block (the timer to the trail) cleared at the start, byte by byte
     void clearBlockBytes() {
