@@ -174,6 +174,8 @@ void minimapEntranceMarker(size_t c, int16_t x, int16_t y);
 // turned by the stick's yaw offset minus the player's yaw (exe 0x40bea0 through the projection registers) and scaled
 // by 1 / 32 at (x, y), a G3 (its tip cyan) and its outline
 void minimapPlayerHeading(size_t c, int16_t x, int16_t y);
+// ... of another player (OpenDash's co-op: the others in the room, in their own colours)
+void minimapPlayerHeading(size_t c, int16_t x, int16_t y, const Player& pl, uint32_t tip, uint32_t back);
 // exe 0x415a30(packet, x, y, flags): an icon of a town's map into chain c: flags & 4 an 8 x 8 sprite (column flags & 3
 // of the row at (0xb0, 0xa0)), else a 24 x 24 quad turned by flags & 3; flags & 8 semi-transparent
 void minimapIcon(size_t c, int16_t x, int16_t y, uint32_t flags);

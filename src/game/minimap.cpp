@@ -16,6 +16,7 @@
 #include "game/matrix.hpp"
 #include "game/menu_draw.hpp"
 #include "game/player/player_state.hpp"
+#include "game/player/players.hpp"
 #include "game/projection.hpp"
 #include "game/room_grid.hpp"
 #include "game/script_state.hpp"
@@ -37,6 +38,8 @@ constexpr uint32_t kPulsePeriodMask = 0x1f, kPulseHalf = 0x10;
 // the player's heading: its corners (x, y, z) before the turn, its colours, the scale to the panel (>> 5)
 constexpr int16_t kHeadingCorners[3][3] = {{0, 0, 0xc0}, {-0x60, 0, -0xa0}, {0x60, 0, -0xa0}};
 constexpr uint32_t kHeadingTip = 0xffff3f, kHeadingBack = 0xff3f00, kHeadingOutline = 0x804040;
+// OpenDash's co-op: the other players' headings (green: the local one's is blue, the entrance's red)
+constexpr uint32_t kOtherHeadingTip = 0x7fff7f, kOtherHeadingBack = 0x00b000;
 constexpr int kHeadingShift = 5;
 // the towns' icons (tpage 0xd, clut 0x7fd3)
 constexpr uint16_t kIconMode = 0x0d, kIconClut = 0x7fd3;
@@ -257,6 +260,11 @@ void minimapAreaPanel(const MinimapArea& a, const MinimapTileStyle& s) {
     }
     minimapEntranceMarker(c, int16_t((m.entryX >> kPanelShift) - edgeX + baseX),
                           int16_t(edgeY - (m.entryZ >> kPanelShift) + baseY));
+    forEachPlayer([&](const Player& other) { // a session's other players in the room (under this one's)
+        if (&other == &p) return;
+        minimapPlayerHeading(c, int16_t((other.pos.x.whole >> kPanelShift) + baseX - edgeX),
+                             int16_t(baseY - (other.pos.z.whole >> kPanelShift) + edgeY), other, kOtherHeadingTip, kOtherHeadingBack);
+    });
     minimapPlayerHeading(c, int16_t((p.pos.x.whole >> kPanelShift) + baseX - edgeX),
                          int16_t(baseY - (p.pos.z.whole >> kPanelShift) + edgeY));
     minimapPanelClose(c);
@@ -278,8 +286,9 @@ void minimapEntranceMarker(size_t c, int16_t x, int16_t y) {
     tri(c, p, {colour, colour, colour});
 }
 
-void minimapPlayerHeading(size_t c, int16_t x, int16_t y) {
-    const Player& pl = player();
+void minimapPlayerHeading(size_t c, int16_t x, int16_t y) { minimapPlayerHeading(c, x, y, player(), kHeadingTip, kHeadingBack); }
+
+void minimapPlayerHeading(size_t c, int16_t x, int16_t y, const Player& pl, uint32_t tip, uint32_t back) {
     // the turn: Ry(the stick's yaw offset - the player's yaw) * the identity, its padding short 0 (exe 0x40bea0 on the
     // stack's identity image); no translation
     const Matrix3 m = mulMatrix3x3(rotationY(int32_t(pl.directionOffset.y) - int32_t(pl.rotation.y)), kIdentityMatrix);
@@ -295,7 +304,7 @@ void minimapPlayerHeading(size_t c, int16_t x, int16_t y) {
         storeProjectionPoint(view);
         p[k] = {int16_t((view[0] >> kHeadingShift) + x), int16_t((view[2] >> kHeadingShift) + y)};
     }
-    tri(c, p, {kHeadingTip, kHeadingBack, kHeadingBack});
+    tri(c, p, {tip, back, back});
     // the outline: a 0x4c polyline round the three corners
     line(c, p[0], p[1], kHeadingOutline);
     line(c, p[1], p[2], kHeadingOutline);
