@@ -229,6 +229,7 @@ void OwnWorldClient::bindWorld(int stage, int sub) {
     state_ = std::make_unique<od::port::NetStateClient>(*actors_);
     clock_ = std::make_unique<od::port::NetRenderClock>();
     shownAny_ = false;
+    if (!room_ || room_->stage != stage || room_->sub != sub) pendingMove_.clear(); // a move of the room left
     room_ = WorldRoom{stage, sub};
     joined_ = false;
     lastEquipment_.clear();
@@ -566,23 +567,32 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
             playedScene_.reset(); // the world's copy of the one this game ended first is over too
         }
         break;
-    case WorldMessageType::NetMoveTo:
+    case WorldMessageType::NetMoveTo: {
+        // a move of the room this game is in (one of a room left since is stale: a world's exit sent before the move)
+        if (m.netState.size() < 2) break;
+        const uint8_t fromStage = m.netState[m.netState.size() - 2], fromSub = m.netState[m.netState.size() - 1];
+        if (!room_ || fromStage != uint8_t(room_->stage) || fromSub != uint8_t(room_->sub)) {
+            SDL_Log("own world: a move of ST%02X sub %u, left already: not taken", unsigned(fromStage), unsigned(fromSub));
+            break;
+        }
+        const std::vector<uint8_t> move(m.netState.begin(), m.netState.end() - 2);
         if (gateAsked_ && gateAtDoor_) {
             // the gate this player waited at, a door's, opens: the door's own script and scene go on here, as in the game
             gateAsked_ = false;
             gateAtDoor_ = false;
             doorPass_ = true;
-            if (m.netState.size() >= 8) {
-                const auto half = [&](size_t i) { return int16_t(uint16_t(m.netState[i] | m.netState[i + 1] << 8)); };
-                doorArrival_ = std::array<int16_t, 5>{int16_t(m.netState[0]), int16_t(m.netState[1]), half(2), half(4), half(6)};
+            if (move.size() >= 8) {
+                const auto half = [&](size_t i) { return int16_t(uint16_t(move[i] | move[i + 1] << 8)); };
+                doorArrival_ = std::array<int16_t, 5>{int16_t(move[0]), int16_t(move[1]), half(2), half(4), half(6)};
             }
             od::port::transitionRequest().kind = uint8_t(od::port::TransitionKind::DoorActor);
             od::port::setStoryFlag(od::port::kFlagTransitionArmed);
             SDL_Log("own world: the gate opens: through the door");
             break;
         }
-        pendingMove_ = m.netState;
+        pendingMove_ = move;
         break;
+    }
     case WorldMessageType::NetWarp:
         if (m.netState.size() == 16) { // as the world did: this game's Mega Man and room with it
             const auto half = [&](size_t i) { return int16_t(uint16_t(m.netState[i] | m.netState[i + 1] << 8)); };
@@ -938,8 +948,8 @@ void OwnWorldClient::gateTurn() {
     if (asked && g.gameMode() == od::port::GameMode::Field && g.fieldStep() == od::port::FieldStep::Playing) {
         const bool mission = od::port::storyPlaceOf(uint8_t(room_->stage), room_->sub, g.story) == od::port::StoryPlaceKind::Mission;
         const bool door = r.kind == uint8_t(od::port::TransitionKind::DoorActor);
-        const bool passing = doorPass_ && door; // the gate opened for this door: its script runs
-        if (passing) doorPass_ = false;
+        // the gate opened for this door: its script runs, its own asks too (the pass lasts until the room changes)
+        const bool passing = doorPass_ && door;
         const bool gated = !passing && (mission || od::port::storyDoorGated(uint8_t(room_->stage), r.destStage, r.destRoom, g.story));
         if (bossFight_ || testBossFight_ || gated) {
             r.state = od::port::kTransitionNone;

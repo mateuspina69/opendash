@@ -259,6 +259,10 @@ void WorldHost::moveTo(uint8_t playerId, const std::vector<uint8_t>& move) {
     WorldMessage m{WorldMessageType::NetMoveTo};
     m.playerId = playerId;
     m.netState = move;
+    // the room it was meant in: a game that has left it since takes no move of it
+    const std::optional<WorldRoom> from = playerRoom_.at(playerId);
+    m.netState.push_back(from ? uint8_t(from->stage) : uint8_t(0xff));
+    m.netState.push_back(from ? uint8_t(from->sub) : uint8_t(0xff));
     netInbox_.at(playerId).push_back(std::move(m));
 }
 
@@ -437,6 +441,8 @@ void WorldHost::poll(uint64_t nowNs) {
                     WorldMessage move{WorldMessageType::NetMoveTo};
                     move.playerId = id;
                     move.netState = arrivalBeside(m.netState, k++);
+                    move.netState.push_back(uint8_t(it->first.stage)); // (moveTo)
+                    move.netState.push_back(uint8_t(it->first.sub));
                     netInbox_[id].push_back(std::move(move));
                 }
                 continue;
