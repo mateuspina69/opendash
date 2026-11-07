@@ -779,7 +779,8 @@ void testStoryTable() {
     CHECK(!storyDoorGated(0x37, 0x37, 5, 1));
     CHECK(storyDoorGated(0x2a, 0x55, 0, 4)); // into a stage listed whole
     CHECK(!storyDoorGated(0x55, 0x55, 1, 4)); // ... not inside it
-    CHECK(storyScriptGated(0x1c) && !storyScriptGated(0x56)); // the story byte: gated; a first visit: optional
+    CHECK(storyScriptGated(0x1c) && storyScriptGated(0x56)); // a scene: everyone's
+    CHECK(!storyScriptGated(0) && !storyScriptGated(8));      // a door's transition, the shop's menu: one player's
 }
 
 void testGlobalState() {

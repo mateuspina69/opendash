@@ -56,13 +56,8 @@ constexpr std::array kPlaces = {
     StoryPlace{0x18, kAnySub, kAnyStory, K::Mission, kNoFlag},
 };
 
-// The scripts that advance the story's byte (exe 0x512800 in the script or at its start in the room script)
-// and those a story boss's fight follows
-constexpr std::array<uint8_t, 34> kGatedScripts = {
-    0x13, 0x1c, 0x24, 0x31, 0x38, 0x3b, 0x3f, 0x54, 0x5e, 0x62, 0x65, 0x66, 0x67, 0x69, // the story's byte
-    0x09, 0x0b, 0x1a, 0x1b, 0x28, 0x2a, 0x42, 0x52, 0x59, 0x5a, 0x5b, 0x5d, 0x6b, 0x6c, 0x6d, 0x75, // a boss's fight
-    0x37, 0x39, 0x3a, 0x3e, // the story's flights and attack (content/nino/ch2_rooms, content/calbania/nino_return_rooms)
-};
+// the scripts that are one player's own: the armed exit's transition (a door's), the shop's menu
+constexpr uint8_t kExitTransitionScript = 0, kShopScript = 8;
 
 } // namespace
 
@@ -84,6 +79,6 @@ bool storyDoorGated(uint8_t fromStage, uint8_t toStage, int toSub, uint8_t story
 
 bool storyStageRunsAlone(uint8_t stage) { return stage >= 0x59 && stage <= 0x5b; }
 
-bool storyScriptGated(uint8_t script) { return std::find(kGatedScripts.begin(), kGatedScripts.end(), script) != kGatedScripts.end(); }
+bool storyScriptGated(uint8_t script) { return script != kExitTransitionScript && script != kShopScript; }
 
 } // namespace od::port

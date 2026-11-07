@@ -342,7 +342,8 @@ void WorldHost::gateTurn(uint64_t nowNs) {
         ++all;
         if (g.scene ? playerRoom_[id] == g.room : g.waiting.count(id) != 0) ++here;
     }
-    const bool bring = gateTeleport_ && !g.mission;
+    // a scene brings everyone to its room (it is everyone's); a door's gate, with the session's teleport option
+    const bool bring = (g.scene || gateTeleport_) && !g.mission;
     if (bring) {
         if (g.scene) { // next to who is there
             for (uint8_t id = 0; id < kPlayers; ++id) {

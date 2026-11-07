@@ -460,6 +460,7 @@ int run(const WorldArgs& w) {
     // logic starts right after is what they did
     uint8_t lastActor = 0xff;
     uint32_t lastActorTicksAgo = 0xffffffffu;
+    uint8_t sceneCause = 0xff; // who caused the scene that waits for everyone (it drives it once it plays)
     static constexpr uint32_t kSceneCauseTicks = 4;
     const auto noteActor = [&](uint8_t id) {
         lastActor = id;
@@ -792,7 +793,10 @@ int run(const WorldArgs& w) {
         if (lastActorTicksAgo != 0xffffffffu) ++lastActorTicksAgo;
         const bool now = od::port::scriptState().inUse() && od::port::scriptState().id != 0;
         if (now && !sceneOn && sceneGated && od::port::storyScriptGated(od::port::scriptState().id)) { // everyone first
-            if (!sceneAsked) link->sendReliable({WorldMessageType::NetSceneGate});
+            if (!sceneAsked) {
+                link->sendReliable({WorldMessageType::NetSceneGate});
+                sceneCause = lastActorTicksAgo <= kSceneCauseTicks ? lastActor : uint8_t(0xff);
+            }
             sceneAsked = true;
             return;
         }
@@ -812,9 +816,16 @@ int run(const WorldArgs& w) {
         }
         if (now && !sceneOn) {
             sceneOn = true;
-            sceneOwner = 0;
-            while (sceneOwner < od::port::kPlayerSlots && !od::port::playerPresent(sceneOwner)) ++sceneOwner;
-            if (sceneOwner == od::port::kPlayerSlots) sceneOwner = 0;
+            // who caused it (their talk, their step on its trigger) drives it; else the first one here
+            const uint8_t cause = sceneCause != 0xff ? sceneCause : lastActorTicksAgo <= kSceneCauseTicks ? lastActor : uint8_t(0xff);
+            sceneCause = 0xff;
+            if (cause < od::port::kPlayerSlots && od::port::playerPresent(cause)) {
+                sceneOwner = cause;
+            } else {
+                sceneOwner = 0;
+                while (sceneOwner < od::port::kPlayerSlots && !od::port::playerPresent(sceneOwner)) ++sceneOwner;
+                if (sceneOwner == od::port::kPlayerSlots) sceneOwner = 0;
+            }
             if (sceneOwner != 0) { // the host is elsewhere: the first one here stands in
                 od::port::remotePlayerJoin(0, od::port::capturePlayerSnapshot(od::port::playerById(sceneOwner)));
             }

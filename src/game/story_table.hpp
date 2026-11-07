@@ -20,7 +20,8 @@ StoryPlaceKind storyPlaceOf(uint8_t stage, int sub, uint8_t story);
 bool storyDoorGated(uint8_t fromStage, uint8_t toStage, int toSub, uint8_t story);
 // the sub-ruins: no gate, a player who was not there misses it
 bool storyOptionalStage(uint8_t stage);
-// this script advances the story's byte, or opens a story boss's fight: it waits for everyone. The others are optional
+// this script is a scene of the story (every one but a door's transition and the shop's menu): everyone plays it, so it
+// waits for everyone (those elsewhere are brought)
 bool storyScriptGated(uint8_t script);
 // the time trial's courses (ST59 / 5A / 5B): who goes in races alone on their own machine, the others stay free
 bool storyStageRunsAlone(uint8_t stage);
