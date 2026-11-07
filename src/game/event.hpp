@@ -40,8 +40,14 @@ struct OwnerEvent {
     int32_t x = 0, y = 0, z = 0;
     uint32_t param = 0;
     uint16_t window = 0, message = 0;
+    uint8_t menus = 0, hintsMessage = 0; // the talker's menus its message's choices open (kEventMenus*), its hints
     friend bool operator==(const OwnerEvent&, const OwnerEvent&) = default;
 };
+// what a talker's message opens on its choices (the save menu, the hints): its own class runs them, in the player's game
+// when its event plays there
+constexpr uint8_t kEventMenusNone = 0, kEventMenusTalker = 1, kEventMenusStageTalker = 2;
+// a talker's class, before its eventStart: the menus of its event
+void setEventTalkerMenus(uint8_t menus, uint8_t hintsMessage);
 std::vector<uint8_t> encode(const OwnerEvent& e);
 std::optional<OwnerEvent> decodeOwnerEvent(std::span<const uint8_t> bytes);
 void setEventOwnerHook(std::function<void(const OwnerEvent&)> hook);

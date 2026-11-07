@@ -57,7 +57,14 @@ int enterStep(uint32_t step, bool skipped) {
 
 } // namespace
 
+namespace {
+bool g_startsBlocked = false;
+} // namespace
+
+void setScriptStartsBlocked(bool blocked) { g_startsBlocked = blocked; }
+
 void scriptStart(uint8_t id) {
+    if (g_startsBlocked) return;
     ScriptState& s = scriptState();
     Player& p = player();
     if (p.hitPoints < 0 || (s.flags & kScriptRunning)) return;
@@ -82,7 +89,7 @@ void scriptStart(uint8_t id) {
 }
 
 void scriptRun(uint8_t id) {
-    if (player().hitPoints < 0 || (scriptState().flags & kScriptRunning)) return;
+    if (g_startsBlocked || player().hitPoints < 0 || (scriptState().flags & kScriptRunning)) return;
     if (eventState().active != 0) eventAbort();
     windowCloseAll(WindowClose::Force);
     scriptStart(id);

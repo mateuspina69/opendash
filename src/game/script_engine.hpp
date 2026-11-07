@@ -24,6 +24,9 @@ void scriptRun(uint8_t id);
 void scriptRunnerTick(const PlayerEnv& env);
 // A session's world: a scene waits at its start until the coordinator says everyone is there
 void setScriptsGated(bool gated);
+// OpenDash's co-op: no script starts (scriptStart / scriptRun do nothing) while the room's logic is replayed to spawn what
+// it spawned (a session's game rebuilding its room for a scene)
+void setScriptStartsBlocked(bool blocked);
 // exe 0x511720 (the frame body's end): the block's ended mark cleared
 void scriptBlockIdle();
 

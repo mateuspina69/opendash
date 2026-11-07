@@ -181,6 +181,7 @@ void standEvent(EventState& ev) {
 
 std::function<void(const OwnerEvent&)> g_ownerHook;
 size_t g_owner = 0;
+uint8_t g_nextMenus = 0, g_nextHints = 0; // setEventTalkerMenus: the next event's
 uint8_t g_updatingSlot = 0;
 std::array<bool, kPlayerSlots> g_ownerEventEnding{};
 std::array<uint8_t, kEventSlots> g_speakerSlot{}; // the actor that started each player's event
@@ -203,6 +204,10 @@ void ownerEventTick(size_t player) {
 
 void setEventOwnerHook(std::function<void(const OwnerEvent&)> hook) { g_ownerHook = std::move(hook); }
 void setEventOwner(size_t player) { g_owner = player; }
+void setEventTalkerMenus(uint8_t menus, uint8_t hintsMessage) {
+    g_nextMenus = menus;
+    g_nextHints = hintsMessage;
+}
 void eventOwnerEnded(size_t player) {
     if (player < kPlayerSlots) g_ownerEventEnding[player] = true;
 }
@@ -233,11 +238,13 @@ std::vector<uint8_t> encode(const OwnerEvent& e) {
     put(e.param, 4);
     put(e.window, 2);
     put(e.message, 2);
+    put(e.menus, 1);
+    put(e.hintsMessage, 1);
     return out;
 }
 
 std::optional<OwnerEvent> decodeOwnerEvent(std::span<const uint8_t> b) {
-    if (b.size() != 22) return std::nullopt;
+    if (b.size() != 24) return std::nullopt;
     size_t at = 0;
     const auto get = [&](size_t n) {
         uint32_t v = 0;
@@ -253,6 +260,8 @@ std::optional<OwnerEvent> decodeOwnerEvent(std::span<const uint8_t> b) {
     e.param = get(4);
     e.window = uint16_t(get(2));
     e.message = uint16_t(get(2));
+    e.menus = uint8_t(get(1));
+    e.hintsMessage = uint8_t(get(1));
     return e;
 }
 
@@ -276,6 +285,7 @@ void eventTick() {
 }
 
 void eventStart(const Fixed16Vec3* pos, ShortVec3* rot, uint32_t param, uint16_t window, uint16_t message) {
+    const uint8_t menus = std::exchange(g_nextMenus, 0), hints = std::exchange(g_nextHints, 0);
     const GameMode mode = gameState().gameMode();
     if (int8_t(mode) < int8_t(GameMode::Field) || int8_t(mode) > int8_t(GameMode::Pause)) return;
     if (g_ownerHook && !scriptState().inUse()) {
@@ -294,7 +304,7 @@ void eventStart(const Fixed16Vec3* pos, ShortVec3* rot, uint32_t param, uint16_t
         ev.message = int16_t(message);
         ev.speakerPosition = nullptr;
         ev.turnedRotation = nullptr;
-        OwnerEvent e{owner, false, 0, 0, 0, param, window, message};
+        OwnerEvent e{owner, false, 0, 0, 0, param, window, message, menus, hints};
         if (pos) {
             e.hasPos = true;
             e.x = pos->x;

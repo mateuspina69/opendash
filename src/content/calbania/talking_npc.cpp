@@ -54,8 +54,6 @@ enum class TalkerSub : uint8_t {
 
 constexpr uint8_t kAnimTalk = 4, kAnimSettle = 5, kNoAnim = 0xff;
 constexpr uint32_t kTalkEventParam = 8; // ((behaviour & 0x40) | 8) >> 2: the event's flags
-constexpr uint32_t kHintsFlag = 0x6f9;  // the message chose "hints"
-constexpr int8_t kHintsWindow = 1;
 constexpr int16_t kScaleOne = 0x200;
 constexpr int kHitHeight = 0x30;
 
@@ -65,10 +63,12 @@ const DataTable<CollisionBoxRecord> twinCollisionBox{TableId::TalkingNpcTwinColl
 const DataTable<InteractionBoxRecord> twinTalkBox{TableId::TalkingNpcTwinTalkBox};
 
 // exe 0x449850: waits for the player's talk, then starts its event
-void talkerWait(AnimatedActor& actor, TalkingNpcFields& npc) {
+void talkerWait(AnimatedActor& actor, TalkingNpcFields& npc, bool stageHints) {
     if (npc.talkFlags & kTalking) return;
     if (!anyPlayerTalksTo(actor) || eventState().active != 0) return;
     const uint32_t param = ((npc.behaviour & kTalkerEventFlag) | kTalkEventParam) >> 2;
+    // (a session's world: the event plays in its player's game, and so do the menus its choices open)
+    setEventTalkerMenus(stageHints ? kEventMenusStageTalker : kEventMenusTalker, npc.hintsMessage);
     eventStart(&actor.pos, &actor.rotation, param, 0, npc.message); // exe 0x543af0
     actor.subState = uint8_t(TalkerSub::Talk);
     actor.enterStep(0);
@@ -85,14 +85,7 @@ void talkerTalk(AnimatedActor& actor, TalkingNpcFields& npc, bool stageHints) {
         actor.enterStep(1);
         [[fallthrough]];
     case 1:
-        if (storyFlag(kFlagSaveMenuAsked)) {
-            saveMenuTick(npc.saveMenu); // exe 0x548f60
-        } else if (storyFlag(kHintsFlag)) {
-            windowClose(kHintsWindow, WindowClose::Force);
-            if (stageHints) windowOpen(kHintsWindow, kMessageBank, npc.hintsMessage);
-            else windowOpen(kHintsWindow, stateAddress(TableId::TalkingNpcHintsBank), 0);
-            clearStoryFlag(kHintsFlag); // exe 0x510e30
-        }
+        talkerMenusTick(npc.saveMenu, stageHints ? kEventMenusStageTalker : kEventMenusTalker, npc.hintsMessage);
         if (event.speakerAnimation != kNoSpeakerAnimation) {
             npc.anim = event.speakerAnimation;
             event.speakerAnimation = kNoSpeakerAnimation;
@@ -148,7 +141,7 @@ void talkingNpc(AnimatedActor& actor, const DataTable<CollisionBoxRecord>& colli
         break;
     case TalkerState::Main:
         switch (TalkerSub(actor.subState)) {
-        case TalkerSub::Wait: talkerWait(actor, npc); break;
+        case TalkerSub::Wait: talkerWait(actor, npc, stageHints); break;
         case TalkerSub::Talk: talkerTalk(actor, npc, stageHints); break;
         default: notPortedAt(kTalkingNpcPort, "sub-state", actor.subState);
         }

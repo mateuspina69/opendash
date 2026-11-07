@@ -1839,25 +1839,29 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
                 assetsDirty = true;
             }
             ownWorld->turn(SDL_GetTicksNS());
-            if (const auto scene = ownWorld->takeSceneStart()) {
-                // a story scene in the room's world: this game plays it as the normal game does. The world's actors go,
-                // the room's own come as a room load spawns them (this player stays where it is), and the script starts
-                // (one the room started here and held for everyone is already there, at its start)
+            const bool rebuild = ownWorld->takeRoomRebuild();
+            const std::optional<uint8_t> scene = ownWorld->takeSceneStart();
+            if (scene || rebuild) {
+                // a story scene in the room's world, or a script this game's own started there: this game plays it as
+                // the normal game does. The world's actors go, the room's own come as a room load spawns them (this
+                // player stays where it is) and as the room's logic spawned them since the room's entry (a cast by a
+                // lift the scene talks to: its handler from the room's entry, with the flags of then, until it stops
+                // advancing, starting no script; the flags are the session's again after), and the script starts (one
+                // the room started here and held for everyone is already there, at its start)
                 od::port::killAllActors();
                 od::port::actorSystem().boneBlocksUsed = 0;
                 od::port::roomSetupActors(0, od::port::kSpawnSkipPlayer);
-                if (const OwnWorldClient::RoomEntry* entry = ownWorld->roomEntry(); entry && !od::port::scriptState().inUse()) {
-                    // ... and what the room's logic spawns from the room's entry on, as its world ran it (a cast by a lift
-                    // the scene talks to): its handler from the room's entry, with the flags of then, until it stops
-                    // advancing; the flags are the session's again after
+                if (const OwnWorldClient::RoomEntry* entry = ownWorld->roomEntry()) {
                     const od::port::StoryFlags now = od::port::storyFlags();
-                    const bool scriptBefore = od::port::scriptState().inUse(); // (what it would start is the world's)
+                    const uint8_t scriptFlags = od::port::scriptState().flags; // (the room's logic waits while one runs)
                     od::port::storyFlags() = entry->flags;
                     od::port::clearStoryFlag(od::port::kFlagTransitionArmed); // the arrival is done: no door's script again
                     od::port::clearStoryFlag(od::port::kFlagTransitionArriving);
                     od::port::roomScriptState() = entry->logic;
+                    od::port::scriptState().flags = 0;
+                    od::port::setScriptStartsBlocked(true);
                     constexpr int kEntryTicks = 8;
-                    for (int t = 0; t < kEntryTicks && !od::port::scriptState().inUse(); ++t) {
+                    for (int t = 0; t < kEntryTicks; ++t) {
                         const od::port::RoomScriptState before = od::port::roomScriptState();
                         if (!od::port::roomScriptHandler()) break;
                         const od::port::RoomScriptState& after = od::port::roomScriptState();
@@ -1866,15 +1870,14 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
                             after.actorMask == before.actorMask)
                             break;
                     }
+                    od::port::setScriptStartsBlocked(false);
+                    od::port::scriptState().flags = scriptFlags;
                     od::port::storyFlags() = now;
-                    // a script it started has not run a tick (scriptStart sets its block only): the world's scene is
-                    // what starts here
-                    if (!scriptBefore) od::port::scriptState().flags = 0;
                     od::port::applyActorFrees();
                 }
                 reportUnported();
                 // the scene's script (the room's logic may have started it already, as the world's did)
-                if (!(od::port::scriptState().flags & od::port::kScriptRunning) || od::port::scriptState().id != *scene)
+                if (scene && (!(od::port::scriptState().flags & od::port::kScriptRunning) || od::port::scriptState().id != *scene))
                     od::port::scriptStart(*scene);
             }
         }

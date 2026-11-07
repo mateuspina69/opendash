@@ -327,6 +327,24 @@ void OwnWorldClient::turn(uint64_t nowNs) {
                 unsigned(s.owner), unsigned(s.type), unsigned(s.variant),
                 s.parent == od::port::kNetNoParent ? ""
                                                    : (" on player " + std::to_string(s.parent) + ", here " + std::to_string(s.parentTable)).c_str());
+    // a story script this game's own started in the room's world (a message's op, the room's arrival): a scene of this
+    // game's, as in the normal game, with the room's own actors (script 0 is a door's: the transition, this game's own)
+    if (!localScene_ && !entering_ && od::port::scriptState().inUse() && od::port::scriptState().id != 0) {
+        const uint8_t script = od::port::scriptState().id;
+        localScene_ = true;
+        sceneRan_ = true;
+        scene_ = true;
+        sceneOwner_ = playerId_;
+        scenePads_.start();
+        sentPad_ = 0;
+        sceneTick_ = 0;
+        sceneRoom_ = room_;
+        sceneScript_ = script;
+        sceneEndAt_.reset();
+        sceneHeard_ = false; // the world plays none of it: it ends here with its script
+        roomRebuild_ = true;
+        SDL_Log("own world: a script of this game's started in the room's world (script %02x): a scene here", unsigned(script));
+    }
     sceneTurn();
     liftTurn();
     localSceneTurn();
@@ -470,6 +488,9 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
             od::port::eventStart(e->hasPos ? &eventPoint_ : nullptr, nullptr, e->param, e->window, e->message);
             SDL_Log("own world: an event of the room's world, message %u", unsigned(e->message));
             ownEvent_ = true;
+            eventMenus_ = e->menus; // what its talker's choices open plays here, with the event
+            eventHints_ = e->hintsMessage;
+            eventSaveMenu_ = {};
         }
         break;
     case WorldMessageType::NetRevived:
@@ -762,6 +783,7 @@ void OwnWorldClient::addGuest(int dx, int dz) { guest_ = std::make_pair(dx, dz);
 void OwnWorldClient::endFrame() {
     if (!room_) return;
     if (ownEvent_) {
+        od::port::talkerMenusTick(eventSaveMenu_, eventMenus_, eventHints_);
         od::port::EventState& ev = od::port::eventState();
         if (ev.speakerAnimation < od::port::kSpeakerAnimationCount) {
             pipe_->sendReliable(playerId_, WorldMessageType::NetSpeaker, {ev.speakerAnimation});

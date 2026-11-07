@@ -14,6 +14,8 @@
 #include "game/save_image.hpp"
 #include "game/save_slots.hpp"
 #include "game/story_flags.hpp"
+#include "game/event.hpp"
+#include "engine/data_source.hpp"
 
 namespace od::port {
 
@@ -452,6 +454,20 @@ int loadMenuTick(FadeTask& fade, const std::function<int(uint32_t, uint8_t*, uin
     windowCloseAll(WindowClose::Force); // exe 0x5577d0(1)
     clearStoryFlag(kFlagStoryMenuOpen);
     return ((m.flags & kMenuCancelled) != 0) + 1;
+}
+
+void talkerMenusTick(SaveMenuBlock& block, uint8_t menus, uint8_t hintsMessage) {
+    constexpr uint32_t kHintsFlag = 0x6f9; // the message chose "hints"
+    constexpr int8_t kHintsWindow = 1;
+    if (menus == kEventMenusNone) return;
+    if (storyFlag(kFlagSaveMenuAsked)) {
+        saveMenuTick(block); // exe 0x548f60
+    } else if (storyFlag(kHintsFlag)) {
+        windowClose(kHintsWindow, WindowClose::Force);
+        if (menus == kEventMenusStageTalker) windowOpen(kHintsWindow, kMessageBank, hintsMessage);
+        else windowOpen(kHintsWindow, stateAddress(TableId::TalkingNpcHintsBank), 0);
+        clearStoryFlag(kHintsFlag); // exe 0x510e30
+    }
 }
 
 } // namespace od::port

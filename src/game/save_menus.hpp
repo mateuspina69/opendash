@@ -81,6 +81,9 @@ inline LoadMenuBlock& loadMenuBlock() {
 
 // exe 0x548f60(block): the save menu the talking NPC runs while its save flag is set, one tick
 void saveMenuTick(SaveMenuBlock& block);
+// a talker's menus on its message's choices (exe 0x4498b0 / 0x449bd0 step 1): the save menu while flag 0x6fa holds, the
+// hints window on flag 0x6f9 (kEventMenus*: the talker's exe bank, or the stage's message bank's `hintsMessage`)
+void talkerMenusTick(SaveMenuBlock& block, uint8_t menus, uint8_t hintsMessage);
 // exe 0x548f20's menu (script 0x76, the game clear): the clear data written into the slot's image kClearDataImage; true
 // once closed (kMenuClosed: the windows closed, the story menu's flag cleared)
 bool clearSaveMenuTick();

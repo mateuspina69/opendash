@@ -21,6 +21,7 @@
 #include "game/event_state.hpp"
 #include "game/fade.hpp"
 #include "game/presentation.hpp"
+#include "game/save_menus.hpp"
 #include "game/room_scripts.hpp"
 #include "game/story_flags.hpp"
 #include "game/ghost_buffer.hpp"
@@ -78,6 +79,9 @@ public:
     // a story scene starts here (the world said so): its script, once (the game frees the world's actors, spawns the
     // room's own and starts the script as the normal game would)
     std::optional<uint8_t> takeSceneStart() { return std::exchange(sceneStart_, std::nullopt); }
+    // a script of this game's own started while it was in the room's world (a message's, an arrival's): it plays here as
+    // a scene, with the room's own actors again
+    bool takeRoomRebuild() { return std::exchange(roomRebuild_, false); }
     // the room as this game entered it, before its first field tick: the story's flags and the room's logic (its
     // handler's steps), which a scene the world starts here plays the room's logic from again (what it spawns there --
     // a cast waiting by a lift -- is the scene's)
@@ -209,6 +213,7 @@ private:
     std::optional<uint8_t> sceneStart_;   // the script to start, for the game to take
     std::optional<WorldRoom> sceneRoom_;  // the room it started in
     uint8_t sceneScript_ = 0;             // its script
+    bool roomRebuild_ = false;
     bool sceneRan_ = false;               // its script has run here (its end is the script's end, not its start)
     bool sceneMoved_ = false;             // its script went to another room, whose first field tick has not run yet
     // the scene this game played to its end before its room's world did (that world's copy of it may still run)
@@ -218,6 +223,9 @@ private:
     };
     std::optional<PlayedScene> playedScene_;
     std::optional<RoomEntry> roomEntry_;
+    // the world's event this game plays: its talker's menus (game/event kEventMenus*), their state here
+    uint8_t eventMenus_ = 0, eventHints_ = 0;
+    od::port::SaveMenuBlock eventSaveMenu_;
     std::function<std::vector<uint8_t>()> heldBanks_;
     std::function<void(std::span<const uint8_t>)> takeBanks_;
     // the world's actor this Mega Man lifted (its slot there, its type)
