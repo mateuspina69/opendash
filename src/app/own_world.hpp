@@ -20,6 +20,8 @@
 #include "game/event_state.hpp"
 #include "game/fade.hpp"
 #include "game/presentation.hpp"
+#include "game/room_scripts.hpp"
+#include "game/story_flags.hpp"
 #include "game/ghost_buffer.hpp"
 #include "game/player/net_player.hpp"
 #include "game/player/remote_combat.hpp"
@@ -70,6 +72,15 @@ public:
     // a story scene starts here (the world said so): its script, once (the game frees the world's actors, spawns the
     // room's own and starts the script as the normal game would)
     std::optional<uint8_t> takeSceneStart() { return std::exchange(sceneStart_, std::nullopt); }
+    // the room as this game entered it, before its first field tick: the story's flags and the room's logic (its
+    // handler's steps), which a scene the world starts here plays the room's logic from again (what it spawns there --
+    // a cast waiting by a lift -- is the scene's)
+    struct RoomEntry {
+        WorldRoom room;
+        od::port::StoryFlags flags;
+        od::port::RoomScriptState logic;
+    };
+    const RoomEntry* roomEntry() const { return roomEntry_ && room_ && roomEntry_->room == *room_ ? &*roomEntry_ : nullptr; }
     // the turn before a tick: the player's state to the world, what the world sent, the timeline up to now
     void turn(uint64_t nowNs);
     // a turn away from a game (the title, a load): the session's save and what it says; nothing of a room
@@ -199,6 +210,7 @@ private:
         uint8_t script = 0;
     };
     std::optional<PlayedScene> playedScene_;
+    std::optional<RoomEntry> roomEntry_;
     std::optional<std::vector<uint8_t>> sceneEndAt_; // the world's end: where its Mega Man stands, its owner
     bool sceneHeard_ = false; // the world has started it too (a scene started here: the world's start confirms it)
     bool heldHere_ = false;   // started here, held until the world starts it (it waits for everyone)

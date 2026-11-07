@@ -129,6 +129,7 @@ void OwnWorldClient::roomBound(int stage, int sub) {
         return;
     }
     playedScene_.reset();
+    roomEntry_ = RoomEntry{WorldRoom{stage, sub}, od::port::storyFlags(), od::port::roomScriptState()};
     // the room is loaded, its first field tick still to come (also one a scene's script went to)
     if (coordinator_) coordinator_->hostBound(WorldRoom{stage, sub});
     if (localScene_) { // a room the scene's script went to: its actors are this game's, as in the normal game
