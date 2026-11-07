@@ -6,6 +6,7 @@
 
 #include <array>
 #include <cstdint>
+#include <deque>
 #include <filesystem>
 #include <functional>
 #include <memory>
@@ -161,6 +162,9 @@ private:
         od::port::NetPlayerReceiver from;
         od::ghost::GhostBuffer buffer;
         std::array<od::port::NetPlayerTrack, 2> tracks{};
+        // each channel's animation starts as heard, by their tick: the tick shown plays the one started by then (a
+        // short one -- a kick -- the next start replaced before it was shown still plays its time)
+        std::array<std::deque<od::port::NetPlayerChannel>, 2> starts{};
         int64_t stepped = -1;
         bool joined = false;
         std::vector<uint8_t> equipment; // what they wear (the world's NetEquip of them): their shots here are theirs

@@ -421,6 +421,18 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
             Other& o = others_[*id];
             const auto heard = o.from.apply(one);
             if (!heard) continue;
+            for (size_t c = 0; c < 2; ++c) { // a start not heard before: kept by its tick
+                const od::port::NetPlayerChannel& ch = o.from.fields().channels[c];
+                if (ch.tick == od::port::kNetPlayerNoTick) continue;
+                std::deque<od::port::NetPlayerChannel>& q = o.starts[c];
+                if (!q.empty() && q.back().tick == ch.tick) {
+                    q.back() = ch;
+                    continue;
+                }
+                q.push_back(ch);
+                constexpr size_t kKeptStarts = 16;
+                while (q.size() > kKeptStarts) q.pop_front();
+            }
             acks.push_back(*id);
             acks.push_back(uint8_t(heard->sequence));
             acks.push_back(uint8_t(heard->sequence >> 8));
@@ -754,7 +766,19 @@ void OwnWorldClient::showPlayers(GhostView& ghosts, uint64_t localFingerprint, u
             const od::ScopedLoadedFiles bound(*files);
             const od::port::NetPlayerFields& f = o.from.fields();
             for (int64_t t = o.stepped < 0 ? tick : o.stepped + 1; t <= tick; ++t)
-                for (size_t c = 0; c < 2; ++c) o.tracks[c].step(f.channels[c], f.stageAnims, uint32_t(t));
+                for (size_t c = 0; c < 2; ++c) {
+                    // the start in play on tick t: the newest heard by then (the latest fields: none kept yet)
+                    const od::port::NetPlayerChannel* in = &f.channels[c];
+                    std::deque<od::port::NetPlayerChannel>& q = o.starts[c];
+                    for (auto it = q.rbegin(); it != q.rend(); ++it)
+                        if (int32_t(it->tick - uint32_t(t)) <= 0) {
+                            in = &*it;
+                            break;
+                        }
+                    // what started before the newest one of them goes (it is played)
+                    while (q.size() > 1 && int32_t(q[1].tick - uint32_t(t)) <= 0) q.pop_front();
+                    o.tracks[c].step(*in, f.stageAnims, uint32_t(t));
+                }
             o.stepped = tick;
         }
         const od::port::PlayerSnapshot played = od::port::netPlayerSnapshot(o.from.fields(), o.tracks);
