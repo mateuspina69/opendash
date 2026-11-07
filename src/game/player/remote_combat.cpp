@@ -247,6 +247,14 @@ std::vector<uint8_t> encode(const NetShotHit& v) {
 
 void applyShotEvent(ShotActor& shot, const NetShotHit& e) {
     if (e.event == NetShotEvent::Result) {
+        if (e.hit.result & kHitAttackSolid) {
+            // a solid body hit in the world, where the world's copy met it: this one has flown on since (the result came
+            // a round trip later), so it stops there too -- its burst is at the body, not past it
+            shot.pos.x = int32_t(uint32_t(uint16_t(e.hit.contact[0])) << 16);
+            shot.pos.y = int32_t(uint32_t(uint16_t(e.hit.contact[1])) << 16);
+            shot.pos.z = int32_t(uint32_t(uint16_t(e.hit.contact[2])) << 16);
+            shot.prevPos = shot.pos;
+        }
         applyShotHit(shot, e.hit);
         return;
     }
