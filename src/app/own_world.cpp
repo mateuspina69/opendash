@@ -128,6 +128,7 @@ void OwnWorldClient::roomBound(int stage, int sub) {
         warping_ = false;
         return;
     }
+    playedScene_.reset();
     // the room is loaded, its first field tick still to come (also one a scene's script went to)
     if (coordinator_) coordinator_->hostBound(WorldRoom{stage, sub});
     if (localScene_) { // a room the scene's script went to: its actors are this game's, as in the normal game
@@ -356,6 +357,12 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
                         m.type == WorldMessageType::NetScreen || m.type == WorldMessageType::NetHold ||
                         m.type == WorldMessageType::NetEventStart))
         return;
+    // ... and what the world's copy of one this game has played to its end shows, until it ends there too: its windows, its
+    // fades, its warps are the scene's, seen here already
+    if (playedScene_ && (m.type == WorldMessageType::NetPresent || m.type == WorldMessageType::NetWarp ||
+                         m.type == WorldMessageType::NetScreen || m.type == WorldMessageType::NetHold ||
+                         m.type == WorldMessageType::NetEventStart))
+        return;
     switch (m.type) {
     case WorldMessageType::NetEvents:
         if (!state_->applyEvents(m.netState)) SDL_Log("own world: a bad event batch");
@@ -511,6 +518,11 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
                     unsigned(sceneOwner_));
             break;
         }
+        if (playedScene_ && room_ && playedScene_->room == *room_ && playedScene_->script == m.netState[1]) {
+            // the world's copy of the scene this game has played already, told on joining it again: not played twice
+            SDL_Log("own world: the world's scene (script %02x) was played here already", unsigned(m.netState[1]));
+            break;
+        }
         scene_ = true;
         sceneOwner_ = m.netState[0];
         scenePads_.start(at);
@@ -536,8 +548,12 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
         // this game's copy ends once its script has too (until then what it changes is the world's to say)
         // (the world's end of a scene comes after its start: one before it is the end of the one this game left, sent by
         // that room's world before it heard of the move)
-        if (localScene_ && sceneHeard_) sceneEndAt_ = m.netState;
-        else if (!localScene_) scene_ = false;
+        if (localScene_ && sceneHeard_) {
+            sceneEndAt_ = m.netState;
+        } else if (!localScene_) {
+            scene_ = false;
+            playedScene_.reset(); // the world's copy of the one this game ended first is over too
+        }
         break;
     case WorldMessageType::NetMoveTo:
         if (gateAsked_ && gateAtDoor_) {
@@ -759,16 +775,29 @@ void OwnWorldClient::movedTo(const std::vector<uint8_t>& to) {
     SDL_Log("own world: moved to ST%02X sub %d at %d %d %d", unsigned(to[0]), int(to[1]), int(x), int(y), int(z));
 }
 
-// The world's scene is over (or the world never started the one this game's room started), and the one this game ran
-// is too (its script done, no room change pending, the field playing): what the scene left goes, this game is in its
-// room's world again and is told all of it (a fresh join)
+// The scene this game ran is over (its script done, no room change pending, the field playing): what the scene left goes,
+// this game is in its room's world again and is told all of it (a fresh join). The world's copy of it may still run: it
+// started after this game's (the world starts with the room) and plays the same pad on the same ticks, so it ends where
+// this one did, later; its start, told again on the join, is not played a second time here
 void OwnWorldClient::localSceneTurn() {
-    if (!localScene_ || (!sceneEndAt_ && sceneHeard_)) return;
+    if (!localScene_) return;
     const od::port::GameState& g = od::port::gameState();
     if (od::port::scriptState().inUse() || od::port::transitionRequest().state != od::port::kTransitionNone ||
         g.gameMode() != od::port::GameMode::Field || g.fieldStep() != od::port::FieldStep::Playing)
         return;
-    const std::optional<std::vector<uint8_t>> at = std::exchange(sceneEndAt_, std::nullopt);
+    std::optional<std::vector<uint8_t>> at = std::exchange(sceneEndAt_, std::nullopt);
+    if (!at && sceneHeard_ && room_) {
+        playedScene_ = PlayedScene{*room_, sceneScript_};
+        // where the world's will end: where this game's Mega Man (the scene's, on every copy) stands, its owner there
+        const od::port::Player& man = od::port::player();
+        std::vector<uint8_t> mine;
+        for (const int16_t v : {man.pos.x.whole, man.pos.y.whole, man.pos.z.whole, man.rotation.y}) {
+            mine.push_back(uint8_t(v));
+            mine.push_back(uint8_t(uint16_t(v) >> 8));
+        }
+        mine.push_back(sceneOwner_);
+        at = std::move(mine);
+    }
     const bool sameRoom = sceneRoom_ && room_ && *sceneRoom_ == *room_;
     localScene_ = false;
     sceneRoom_.reset();

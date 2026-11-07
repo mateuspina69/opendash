@@ -193,6 +193,12 @@ private:
     std::optional<WorldRoom> sceneRoom_;  // the room it started in
     uint8_t sceneScript_ = 0;             // its script
     bool sceneMoved_ = false;             // its script went to another room, whose first field tick has not run yet
+    // the scene this game played to its end before its room's world did (that world's copy of it may still run)
+    struct PlayedScene {
+        WorldRoom room;
+        uint8_t script = 0;
+    };
+    std::optional<PlayedScene> playedScene_;
     std::optional<std::vector<uint8_t>> sceneEndAt_; // the world's end: where its Mega Man stands, its owner
     bool sceneHeard_ = false; // the world has started it too (a scene started here: the world's start confirms it)
     bool heldHere_ = false;   // started here, held until the world starts it (it waits for everyone)
