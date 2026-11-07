@@ -283,9 +283,9 @@ bool allPlayersInZone(const EncounterZone& z, uint32_t type) {
     forEachPlayer([&](const Player& p) { all = all && inZone(p.pos, z, type); });
     return all;
 }
-// the player who set a slot off, while they are in the session; else the one player every session has
+// the player who set a slot off, while they are in the room; else the one acting (a player in it)
 Player& slotPlayer(const EncounterSlot& slot) {
-    return playerPresent(slot.triggeredBy) ? playerById(slot.triggeredBy) : player();
+    return playerPresent(slot.triggeredBy) ? playerById(slot.triggeredBy) : actingPlayer();
 }
 int8_t& cellXOf(EncounterSlot& slot, size_t id) { return id == 0 ? slot.cellX : slot.otherCellX[id - 1]; }
 int8_t& cellZOf(EncounterSlot& slot, size_t id) { return id == 0 ? slot.cellZ : slot.otherCellZ[id - 1]; }

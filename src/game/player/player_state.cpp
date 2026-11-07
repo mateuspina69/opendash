@@ -51,8 +51,15 @@ size_t playerId(const Player& p) {
 namespace {
 size_t g_acting = 0;
 } // namespace
-size_t actingPlayerId() { return g_acting; }
-Player& actingPlayer() { return table().players[g_acting]; }
+// the acting player, or (out of the room: a world's host elsewhere, whose room's actors were started as theirs) the first
+// one in it
+size_t actingPlayerId() {
+    if (table().present[g_acting]) return g_acting;
+    for (size_t id = 0; id < kPlayerSlots; ++id)
+        if (table().present[id]) return id;
+    return g_acting;
+}
+Player& actingPlayer() { return table().players[actingPlayerId()]; }
 ScopedActingPlayer::ScopedActingPlayer(size_t id) : previous_(g_acting) {
     checkId(id);
     g_acting = id;

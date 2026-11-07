@@ -280,7 +280,7 @@ void rollSpawnerST0D(ControllerActor& e) {
     } else if (storyFlag(kFlagAfterJoesLab)) {
         openTracks();
         AnimatedActor& a = spawned(spawnRoll(fieldRecord, fieldPoint), "0x41b440: Roll not spawned");
-        const int16_t px = player().pos.x.whole, pz = player().pos.z.whole;
+        const int16_t px = actingPlayer().pos.x.whole, pz = actingPlayer().pos.z.whole; // (the one in the room)
         if (px == 0x3600) {
             if (pz == -0x1300) {
                 if (storyFlag(kFlagRollFainted)) {

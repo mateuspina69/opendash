@@ -90,6 +90,7 @@ WorldHost::World& WorldHost::worldOf(WorldRoom room, const std::vector<uint8_t>&
     world->process = SDL_CreateProcess(args.data(), false);
     if (!world->process) throw std::runtime_error(std::string("world process: ") + SDL_GetError());
     SDL_Log("coordinator: world ST%s sub %s started", stage, sub);
+    world->startedNs = SDL_GetTicksNS();
     return *worlds_.emplace(room, std::move(world)).first->second;
 }
 
@@ -429,6 +430,11 @@ void WorldHost::poll(uint64_t nowNs) {
     for (auto it = worlds_.begin(); it != worlds_.end();) {
         World& world = *it->second;
         for (const WorldMessage& m : world.link.poll(nowNs)) {
+            if (world.startedNs != 0) {
+                SDL_Log("coordinator: the world of ST%02X sub %d answers %llu ms after its start", unsigned(it->first.stage), it->first.sub,
+                        static_cast<unsigned long long>((SDL_GetTicksNS() - world.startedNs) / 1'000'000));
+                world.startedNs = 0;
+            }
             if (m.type == WorldMessageType::Report) world.report = WorldReport{m.tick, m.liveActors, m.players, m.digest};
             if ((m.type == WorldMessageType::NetEvents || m.type == WorldMessageType::NetUpdate ||
                  m.type == WorldMessageType::NetHit || m.type == WorldMessageType::NetShotHit ||

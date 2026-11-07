@@ -127,6 +127,7 @@ void testActingPlayer() {
     CHECK(actingPlayerId() == 0 && &actingPlayer() == &player());
     const uint32_t mine = allocActor10();
     CHECK(shotActorAt(mine).ownerPlayer == 0);
+    joinPlayer(4);
     {
         const ScopedActingPlayer acting(4);
         CHECK(&actingPlayer() == &playerById(4));
@@ -138,6 +139,15 @@ void testActingPlayer() {
         }
         CHECK(actingPlayerId() == 4);
     }
+    CHECK(actingPlayerId() == 0);
+    // a world whose host is elsewhere: what was started as the host's acts as the first player in the room
+    leavePlayer(0);
+    {
+        const ScopedActingPlayer acting(shotActorAt(mine).ownerPlayer);
+        CHECK(actingPlayerId() == 4 && &actingPlayer() == &playerById(4));
+    }
+    joinPlayer(0);
+    leavePlayer(4);
     CHECK(actingPlayerId() == 0);
     resetActorPools();
     actorSystem().shotsLive = 0;
