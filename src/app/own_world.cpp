@@ -187,7 +187,19 @@ void OwnWorldClient::roomScriptsRan() {
         startedHere(s.id);
         return;
     }
+    dropRoomEvent();
     freeLocalActors();
+}
+
+// The world takes the room: a message its own logic opened here first (a mission's briefing on the room's first tick) is
+// the world's -- its logic opens it for the room, and it plays from there once
+void OwnWorldClient::dropRoomEvent() {
+    od::port::EventState& ev = od::port::eventState();
+    if (ev.active == 0) return;
+    SDL_Log("own world: the room's message %d started here: its world plays it", int(ev.message));
+    od::port::windowClose(int8_t(ev.window), od::port::WindowClose::Force);
+    od::port::eventAbort();
+    od::port::player().inputMode &= uint8_t(~od::port::kInputOff);
 }
 
 void OwnWorldClient::startedHere(uint8_t script) {
@@ -932,7 +944,9 @@ void OwnWorldClient::localSceneTurn() {
         g.gameMode() != od::port::GameMode::Field || g.fieldStep() != od::port::FieldStep::Playing)
         return;
     std::optional<std::vector<uint8_t>> at = std::exchange(sceneEndAt_, std::nullopt);
-    if (!at && sceneHeard_ && room_) {
+    const bool sameRoom = sceneRoom_ && room_ && *sceneRoom_ == *room_;
+    // (the world of a room the scene went to never played it: what it shows is not the scene's)
+    if (!at && sceneHeard_ && sameRoom) {
         playedScene_ = PlayedScene{*room_, sceneScript_};
         // where the world's will end: where this game's Mega Man (the scene's, on every copy) stands, its owner there
         const od::port::Player& man = od::port::player();
@@ -944,7 +958,6 @@ void OwnWorldClient::localSceneTurn() {
         mine.push_back(sceneOwner_);
         at = std::move(mine);
     }
-    const bool sameRoom = sceneRoom_ && room_ && *sceneRoom_ == *room_;
     localScene_ = false;
     sceneRoom_.reset();
     const WorldRoom here = *room_;
@@ -958,7 +971,10 @@ void OwnWorldClient::localSceneTurn() {
     // its script went to a room whose first field tick is still to come: that tick decides, as on any entry (the room
     // setup's actors stay for a scene it starts)
     const bool firstTickToCome = std::exchange(sceneMoved_, false);
-    if (!firstTickToCome) freeLocalActors();
+    if (!firstTickToCome) {
+        if (!sameRoom) dropRoomEvent(); // the room the scene went to: its world's from here, its messages too
+        freeLocalActors();
+    }
     bindWorld(here.stage, here.sub);
     entering_ = firstTickToCome;
     if (sameRoom && at) sceneEnd(*at);

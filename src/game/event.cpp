@@ -217,6 +217,17 @@ void eventOwnerEnded(size_t player) {
     if (player < kPlayerSlots) g_ownerEventEnding[player] = true;
 }
 void eventOwnerLeft(size_t player) { eventOwnerEnded(player); }
+void eventMoveOwner(size_t from, size_t to) {
+    if (from == to || from >= kPlayerSlots || to >= kPlayerSlots) return;
+    EventSlots& s = eventSlots();
+    s.slots[to + 1] = s.slots[from + 1];
+    s.slots[from + 1].active = 0;
+    g_speakerSlot[to + 1] = std::exchange(g_speakerSlot[from + 1], uint8_t(0));
+    g_roomEvent[to + 1] = std::exchange(g_roomEvent[from + 1], false);
+    g_ownerEventEnding[to] = false;
+    g_ownerEventEnding[from] = false;
+    if (s.current == from + 1) s.current = to + 1;
+}
 EventState& eventOfOwner(size_t player) { return eventSlots().slots[player + 1]; }
 void eventSelectFor(uint8_t actorSlot) {
     eventSlots().current = 0;
@@ -311,7 +322,9 @@ void eventStart(const Fixed16Vec3* pos, ShortVec3* rot, uint32_t param, uint16_t
         if (!playerPresent(owner)) {
             owner = 0;
             while (owner < kPlayerSlots && !playerPresent(owner)) ++owner;
-            if (owner == kPlayerSlots) return; // nobody in the room to show it to
+            // nobody in the room yet (the world starts before its players are in): held in player 0's slot, what started
+            // it waits for it; the world gives it to the first one in (eventMoveOwner)
+            if (owner == kPlayerSlots) owner = 0;
         }
         EventState& ev = eventSlots().slots[owner + 1];
         g_speakerSlot[owner + 1] = g_updatingSlot;

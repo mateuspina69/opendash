@@ -274,6 +274,7 @@ private:
     void followEnd();
     uint8_t inputBeforeEvent_ = 0; // this player's input mode as the world's event began
     void restoreEventInput(const od::port::EventState& ev);
+    void dropRoomEvent();
     uint32_t testLevelTick_ = 0;
     int8_t testLevel_ = 0;
     int testWeapon_ = -1;

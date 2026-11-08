@@ -573,6 +573,7 @@ int run(const WorldArgs& given) {
     };
     std::optional<SharedEvent> sharedEvent;
     std::optional<od::port::OwnerEvent> heldEvent;
+    std::optional<od::port::OwnerEvent> waitingEvent; // the room's, started before anyone was in: the first one in plays it
     const auto eventFollowMessage = [&](uint8_t client) {
         od::port::OwnerEvent copy = sharedEvent->start;
         copy.follows = uint8_t(copy.player);
@@ -614,6 +615,16 @@ int run(const WorldArgs& given) {
                 e.reach == od::port::EventReach::Everyone ? "everyone" : "the room");
         for (const auto& [client, sender] : netClients)
             if (client != e.player) eventFollowMessage(client);
+    };
+    // an event of this room runs on its player's machine; one of everyone's once everyone is here
+    const auto routeEvent = [&](const od::port::OwnerEvent& e) {
+        if (e.reach == od::port::EventReach::Everyone && !od::port::storyOptionalStage(uint8_t(w.stage))) {
+            heldEvent = e;
+            link->sendReliable({WorldMessageType::NetSceneGate});
+            SDL_Log("world: player %zu's event (message %u) is everyone's: it waits for them", e.player, unsigned(e.message));
+            return;
+        }
+        startOwnerEvent(e);
     };
     if (w.linkPort != 0) {
         link = waitingLink ? std::move(waitingLink) : std::make_unique<WorldLink>(uint16_t(w.linkPort));
@@ -704,13 +715,12 @@ int run(const WorldArgs& given) {
         });
         // an event of this room runs on its player's machine; one of everyone's once everyone is here
         od::port::setEventOwnerHook([&](const od::port::OwnerEvent& e) {
-            if (e.reach == od::port::EventReach::Everyone && !od::port::storyOptionalStage(uint8_t(w.stage))) {
-                heldEvent = e;
-                link->sendReliable({WorldMessageType::NetSceneGate});
-                SDL_Log("world: player %zu's event (message %u) is everyone's: it waits for them", e.player, unsigned(e.message));
+            if (!od::port::playerPresent(e.player)) {
+                waitingEvent = e;
+                SDL_Log("world: an event (message %u) before anyone is in: it waits for the first one", unsigned(e.message));
                 return;
             }
-            startOwnerEvent(e);
+            routeEvent(e);
         });
     }
     bool stopped = false;
@@ -1064,6 +1074,14 @@ int run(const WorldArgs& given) {
                 if (m.playerId < od::port::kPlayerSlots) mirrors[m.playerId].from.acceptRestart();
                 if (state && m.playerId < od::port::kPlayerSlots) {
                     od::port::remotePlayerJoin(m.playerId, state->snapshot);
+                    if (waitingEvent) { // the room's event that waited for someone: theirs
+                        od::port::OwnerEvent e = *std::exchange(waitingEvent, std::nullopt);
+                        if (od::port::eventOfOwner(e.player).active) {
+                            od::port::eventMoveOwner(e.player, m.playerId);
+                            e.player = m.playerId;
+                            routeEvent(e);
+                        }
+                    }
                     // what they wore here before (their game tells it on a change only)
                     if (!equipOf[m.playerId].empty()) od::port::applyEquipment(od::port::playerById(m.playerId), equipOf[m.playerId]);
                 }

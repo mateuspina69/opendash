@@ -73,5 +73,7 @@ void eventSelectNone();
 EventState& eventOfOwner(size_t player);
 // the player is out of the world: their event ends with them
 void eventOwnerLeft(size_t player);
+// an event started while nobody was in the world (held in player 0's slot) goes to the first player in
+void eventMoveOwner(size_t from, size_t to);
 
 } // namespace od::port
