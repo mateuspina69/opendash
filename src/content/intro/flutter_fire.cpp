@@ -795,4 +795,29 @@ void fireEffectUpdate(const PlayerEnv& env, uint32_t address) {
     notPortedAt(kFireArea, "0x437520 kind", effect.subtype);
 }
 
+constexpr uint8_t kFireHeldPicture = 0x80; // a picture's state: the fire's class did not run (not drawn)
+
+std::vector<uint8_t> firePicture(uint32_t address) {
+    const StaticActor& actor = staticActorAt(address);
+    const BurningFields& fire = classState<BurningFields>(staticActorAt(address));
+    const uint32_t strength = uint32_t(fire.strength);
+    // (a fire its pool loop passes by, during a message: no draw command, as in the game)
+    const uint8_t state = uint8_t(actor.state | ((actor.runFlags & kActorRun) ? 0 : kFireHeldPicture));
+    return {state,             uint8_t(strength), uint8_t(strength >> 8), uint8_t(strength >> 16), uint8_t(strength >> 24),
+            fire.frame,        fire.frameTicks};
+}
+
+void fireTakePicture(uint32_t address, std::span<const uint8_t> picture) {
+    if (picture.size() != 7) return;
+    StaticActor& actor = staticActorAt(address);
+    BurningFields& fire = classState<BurningFields>(actor);
+    actor.state = picture[0];
+    fire.strength = int32_t(uint32_t(picture[1]) | uint32_t(picture[2]) << 8 | uint32_t(picture[3]) << 16 | uint32_t(picture[4]) << 24);
+    fire.frame = picture[5];
+    fire.frameTicks = picture[6];
+}
+
+bool flameStopped(uint32_t address) { return classState<FlameFields>(staticActorAt(address)).stopped != 0; }
+void flameStop(uint32_t address) { stopFlame(address); }
+
 } // namespace od::port

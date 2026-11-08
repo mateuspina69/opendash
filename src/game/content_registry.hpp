@@ -13,6 +13,8 @@
 #include <cstdint>
 #include <initializer_list>
 #include <map>
+#include <set>
+#include <span>
 #include <utility>
 #include <vector>
 
@@ -87,6 +89,24 @@ struct ContentRegistry {
     std::map<RoutineId, fx::ClassDraw> effectDraws;
     std::vector<void (*)(std::vector<fx::Texture>& out)> effectTextures;
     std::vector<std::array<uint32_t, 2>> effectGradientRows;
+
+    // ---- a session's world and its clients (game/world_net_state)
+    // the content's statics that are effects: seen, not played with, each client runs them from their event
+    std::set<RoutineId> netEffects;
+    // ... those whose end their maker says (a fire's flame): when the world's is told so, and how a client's copy is told
+    // (it then dies out by itself, as the world's does)
+    struct NetStop {
+        bool (*stopped)(uint32_t actor) = nullptr;
+        void (*stop)(uint32_t actor) = nullptr;
+    };
+    std::map<RoutineId, NetStop> netStops;
+    // the statics whose picture is their class's fields (they bind no model: a fire): what the world's gives its copies
+    // in the updates, and how a copy takes it
+    struct NetPicture {
+        std::vector<uint8_t> (*capture)(uint32_t actor) = nullptr;
+        void (*apply)(uint32_t actor, std::span<const uint8_t> picture) = nullptr;
+    };
+    std::map<RoutineId, NetPicture> netPictures;
 
     // ---- single calls of the systems
     // the running scripts that draw the white screen this frame (exe 0x5f30e0's callers; game/hud asks each)

@@ -457,6 +457,9 @@ struct ActorHeader {
     // OpenDash's co-op: a client's copy of a world's actor run from its event, or what such a copy started: seen, it plays
     // with no one (its hits are the world's)
     bool worldCopy = false;
+    // OpenDash's co-op: a client's copy of a world's actor held in its slot (its class runs in the world: its run flag is
+    // off here); a class whose picture is its fields is drawn from what the world tells of them
+    bool worldHeld = false;
     uint8_t loopFlags = 0;  // kActorLateLoop | kActorStageClass
     uint8_t type = 0;       // the class table index
     uint8_t subtype = 0;    // the sub-table index (pools 0x20 / 0x60)

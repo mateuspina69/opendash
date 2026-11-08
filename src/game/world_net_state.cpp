@@ -17,6 +17,8 @@
 #include "game/actor_model.hpp"
 #include "game/actor_pools.hpp"
 #include "game/animation_data.hpp"
+#include "game/content_registry.hpp"
+#include "game/smoke_column.hpp"
 #include "game/footstep_dust.hpp"
 #include "game/glow_trails.hpp"
 #include "game/player/players.hpp"
@@ -82,7 +84,7 @@ constexpr uint8_t kMaskX = 0x01, kMaskY = 0x02, kMaskZ = 0x04, kMaskYaw = 0x08, 
 constexpr uint8_t kMoreAnimExtra = 0x01, kMoreLock = 0x02, kMoreSolids = 0x04, kMoreScale = 0x08, kMoreTint = 0x10, kMoreParts = 0x20,
                   kMoreAim = 0x40, kMorePath = 0x80;
 constexpr uint8_t kExtraAge = 0x01, kExtraKey = 0x02, kExtraHeld = 0x04, kExtraPaint = 0x08, kExtraLook = 0x10,
-                  kExtraUniformScale = 0x20, kExtraReport = 0x40; // what else
+                  kExtraUniformScale = 0x20, kExtraReport = 0x40, kExtraPicture = 0x80; // what else
 constexpr uint8_t kLookBoneScale = 0x01;
 constexpr uint8_t kLockPositionsOnly = 0x80, kLockWide = 0x40, kLockOwners = 0x20, kLockCountMask = 0x1f;
 constexpr int kLockGrain = 4;   // the units a narrow lock offset counts in
@@ -91,7 +93,7 @@ constexpr int kLockTolerance = 4; // units a lock-on point may drift before the 
 constexpr size_t kMaxLockPoints = 8;
 constexpr uint8_t kEventAppear = 1, kEventGo = 2, kEventAppearStill = 3, kEventEffect = 4, kEventShift = 5, kEventRoomPatch = 6, kEventFlash = 7; // Still: no animation in play
 constexpr size_t kBatchHeaderBytes = 8;
-constexpr size_t kAppearBytes = 26, kGoBytes = 2, kEffectBytes = 35 + 4 + 16 + 1;
+constexpr size_t kAppearBytes = 27, kGoBytes = 2, kEffectBytes = 35 + 4 + 16 + 1;
 constexpr int kPathPosTolerance = 32; // 1/16 units an actor may leave its path by before the world sends a new one
 constexpr int kPathRotTolerance = 16; // of a turn of 4096
 constexpr size_t kMaxInFlight = 64;
@@ -136,7 +138,7 @@ void NetWorldTable::seen(uint8_t slot, const Seen& s) {
         a.state.animTick = kNetNoAnimTick;
         ++occupants;
     }
-    a.identity = {s.type, s.subtype, s.variant, s.modelEntry};
+    a.identity = {s.type, s.subtype, s.variant, s.modelEntry, s.classFlags};
     if (occupantChanged) {
         a.effect = s.effect;
         a.effectGoes = s.effectGoes;
@@ -153,6 +155,7 @@ void NetWorldTable::seen(uint8_t slot, const Seen& s) {
     a.state.anim = s.anim;
     a.state.shown = s.shown;
     a.state.report = s.report;
+    a.state.picture = s.picture;
     const uint16_t tintBefore = occupantChanged ? s.bound.tint : a.state.visual.tint;
     a.state.visual = s.visual;
     if (s.visual.tint == kTintFlash) { // a hit's flash: its own event, so that it is seen however often the updates go
@@ -370,6 +373,7 @@ NetWorldTable::Seen seenOf(const Actor& a, uint32_t model, uint32_t animTable) {
     s.type = a.type;
     s.subtype = a.subtype;
     s.variant = a.variant;
+    s.classFlags = uint8_t(a.loopFlags & (kActorStageClass | kActorLateLoop));
     s.model = model;
     s.animTable = animTable;
     s.pos = {a.pos.x.whole, a.pos.y.whole, a.pos.z.whole};
@@ -413,8 +417,22 @@ bool netEffectClass(RoutineId id) {
     case RoutineId::WaterSplashUpdate:
     case RoutineId::BossBladeUpdate:
     case RoutineId::PickupUpdate: return true;
-    default: return false;
+    default: return content().netEffects.contains(id);
     }
+}
+
+// a client-run effect whose end its maker says: a smoke column of variant 0 / 1 (ended by what burned), the content's
+// (ContentRegistry::netStops)
+ContentRegistry::NetStop netStopOf(RoutineId id) {
+    if (id == RoutineId::SmokeColumnUpdate)
+        return {[](uint32_t a) { return classState<SmokeColumnFields>(staticActorAt(a)).ended != 0; },
+                [](uint32_t a) {
+                    uint8_t& ended = classState<SmokeColumnFields>(staticActorAt(a)).ended;
+                    if (ended == 0) ended = 1;
+                }};
+    const auto& stops = content().netStops;
+    const auto it = stops.find(id);
+    return it == stops.end() ? ContentRegistry::NetStop{} : it->second;
 }
 
 bool staticIsEffect(const StaticActor& a) {
@@ -457,7 +475,22 @@ template <class Pool> void captureMeshPool(NetWorldTable& table, Pool& pool, siz
             table.gone(slot);
             continue;
         }
+        RoutineRef staticClass;
+        if constexpr (std::is_same_v<Pool, StaticPool>) {
+            staticClass = actorHandler(a, (a.loopFlags & kActorLateLoop) ? ActorPool::StaticsLate : ActorPool::Statics, false);
+            // one its maker has told to end: gone for the clients, whose copies are told to end too (they die out there)
+            if (const ContentRegistry::NetStop stop = staticClass ? netStopOf(staticClass.id()) : ContentRegistry::NetStop{};
+                stop.stopped && stop.stopped(a.at)) {
+                table.gone(slot);
+                continue;
+            }
+        }
         NetWorldTable::Seen s = seenOf(a, a.model, 0);
+        if constexpr (std::is_same_v<Pool, StaticPool>) {
+            const auto& pictures = content().netPictures;
+            if (const auto it = staticClass ? pictures.find(staticClass.id()) : pictures.end(); it != pictures.end() && it->second.capture)
+                s.picture = it->second.capture(a.at);
+        }
         const NetWorldActor& held = table.actors[slot];
         s.modelEntry = held.live && held.model == a.model && held.identity.type == a.type
                            ? held.identity.modelEntry
@@ -507,6 +540,8 @@ template <class Pool> void captureMeshPool(NetWorldTable& table, Pool& pool, siz
                 // a pickup: each client runs it from its event (its draw is the class's fields); who takes it is the
                 // world's, whose end of it ends the copies
                 if (h && h.id() == RoutineId::PickupUpdate) s.effectEnds = true;
+                // ... one whose end its maker says: the world's tells it (the copy then dies out by itself)
+                if (h && netStopOf(h.id()).stop) s.effectEnds = true;
                 if (h && h.id() == RoutineId::WaterSplashUpdate)
                     noteSplashSource(const_cast<StaticActor&>(static_cast<const StaticActor&>(a)), s.effectStart, s.effectGoes);
             }
@@ -848,6 +883,7 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
         w.u8(a.identity.subtype);
         w.u8(a.identity.variant);
         w.u8(a.identity.modelEntry);
+        w.u8(a.identity.classFlags);
         w.u8(a.state.shown ? 1 : 0);
         for (const int16_t v : a.state.pos) w.i16(v);
         for (const int16_t v : a.state.rot) w.i16(v);
@@ -868,6 +904,7 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
         k.acked.aim.clear();
         k.acked.lock.clear();
         k.acked.solids.clear();
+        k.acked.picture.clear(); // ... and its picture goes in the first update
         k.sent = k.acked;
     }
     if (w.bytes.size() > kBatchHeaderBytes) batches.push_back(std::move(w.bytes));
@@ -919,6 +956,7 @@ std::vector<uint8_t> NetStateSender::update(const NetWorldTable& table) {
         };
         if (lookDiffers(k.acked.visual) || lookDiffers(k.sent.visual)) extra |= kExtraLook;
         if (differs(&NetActorState::report)) extra |= kExtraReport;
+        if (differs(&NetActorState::picture)) extra |= kExtraPicture;
         if (a.state.lock != k.acked.lock || a.state.lock != k.sent.lock) more |= kMoreLock;
         if (a.state.solids != k.acked.solids || a.state.solids != k.sent.solids) more |= kMoreSolids;
         const NetActorVisual &v = a.state.visual, &va = k.acked.visual, &vs = k.sent.visual;
@@ -1001,6 +1039,10 @@ std::vector<uint8_t> NetStateSender::update(const NetWorldTable& table) {
             e.u8(a.state.visual.semi);
         }
         if (extra & kExtraReport) e.u8(a.state.report);
+        if (extra & kExtraPicture) {
+            e.u8(uint8_t(a.state.picture.size()));
+            e.bytes.insert(e.bytes.end(), a.state.picture.begin(), a.state.picture.end());
+        }
         count(&UpdateBytes::paint);
         if (more & kMoreSolids) {
             e.u8(uint8_t(a.state.solids.size()));
@@ -1205,6 +1247,7 @@ bool NetStateClient::applyEvents(std::span<const uint8_t> bytes) {
             o->identity.subtype = r.u8();
             o->identity.variant = r.u8();
             o->identity.modelEntry = r.u8();
+            o->identity.classFlags = r.u8();
             o->last.shown = r.u8() != 0;
             for (int16_t& v : o->last.pos) v = r.i16();
             for (int16_t& v : o->last.rot) v = r.i16();
@@ -1305,6 +1348,10 @@ std::optional<uint16_t> NetStateClient::applyParsed(std::span<const uint8_t> byt
             s.told |= kNetToldLook;
         }
         if (extra & kExtraReport) s.report = r.u8();
+        if (extra & kExtraPicture) {
+            s.picture.resize(r.u8());
+            for (uint8_t& b : s.picture) b = r.u8();
+        }
         if (more & kMoreSolids) {
             s.solids.resize(r.u8());
             for (NetSolid& v : s.solids) {
@@ -1514,10 +1561,12 @@ void PoolNetActors::appear(uint8_t slot, const NetActorIdentity& identity, const
     ActorHeader& head = ownSlot_[slot] != 0 ? actorHeaderAt(ownSlot_[slot]) : claimActorSlot(slot);
     head.flags = kActorLiveDrawn;
     head.runFlags &= uint8_t(~kActorRun); // the pool loops pass it by: its class runs in the world
+    head.worldHeld = true;
     head.state = 1;                       // past a class's first state: the draw pass passes over a static still in it
     head.type = identity.type;
     head.subtype = identity.subtype;
     head.variant = identity.variant;
+    head.loopFlags = uint8_t((head.loopFlags & ~(kActorStageClass | kActorLateLoop)) | identity.classFlags);
     Actor& a = actorLayoutOf(head);
     a.pos.x.whole = state.pos[0];
     a.pos.y.whole = state.pos[1];
@@ -1536,7 +1585,14 @@ void PoolNetActors::go(uint8_t slot) {
     // ... and one gone already is not freed again: a free of a slot no longer live puts it back in the pool's live mask
     // (applyActorFrees toggles the freed bits), a slot lost for good -- the shots' pool runs out and the buster stops
     if (ActorHeader* head = stale ? nullptr : slotOf(slot); head && (head->flags & kActorLive)) {
-        if (actorSlotClass(slot) == kShotClass) freeActor(asShot(*head)); // freeActor(ActorHeader&), as the exe, has no case for shots
+        // an effect whose end its maker says: told to end, it dies out by itself, as the world's
+        ContentRegistry::NetStop stop;
+        if (actorSlotClass(slot) == kStaticClass) {
+            RoutineRef h = actorHandler(*head, (head->loopFlags & kActorLateLoop) ? ActorPool::StaticsLate : ActorPool::Statics, false);
+            if (h) stop = netStopOf(h.id());
+        }
+        if (stop.stop) stop.stop(actorLayoutOf(*head).at);
+        else if (actorSlotClass(slot) == kShotClass) freeActor(asShot(*head)); // freeActor(ActorHeader&), as the exe, has no case for shots
         else freeActor(*head);
     }
     ownSlot_[slot] = 0;
@@ -1711,6 +1767,14 @@ void PoolNetActors::tick(uint8_t slot, const NetActorState& state, const std::op
         if (state.told & kNetToldLook) {
             mesh.scaleBytes = {state.visual.rootScale[0], state.visual.rootScale[1], state.visual.rootScale[2]};
             mesh.semiTransparency = state.visual.semi;
+        }
+        // a class whose picture is its fields: the world's, on the copy its draw reads
+        if (!state.picture.empty() && actorSlotClass(slot) == kStaticClass) {
+            RoutineRef h = actorHandler(*head, ActorPool::Statics, false);
+            if (!h) h = actorHandler(*head, ActorPool::StaticsLate, false);
+            const auto& pictures = content().netPictures;
+            if (const auto it = h ? pictures.find(h.id()) : pictures.end(); it != pictures.end() && it->second.apply)
+                it->second.apply(a.at, state.picture);
         }
         return;
     }

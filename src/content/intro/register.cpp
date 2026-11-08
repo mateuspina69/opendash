@@ -103,6 +103,10 @@ void registerIntroClasses(ContentRegistry& r) {
     r.effectDraws.emplace(RoutineId::FireEffectUpdate, &fireEffectDraw);
     r.effectDraws.emplace(RoutineId::OpeningEffectUpdate, &openingEffectDraw);
     r.effectTextures.push_back(&fireMissionTextures);
+    // a session's: a fire's picture goes from the world's to its copies; its flames run on every machine, stopped by it
+    r.netPictures.emplace(RoutineId::FireUpdate, ContentRegistry::NetPicture{&firePicture, &fireTakePicture});
+    r.netEffects.insert(RoutineId::FlameUpdate);
+    r.netStops.emplace(RoutineId::FlameUpdate, ContentRegistry::NetStop{&flameStopped, &flameStop});
     r.effectTextures.push_back(&openingEffectTextures);
     r.effectGradientRows.push_back({kExhaustGlow, 0});
 }

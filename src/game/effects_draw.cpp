@@ -626,9 +626,9 @@ void laserBeam(DrawContext& c, const State& st, const port::EffectActor& e, uint
     }
 }
 
-RoutineId handler(const port::ActorHeader& a, port::ActorPool p1, port::ActorPool p2) {
-    const RoutineRef h = port::actorHandler(a, p1);
-    return h ? h.id() : port::actorHandler(a, p2).id();
+RoutineId handler(const port::ActorHeader& a, port::ActorPool p1, port::ActorPool p2, bool updating = true) {
+    const RoutineRef h = port::actorHandler(a, p1, updating);
+    return h ? h.id() : port::actorHandler(a, p2, updating).id();
 }
 // a content class's draw by its routine (nullptr: none)
 ClassDraw contentDraw(RoutineId h) {
@@ -781,8 +781,10 @@ void collect(State& st, TextureCache& tex, std::vector<Prim>& out) {
     port::StaticPool& statics = port::staticPool();
     for (uint32_t i = 0; i < statics.size(); ++i) { // pool 0x60
         const port::StaticActor& a = statics[i];
-        if (!a.live()) continue;
-        const RoutineId h = handler(a, port::ActorPool::Statics, port::ActorPool::StaticsLate);
+        if (!(a.flags & port::kActorLive)) continue;
+        const RoutineId h = handler(a, port::ActorPool::Statics, port::ActorPool::StaticsLate, false);
+        // (a session's client: a world's actor held here whose picture is its fields is drawn from what the world tells)
+        if (!a.live() && !(a.worldHeld && port::content().netPictures.contains(h))) continue;
         if (h == kPickupClass) pickup(c, st, a, kStaticObjects | i << 4);
         else if (h == kExplosionClass) {
             explosion(c, st, a, kStaticObjects | i << 4);

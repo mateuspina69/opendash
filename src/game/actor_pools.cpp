@@ -226,6 +226,7 @@ void startSlot(ActorHeader& actor, uint8_t loopFlags) {
     const uint32_t cls = actorSlotClass(actor.slot);
     actor.startedByClientRun = sys.shotCursor != 0 || (sys.updatingClientRun && (cls == kEffectClass || cls == kControllerClass));
     actor.worldCopy = sys.updatingWorldCopy;
+    actor.worldHeld = false;
     actor.runFlags = kActorRun | kActorShown;
     actor.loopFlags = loopFlags;
     actor.clearIdentity();

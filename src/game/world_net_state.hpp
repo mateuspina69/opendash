@@ -93,6 +93,7 @@ struct NetEffect {
 struct NetActorIdentity {
     uint8_t type = 0, subtype = 0, variant = 0;
     uint8_t modelEntry = kNetNoModel; // the entry of the stage's model bank (game/actor_model bindActorModelEntry)
+    uint8_t classFlags = 0; // its loop flags' class bits (the stage's table, the late loop): what names its class
     friend bool operator==(const NetActorIdentity&, const NetActorIdentity&) = default;
 };
 
@@ -161,6 +162,7 @@ struct NetActorState {
     int16_t fallStep = 0;         // ... its y step growing by this each tick (a fall, an arc)
     uint8_t report = 0;           // an animated actor's stepCounter: what a boss tells the parts it started
     uint8_t told = 0;            // a client's: which of the visual's fields the world has said (kNetTold...)
+    std::vector<uint8_t> picture; // a class whose picture is its fields (ContentRegistry::netPictures): what it gives
     friend bool operator==(const NetActorState&, const NetActorState&) = default;
 };
 constexpr uint8_t kNetToldScale = 1, kNetToldTint = 2, kNetToldParts = 4, kNetToldLook = 8;
@@ -210,6 +212,7 @@ public:
     // The tick's value of a live actor: a new model or type is a new occupant; a new animation keeps the tick it was chosen
     struct Seen {
         uint8_t type = 0, subtype = 0, variant = 0, modelEntry = kNetNoModel;
+        uint8_t classFlags = 0; // NetActorIdentity::classFlags
         uint32_t model = 0, animTable = 0, animScript = 0;
         std::array<int16_t, 3> pos{}, rot{};
         uint8_t anim = 0;
@@ -233,6 +236,7 @@ public:
         bool effect = false, effectGoes = false, effectEnds = false;
         NetEffect effectStart;
         uint32_t serial = 0; // a shot slot's occupant count (actor_pools shotSlotSerial): a new one is a new occupant
+        std::vector<uint8_t> picture; // NetActorState::picture
     };
     void seen(uint8_t slot, const Seen& s);
     void gone(uint8_t slot);

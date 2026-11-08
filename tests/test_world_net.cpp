@@ -188,7 +188,7 @@ void testEventsFirstAndReuse() {
     other.modelEntry = 4;
     t.seen(kSlotA, other);
     const auto batches = sender.events(t);
-    CHECK(batches.size() == 1 && batches[0].size() == 8 + 2 + 26);
+    CHECK(batches.size() == 1 && batches[0].size() == 8 + 2 + 27);
     for (const auto& batch : batches) CHECK(client.applyEvents(batch));
     CHECK(client.applyUpdate(before).has_value());
     client.advance(5);
