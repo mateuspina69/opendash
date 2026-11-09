@@ -478,6 +478,21 @@ private:
 // the actors a client keeps from its own room setup and runs itself: the door actor and its leaves (a door asks its own player)
 bool netClientKeepsActor(const StaticActor& a);
 bool netClientKeepsAnyActor(const Actor& a); // of any pool
+
+// A scene a client plays rebuilds its room as the room's logic spawned it from its entry: what the world holds of the
+// room now, by slot (the static and the animated actors held or run here from it, and their class's picture) -- taken
+// before the rebuild, then laid on it: what the rebuild spawned that the world no longer holds goes, the rest takes its
+// picture (a fire put out stays out)
+struct NetHeldRoom {
+    struct Slot {
+        bool live = false;
+        uint8_t type = 0;
+        std::vector<uint8_t> picture;
+    };
+    std::array<Slot, kNetSlots> slots{};
+};
+NetHeldRoom captureHeldRoom();
+void layHeldRoom(const NetHeldRoom& held);
 bool netClientKeepsEffect(const EffectActor& e);
 // ... its class (what it plays it plays here: the world's copy of it is not driven)
 bool netClientKeepsClassOf(RoutineId id);

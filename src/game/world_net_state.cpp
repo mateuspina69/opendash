@@ -1910,6 +1910,53 @@ bool netClientKeepsAnyActor(const Actor& a) {
 
 bool netClientKeepsClassOf(RoutineId id) { return netClientKeepsClass(id); }
 
+namespace {
+// the static / animated actor of a slot and its class
+template <class F> void forEachHeldActor(F&& f) {
+    StaticPool& statics = staticPool();
+    for (size_t i = 0; i < StaticPool::size(); ++i) {
+        RoutineRef h = actorHandler(statics[i], ActorPool::Statics, false);
+        if (!h) h = actorHandler(statics[i], ActorPool::StaticsLate, false);
+        f(static_cast<ActorHeader&>(statics[i]), h);
+    }
+    AnimatedPool& animated = animatedPool();
+    for (size_t i = 0; i < kAnimatedFieldSlots; ++i)
+        f(static_cast<ActorHeader&>(animated[i]), fieldActorHandler(animated[i], ActorPool::Animated, false));
+}
+} // namespace
+
+NetHeldRoom captureHeldRoom() {
+    NetHeldRoom held;
+    const auto& pictures = content().netPictures;
+    forEachHeldActor([&](ActorHeader& a, RoutineRef h) {
+        if (!(a.flags & kActorLive) || a.slot == 0) return;
+        NetHeldRoom::Slot& s = held.slots[a.slot];
+        s.live = true;
+        s.type = a.type;
+        if (const auto it = h ? pictures.find(h.id()) : pictures.end(); it != pictures.end() && it->second.capture)
+            s.picture = it->second.capture(actorLayoutOf(a).at);
+    });
+    return held;
+}
+
+void layHeldRoom(const NetHeldRoom& held) {
+    const auto& pictures = content().netPictures;
+    forEachHeldActor([&](ActorHeader& a, RoutineRef h) {
+        if (!(a.flags & kActorLive) || a.slot == 0 || !h) return;
+        // the classes whose state follows the world's (a picture, an end it says): spawned on the room's entry, in the
+        // same slots there and here; the others stay as the rebuild made them (a later spawn's slot may differ)
+        const auto it = pictures.find(h.id());
+        if (it == pictures.end() && !netStopOf(h.id()).stop) return;
+        const NetHeldRoom::Slot& s = held.slots[a.slot];
+        if (!s.live || s.type != a.type) {
+            freeActor(a);
+            return;
+        }
+        if (!s.picture.empty() && it != pictures.end() && it->second.apply) it->second.apply(actorLayoutOf(a).at, s.picture);
+    });
+    applyActorFrees();
+}
+
 void PoolNetActors::submitLockPoints() {
     size_t box = 0;
     for (size_t i = 0; i < kNetSlots; ++i) {
