@@ -316,6 +316,16 @@ void testRefusals() {
     }
     CHECK(got && got->reason == RefuseReason::Version);
     if (got) std::printf("  version: %s\n", got->text.c_str());
+    // a Refuse under another version's header, from an address the host holds a record of (a Hello ahead of its turn):
+    // not a client's to send, ignored
+    UdpSocket odd(0);
+    odd.sendTo(Endpoint::loopback(host.status(0).port), encode(Hello{kProtocolVersion, "build-1", 0, 0, 0, 2, "odd"}, 7));
+    net.run(5);
+    auto refuse = encode(Refuse{RefuseReason::Full, "x"}, 0);
+    refuse[4] = uint8_t(kProtocolVersion + 1);
+    odd.sendTo(Endpoint::loopback(host.status(0).port), refuse);
+    net.run(20);
+    CHECK(host.status(net.now).players.empty());
 }
 
 void testForwarding() {

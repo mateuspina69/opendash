@@ -230,14 +230,13 @@ void Session::hostReceive(uint64_t nowNs, const Endpoint& from, Decoded d) {
     Client& c = it->second;
     c.link.lastHeardNs = nowNs;
     if (d.version != kProtocolVersion) {
-        // only a Hello decodes from another version: refuse it (once; its acks are in its own layout, the record
-        // falls silent and goes)
-        if (c.link.nextOut == 0) {
-            const Hello& h = std::get<Hello>(d.message);
+        // of another version a Hello and a Refuse decode. The Hello is refused (once; its acks are in its own layout,
+        // the record falls silent and goes); a Refuse is the host's to send, never a client's: ignored
+        const Hello* other = std::get_if<Hello>(&d.message);
+        if (other && c.link.nextOut == 0)
             sendReliable(nowNs, c.link,
                          Refuse{RefuseReason::Version, "host protocol " + std::to_string(kProtocolVersion) +
-                                                           ", yours " + std::to_string(h.protocolVersion)});
-        }
+                                                           ", yours " + std::to_string(other->protocolVersion)});
         return;
     }
     const MessageType t = typeOf(d.message);
