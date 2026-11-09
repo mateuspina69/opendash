@@ -16,7 +16,7 @@ Everyone talks only to the host, and the host forwards each player's state to th
 
 - **The same OpenDash build.** The host refuses a different build and names both. The build id is a hash of the
   sources of the game state, the content scripts, the data loading and the wire (`src/game`, `src/content`,
-  `src/engine`, `src/net`, `src/app/netplay.*`; `cmake/build_id.cmake`), so anyone who builds the same sources gets
+  `src/engine`, `src/net`, `src/app/netplay.*` and the co-op's worlds and coordinator in `src/app`; `cmake/build_id.cmake`), so anyone who builds the same sources gets
   the same id, and builds that differ only in rendering, upscalers or UI play together.
 - **The same game files.** That means `dash2.exe` and the whole `.DAT` set. The host refuses different files and says
   whether the exe or the `.DAT` set differs. Language packs (`opendash/lang`) do not count.
