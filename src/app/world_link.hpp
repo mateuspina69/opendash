@@ -97,7 +97,12 @@ struct WorldMessage {
     uint64_t digest = 0;
     uint16_t netSequence = 0;         // NetAck
     std::vector<uint8_t> netState;    // NetEvents, NetUpdate
+    // a Net message's: the player's entry into a room it belongs to (WorldPipe::enter counts them; a NetEnter carries the
+    // new one, the coordinator gives what it passes on the one now): what a world of a room left says is not played
+    uint8_t entry = 0;
 };
+// a world's message of its room, to one of its players: of their entry into it only (a room left, entered again since)
+bool worldRoomMessage(WorldMessageType type);
 
 std::vector<uint8_t> encodeWorldMessage(const WorldMessage& m);
 std::optional<WorldMessage> decodeWorldMessage(std::span<const uint8_t> bytes);

@@ -127,7 +127,7 @@ std::optional<std::vector<uint8_t>> CoopHost::takeReload() { return std::exchang
 
 void CoopHost::enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& state, const std::vector<uint8_t>& banks) {
     liveSaveFile(room); // a world started now starts from the host's state as it is
-    worlds_.enter(playerId, room, state, banks);
+    worlds_.enter(playerId, room, state, banks, nextEntry(playerId));
 }
 
 void CoopHost::sendReliable(uint8_t playerId, WorldMessageType type, std::vector<uint8_t> bytes) {
@@ -146,7 +146,11 @@ void CoopHost::sendLatest(uint8_t playerId, WorldMessageType type, std::vector<u
     else worlds_.netSendLatest(playerId, type, std::move(bytes));
 }
 
-std::vector<WorldMessage> CoopHost::take(uint8_t playerId) { return worlds_.takeNet(playerId); }
+std::vector<WorldMessage> CoopHost::take(uint8_t playerId) {
+    std::vector<WorldMessage> in = worlds_.takeNet(playerId);
+    dropStale(in);
+    return in;
+}
 
 void CoopHost::sendSave(uint8_t id, uint64_t nowNs) {
     // the host's game: what exists is its state now, in chunks; the last one is shorter than kSaveChunk
@@ -184,7 +188,8 @@ void CoopHost::fromClient(uint8_t id, const WorldMessage& m, uint64_t nowNs) {
             const size_t banksLen = m.netState[3];
             if (m.netState.size() < 4 + banksLen) break;
             const std::vector<uint8_t> banks(m.netState.begin() + 4, m.netState.begin() + ptrdiff_t(4 + banksLen));
-            worlds_.enter(id, WorldRoom{m.netState[0], m.netState[1]}, std::vector<uint8_t>(m.netState.begin() + ptrdiff_t(4 + banksLen), m.netState.end()), banks);
+            worlds_.enter(id, WorldRoom{m.netState[0], m.netState[1]}, std::vector<uint8_t>(m.netState.begin() + ptrdiff_t(4 + banksLen), m.netState.end()), banks,
+                          m.entry);
             if (place && !stays) worlds_.placeNextToHost(id); // joining, or the session started over: next to the host
         }
         break;
@@ -266,6 +271,12 @@ void CoopHost::poll(uint64_t nowNs) {
         for (WorldMessage& m : worlds_.takeNet(id)) session_->sendWorld(nowNs, id, isReliable(m.type), encodeWorldMessage(m));
 }
 
+void WorldPipe::dropStale(std::vector<WorldMessage>& in) {
+    const size_t before = in.size();
+    std::erase_if(in, [&](const WorldMessage& m) { return stale(m); });
+    if (in.size() != before) SDL_Log("own world: %zu message(s) of a room left, not played", before - in.size());
+}
+
 std::optional<uint8_t> SessionPipe::playerId() const {
     const od::net::SessionStatus s = session_.status(nowNs_);
     return s.connection == od::net::Connection::Connected ? std::optional(s.localId) : std::nullopt;
@@ -274,6 +285,7 @@ std::optional<uint8_t> SessionPipe::playerId() const {
 void SessionPipe::enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& state, const std::vector<uint8_t>& banks) {
     WorldMessage m{WorldMessageType::NetEnter};
     m.playerId = playerId;
+    m.entry = nextEntry(playerId);
     m.netState = {uint8_t(room.stage), uint8_t(room.sub), uint8_t(stays_ ? 1 : 0), uint8_t(banks.size())};
     m.netState.insert(m.netState.end(), banks.begin(), banks.end());
     m.netState.insert(m.netState.end(), state.begin(), state.end());
@@ -301,6 +313,10 @@ void SessionPipe::poll(uint64_t nowNs) {
         if (auto m = decodeWorldMessage(d.payload)) inbox_.push_back(std::move(*m));
 }
 
-std::vector<WorldMessage> SessionPipe::take(uint8_t) { return std::exchange(inbox_, {}); }
+std::vector<WorldMessage> SessionPipe::take(uint8_t) {
+    std::vector<WorldMessage> in = std::exchange(inbox_, {});
+    dropStale(in);
+    return in;
+}
 
 } // namespace od::app

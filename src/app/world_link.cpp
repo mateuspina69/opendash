@@ -48,6 +48,32 @@ std::optional<WorldBrief> decodeBrief(std::span<const uint8_t> bytes) {
     return b;
 }
 
+bool worldRoomMessage(WorldMessageType type) {
+    switch (type) {
+    case WorldMessageType::NetEvents:
+    case WorldMessageType::NetUpdate:
+    case WorldMessageType::NetShotHit:
+    case WorldMessageType::NetPlayer:
+    case WorldMessageType::NetPlayerAck:
+    case WorldMessageType::NetEventStart:
+    case WorldMessageType::NetEventPad:
+    case WorldMessageType::NetEventEnd:
+    case WorldMessageType::NetPresent:
+    case WorldMessageType::NetSceneStart:
+    case WorldMessageType::NetScenePad:
+    case WorldMessageType::NetSceneEnd:
+    case WorldMessageType::NetHold:
+    case WorldMessageType::NetWarp:
+    case WorldMessageType::NetScreen:
+    case WorldMessageType::NetRoomPlayer:
+    case WorldMessageType::NetEquip:
+    case WorldMessageType::NetGauges:
+    case WorldMessageType::NetLifted:
+    case WorldMessageType::NetStageBanks: return true;
+    default: return false; // (a hit, a gift, a revival: this player's own, wherever they are now)
+    }
+}
+
 std::vector<uint8_t> encodeWorldMessage(const WorldMessage& m) {
     od::net::ByteWriter w;
     w.u8(uint8_t(m.type));
@@ -122,6 +148,7 @@ std::vector<uint8_t> encodeWorldMessage(const WorldMessage& m) {
     case WorldMessageType::NetEventPad:
     case WorldMessageType::Assign:
         w.u8(m.playerId);
+        w.u8(m.entry);
         w.blob(m.netState);
         break;
     default: break;
@@ -206,6 +233,7 @@ std::optional<WorldMessage> decodeWorldMessage(std::span<const uint8_t> bytes) {
     case WorldMessageType::NetEventPad:
     case WorldMessageType::Assign:
         m.playerId = r.u8();
+        m.entry = r.u8();
         m.netState = r.blob();
         break;
     default: break;

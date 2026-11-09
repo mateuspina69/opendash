@@ -148,7 +148,9 @@ void WorldHost::removeFromWorld(uint8_t playerId) {
     dropEmptiedStage(was->stage);
 }
 
-void WorldHost::enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& playerState, const std::vector<uint8_t>& banks) {
+void WorldHost::enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& playerState, const std::vector<uint8_t>& banks,
+                      uint8_t entry) {
+    entry_.at(playerId) = entry; // (the same room bound again: its world tells it all anew, after this)
     if (playerRoom_.at(playerId) == room) return;
     World& world = worldOf(room, banks); // before the old world goes: a move inside a stage does not empty it
     if (const auto from = playerRoom_.at(playerId)) {
@@ -473,8 +475,10 @@ void WorldHost::poll(uint64_t nowNs) {
                  m.type == WorldMessageType::NetGauges || m.type == WorldMessageType::NetLifted ||
                  m.type == WorldMessageType::NetStageBanks) &&
                 m.playerId < kPlayers &&
-                playerRoom_[m.playerId] == it->first)
+                playerRoom_[m.playerId] == it->first) {
                 netInbox_[m.playerId].push_back(m);
+                netInbox_[m.playerId].back().entry = entry_[m.playerId];
+            }
             if (m.type == WorldMessageType::NetSceneGate) {
                 if (gate_ && !gate_->scene) {
                     sceneAsks_.insert(it->first); // a door's gate is on: the scene's (an event's of everyone's) comes after it

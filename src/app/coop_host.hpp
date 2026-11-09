@@ -2,6 +2,7 @@
 // On a client: the session to the host, which routes them.
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <filesystem>
 #include <functional>
@@ -38,6 +39,13 @@ public:
 
 protected:
     bool stays_ = false;
+    // each player's entries into a room, counted by enter: a world's message of its room for an entry before the player's
+    // last is of a room this game has left (or bound anew) -- held still on the way when it did, it is not played
+    std::array<uint8_t, 256> entries_{};
+    uint8_t nextEntry(uint8_t playerId) { return ++entries_[playerId]; }
+    bool stale(const WorldMessage& m) const { return worldRoomMessage(m.type) && m.entry != entries_[m.playerId]; }
+    // ... those taken out of what came
+    void dropStale(std::vector<WorldMessage>& in);
 };
 
 // The coordinator in the host's game: the worlds, this game's player directly, the session's clients routed

@@ -45,7 +45,9 @@ public:
 
     // the player enters the room in this state (from another room, if they were in one): its world starts if it has none
     // ... its game holding these stage banks (app/stage_banks, encoded): a world started for them starts with them
-    void enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& playerState, const std::vector<uint8_t>& banks = {});
+    // (entry: the player's game's count of its entries, WorldMessage::entry: what the worlds tell it from here on carries it)
+    void enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& playerState, const std::vector<uint8_t>& banks = {},
+               uint8_t entry = 0);
     // the player's state of this tick, to their world
     void state(uint8_t playerId, const std::vector<uint8_t>& playerState);
     // the player is out of the session: the world they were in stops if they were its last
@@ -124,6 +126,7 @@ private:
     std::array<std::optional<WorldRoom>, kPlayers> playerRoom_{};
     std::map<int, od::port::StageRecord> stageRecords_;
     std::array<std::vector<WorldMessage>, kPlayers> netInbox_{};
+    std::array<uint8_t, kPlayers> entry_{}; // each player's entry into the room they are in (WorldMessage::entry)
     od::port::GlobalMaster global_;
     std::array<std::optional<WorldBrief::Entry>, kPlayers> briefs_{};
     std::map<WorldRoom, bool> bossFight_;
