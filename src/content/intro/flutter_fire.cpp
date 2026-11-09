@@ -812,6 +812,8 @@ void fireTakePicture(uint32_t address, std::span<const uint8_t> picture) {
     StaticActor& actor = staticActorAt(address);
     BurningFields& fire = classState<BurningFields>(actor);
     actor.state = picture[0];
+    // put out: the lock on it goes to the next fire at once here too (its class released the world's own player's)
+    if (FireState(actor.state) == FireState::PutOut) releaseLockOnTarget(actor.slot);
     fire.strength = int32_t(uint32_t(picture[1]) | uint32_t(picture[2]) << 8 | uint32_t(picture[3]) << 16 | uint32_t(picture[4]) << 24);
     fire.frame = picture[5];
     fire.frameTicks = picture[6];
