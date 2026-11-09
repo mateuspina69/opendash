@@ -180,9 +180,13 @@ void OwnWorldClient::roomScriptsRan() {
             startedHere(s.id);
             return;
         }
-        // ... else the room is its world's once the scene ends: a message its own logic opened on this first tick (the
-        // scene's script over: not the scene's) is the world's to play, dropped before its window opens here
-        if (!s.inUse()) dropRoomEvent();
+        // ... else, the scene's script over, the scene that brought this game ends on this first tick: the room is its
+        // world's from here, as on any entry -- what its own logic opened now (a mission's question) is dropped before its
+        // window opens, and its logic runs no further here (the next step's message, its actors)
+        if (!s.inUse()) {
+            dropRoomEvent();
+            leaveSceneHere();
+        }
         return;
     }
     if (!entering_) return;
@@ -983,6 +987,24 @@ void OwnWorldClient::localSceneTurn() {
     entering_ = firstTickToCome;
     if (sameRoom && at) sceneEnd(*at);
     SDL_Log("own world: the scene ended, back in the room's world");
+}
+
+// The scene that brought this game to this room is over on the room's first tick (its script done there): this game is
+// in the room's world from this tick on, the room setup's actors gone as on any entry
+void OwnWorldClient::leaveSceneHere() {
+    localScene_ = false;
+    sceneRoom_.reset();
+    const WorldRoom here = *room_;
+    if (od::port::storyStageRunsAlone(uint8_t(here.stage))) { // the scene went to a race: it runs here alone
+        if (joined_) pipe_->sendReliable(playerId_, WorldMessageType::NetLeave, {});
+        room_.reset();
+        joined_ = false;
+        return;
+    }
+    od::port::presentationLoopsClear();
+    freeLocalActors();
+    bindWorld(here.stage, here.sub);
+    SDL_Log("own world: the scene ended on the room's first tick, the room is its world's");
 }
 
 void OwnWorldClient::sceneEnd(const std::vector<uint8_t>& at) {
