@@ -178,7 +178,11 @@ void OwnWorldClient::roomScriptsRan() {
             od::port::presentationLoopsClear();
             bindWorld(room_->stage, room_->sub);
             startedHere(s.id);
+            return;
         }
+        // ... else the room is its world's once the scene ends: a message its own logic opened on this first tick (the
+        // scene's script over: not the scene's) is the world's to play, dropped before its window opens here
+        if (!s.inUse()) dropRoomEvent();
         return;
     }
     if (!entering_) return;
