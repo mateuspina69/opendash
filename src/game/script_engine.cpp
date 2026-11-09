@@ -3,6 +3,8 @@
 #include "game/loaded_data.hpp"
 #include "game/script_engine.hpp"
 
+#include <utility>
+
 #include "game/actor_pools.hpp"
 #include "game/audio_logic.hpp"
 #include "game/display.hpp"
@@ -59,12 +61,17 @@ int enterStep(uint32_t step, bool skipped) {
 
 namespace {
 bool g_startsBlocked = false;
+bool g_blockedStart = false; // a start asked while blocked
 } // namespace
 
 void setScriptStartsBlocked(bool blocked) { g_startsBlocked = blocked; }
+bool takeBlockedScriptStart() { return std::exchange(g_blockedStart, false); }
 
 void scriptStart(uint8_t id) {
-    if (g_startsBlocked) return;
+    if (g_startsBlocked) {
+        g_blockedStart = true;
+        return;
+    }
     ScriptState& s = scriptState();
     Player& p = player();
     if (p.hitPoints < 0 || (s.flags & kScriptRunning)) return;
@@ -89,7 +96,11 @@ void scriptStart(uint8_t id) {
 }
 
 void scriptRun(uint8_t id) {
-    if (g_startsBlocked || player().hitPoints < 0 || (scriptState().flags & kScriptRunning)) return;
+    if (g_startsBlocked) {
+        g_blockedStart = true;
+        return;
+    }
+    if (player().hitPoints < 0 || (scriptState().flags & kScriptRunning)) return;
     if (eventState().active != 0) eventAbort();
     windowCloseAll(WindowClose::Force);
     scriptStart(id);

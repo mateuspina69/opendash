@@ -1864,10 +1864,14 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
                     od::port::roomScriptState() = entry->logic;
                     od::port::scriptState().flags = 0;
                     od::port::setScriptStartsBlocked(true);
+                    (void)od::port::takeBlockedScriptStart();
                     constexpr int kEntryTicks = 8;
                     for (int t = 0; t < kEntryTicks; ++t) {
                         const od::port::RoomScriptState before = od::port::roomScriptState();
                         if (!od::port::roomScriptHandler()) break;
+                        // it asked for a script: in the game its logic waits for it from here (the scene that comes
+                        // after it -- a first landing's cast set out as on a later visit -- is not this one's)
+                        if (od::port::takeBlockedScriptStart()) break;
                         const od::port::RoomScriptState& after = od::port::roomScriptState();
                         if (after.handlerStep == before.handlerStep && after.handlerByte1 == before.handlerByte1 &&
                             after.handlerByte2 == before.handlerByte2 && after.handlerByte3 == before.handlerByte3 &&

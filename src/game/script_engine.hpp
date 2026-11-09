@@ -28,6 +28,8 @@ void setScriptsGated(bool gated);
 // it spawned (a session's game rebuilding its room for a scene), and while a game plays another player's event (the
 // scripts its message starts are that player's)
 void setScriptStartsBlocked(bool blocked);
+// a start asked while they were blocked since the last call (the room's logic replayed asked for its scene there)
+bool takeBlockedScriptStart();
 // exe 0x511720 (the frame body's end): the block's ended mark cleared
 void scriptBlockIdle();
 
