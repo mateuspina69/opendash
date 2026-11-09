@@ -424,6 +424,7 @@ int run(const WorldArgs& given) {
     // the room runs
     std::unique_ptr<WorldLink> waitingLink;
     std::vector<WorldMessage> cameWithRoom;
+    std::vector<uint8_t> givenSave; // the save the room's world starts from, sent in chunks before the room
     if (w.standby) {
         if (w.linkPort == 0) throw std::invalid_argument("--world-standby needs --world-link");
         waitingLink = std::make_unique<WorldLink>(uint16_t(w.linkPort));
@@ -436,6 +437,8 @@ int run(const WorldArgs& given) {
             for (WorldMessage& m : waitingLink->poll(now)) {
                 if (assigned) {
                     cameWithRoom.push_back(std::move(m));
+                } else if (m.type == WorldMessageType::NetSave) {
+                    givenSave.insert(givenSave.end(), m.netState.begin(), m.netState.end());
                 } else if (m.type == WorldMessageType::Assign) {
                     std::vector<std::string> args{"opendash"};
                     for (size_t at = 0; at < m.netState.size();) {
@@ -469,7 +472,11 @@ int run(const WorldArgs& given) {
             if (!assigned) SDL_DelayNS(2'000'000);
         }
     }
-    if (!w.storySave.empty()) {
+    if (!givenSave.empty()) {
+        view->storySave = std::move(givenSave);
+        if (view->storySave.size() != od::port::kSaveSize || od::port::saveChecksumBad(view->storySave))
+            throw std::runtime_error("the save given with the room: bad size / checksum");
+    } else if (!w.storySave.empty()) {
         view->storySave = od::readFile(w.storySave);
         if (view->storySave.size() != od::port::kSaveSize || od::port::saveChecksumBad(view->storySave))
             throw std::runtime_error("--story-save: bad size / checksum");

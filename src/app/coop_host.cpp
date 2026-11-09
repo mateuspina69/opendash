@@ -4,7 +4,6 @@
 #include <SDL3/SDL.h>
 
 #include <algorithm>
-#include <fstream>
 #include <utility>
 
 #include "engine/dat.hpp"
@@ -73,10 +72,7 @@ std::vector<uint8_t> readSave(const std::filesystem::path& storySave) {
 } // namespace
 
 CoopHost::CoopHost(std::filesystem::path exe, std::filesystem::path storySave)
-    : worlds_(exe, storySave, od::port::saveZenny(readSave(storySave))), save_(readSave(storySave)), written_(save_),
-      savePath_(storySave) {
-    lastSavePath_ = exe.parent_path() / "opendash-session-save.dat";
-}
+    : worlds_(exe, storySave, od::port::saveZenny(readSave(storySave))), save_(readSave(storySave)), written_(save_) {}
 
 void CoopHost::hostSaved(std::span<const uint8_t> save) { written_.assign(save.begin(), save.end()); }
 
@@ -92,24 +88,17 @@ void CoopHost::hostBound(WorldRoom room) {
     else bound_ = Bound{room, save};
 }
 
-void CoopHost::liveSaveFile(WorldRoom room) {
+void CoopHost::liveSaveForWorlds(WorldRoom room) {
     const std::vector<uint8_t>& live = liveSave();
     const std::vector<uint8_t>& save = bound_ && bound_->room == room ? bound_->save : live;
-    if (save.empty()) return;
-    std::ofstream out(lastSavePath_, std::ios::binary | std::ios::trunc);
-    out.write(reinterpret_cast<const char*>(save.data()), std::streamsize(save.size()));
-    if (out) worlds_.setSavePath(lastSavePath_);
+    if (!save.empty()) worlds_.setSave(save);
 }
 
 void CoopHost::hostLoaded(std::span<const uint8_t> save, uint64_t nowNs) {
     save_.assign(save.begin(), save.end());
     written_ = save_;
     hostPlaying_ = true;
-    {
-        std::ofstream out(lastSavePath_, std::ios::binary);
-        out.write(reinterpret_cast<const char*>(save_.data()), std::streamsize(save_.size()));
-    }
-    worlds_.reloadFrom(save_, lastSavePath_);
+    worlds_.reloadFrom(save_);
     SDL_Log("coordinator: the session starts from the host's game (ST%02X sub %d)", unsigned(save_.size() > 0x129 ? save_[0x128] : 0),
             int(save_.size() > 0x129 ? save_[0x129] : 0));
     if (!session_) return;
@@ -126,7 +115,7 @@ void CoopHost::hostLoaded(std::span<const uint8_t> save, uint64_t nowNs) {
 std::optional<std::vector<uint8_t>> CoopHost::takeReload() { return std::exchange(reload_, std::nullopt); }
 
 void CoopHost::enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& state, const std::vector<uint8_t>& banks) {
-    liveSaveFile(room); // a world started now starts from the host's state as it is
+    liveSaveForWorlds(room); // a world started now starts from the host's state as it is
     worlds_.enter(playerId, room, state, banks, nextEntry(playerId));
 }
 
@@ -183,7 +172,7 @@ void CoopHost::fromClient(uint8_t id, const WorldMessage& m, uint64_t nowNs) {
             const bool first = clients_.insert(id).second, stays = m.netState[2] != 0;
             if (told_.insert(id).second) sendSave(id, nowNs);
             const bool place = first || placeNext_.erase(id) != 0;
-            liveSaveFile(WorldRoom{m.netState[0], m.netState[1]}); // a world started now starts from the host's state as it is
+            liveSaveForWorlds(WorldRoom{m.netState[0], m.netState[1]}); // a world started now starts from the host's state as it is
             // {stage, sub, stays, the banks' length, the banks, the state}
             const size_t banksLen = m.netState[3];
             if (m.netState.size() < 4 + banksLen) break;
@@ -220,12 +209,8 @@ void CoopHost::fromClient(uint8_t id, const WorldMessage& m, uint64_t nowNs) {
 void CoopHost::poll(uint64_t nowNs) {
     worlds_.poll(nowNs);
     if (worlds_.takeEveryoneDown()) {
-        // the worlds start from the file: the host's last save (a game over's way back)
-        {
-            std::ofstream out(lastSavePath_, std::ios::binary | std::ios::trunc);
-            out.write(reinterpret_cast<const char*>(written_.data()), std::streamsize(written_.size()));
-        }
-        worlds_.reloadFrom(written_, lastSavePath_);
+        // the worlds start from the host's last save (a game over's way back)
+        worlds_.reloadFrom(written_);
         save_ = written_;
         reload_ = written_;
         if (session_)

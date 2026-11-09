@@ -70,9 +70,10 @@ public:
     void placeNextToHost(uint8_t playerId);
     // everyone is down, once: the players told by the caller. Every world stops and the session's state goes back to this save
     bool takeEveryoneDown();
-    void reloadFrom(const std::vector<uint8_t>& save, const std::filesystem::path& savePath);
-    // the save a world started from now on starts from (the host's live state, written there; the running worlds go on)
-    void setSavePath(std::filesystem::path savePath) { storySave_ = std::move(savePath); }
+    void reloadFrom(const std::vector<uint8_t>& save);
+    // the save a world started from now on starts from (the host's live state; the running worlds go on). It goes to the
+    // world's process over its link, never through a file another room's entry could be rewriting as the world reads it
+    void setSave(std::vector<uint8_t> save) { storySave_ = std::move(save); }
     // test instrument: this flag is clear from the session's start, whatever the save says
     void testClearFlag(uint32_t flag);
     // ... or set it now, told to the worlds as a change of the session
@@ -120,7 +121,8 @@ private:
     void dropEmptiedStage(int stage);
     void globalChanged(const od::port::GlobalChange& change, const World* fromWorld, std::optional<uint8_t> fromPlayer);
 
-    std::filesystem::path exe_, storySave_;
+    std::filesystem::path exe_;
+    std::vector<uint8_t> storySave_; // what a world started now starts from (none: the story's start)
     std::map<WorldRoom, std::unique_ptr<World>> worlds_;
     std::vector<std::unique_ptr<World>> stopping_; // told to stop, waiting for the process to end
     std::array<std::optional<WorldRoom>, kPlayers> playerRoom_{};

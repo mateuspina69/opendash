@@ -4,6 +4,7 @@
 
 #include <SDL3/SDL.h>
 
+#include "engine/dat.hpp"
 #include "game/actor_movement.hpp"
 
 #include <algorithm>
@@ -17,6 +18,7 @@ namespace od::app {
 
 namespace {
 constexpr uint64_t kKeepAliveNs = 1'000'000'000;
+constexpr size_t kSaveChunk = 1000; // a save's bytes in one message of the link (its datagram holds the headers too)
 } // namespace
 
 WorldHost::World::~World() {
@@ -27,7 +29,9 @@ WorldHost::World::~World() {
 }
 
 WorldHost::WorldHost(std::filesystem::path exe, std::filesystem::path storySave, int32_t zenny)
-    : exe_(std::move(exe)), storySave_(std::move(storySave)), global_(zenny) {}
+    : exe_(std::move(exe)),
+      storySave_(!storySave.empty() && std::filesystem::exists(storySave) ? od::readFile(storySave) : std::vector<uint8_t>{}),
+      global_(zenny) {}
 
 WorldHost::~WorldHost() {
     for (auto& [room, world] : worlds_) world->link.sendReliable({WorldMessageType::Stop});
@@ -73,30 +77,32 @@ WorldHost::World& WorldHost::worldOf(WorldRoom room, const std::vector<uint8_t>&
     }
     args.push_back("--global-state");
     args.push_back(hex(od::port::encode(global_.all(uint8_t(room.stage)))));
-    if (const std::string save = storySave_.string(); !save.empty()) {
-        args.push_back("--story-save");
-        args.push_back(save);
-    }
     if (!banks.empty()) {
         args.push_back("--stage-banks");
         args.push_back(hex(banks));
     }
+    // the process waiting with the game's files loaded takes the room (else one started now): the save first, in chunks
+    // (a datagram of the link holds less), then the room and what it is told
     std::unique_ptr<World> world;
-    if (standby_ && !standby_->link.silent(SDL_GetTicksNS())) {
-        // the process waiting with the game's files loaded takes the room: what a room's world is told on its command line
+    const bool waiting = standby_ && !standby_->link.silent(SDL_GetTicksNS());
+    if (waiting) {
         world = std::move(standby_);
-        WorldMessage assign{WorldMessageType::Assign};
-        for (const std::string& a : args) {
-            assign.netState.insert(assign.netState.end(), a.begin(), a.end());
-            assign.netState.push_back(0);
-        }
-        world->link.sendReliable(assign);
-        SDL_Log("coordinator: world ST%s sub %s given to the waiting process", stage, sub);
     } else {
         standby_.reset();
-        world = startWorldProcess(args);
-        SDL_Log("coordinator: world ST%s sub %s started", stage, sub);
+        world = startWorldProcess({"--world-standby"});
     }
+    for (size_t at = 0; at < storySave_.size(); at += kSaveChunk) {
+        WorldMessage chunk{WorldMessageType::NetSave};
+        chunk.netState.assign(storySave_.begin() + ptrdiff_t(at), storySave_.begin() + ptrdiff_t(std::min(at + kSaveChunk, storySave_.size())));
+        world->link.sendReliable(chunk);
+    }
+    WorldMessage assign{WorldMessageType::Assign};
+    for (const std::string& a : args) {
+        assign.netState.insert(assign.netState.end(), a.begin(), a.end());
+        assign.netState.push_back(0);
+    }
+    world->link.sendReliable(assign);
+    SDL_Log("coordinator: world ST%s sub %s %s", stage, sub, waiting ? "given to the waiting process" : "started");
     world->startedNs = SDL_GetTicksNS();
     World& placed = *worlds_.emplace(room, std::move(world)).first->second;
     standby_ = startWorldProcess({"--world-standby"}); // the next room's, ready when it is entered
@@ -599,7 +605,7 @@ void WorldHost::gameOverTurn() {
 
 bool WorldHost::takeEveryoneDown() { return std::exchange(everyoneDown_, false); }
 
-void WorldHost::reloadFrom(const std::vector<uint8_t>& save, const std::filesystem::path& savePath) {
+void WorldHost::reloadFrom(const std::vector<uint8_t>& save) {
     for (auto& [room, world] : worlds_) {
         world->link.sendReliable({WorldMessageType::Stop});
         stopping_.push_back(std::move(world));
@@ -616,7 +622,7 @@ void WorldHost::reloadFrom(const std::vector<uint8_t>& save, const std::filesyst
     gate_.reset();
     gameOverSent_ = false;
     global_ = od::port::GlobalMaster(od::port::saveZenny(save));
-    storySave_ = savePath;
+    storySave_ = save;
 }
 
 void WorldHost::testClearFlag(uint32_t flag) {

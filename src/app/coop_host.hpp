@@ -80,10 +80,10 @@ public:
 private:
     void fromClient(uint8_t id, const WorldMessage& m, uint64_t nowNs);
     void sendSave(uint8_t id, uint64_t nowNs);
-    // the host's live state (else the last one known: the game is not played now), and the file a world starts from
+    // the host's live state (else the last one known: the game is not played now)
     const std::vector<uint8_t>& liveSave();
-    // ... the file a world of this room starts from (the state the host's game entered it with, when it is there)
-    void liveSaveFile(WorldRoom room);
+    // ... what a world of this room starts from (the state the host's game entered it with, when it is there)
+    void liveSaveForWorlds(WorldRoom room);
     struct Bound {
         WorldRoom room;
         std::vector<uint8_t> save;
@@ -103,7 +103,6 @@ private:
     std::map<uint8_t, std::pair<uint8_t, uint8_t>> sentRoom_; // the stage and room of the save each client was last sent
     std::set<uint8_t> told_;      // the players told the session's save (on connecting, at the title or in a game)
     std::set<uint8_t> placeNext_; // ... who come next to the host when they enter (the session started over)
-    std::filesystem::path savePath_, lastSavePath_;
     std::optional<std::vector<uint8_t>> reload_;
 };
 
