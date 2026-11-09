@@ -244,6 +244,36 @@ void messageTriggerUpdate(const PlayerEnv&, uint32_t actor) {
     }
     if (!anyone && (trigger.flags & kActorLive)) messageTrigger(trigger);
 }
-void scriptedMessageUpdate(const PlayerEnv&, uint32_t actor) { scriptedMessage(controllerActorAt(actor)); }
+void scriptedMessageUpdate(const PlayerEnv&, uint32_t actor) {
+    ControllerActor& controller = controllerActorAt(actor);
+    if (!worldHasNoView()) {
+        scriptedMessage(controller);
+        return;
+    }
+    // a session's world: the message is the room's, played in every game of it (the first one in its owner); each game's
+    // own Mega Man is held by the event there, the world's copies of the players are their games' (none taken over here)
+    const ScriptedMessageFields m(controller);
+    switch (ScriptedMessageState(controller.state)) {
+    case ScriptedMessageState::WaitFree:
+        if (scriptState().flags == 0 && eventState().active == 0) controller.state = uint8_t(ScriptedMessageState::Show);
+        return;
+    case ScriptedMessageState::TakeOver: controller.state = uint8_t(ScriptedMessageState::Show); return;
+    case ScriptedMessageState::Show:
+        if (!(m.flags & kWaitsForFade) || fadeState().idle()) {
+            size_t owner = 0;
+            while (owner < kPlayerSlots && !playerPresent(owner)) ++owner;
+            setEventOwner(owner < kPlayerSlots ? owner : 0); // (nobody in yet: it waits for the first one, game/event)
+            setEventReach(EventReach::Room);
+            eventStartAt(0, nullptr, kScriptedEventFlags, 0, m.message);
+            if (m.flag != kNoMessageFlag) setStoryFlag(uint32_t(int32_t(m.flag)));
+            controller.state = uint8_t(ScriptedMessageState::WaitEvent);
+        }
+        return;
+    case ScriptedMessageState::WaitEvent:
+        if (eventState().active == 0) freeActor(controller);
+        return;
+    default: return;
+    }
+}
 
 } // namespace od::port
