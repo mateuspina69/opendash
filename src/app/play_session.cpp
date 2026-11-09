@@ -944,6 +944,8 @@ void PlayerView::setupHooks() {
     };
     hooks.camera = [this] { od::port::cameraUpdate(); };
     // a session: the room's first field tick ran its scripts here; a scene they started plays here from this tick
+    // a session: the arrival's fade-in waits for the room's world (its actors come with it, not after)
+    hooks.arrivalHeld = [this] { return ownWorld && ownWorld->holdsArrival(); };
     hooks.roomScripts = [this] {
         if (ownWorld) ownWorld->roomScriptsRan();
     };

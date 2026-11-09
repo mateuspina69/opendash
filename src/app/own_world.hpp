@@ -70,6 +70,9 @@ public:
     // ... and not while a story scene plays: every game runs the scene itself, as the normal game does
     // ... and not on the room's first field tick, whose scripts run here as in the normal game (roomScriptsRan)
     bool inWorld() const { return room_.has_value() && !localScene_ && !entering_; }
+    // the room this game enters is its world's and that world's actors are not shown here yet: the arrival's fade-in
+    // waits (a world that stops, its alert told, lets it go)
+    bool holdsArrival() const;
     // the room's scripts have run (game/transition roomScripts): on the room's first field tick, a scene they started
     // plays here from that tick, as in the normal game; else the room's world takes over
     void roomScriptsRan();
@@ -276,6 +279,7 @@ private:
     void restoreEventInput(const od::port::EventState& ev);
     void dropRoomEvent();
     void leaveSceneHere();
+    bool worldLost_ = false; // the room's world stopped (the coordinator's alert): nothing waits for it
     uint32_t testLevelTick_ = 0;
     int8_t testLevel_ = 0;
     int testWeapon_ = -1;

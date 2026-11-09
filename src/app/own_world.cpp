@@ -119,6 +119,11 @@ std::optional<std::vector<uint8_t>> OwnWorldClient::takeHostSaveAway() {
     return hostSave_;
 }
 
+bool OwnWorldClient::holdsArrival() const {
+    if (!room_ || localScene_ || worldLost_ || !pipe_->playerId()) return false;
+    return entering_ || !joined_ || !shownAny_;
+}
+
 void OwnWorldClient::notice(const std::string& text) {
     SDL_Log("own world: %s", text.c_str());
     alert_ = text;
@@ -252,6 +257,7 @@ void OwnWorldClient::bindWorld(int stage, int sub) {
     state_ = std::make_unique<od::port::NetStateClient>(*actors_);
     clock_ = std::make_unique<od::port::NetRenderClock>();
     shownAny_ = false;
+    worldLost_ = false;
     if (!room_ || room_->stage != stage || room_->sub != sub) pendingMove_.clear(); // a move of the room left
     room_ = WorldRoom{stage, sub};
     joined_ = false;
@@ -721,6 +727,7 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
         }
         break;
     case WorldMessageType::NetAlert:
+        worldLost_ = true; // (a world that stopped, a session that ends: what waits for the world goes on)
         notice(std::string(m.netState.begin(), m.netState.end()));
         break;
     case WorldMessageType::NetStageBanks:

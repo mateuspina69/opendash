@@ -339,7 +339,8 @@ void fieldMode(const PlayerEnv& env, TransitionHooks& hooks, FadeTask& fade) {
     };
     switch (FieldStep(step)) {
     case FieldStep::FadeIn:
-        if (f.busy != 0) return run();
+        // (a session: the room is shown once its world's actors are in it, never empty before them)
+        if (f.busy != 0 || (r.fadeIn != kNoFade && hooks.arrivalHeld && hooks.arrivalHeld())) return run();
         if (r.fadeIn == kNoFade) {
             g.modeStep = uint8_t(step + 2);
             return run();
