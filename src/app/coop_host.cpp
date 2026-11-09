@@ -63,6 +63,21 @@ bool isReliable(WorldMessageType t) {
     }
 }
 
+// a message through the session, to its player `toId` (from a client: to the host). What must arrive goes whole, in
+// parts when one datagram does not hold it; what the next one replaces is one datagram
+void sendWorld(od::net::Session& session, uint64_t nowNs, uint8_t toId, const WorldMessage& m, bool reliable) {
+    if (reliable) {
+        for (const std::vector<uint8_t>& part : encodeWorldMessageParts(m)) session.sendWorld(nowNs, toId, true, part);
+        return;
+    }
+    const std::vector<uint8_t> bytes = encodeWorldMessage(m);
+    if (bytes.size() > kWorldMessageBytes) {
+        SDL_Log("session: a message of type %u is %zu bytes, more than one datagram holds: not sent", unsigned(m.type), bytes.size());
+        return;
+    }
+    session.sendWorld(nowNs, toId, false, bytes);
+}
+
 } // namespace
 
 namespace {
@@ -106,7 +121,7 @@ void CoopHost::hostLoaded(std::span<const uint8_t> save, uint64_t nowNs) {
         stale_.insert(id);
         WorldMessage m{WorldMessageType::NetReload};
         m.playerId = id;
-        session_->sendWorld(nowNs, id, true, encodeWorldMessage(m));
+        sendWorld(*session_, nowNs, id, m, true);
         sendSave(id, nowNs);
         placeNext_.insert(id);
     }
@@ -150,7 +165,7 @@ void CoopHost::sendSave(uint8_t id, uint64_t nowNs) {
         m.playerId = id;
         const size_t n = std::min(kSaveChunk, save.size() - at);
         m.netState.assign(save.begin() + ptrdiff_t(at), save.begin() + ptrdiff_t(at + n));
-        session_->sendWorld(nowNs, id, true, encodeWorldMessage(m));
+        sendWorld(*session_, nowNs, id, m, true);
     }
 }
 
@@ -218,13 +233,16 @@ void CoopHost::poll(uint64_t nowNs) {
                 stale_.insert(id);
                 WorldMessage m{WorldMessageType::NetReload};
                 m.playerId = id;
-                session_->sendWorld(nowNs, id, true, encodeWorldMessage(m));
+                sendWorld(*session_, nowNs, id, m, true);
                 sendSave(id, nowNs);
             }
     }
     if (!session_) return;
-    for (const od::net::ReceivedWorld& d : session_->takeWorld())
-        if (const auto m = decodeWorldMessage(d.payload)) fromClient(d.fromId, *m, nowNs);
+    for (const od::net::ReceivedWorld& d : session_->takeWorld()) {
+        if (d.fromId >= parts_.size()) continue;
+        if (auto m = decodeWorldMessage(d.payload))
+            if (const auto whole = parts_[d.fromId].take(std::move(*m))) fromClient(d.fromId, *whole, nowNs);
+    }
     // a client that has gone is out of its world
     const od::net::SessionStatus status = session_->status(nowNs);
     for (const od::net::PlayerStatus& p : status.players) {
@@ -243,6 +261,8 @@ void CoopHost::poll(uint64_t nowNs) {
     };
     std::erase_if(told_, gone);
     std::erase_if(stale_, gone);
+    for (size_t id = 0; id < parts_.size(); ++id)
+        if (gone(uint8_t(id))) parts_[id] = {}; // (a message it left half sent is not the start of its next one's)
     for (auto it = clients_.begin(); it != clients_.end();) {
         const bool there = std::any_of(status.players.begin(), status.players.end(), [&](const od::net::PlayerStatus& p) { return p.playerId == *it; });
         if (there) {
@@ -253,7 +273,7 @@ void CoopHost::poll(uint64_t nowNs) {
         }
     }
     for (const uint8_t id : clients_)
-        for (WorldMessage& m : worlds_.takeNet(id)) session_->sendWorld(nowNs, id, isReliable(m.type), encodeWorldMessage(m));
+        for (WorldMessage& m : worlds_.takeNet(id)) sendWorld(*session_, nowNs, id, m, isReliable(m.type));
 }
 
 void WorldPipe::dropStale(std::vector<WorldMessage>& in) {
@@ -274,14 +294,14 @@ void SessionPipe::enter(uint8_t playerId, WorldRoom room, const std::vector<uint
     m.netState = {uint8_t(room.stage), uint8_t(room.sub), uint8_t(stays_ ? 1 : 0), uint8_t(banks.size())};
     m.netState.insert(m.netState.end(), banks.begin(), banks.end());
     m.netState.insert(m.netState.end(), state.begin(), state.end());
-    session_.sendWorld(nowNs_, 0, true, encodeWorldMessage(m));
+    sendWorld(session_, nowNs_, 0, m, true);
 }
 
 void SessionPipe::sendReliable(uint8_t playerId, WorldMessageType type, std::vector<uint8_t> bytes) {
     WorldMessage m{type};
     m.playerId = playerId;
     m.netState = std::move(bytes);
-    session_.sendWorld(nowNs_, 0, true, encodeWorldMessage(m));
+    sendWorld(session_, nowNs_, 0, m, true);
 }
 
 void SessionPipe::sendLatest(uint8_t playerId, WorldMessageType type, std::vector<uint8_t> bytes) {
@@ -289,13 +309,15 @@ void SessionPipe::sendLatest(uint8_t playerId, WorldMessageType type, std::vecto
     m.playerId = playerId;
     if (type == WorldMessageType::NetAck && bytes.size() == 2) m.netSequence = uint16_t(bytes[0] | bytes[1] << 8);
     else m.netState = std::move(bytes);
-    session_.sendWorld(nowNs_, 0, false, encodeWorldMessage(m));
+    sendWorld(session_, nowNs_, 0, m, false);
 }
 
 void SessionPipe::poll(uint64_t nowNs) {
     nowNs_ = nowNs;
+    if (!playerId()) parts_ = {}; // (the session was lost: what the host had half sent is not the start of its next one's)
     for (const od::net::ReceivedWorld& d : session_.takeWorld())
-        if (auto m = decodeWorldMessage(d.payload)) inbox_.push_back(std::move(*m));
+        if (auto m = decodeWorldMessage(d.payload))
+            if (auto whole = parts_.take(std::move(*m))) inbox_.push_back(std::move(*whole));
 }
 
 std::vector<WorldMessage> SessionPipe::take(uint8_t) {

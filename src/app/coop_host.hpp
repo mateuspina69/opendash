@@ -103,6 +103,7 @@ private:
     std::map<uint8_t, std::pair<uint8_t, uint8_t>> sentRoom_; // the stage and room of the save each client was last sent
     std::set<uint8_t> told_;      // the players told the session's save (on connecting, at the title or in a game)
     std::set<uint8_t> placeNext_; // ... who come next to the host when they enter (the session started over)
+    std::array<WorldParts, od::net::kMaxPlayers> parts_{}; // each client's message on its way in parts
     std::optional<std::vector<uint8_t>> reload_;
 };
 
@@ -122,6 +123,7 @@ private:
     od::net::Session& session_;
     uint64_t nowNs_ = 0;
     std::vector<WorldMessage> inbox_;
+    WorldParts parts_; // the host's message on its way in parts
 };
 
 } // namespace od::app

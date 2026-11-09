@@ -89,6 +89,36 @@ void testCodecAndLink() {
     for (const WorldMessage& x : atWorld)
         if (x.type == WorldMessageType::Join) sawJoin = x.playerId == 5 && x.playerState == join.playerState;
     CHECK(sawJoin);
+
+    // a message longer than one datagram holds arrives whole, before what was sent after it
+    WorldMessage big{WorldMessageType::Assign};
+    big.playerId = 3;
+    big.netState.resize(20000);
+    for (size_t i = 0; i < big.netState.size(); ++i) big.netState[i] = uint8_t(i * 7 + i / 251);
+    const std::vector<std::vector<uint8_t>> pieces = encodeWorldMessageParts(big);
+    CHECK(pieces.size() > 1 && encodeWorldMessageParts(join).size() == 1);
+    for (const std::vector<uint8_t>& piece : pieces) CHECK(piece.size() <= kWorldMessageBytes);
+    WorldParts joiner; // a whole message between the parts (what the next one replaces) passes, the parts go on
+    for (size_t i = 0; i < pieces.size(); ++i) {
+        const auto got = joiner.take(*decodeWorldMessage(pieces[i]));
+        CHECK(got.has_value() == (i + 1 == pieces.size()));
+        if (got) CHECK(got->type == WorldMessageType::Assign && got->netState == big.netState);
+        const auto between = joiner.take(WorldMessage{WorldMessageType::KeepAlive});
+        CHECK(between && between->type == WorldMessageType::KeepAlive);
+    }
+    coordinator.sendReliable(big);
+    coordinator.sendReliable({WorldMessageType::Stop});
+    atWorld.clear();
+    for (int i = 0; i < 400 && (atWorld.size() < 2 || !coordinator.settled()); ++i) {
+        now += 5'000'000;
+        (void)coordinator.poll(now);
+        for (auto& x : world.poll(now)) atWorld.push_back(std::move(x));
+        SDL_DelayNS(1'000'000);
+    }
+    CHECK(atWorld.size() == 2);
+    if (atWorld.size() == 2)
+        CHECK(atWorld[0].type == WorldMessageType::Assign && atWorld[0].playerId == 3 && atWorld[0].netState == big.netState &&
+              atWorld[1].type == WorldMessageType::Stop);
     CHECK(coordinator.settled() && world.settled());
     CHECK(!world.silent(now));
     CHECK(world.silent(now + WorldLink::kSilenceNs + 1));

@@ -1,6 +1,8 @@
 // The link between the coordinator and a world process (see world_link.hpp).
 #include "app/world_link.hpp"
 
+#include <SDL3/SDL.h>
+
 #include <algorithm>
 
 #include "net/wire.hpp"
@@ -147,6 +149,7 @@ std::vector<uint8_t> encodeWorldMessage(const WorldMessage& m) {
     case WorldMessageType::NetStoryMove:
     case WorldMessageType::NetEventPad:
     case WorldMessageType::Assign:
+    case WorldMessageType::Part: // (entry: more of the message follows)
         w.u8(m.playerId);
         w.u8(m.entry);
         w.blob(m.netState);
@@ -232,6 +235,7 @@ std::optional<WorldMessage> decodeWorldMessage(std::span<const uint8_t> bytes) {
     case WorldMessageType::NetStoryMove:
     case WorldMessageType::NetEventPad:
     case WorldMessageType::Assign:
+    case WorldMessageType::Part:
         m.playerId = r.u8();
         m.entry = r.u8();
         m.netState = r.blob();
@@ -242,6 +246,44 @@ std::optional<WorldMessage> decodeWorldMessage(std::span<const uint8_t> bytes) {
     return m;
 }
 
+namespace {
+constexpr size_t kPartBytes = kWorldMessageBytes - 5;   // a Part's bytes: its type, player, mark and length come first
+constexpr size_t kWholeBytes = 0x10000 + 16;            // the longest message there is (wire's blob, its fields)
+} // namespace
+
+std::vector<std::vector<uint8_t>> encodeWorldMessageParts(const WorldMessage& m) {
+    std::vector<std::vector<uint8_t>> out;
+    std::vector<uint8_t> whole = encodeWorldMessage(m);
+    if (whole.size() <= kWorldMessageBytes) {
+        out.push_back(std::move(whole));
+        return out;
+    }
+    for (size_t at = 0; at < whole.size(); at += kPartBytes) {
+        const size_t n = std::min(kPartBytes, whole.size() - at);
+        WorldMessage part{WorldMessageType::Part};
+        part.playerId = m.playerId;
+        part.entry = at + n < whole.size() ? 1 : 0;
+        part.netState.assign(whole.begin() + ptrdiff_t(at), whole.begin() + ptrdiff_t(at + n));
+        out.push_back(encodeWorldMessage(part));
+    }
+    return out;
+}
+
+std::optional<WorldMessage> WorldParts::take(WorldMessage m) {
+    if (m.type != WorldMessageType::Part) return m;
+    if (bytes_.size() + m.netState.size() > kWholeBytes) { // no message is this long: not one of ours
+        bytes_.clear();
+        return std::nullopt;
+    }
+    bytes_.insert(bytes_.end(), m.netState.begin(), m.netState.end());
+    if (m.entry != 0) return std::nullopt;
+    const std::vector<uint8_t> whole = std::move(bytes_);
+    bytes_.clear();
+    std::optional<WorldMessage> out = decodeWorldMessage(whole);
+    if (out && out->type == WorldMessageType::Part) return std::nullopt;
+    return out;
+}
+
 WorldLink::WorldLink() : socket_(0) {}
 WorldLink::WorldLink(uint16_t to) : socket_(0), peer_(od::net::Endpoint::loopback(to)) {}
 
@@ -250,18 +292,25 @@ void WorldLink::sendRaw(std::span<const uint8_t> bytes) {
 }
 
 void WorldLink::sendReliable(const WorldMessage& m) {
-    od::net::ByteWriter w;
-    w.u8(uint8_t(Kind::Reliable));
-    w.u32(nextSend_);
-    w.raw(encodeWorldMessage(m));
-    unacked_.push_back({nextSend_++, w.take()});
-    sendRaw(unacked_.back().bytes);
+    for (const std::vector<uint8_t>& part : encodeWorldMessageParts(m)) {
+        od::net::ByteWriter w;
+        w.u8(uint8_t(Kind::Reliable));
+        w.u32(nextSend_);
+        w.raw(part);
+        unacked_.push_back({nextSend_++, w.take()});
+        sendRaw(unacked_.back().bytes);
+    }
 }
 
 void WorldLink::sendLatest(const WorldMessage& m) {
+    const std::vector<uint8_t> bytes = encodeWorldMessage(m);
+    if (bytes.size() > kWorldMessageBytes) {
+        SDL_Log("world link: a message of type %u is %zu bytes, more than one datagram holds: not sent", unsigned(m.type), bytes.size());
+        return;
+    }
     od::net::ByteWriter w;
     w.u8(uint8_t(Kind::Latest));
-    w.raw(encodeWorldMessage(m));
+    w.raw(bytes);
     sendRaw(w.bytes());
 }
 
@@ -283,7 +332,8 @@ std::vector<WorldMessage> WorldLink::poll(uint64_t nowNs) {
             if (!r.ok()) continue;
             const std::span<const uint8_t> body = std::span(d.bytes).subspan(5);
             if (sequence == nextReceive_) {
-                if (auto m = decodeWorldMessage(body)) in.push_back(std::move(*m));
+                if (auto m = decodeWorldMessage(body))
+                    if (auto whole = parts_.take(std::move(*m))) in.push_back(std::move(*whole));
                 ++nextReceive_;
             }
             od::net::ByteWriter ack; // what came in order so far, also when this one was a repeat or came early
@@ -291,7 +341,8 @@ std::vector<WorldMessage> WorldLink::poll(uint64_t nowNs) {
             ack.u32(nextReceive_ - 1);
             sendRaw(ack.bytes());
         } else if (kind == uint8_t(Kind::Latest)) {
-            if (auto m = decodeWorldMessage(std::span(d.bytes).subspan(1))) in.push_back(std::move(*m));
+            // (a Part goes only where what is sent arrives in order)
+            if (auto m = decodeWorldMessage(std::span(d.bytes).subspan(1)); m && m->type != WorldMessageType::Part) in.push_back(std::move(*m));
         }
     }
     if (nowNs - lastSendNs_ >= kResendNs) {
@@ -301,6 +352,8 @@ std::vector<WorldMessage> WorldLink::poll(uint64_t nowNs) {
     return in;
 }
 
-bool WorldLink::silent(uint64_t nowNs) const { return lastHeardNs_ != 0 && nowNs - lastHeardNs_ > kSilenceNs; }
+uint64_t WorldLink::quietNs(uint64_t nowNs) const { return lastHeardNs_ != 0 && nowNs > lastHeardNs_ ? nowNs - lastHeardNs_ : 0; }
+
+bool WorldLink::silent(uint64_t nowNs) const { return quietNs(nowNs) > kSilenceNs; }
 
 } // namespace od::app

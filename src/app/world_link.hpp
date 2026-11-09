@@ -68,10 +68,12 @@ enum class WorldMessageType : uint8_t {
     NetEventPad = 61,
     // coordinator -> a world process waiting with the game's files loaded (--world-standby): its room, as the command line
     // of a room's world gives it (each argument, then a zero byte)
-    Assign = 62
+    Assign = 62,
+    // a piece of a message that one datagram does not hold (encodeWorldMessageParts): its bytes, and whether more follow
+    Part = 63
 };
 // the last type: what a decoder takes (a type added after it is the new last)
-constexpr WorldMessageType kLastWorldMessageType = WorldMessageType::Assign;
+constexpr WorldMessageType kLastWorldMessageType = WorldMessageType::Part;
 
 // What a world says of its players to the coordinator
 struct WorldBrief {
@@ -107,6 +109,21 @@ bool worldRoomMessage(WorldMessageType type);
 std::vector<uint8_t> encodeWorldMessage(const WorldMessage& m);
 std::optional<WorldMessage> decodeWorldMessage(std::span<const uint8_t> bytes);
 
+// The bytes of an encoded message one datagram holds, on the link and in a session (net/udp_socket's datagram less
+// their framing)
+constexpr size_t kWorldMessageBytes = od::net::kMaxDatagram - 20;
+// A message as the datagrams that carry it where what is sent arrives in order: itself when one holds it, else Part
+// messages with its bytes in order
+std::vector<std::vector<uint8_t>> encodeWorldMessageParts(const WorldMessage& m);
+// The receiving end of one such way: a whole message is given back as it is, a Part is kept until its last one came
+class WorldParts {
+public:
+    std::optional<WorldMessage> take(WorldMessage m);
+
+private:
+    std::vector<uint8_t> bytes_;
+};
+
 // One side of a link. The coordinator binds (port 0: any free one) and learns its peer from the first datagram; the world
 // is told the coordinator's port.
 class WorldLink {
@@ -119,13 +136,15 @@ public:
 
     uint16_t port() const { return socket_.port(); }
     bool hasPeer() const { return peer_.has_value(); }
-    // what must arrive: sent now, resent every kResendNs until acknowledged, in order
+    // what must arrive: sent now, resent every kResendNs until acknowledged, in order (of any length a message has)
     void sendReliable(const WorldMessage& m);
-    // what the next one replaces (nothing happens before the peer is known)
+    // what the next one replaces (nothing happens before the peer is known): one datagram, a longer one is not sent
     void sendLatest(const WorldMessage& m);
     // this side's turn: what arrived, in order for what must arrive, and the resends due at time nowNs
     std::vector<WorldMessage> poll(uint64_t nowNs);
-    // the peer has been heard, or this link started, longer ago than kSilenceNs
+    // how long ago the peer was heard, or this link started
+    uint64_t quietNs(uint64_t nowNs) const;
+    // ... longer ago than kSilenceNs
     bool silent(uint64_t nowNs) const;
     // nothing of what must arrive is still unacknowledged
     bool settled() const { return unacked_.empty(); }
@@ -140,6 +159,7 @@ private:
         std::vector<uint8_t> bytes;
     };
     std::vector<Unacked> unacked_;
+    WorldParts parts_;
     uint32_t nextSend_ = 1, nextReceive_ = 1;
     uint64_t lastSendNs_ = 0, lastHeardNs_ = 0;
 };
