@@ -109,6 +109,7 @@ private:
         std::vector<uint8_t> players;
         uint64_t lastKeepAliveNs = 0;
         uint64_t startedNs = 0; // its process started then; 0 once it was heard
+        bool running = false;   // it has reported: its room is loaded and its ticks go
         ~World();
     };
     World& worldOf(WorldRoom room, const std::vector<uint8_t>& banks = {});

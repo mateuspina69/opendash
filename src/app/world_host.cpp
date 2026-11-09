@@ -19,6 +19,8 @@ namespace od::app {
 namespace {
 constexpr uint64_t kKeepAliveNs = 1'000'000'000;
 constexpr size_t kSaveChunk = 1000; // a save's bytes in one message of the link (its datagram holds the headers too)
+// a world that starts is unheard while it loads its room (under a second as measured): past this it is not coming
+constexpr uint64_t kStartSilenceNs = 30'000'000'000;
 } // namespace
 
 WorldHost::World::~World() {
@@ -467,7 +469,10 @@ void WorldHost::poll(uint64_t nowNs) {
                         static_cast<unsigned long long>((SDL_GetTicksNS() - world.startedNs) / 1'000'000));
                 world.startedNs = 0;
             }
-            if (m.type == WorldMessageType::Report) world.report = WorldReport{m.tick, m.liveActors, m.players, m.digest};
+            if (m.type == WorldMessageType::Report) {
+                world.report = WorldReport{m.tick, m.liveActors, m.players, m.digest};
+                world.running = true;
+            }
             if ((m.type == WorldMessageType::NetEvents || m.type == WorldMessageType::NetUpdate ||
                  m.type == WorldMessageType::NetHit || m.type == WorldMessageType::NetShotHit ||
                  m.type == WorldMessageType::NetPlayer || m.type == WorldMessageType::NetPlayerAck ||
@@ -548,15 +553,18 @@ void WorldHost::poll(uint64_t nowNs) {
             world.lastKeepAliveNs = nowNs;
             world.link.sendLatest({WorldMessageType::KeepAlive});
         }
-        // a world that ended on its own (it failed): its players have no world until they enter again
-        if (world.process && !SDL_WaitProcess(world.process, false, nullptr)) {
+        // a world that ended on its own (it failed), or that answers no more (a running one reports every tick; one that
+        // starts loads its room first, unheard meanwhile): its players have no world until they enter again
+        const bool ended = !world.process || SDL_WaitProcess(world.process, false, nullptr);
+        const bool unheard = !ended && world.link.quietNs(nowNs) > (world.running ? WorldLink::kSilenceNs : kStartSilenceNs);
+        if (!ended && !unheard) {
             ++it;
             continue;
         }
         {
             char text[160];
-            std::snprintf(text, sizeof text, "The world of ST%02X sub %d stopped (opendash-world-ST%02X-%d.log)", unsigned(it->first.stage),
-                          it->first.sub, unsigned(it->first.stage), it->first.sub);
+            std::snprintf(text, sizeof text, "The world of ST%02X sub %d %s (opendash-world-ST%02X-%d.log)", unsigned(it->first.stage),
+                          it->first.sub, ended ? "stopped" : "answers no more", unsigned(it->first.stage), it->first.sub);
             alert(text);
         }
         for (uint8_t id : world.players) playerRoom_[id].reset();
