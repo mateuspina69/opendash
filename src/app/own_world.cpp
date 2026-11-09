@@ -760,12 +760,8 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
         }
         break;
     case WorldMessageType::NetSave:
-        if (std::exchange(saveEnded_, false)) { // the first chunk of another save
-            hostSave_.clear();
-            hostSaveWhole_ = false;
-        }
-        hostSave_.insert(hostSave_.end(), m.netState.begin(), m.netState.end());
-        if (m.netState.size() < 1000) hostSaveWhole_ = saveEnded_ = true; // the last chunk is the short one
+        hostSave_ = m.netState;
+        hostSaveWhole_ = true;
         break;
     default: break;
     }

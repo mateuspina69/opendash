@@ -424,7 +424,7 @@ int run(const WorldArgs& given) {
     // the room runs
     std::unique_ptr<WorldLink> waitingLink;
     std::vector<WorldMessage> cameWithRoom;
-    std::vector<uint8_t> givenSave; // the save the room's world starts from, sent in chunks before the room
+    std::vector<uint8_t> givenSave; // the save the room's world starts from, sent before the room
     if (w.standby) {
         if (w.linkPort == 0) throw std::invalid_argument("--world-standby needs --world-link");
         waitingLink = std::make_unique<WorldLink>(uint16_t(w.linkPort));
@@ -438,7 +438,7 @@ int run(const WorldArgs& given) {
                 if (assigned) {
                     cameWithRoom.push_back(std::move(m));
                 } else if (m.type == WorldMessageType::NetSave) {
-                    givenSave.insert(givenSave.end(), m.netState.begin(), m.netState.end());
+                    givenSave = std::move(m.netState);
                 } else if (m.type == WorldMessageType::Assign) {
                     std::vector<std::string> args{"opendash"};
                     for (size_t at = 0; at < m.netState.size();) {

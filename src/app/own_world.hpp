@@ -190,7 +190,6 @@ private:
     bool bossFight_ = false, testBossFight_ = false;
     std::string notice_;
     int noticeTicks_ = 0;
-    bool saveEnded_ = false;   // the last save that came is whole: a chunk now starts another
     std::string alert_;        // what went wrong (notice), shown until alertUntilNs_
     uint64_t alertUntilNs_ = 0;
     bool gateAsked_ = false;

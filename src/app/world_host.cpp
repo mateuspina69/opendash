@@ -18,7 +18,6 @@ namespace od::app {
 
 namespace {
 constexpr uint64_t kKeepAliveNs = 1'000'000'000;
-constexpr size_t kSaveChunk = 1000; // a save's bytes in one message of the link (its datagram holds the headers too)
 // a world that starts is unheard while it loads its room (under a second as measured): past this it is not coming
 constexpr uint64_t kStartSilenceNs = 30'000'000'000;
 } // namespace
@@ -83,8 +82,8 @@ WorldHost::World& WorldHost::worldOf(WorldRoom room, const std::vector<uint8_t>&
         args.push_back("--stage-banks");
         args.push_back(hex(banks));
     }
-    // the process waiting with the game's files loaded takes the room (else one started now): the save first, in chunks
-    // (a datagram of the link holds less), then the room and what it is told
+    // the process waiting with the game's files loaded takes the room (else one started now): the save first, then the
+    // room and what it is told
     std::unique_ptr<World> world;
     const bool waiting = standby_ && !standby_->link.silent(SDL_GetTicksNS());
     if (waiting) {
@@ -93,10 +92,10 @@ WorldHost::World& WorldHost::worldOf(WorldRoom room, const std::vector<uint8_t>&
         standby_.reset();
         world = startWorldProcess({"--world-standby"});
     }
-    for (size_t at = 0; at < storySave_.size(); at += kSaveChunk) {
-        WorldMessage chunk{WorldMessageType::NetSave};
-        chunk.netState.assign(storySave_.begin() + ptrdiff_t(at), storySave_.begin() + ptrdiff_t(std::min(at + kSaveChunk, storySave_.size())));
-        world->link.sendReliable(chunk);
+    if (!storySave_.empty()) {
+        WorldMessage save{WorldMessageType::NetSave};
+        save.netState = storySave_;
+        world->link.sendReliable(save);
     }
     WorldMessage assign{WorldMessageType::Assign};
     for (const std::string& a : args) {

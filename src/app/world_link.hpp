@@ -27,7 +27,7 @@ enum class WorldMessageType : uint8_t {
     NetFire = 14, NetReport = 15, NetHit = 16, NetShotHit = 17,
     // a player's state (game/player/net_player): both ways, for what the next one replaces; its acknowledgement: id, sequence
     NetPlayer = 18, NetPlayerAck = 19,
-    // between a client and the host's coordinator: this player enters a room (stage, sub, state), the host's save in chunks,
+    // between a client and the host's coordinator: this player enters a room (stage, sub, state), the host's save,
     // what the player wears
     NetEnter = 20, NetSave = 21, NetEquip = 22,
     // what the session shares (game/global_state), both ways; what a pickup or a chest gave a player; a player pressed Use by

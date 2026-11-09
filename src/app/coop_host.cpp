@@ -13,8 +13,6 @@ namespace od::app {
 
 namespace {
 
-constexpr size_t kSaveChunk = 1000; // a NetSave's bytes: the rest of the datagram is the headers
-
 bool isReliable(WorldMessageType t) {
     switch (t) {
     case WorldMessageType::NetEvents:
@@ -157,16 +155,13 @@ std::vector<WorldMessage> CoopHost::take(uint8_t playerId) {
 }
 
 void CoopHost::sendSave(uint8_t id, uint64_t nowNs) {
-    // the host's game: what exists is its state now, in chunks; the last one is shorter than kSaveChunk
+    // the host's game: what exists is its state now
     const std::vector<uint8_t>& save = liveSave();
     if (save.size() > 0x129) sentRoom_[id] = {save[0x128], save[0x129]};
-    for (size_t at = 0; at <= save.size(); at += kSaveChunk) {
-        WorldMessage m{WorldMessageType::NetSave};
-        m.playerId = id;
-        const size_t n = std::min(kSaveChunk, save.size() - at);
-        m.netState.assign(save.begin() + ptrdiff_t(at), save.begin() + ptrdiff_t(at + n));
-        sendWorld(*session_, nowNs, id, m, true);
-    }
+    WorldMessage m{WorldMessageType::NetSave};
+    m.playerId = id;
+    m.netState = save;
+    sendWorld(*session_, nowNs, id, m, true);
 }
 
 void CoopHost::fromClient(uint8_t id, const WorldMessage& m, uint64_t nowNs) {
