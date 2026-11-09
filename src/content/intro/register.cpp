@@ -3,6 +3,7 @@
 // same order), the opening's ST1E / ST3A classes (moved from game/combat in Task 1.5) and the opening's cutscene cast
 // and effects of ST39 / ST3A (moved from game/story in Task 1.7).
 #include "content/registry.hpp"
+#include "game/net_effect_links.hpp"
 
 #include "content/intro/st4a_event_triggers.hpp"
 
@@ -107,6 +108,9 @@ void registerIntroClasses(ContentRegistry& r) {
     r.netPictures.emplace(RoutineId::FireUpdate, ContentRegistry::NetPicture{&firePicture, &fireTakePicture});
     r.netPictures.emplace(RoutineId::WallBlastUpdate, ContentRegistry::NetPicture{&firePicture, &fireTakePicture});
     r.netEffects.insert(RoutineId::FlameUpdate);
+    // ... the burning Data's picture, which his flame follows on every machine
+    r.netPictures.emplace(RoutineId::BurningDataUpdate, ContentRegistry::NetPicture{&dataPicture, &dataTakePicture});
+    registerNetEffectLinks(RoutineId::FireEffectUpdate, NetEffectLinks{&fireEffectLinkRead, &fireEffectLinkWrite});
     r.netStops.emplace(RoutineId::FlameUpdate, ContentRegistry::NetStop{&flameStopped, &flameStop});
     r.effectTextures.push_back(&openingEffectTextures);
     r.effectGradientRows.push_back({kExhaustGlow, 0});

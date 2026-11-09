@@ -648,6 +648,10 @@ void captureNetWorld(NetWorldTable& table, uint32_t tick) {
         NetWorldTable::Seen s = seenOf(a, hasModel ? a.model : 0, hasModel ? a.animTable.value() : 0);
         s.anim = a.anim;
         s.report = a.stepCounter;
+        if (const RoutineRef h = fieldActorHandler(a, ActorPool::Animated, false)) { // a class whose picture is its fields
+            const auto& pictures = content().netPictures;
+            if (const auto it = pictures.find(h.id()); it != pictures.end() && it->second.capture) s.picture = it->second.capture(a.at);
+        }
         s.animScript = hasModel ? a.animScript.value() : 0;
         const NetWorldActor& held = table.actors[slot];
         s.modelEntry = held.live && held.model == s.model && held.animTable == s.animTable && held.identity.type == a.type
@@ -1779,6 +1783,11 @@ void PoolNetActors::tick(uint8_t slot, const NetActorState& state, const std::op
         return;
     }
     asAnimated(a).stepCounter = state.report; // the copies of the parts it started read it (a boss's blades)
+    if (!state.picture.empty()) // what its class shows of its fields (the effects that follow it read them)
+        if (const RoutineRef h = fieldActorHandler(*head, ActorPool::Animated, false)) {
+            const auto& pictures = content().netPictures;
+            if (const auto it = pictures.find(h.id()); it != pictures.end() && it->second.apply) it->second.apply(a.at, state.picture);
+        }
     if (!animates_[slot]) return;
     AnimatedActor& animated = asAnimated(a);
     if (state.told & kNetToldScale) {

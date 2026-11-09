@@ -100,8 +100,8 @@ struct ContentRegistry {
         void (*stop)(uint32_t actor) = nullptr;
     };
     std::map<RoutineId, NetStop> netStops;
-    // the statics whose picture is their class's fields (they bind no model: a fire): what the world's gives its copies
-    // in the updates, and how a copy takes it
+    // the statics whose picture is their class's fields (they bind no model: a fire), and the animated actors whose fields
+    // what follows them reads (the burning Data's flame): what the world's gives its copies in the updates, how a copy takes it
     struct NetPicture {
         std::vector<uint8_t> (*capture)(uint32_t actor) = nullptr;
         void (*apply)(uint32_t actor, std::span<const uint8_t> picture) = nullptr;

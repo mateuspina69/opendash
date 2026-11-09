@@ -5,6 +5,7 @@
 // the timers, the hints) and its result (content/intro/mission_result.cpp: script 0xd), and their entry points.
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <span>
 #include <vector>
@@ -86,6 +87,10 @@ struct FireEffectFields : ActorClassState {
     int16_t& size;
     PartField<uint8_t, int16_t> key;
     PartField<uint8_t, int16_t> spin;         // the sprite's rotation >> 4
+    // OpenDash's co-op: a client's copy of Data's flame -- the copy of the Data it burns on (its world's moves it), and
+    // whether he was seen burning since (his copy's end of it ends this one)
+    uint32_t followed = 0;
+    bool followedBurning = false;
 
     // the sprite / hit block cleared
     void clearSprite() {
@@ -335,6 +340,15 @@ std::vector<uint8_t> firePicture(uint32_t actor);
 void fireTakePicture(uint32_t actor, std::span<const uint8_t> picture);
 bool flameStopped(uint32_t actor);
 void flameStop(uint32_t actor);
+// ... the burning Data's picture -- burning, his hit points (his flame's size) -- and his flame on a client: the point of his
+// copy's head and its size (false: he is gone)
+std::vector<uint8_t> dataPicture(uint32_t actor);
+void dataTakePicture(uint32_t actor, std::span<const uint8_t> picture);
+bool dataFlameOn(uint32_t data, ShortVec3& point, int16_t& size, bool& burning);
+// ... the Data whose flame a world's flame effect is (none: not one); the mission's effects' links (game/net_effect_links)
+const ActorHeader* dataOfFlame(uint32_t effect);
+bool fireEffectLinkRead(EffectActor& effect, std::array<const ActorHeader*, 2>& held);
+void fireEffectLinkWrite(EffectActor& effect, const std::array<ActorHeader*, 2>& held);
 
 // ST1E's room case (exe 0x580710): the room's handler (the fires, the timers, the hints; the result script 0xd)
 bool fireMissionRoomCase();

@@ -775,6 +775,20 @@ void fireEffectUpdate(const PlayerEnv& env, uint32_t address) {
             effect.enterState(uint8_t(FireEffectState::Run));
             return;
         }
+        if (effect.worldCopy) {
+            // a session's client: its Data's copy carries it as the world's Data does his (at his head, his hit points
+            // its size); it ends once he has stopped burning. Its smoke comes from the world's
+            int16_t followedSize = 0;
+            bool burning = false;
+            if (!dataFlameOn(fx.followed, fx.pos, followedSize, burning) || (fx.followedBurning && !burning)) {
+                effect.enterState(uint8_t(FireEffectState::Done));
+                return;
+            }
+            fx.followedBurning = fx.followedBurning || burning;
+            fx.size = followedSize;
+            stepKeys(effect, fx, emberKeys[effect.variant]);
+            return;
+        }
         // exe 0x437c30: its size from Data, smoke puffs (variant 3 every other frame, variant 4 every frame)
         fx.size = int16_t(DataFlameParams(effect).size);
         stepKeys(effect, fx, emberKeys[effect.variant]);
@@ -817,6 +831,16 @@ void fireTakePicture(uint32_t address, std::span<const uint8_t> picture) {
     fire.strength = int32_t(uint32_t(picture[1]) | uint32_t(picture[2]) << 8 | uint32_t(picture[3]) << 16 | uint32_t(picture[4]) << 24);
     fire.frame = picture[5];
     fire.frameTicks = picture[6];
+}
+
+// the world: the Data a flame effect burns on (the other kinds hold nothing); the client: his copy, the one its copy follows
+bool fireEffectLinkRead(EffectActor& effect, std::array<const ActorHeader*, 2>& held) {
+    if (FireEffectKind(effect.subtype) == FireEffectKind::DataFlame) held[0] = dataOfFlame(effect.at);
+    return true;
+}
+void fireEffectLinkWrite(EffectActor& effect, const std::array<ActorHeader*, 2>& held) {
+    if (FireEffectKind(effect.subtype) == FireEffectKind::DataFlame && held[0])
+        classState<FireEffectFields>(effect).followed = actorLayoutOf(*held[0]).at;
 }
 
 bool flameStopped(uint32_t address) { return classState<FlameFields>(staticActorAt(address)).stopped != 0; }

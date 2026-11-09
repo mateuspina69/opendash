@@ -13,6 +13,7 @@
 #include "game/actor_movement.hpp"
 #include "game/actor_pools.hpp"
 #include "game/actor_state.hpp"
+#include "game/actors.hpp"
 #include "game/angles.hpp"
 #include "game/audio_logic.hpp"
 #include "game/collision.hpp"
@@ -90,6 +91,8 @@ constexpr uint16_t kBurntTint = 0x2108;
 constexpr int16_t kRoomMinX = 0x20, kRoomMaxX = 0x130, kRoomMinZ = 0x50, kRoomMaxZ = 0x150;
 constexpr int kHeadBone = 6;
 constexpr int kHeadReach = -0x20;
+// his head's point (his flame's place): where his class keeps the flame, and a session's client its copy
+void headPoint(const AnimatedActor& actor, int16_t out[3]) { bonePointAhead(actor, kHeadBone, kHeadReach, out); }
 
 // The lanes of the geometry scratch the exe leaves its points in (+0x60.., +0x70..; kept written: the routines that
 // follow may read them; +0xa0.. / +0xb0..: Data's own)
@@ -912,6 +915,48 @@ void resultSceneDataUpdate(const PlayerEnv&, uint32_t address) {
     case SceneState::Free: freeActor(actor); return;
     default: notPortedAt(kDataArea, "0x4ea1d0 state", actor.state);
     }
+}
+
+// ---- a session (game/world_net_state) -------------------------------------------------------------------------------
+
+std::vector<uint8_t> dataPicture(uint32_t address) {
+    const AnimatedActor& actor = animatedActorAt(address);
+    const DataFields& data = classState<DataFields>(animatedActorAt(address));
+    return {uint8_t(data.has(DataFields::kBurning) ? 1 : 0), uint8_t(actor.hitPoints), uint8_t(uint16_t(actor.hitPoints) >> 8)};
+}
+
+void dataTakePicture(uint32_t address, std::span<const uint8_t> picture) {
+    if (picture.size() != 3) return;
+    AnimatedActor& actor = animatedActorAt(address);
+    DataFields& data = classState<DataFields>(actor);
+    data.flags = picture[0] ? uint16_t(data.flags | DataFields::kBurning) : uint16_t(data.flags & ~DataFields::kBurning);
+    actor.hitPoints = int16_t(uint16_t(picture[1] | picture[2] << 8));
+}
+
+bool dataFlameOn(uint32_t dataAddress, ShortVec3& point, int16_t& size, bool& burning) {
+    if (dataAddress == 0) return false;
+    const AnimatedActor& actor = animatedActorAt(dataAddress);
+    const RoutineRef h = fieldActorHandler(actor, ActorPool::Animated, false);
+    if (!(actor.flags & kActorLive) || !h || !h.is(RoutineId::BurningDataUpdate)) return false;
+    int16_t head[3];
+    headPoint(actor, head);
+    point.x = head[0];
+    point.y = head[1];
+    point.z = head[2];
+    size = int16_t(uint16_t(actor.hitPoints >> 6));
+    burning = classState<DataFields>(animatedActorAt(dataAddress)).has(DataFields::kBurning);
+    return true;
+}
+
+const ActorHeader* dataOfFlame(uint32_t effect) {
+    AnimatedPool& pool = animatedPool();
+    for (size_t i = 0; i < kAnimatedFieldSlots; ++i) {
+        const AnimatedActor& a = pool[i];
+        if (!(a.flags & kActorLive)) continue;
+        const RoutineRef h = fieldActorHandler(a, ActorPool::Animated, false);
+        if (h && h.is(RoutineId::BurningDataUpdate) && classState<DataFields>(pool[i]).flame == effect) return &a;
+    }
+    return nullptr;
 }
 
 } // namespace od::port
