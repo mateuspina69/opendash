@@ -273,11 +273,25 @@ ActorHeader& claimActorSlot(uint32_t slot) {
     const uint32_t cls = actorSlotClass(slot);
     const uint32_t i = slot - cls;
     ActorSystemState& s = actorSystem();
+    // live, and no free of its last occupant pending (a world's slot taken by its next occupant on the tick the last one
+    // went): applyActorFrees would toggle its live bit off under the new one, which no sweep would then free
     switch (cls) {
-    case kShotClass: s.shotsLive |= slotBit(i); break;
-    case kAnimatedClass: s.animatedLive |= slotBit(i); break;
-    case kProjectileClass: s.projectilesLive |= slotBit(i); break;
-    case kStaticClass: s.staticsLive[i >> 5] |= slotBit(i); break;
+    case kShotClass:
+        s.shotsLive |= slotBit(i);
+        s.shotsFreed &= ~slotBit(i);
+        break;
+    case kAnimatedClass:
+        s.animatedLive |= slotBit(i);
+        s.animatedFreed &= ~slotBit(i);
+        break;
+    case kProjectileClass:
+        s.projectilesLive |= slotBit(i);
+        s.projectilesFreed &= ~slotBit(i);
+        break;
+    case kStaticClass:
+        s.staticsLive[i >> 5] |= slotBit(i);
+        s.staticsFreed[i >> 5] &= ~slotBit(i);
+        break;
     default: notAnActorSlot(slot, 0);
     }
     ActorHeader& actor = actorHeaderAt(actorBySlot(slot));
