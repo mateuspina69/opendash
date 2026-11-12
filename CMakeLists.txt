@@ -146,7 +146,11 @@ add_custom_command(TARGET opendash POST_BUILD # seed saves/ from the Debug dir (
 
 # --- upscaler SDKs (Windows only): not in the repository; the configure fetches the pinned versions into third_party/
 # (tools/fetch_sdks.py, a no-op for the ones already there) ---
-if(WIN32)
+option(OD_NO_VENDOR_SDKS "build without the vendor upscaler SDKs (DLSS, FSR, XeSS, NIS): the Linux path" OFF)
+if(WIN32 AND OD_NO_VENDOR_SDKS)
+    target_compile_definitions(opendash PRIVATE OD_NO_VENDOR_SDKS=1)
+endif()
+if(WIN32 AND NOT OD_NO_VENDOR_SDKS)
 execute_process(COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/fetch_sdks.py RESULT_VARIABLE od_fetch_rc)
 if(NOT od_fetch_rc EQUAL 0)
     message(FATAL_ERROR "upscaler SDKs: tools/fetch_sdks.py failed (${od_fetch_rc}); it needs git, Git LFS and network")
@@ -181,12 +185,25 @@ add_custom_command(TARGET opendash POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_i
     "${OD_FFX_ROOT}/signedbin/amd_fidelityfx_upscaler_dx12.dll"
     "${OD_DLSS_ROOT}/lib/Windows_x86_64/rel/nvngx_dlss.dll"
     "${OD_XESS_ROOT}/bin/libxess.dll" $<TARGET_FILE_DIR:opendash>)
+install(FILES "${OD_FFX_ROOT}/signedbin/amd_fidelityfx_loader_dx12.dll"
+    "${OD_FFX_ROOT}/signedbin/amd_fidelityfx_upscaler_dx12.dll"
+    "${OD_DLSS_ROOT}/lib/Windows_x86_64/rel/nvngx_dlss.dll"
+    "${OD_XESS_ROOT}/bin/libxess.dll" DESTINATION .)
 set(OD_NIS_COMMON NIS_HDR_MODE=0 NIS_BLOCK_WIDTH=32 NIS_THREAD_GROUP_SIZE=256 NIS_USE_HALF_PRECISION=0)
 od_add_shader(TARGET opendash FILE "${OD_NIS_ROOT}/NIS_Main.hlsl" ENTRY main PROFILE cs_6_0 NAME g_nis_scaler_cs
               HLSL 2018 DEFINES NIS_SCALER=1 NIS_BLOCK_HEIGHT=24 ${OD_NIS_COMMON})
 od_add_shader(TARGET opendash FILE "${OD_NIS_ROOT}/NIS_Main.hlsl" ENTRY main PROFILE cs_6_0 NAME g_nis_sharpen_cs
               HLSL 2018 DEFINES NIS_SCALER=0 NIS_BLOCK_HEIGHT=32 ${OD_NIS_COMMON})
 endif() # WIN32: the upscaler SDKs
+
+# --- install: a release folder with everything the exe reads next to it (cmake --install build --config Release
+# --prefix <folder>): the exe, its DLLs and assets/ (the HD fonts, the vector UI's captions; without them the HD text
+# and the vector UI fall back to the pixel art) ---
+install(TARGETS opendash RUNTIME DESTINATION .)
+if(WIN32)
+    install(FILES $<TARGET_RUNTIME_DLLS:opendash> DESTINATION .)
+endif()
+install(DIRECTORY assets DESTINATION .)
 
 # --- tests ---
 enable_testing()

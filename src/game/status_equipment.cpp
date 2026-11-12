@@ -201,6 +201,7 @@ void kindListDraw(StatusScreen& s, int x, int y, int vis, uint32_t kind, uint32_
     if (kind > kKindSpecialWeapon && kind <= kKindLegs) {
         const size_t c = otOpen(kOtRows);
         otDrawMode(c, kPageMode);
+        labelNext(kLblEquipHead, 6); // (OpenDash: "PARTS LIST" in HD, translated: equip.head.6)
         otSprite(c, x + 8, y - 3, kListTabArt, 0x30, 8);
     }
     int ty = y + 4;
@@ -441,8 +442,15 @@ void legItemsDraw(int x, int y) {
     frameDraw(x, y, 0x54, 0x30, kFrameRound);
     const size_t c = otOpen(kOtRows);
     otDrawMode(c, kPageMode);
-    if (storyFlag(kFlameBarrierItem)) otSprite(c, x + 8, y + 8, kFlameBarrierArt, 0x20, 0x20);
-    if (storyFlag(kLightBarrierItem)) otSprite(c, x + 0x2c, y + 8, kLightBarrierArt, 0x20, 0x20);
+    // (OpenDash, Herbert: the badges' Japanese words in HD, in the language -- kLblBarrier: 0 flame, 1 light)
+    if (storyFlag(kFlameBarrierItem)) {
+        labelNext(kLblBarrier, 0);
+        otSprite(c, x + 8, y + 8, kFlameBarrierArt, 0x20, 0x20);
+    }
+    if (storyFlag(kLightBarrierItem)) {
+        labelNext(kLblBarrier, 1);
+        otSprite(c, x + 0x2c, y + 8, kLightBarrierArt, 0x20, 0x20);
+    }
     otDrawMode(c, kPageMode);
 }
 // exe 0x5ed910(slots): the buster's levels = the sum of the three parts' bonuses, at most 7

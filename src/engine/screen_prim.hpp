@@ -28,6 +28,8 @@ enum VecArt : uint16_t {
     kVecFrame1 = 3,      // 1 the round list frame,
     kVecFrame2 = 4,      // 2 the frame with the arrow (drawn by code at the call's size: app/ui/vector_ui)
     kVecOptJunction = 5, // the options page's corner pieces where its two frames meet (FUN_005eeda0, 0x10, 0x94)
+    kVecDualShock = 6,   // OpenDash: the PS1's DualShock behind the key configuration's pad list (128 x 88)
+    kVecLanguage = 7,    // OpenDash: the globe on the options' language row (10 x 10, white: tinted as the caption)
     kVecItemIcon = 0x100, // + k: an item's 16 x 16 icon (FUN_005ea6d0, kind k of 0x91aab0)
 };
 
@@ -61,6 +63,23 @@ enum VecLabel : uint16_t {
     kLblScrollTrack,    // its track (the quad between the end pieces)
     kLblScrollThumb,    // its thumb (the quad over the track)
     kLblScrollLit,      // an end piece's arrow lit while the list scrolls (8 x 8): arg 0 = up, 1 = down
+    kLblPadPicture,     // OpenDash: the key configuration's pad picture (0x60, 0x3a, 128 x 88): the PS1's DualShock
+    kLblPadButton,      // OpenDash: a pad button bound in the key configuration: arg = its code (input padButtonDown)
+    kLblBackdrop,       // OpenDash: the sub-screens' scrolling backdrop (exe 0x5e7fe0) in HD (assets/ui/backdrop_tile.png,
+                        // Doni Arts' tile, at 45 degrees): its first tile; arg = the frame byte t (its scroll), ref = the
+                        // widescreen margin
+    kLblBackdropRest,   // its other tiles (drawn by the first one's label when the HD tile is there)
+    kLblOptText,        // OpenDash: a value box of OpenDash's rows (the music, the screen, the language), its text the
+                        // primitive's utf8: arg = 0 another value, 1 the chosen one, 2 a label
+    kLblFlag,           // OpenDash (Herbert): a language's flag (assets/ui/flags/<code>.svg) right-aligned in the box, its
+                        // height the box's: arg = the language base (engine/lang languageBase: 0 jp .. 8 zh, 9 zh traditional)
+    kLblTitleExtras,    // OpenDash: the title menu's Extras row (game/title drawMenu, 216 x 40): the host draws its word
+                        // (assets/ui/title/<language>/extras_sel.svg / extras_nor.svg): arg 1 = the cursor's row
+    kLblTitleQuit,      // OpenDash: the title menu's Quit row (under Extras): its word sair_sel.svg / sair_nor.svg, arg as above
+    kLblBarrier,        // OpenDash: the equipment's barrier badge (32 x 32 green octagon): arg 0 flame, 1 light (barrier.<arg>)
+    kLblVideoIcon,      // OpenDash (Herbert: icons that mean the lines): the screen row's overlay icons (25 x 25) drawn in
+                        // HD -- arg 0 the anti-aliasing, 1 the resolution, 2 the display mode (the exe's art says
+                        // Video / Mouse / Keyboard)
 };
 
 struct ScreenPrim {

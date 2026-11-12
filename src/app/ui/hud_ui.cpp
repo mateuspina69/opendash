@@ -5,14 +5,228 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
+#include <cstdio>
 #include <exception>
+#include <filesystem>
+#include <stb_image.h>
 
 #include "app/room_mesh.hpp"
+#include "app/ui/vector_ui.hpp"
 #include "engine/dat.hpp"
 #include "engine/data_source.hpp"
 #include "engine/vram.hpp"
 
 namespace od::app {
+
+namespace {
+
+// assets/ui/hud/hud_<key as 5 hex digits>.png (e.g. hud_d7fd0.png: tpage 0x0d, clut 0x7fd0): the same 256 x 256 page
+// drawn at a higher resolution (square, RGBA; the UVs are normalised, so any size of 256 px or more); 0 = none
+od::TextureHandle loadHdPage(od::Renderer& r, uint32_t key) {
+    char name[32];
+    std::snprintf(name, sizeof name, "hud_%05x.png", unsigned(key));
+    const std::filesystem::path path = assetsDir() / "ui" / "hud" / name;
+    std::error_code ec;
+    if (!std::filesystem::is_regular_file(path, ec)) return 0;
+    std::vector<uint8_t> bytes;
+    try {
+        bytes = od::readFile(path);
+    } catch (const std::exception&) {
+        return 0;
+    }
+    int w = 0, h = 0, comp = 0;
+    stbi_uc* px = stbi_load_from_memory(bytes.data(), int(bytes.size()), &w, &h, &comp, 4);
+    if (!px) {
+        SDL_Log("hud: cannot read %s", path.string().c_str());
+        return 0;
+    }
+    od::TextureHandle t = 0;
+    if (w == h && w >= 256) t = r.createTexture(w, h, reinterpret_cast<const uint32_t*>(px));
+    else SDL_Log("hud: %s is %dx%d, not a square page of 256 px or more", path.string().c_str(), w, h);
+    stbi_image_free(px);
+    if (t) SDL_Log("hud: HD page %s (%dx%d)", name, w, h);
+    return t;
+}
+
+} // namespace
+
+std::filesystem::path creditPage(const std::string& name, const std::string& lang) {
+    std::error_code ec;
+    for (const std::string& l : {lang, std::string("en")}) {
+        const auto p = assetsDir() / "ui" / "credits" / (name + "_" + l + ".png");
+        if (std::filesystem::is_regular_file(p, ec)) return p;
+    }
+    return {};
+}
+
+int creditCards(const std::string& lang) {
+    int n = 0;
+    char name[8];
+    for (;;) {
+        std::snprintf(name, sizeof name, "c%02d", n + 1);
+        if (creditPage(name, lang).empty()) return n;
+        ++n;
+    }
+}
+
+CreditsFrame creditsFrame(double t, double song, int cards) {
+    CreditsFrame f;
+    if (cards <= 0) {
+        f.done = true;
+        return f;
+    }
+    // (Herbert) the cards spread over the whole song: the background fades in, the cards one by one (fade in, hold,
+    // fade out), the last one (PRESENTED BY CAPCOM) held to the song's end, everything faded out with it
+    const double D = song > 30.0 ? song : 219.0, intro = 3.0, last = 12.0, fade = 1.2, out = 2.5;
+    f.background = float(std::clamp(t / 2.0, 0.0, 1.0) * std::clamp((D - t) / out, 0.0, 1.0));
+    if (t >= D) {
+        f.done = true;
+        return f;
+    }
+    const double slot = std::max(4.0, (D - intro - last) / double(std::max(1, cards - 1)));
+    if (t < intro) return f;
+    const int k = int((t - intro) / slot);
+    if (k >= cards - 1) { // the last card to the end
+        f.card = cards - 1;
+        const double u = t - (intro + slot * (cards - 1));
+        f.alpha = float(std::clamp(u / fade, 0.0, 1.0) * std::clamp((D - t) / out, 0.0, 1.0));
+        return f;
+    }
+    const double u = t - intro - slot * k, gap = 0.3;
+    f.card = k;
+    f.alpha = float(std::clamp(std::min(u / fade, (slot - gap - u) / fade), 0.0, 1.0));
+    return f;
+}
+
+void HudUi::drawCredits(ui::Canvas& cv, od::Renderer& r, const CreditsFrame& f, float width, float height) {
+    cv.quadFilled(ui::Vec2(0.0f, 0.0f), ui::Vec2(width, 0.0f), ui::Vec2(width, height), ui::Vec2(0.0f, height),
+                  ui::rgba(0, 0, 0, 255));
+    float aspect = 4.0f / 3.0f;
+    // the game's credits illustration (ST57T), dimmed, covering the window
+    const std::filesystem::path bg = assetsDir() / "ui" / "credits" / "fundo.png";
+    if (f.background > 0.0f)
+        if (const od::TextureHandle t = creditTexture(r, bg, aspect)) {
+            const float w = std::max(width, height * aspect), h = w / aspect, x0 = (width - w) * 0.5f, y0 = (height - h) * 0.5f;
+            const int v = int(255.0f * 0.45f * f.background);
+            cv.imageQuad(t, ui::Vec2(x0, y0), ui::Vec2(x0 + w, y0), ui::Vec2(x0 + w, y0 + h), ui::Vec2(x0, y0 + h),
+                         ui::Vec2(0.0f, 0.0f), ui::Vec2(1.0f, 0.0f), ui::Vec2(1.0f, 1.0f), ui::Vec2(0.0f, 1.0f),
+                         ui::rgba(v, v, v, 255));
+        }
+    if (f.card < 0 || f.alpha <= 0.0f) return;
+    char name[8];
+    std::snprintf(name, sizeof name, "c%02d", f.card + 1);
+    const std::filesystem::path page = creditPage(name, creditsLang);
+    if (page.empty()) return;
+    aspect = 16.0f / 9.0f;
+    if (const od::TextureHandle t = creditTexture(r, page, aspect)) { // the window's height, centred
+        const float w = height * aspect, x0 = (width - w) * 0.5f;
+        const int a = int(255.0f * f.alpha);
+        cv.imageQuad(t, ui::Vec2(x0, 0.0f), ui::Vec2(x0 + w, 0.0f), ui::Vec2(x0 + w, height), ui::Vec2(x0, height),
+                     ui::Vec2(0.0f, 0.0f), ui::Vec2(1.0f, 0.0f), ui::Vec2(1.0f, 1.0f), ui::Vec2(0.0f, 1.0f),
+                     ui::rgba(255, 255, 255, a));
+    }
+}
+
+int galleryPictures() {
+    int n = 0;
+    std::error_code ec;
+    char name[16];
+    for (;;) {
+        std::snprintf(name, sizeof name, "g%02d.png", n + 1);
+        if (!std::filesystem::is_regular_file(assetsDir() / "ui" / "gallery" / name, ec)) return n;
+        ++n;
+    }
+}
+
+void HudUi::drawGallery(ui::Canvas& cv, od::Renderer& r, const std::filesystem::path& picture, int index, int count,
+                        float width, float height, bool side) {
+    CreditsFrame f;
+    f.background = 0.6f; // (the credits' illustration, dimmed further)
+    drawCredits(cv, r, f, width, height);
+    if (index < 0 || index >= count) return;
+    // the Extras' pictures are many: only the one shown keeps its texture
+    for (auto it = creditTex.begin(); it != creditTex.end();) {
+        if (it->first.find("extras") != std::string::npos && it->first != picture.string()) {
+            r.destroyTexture(it->second.first);
+            it = creditTex.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    float aspect = 1.0f;
+    if (const od::TextureHandle t = creditTexture(r, picture, aspect)) {
+        // the picture fitted to 78 % of the window's height (and 88 % of its width), above the caption
+        float h = height * (side ? 0.56f : 0.78f), w = h * aspect;
+        const float maxW = side ? std::min(width * 0.34f, height * 0.6f) : width * 0.88f;
+        if (w > maxW) w = maxW, h = w / aspect;
+        // (side: its right edge 3 % left of the middle, centred on the text block's height)
+        const float x0 = side ? width * 0.5f - height * 0.03f - w : (width - w) * 0.5f;
+        const float y0 = side ? height * 0.45f - h * 0.5f : (height * 0.86f - h) * 0.5f, e = std::max(2.0f, height / 360.0f);
+        cv.rectFilled(ui::Vec2(x0 - e, y0 - e), ui::Vec2(x0 + w + e, y0 + h + e), ui::rgba(0, 0, 0, 255)); // (the pictures' own black round them)
+        cv.imageQuad(t, ui::Vec2(x0, y0), ui::Vec2(x0 + w, y0), ui::Vec2(x0 + w, y0 + h), ui::Vec2(x0, y0 + h),
+                     ui::Vec2(0.0f, 0.0f), ui::Vec2(1.0f, 0.0f), ui::Vec2(1.0f, 1.0f), ui::Vec2(0.0f, 1.0f),
+                     ui::rgba(255, 255, 255, 255));
+        // the arrows at its sides and the dots under it (the one shown lit)
+        const float cy = y0 + h * 0.5f, a = height * 0.03f, gap = height * 0.03f;
+        const ui::Color arrow = ui::rgba(0x48, 0xd0, 0xd0, 230);
+        const ui::Vec2 l[3] = {ui::Vec2(x0 - gap - a, cy), ui::Vec2(x0 - gap, cy - a), ui::Vec2(x0 - gap, cy + a)};
+        const float rx = side ? width * 0.5f + height * 0.03f + std::min(width * 0.4f, height * 0.75f) : x0 + w; // (past the text)
+        const ui::Vec2 rr[3] = {ui::Vec2(rx + gap + a, cy), ui::Vec2(rx + gap, cy + a), ui::Vec2(rx + gap, cy - a)};
+        cv.convexFillAA(l, 3, arrow);
+        cv.convexFillAA(rr, 3, arrow);
+        const float dy = height * 0.955f, step = height * 0.03f, x = width * 0.5f - step * float(count - 1) * 0.5f;
+        for (int k = 0; k < count && count <= 24; ++k) // (a long album: its number in the caption instead)
+            cv.disc(ui::Vec2(x + step * float(k), dy), height * (k == index ? 0.008f : 0.005f),
+                    k == index ? ui::rgba(0x80, 0xe8, 0xb8, 255) : ui::rgba(0x80, 0x88, 0x98, 200));
+    }
+}
+
+int creditExtraPages(const std::string& lang) {
+    int n = 0;
+    char name[8];
+    for (;;) {
+        std::snprintf(name, sizeof name, "x%02d", n + 1);
+        if (creditPage(name, lang).empty()) return n;
+        ++n;
+    }
+}
+
+od::TextureHandle HudUi::creditTexture(od::Renderer& r, const std::filesystem::path& path, float& aspect) {
+    const auto key = path.string();
+    if (const auto it = creditTex.find(key); it != creditTex.end()) {
+        aspect = it->second.second;
+        return it->second.first;
+    }
+    od::TextureHandle t = 0;
+    aspect = 16.0f / 9.0f;
+    try {
+        const std::vector<uint8_t> bytes = od::readFile(path);
+        int w = 0, h = 0, comp = 0;
+        if (stbi_uc* px = stbi_load_from_memory(bytes.data(), int(bytes.size()), &w, &h, &comp, 4)) {
+            // white letters on black: the black becomes transparent (alpha = the brightest channel, the colour
+            // brought back to full), so the page lies over the staff roll's background as the game's pages do; a
+            // picture with its own transparency (the cards cNN, outlined) or none at all (the background) is kept
+            bool ownAlpha = false;
+            for (int i = 0; i < w * h && !ownAlpha; ++i) ownAlpha = px[size_t(i) * 4 + 3] != 255;
+            const std::string file = path.filename().string();
+            const bool cut = !ownAlpha && (file[0] == 'p' || file[0] == 'x'); // (the game's pages' HD copies)
+            for (int i = 0; cut && i < w * h; ++i) {
+                uint8_t* c = px + size_t(i) * 4;
+                const int m = std::max({c[0], c[1], c[2]});
+                if (m > 0)
+                    for (int k = 0; k < 3; ++k) c[k] = uint8_t(std::min(255, c[k] * 255 / m));
+                c[3] = uint8_t(m);
+            }
+            t = r.createTexture(w, h, reinterpret_cast<const uint32_t*>(px));
+            aspect = float(w) / float(h);
+            stbi_image_free(px);
+        }
+    } catch (const std::exception& e) {
+        SDL_Log("credits: %s", e.what());
+    }
+    creditTex[key] = {t, aspect};
+    return t;
+}
 
 void HudUi::load(od::Renderer& r) {
     tried = true;
@@ -29,6 +243,10 @@ void HudUi::load(od::Renderer& r) {
         // tpage 0x0d: the HUD frames; 0x0e: the escape timer of 0x4270a0 (content/calbania escapeTimerDraw)
         for (const uint32_t key : {0xd7fd0u, 0xd7fd1u, 0xd7fd2u, 0xd7fd3u, 0xe3c38u, 0xe3c78u, 0x367dc8u, 0x367d48u, 0x367dc0u,
                                    0x367d80u}) {
+            if (const od::TextureHandle t = loadHdPage(r, key)) { // an HD page in the assets takes the enlarged one's place
+                tex[key] = t;
+                continue;
+            }
             const auto rgba = vram.decode(uint16_t(key >> 16), uint16_t(key & 0xffff));
             std::vector<uint32_t> px(1024 * 1024);
             for (size_t y = 0; y < 1024; ++y)
@@ -76,11 +294,17 @@ void drawSprite(std::array<Rgb5, kScreenW * kScreenH>& screen, int pageX, int pa
 } // namespace
 
 void HudUi::drawStaff(ui::Canvas& cv, od::Renderer& r, const od::port::StaffPicture& pic, float width, float height) {
-    if (!pic.background && !pic.page) return;
+    if (!pic.background && !pic.page && pic.extra < 0) return;
+    // OpenDash: the game's text pages drawn again in HD in the interface's language, its own pages added
+    char pageName[8] = "";
+    if (pic.extra >= 0) std::snprintf(pageName, sizeof pageName, "x%02d", pic.extra + 1);
+    else if (pic.page && pic.pageIndex >= 0) std::snprintf(pageName, sizeof pageName, "p%02d", pic.pageIndex);
+    const std::filesystem::path hdPage = pageName[0] ? creditPage(pageName, creditsLang) : std::filesystem::path();
+    const bool replaced = !hdPage.empty() && pic.extra < 0;
     const auto same = [](const od::port::StaffPicture& a, const od::port::StaffPicture& b) {
         return a.background == b.background && a.backgroundLevel == b.backgroundLevel && a.page == b.page &&
                a.brightness == b.brightness && a.vramX == b.vramX && a.clutY == b.clutY && a.segment == b.segment &&
-               a.decor == b.decor;
+               a.decor == b.decor && a.pageIndex == b.pageIndex && a.extra == b.extra;
     };
     if (!staffTex || !same(pic, staffShown)) {
         static std::array<Rgb5, kScreenW * kScreenH> screen;
@@ -90,7 +314,7 @@ void HudUi::drawStaff(ui::Canvas& cv, od::Renderer& r, const od::port::StaffPict
             drawSprite(screen, 0x380, 0x100, 1, 0x7dc0, 0x100, 0, 0, 0, 0x40, 0xf0, pic.backgroundLevel, SpriteBlend::Opaque); // tpage 0xbe
             drawSprite(screen, 0x300, 0x100, 1, 0x7dc0, 0, 0, 0, 0, 0x100, 0xf0, pic.backgroundLevel, SpriteBlend::Opaque); // tpage 0xbc
         }
-        if (pic.page) {
+        if (pic.page && !replaced) {
             const int pageX = pic.vramX & ~0x3f, pageY = pic.vramY & 0x100;
             if (pic.decor)
                 drawSprite(screen, pageX, pageY, pic.mode, 0x7cc0, pic.x + pic.decorU, pic.y + pic.decorV, pic.decorU & 0xff,
@@ -117,6 +341,16 @@ void HudUi::drawStaff(ui::Canvas& cv, od::Renderer& r, const od::port::StaffPict
     cv.quadFilled(ui::Vec2(0.0f, 0.0f), ui::Vec2(width, 0.0f), ui::Vec2(width, height), ui::Vec2(0.0f, height), ui::rgba(0, 0, 0, 255));
     cv.imageQuad(staffTex, a, ui::Vec2(b.x, a.y), b, ui::Vec2(a.x, b.y), ui::Vec2(0.0f, 0.0f), ui::Vec2(1.0f, 0.0f), ui::Vec2(1.0f, 1.0f),
                  ui::Vec2(0.0f, 1.0f), ui::rgba(255, 255, 255));
+    if (!hdPage.empty()) { // the HD page, the window's height, centred (16:9: the whole width of a wide window)
+        float aspect = 16.0f / 9.0f;
+        if (const od::TextureHandle t = creditTexture(r, hdPage, aspect)) {
+            const int v = std::min(255, int(pic.extra >= 0 ? pic.extraBrightness : pic.brightness) * 2);
+            const float w = height * aspect, x0 = (width - w) * 0.5f;
+            cv.imageQuad(t, ui::Vec2(x0, 0.0f), ui::Vec2(x0 + w, 0.0f), ui::Vec2(x0 + w, height), ui::Vec2(x0, height),
+                         ui::Vec2(0.0f, 0.0f), ui::Vec2(1.0f, 0.0f), ui::Vec2(1.0f, 1.0f), ui::Vec2(0.0f, 1.0f),
+                         ui::rgba(v, v, v, v));
+        }
+    }
 }
 
 void HudUi::draw(ui::Canvas& cv, const std::vector<od::hud::Prim>& prims, float width, float height) const {

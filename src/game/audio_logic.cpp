@@ -384,6 +384,7 @@ void startVoice(const Start& s) {
     v.active = 1;
     v.entry = s.entry;
     v.priority = s.prio;
+    if (gSfxStarted && soundContext().request.kind != uint16_t(SoundRequestKind::Loop)) gSfxStarted(s.slot, s.entry);
     const BankEntry e = dataRecord<BankEntry>(bank.entries + uint32_t(v.entry) * kBankEntrySize, BankEntry::kBytes);
     v.frequency = e.frequency;
     v.buffer = e.buffer;
@@ -488,6 +489,9 @@ int handlerSfxBank(const SoundDescriptor& d) {
     return startSfxRequest(d, uint8_t(i));
 }
 
+// OpenDash: the music stream a stage change keeps playing (keepMusicStream), kNoStream: none
+uint32_t g_keptMusicStream = kNoStream;
+
 // exe 0x40dc90 / 0x40dd00(ch, mp3Slot, ...): the slot's stream on the channel, faded in
 void startMusicChannel(uint32_t ch, uint32_t slot) {
     MusicState& m = musicState();
@@ -497,9 +501,12 @@ void startMusicChannel(uint32_t ch, uint32_t slot) {
     c.loop = uint8_t(mp3.loop);
     const uint32_t bit = 1u << (ch & 0x1f);
     m.playing |= bit;
-    be().streamVolume(c.stream, 0);
+    // OpenDash: the music starts at full volume (Herbert: no fade in), not faded in by kMusicFadeInStep; the fade entry
+    // still runs once (one step to full) for the channel's done bit
+    soundContext().fadeVolumes[ch] = kSoundVolumeFull;
+    be().streamVolume(c.stream, int16_t(uint16_t(uint32_t((int32_t(kSoundVolumeFull) * int32_t(soundMasters().bgm)) >> 14))));
     be().streamPlay(c.stream);
-    soundFadeIn(bit, kMusicFadeInStep, 0);
+    soundFadeIn(bit, kSoundVolumeFull, 0);
     m.currentStream = c.stream;
 }
 
@@ -512,6 +519,13 @@ int handlerMusic(const SoundDescriptor& d) {
     const uint32_t prio = d.mix & kDescriptorPriority;
     auto&& c = m.channels[ch];
     const uint32_t idx = c.index;
+    // OpenDash: the new stage asks for the music already playing on this channel (keepMusicStream): it goes on
+    if (g_keptMusicStream != kNoStream && d.voice < kMp3Slots && mp3Slots().slots[d.voice].stream == g_keptMusicStream &&
+        ((1u << (idx & 0x1f)) & m.playing) && c.stream == g_keptMusicStream) {
+        g_keptMusicStream = kNoStream;
+        c.priority = uint8_t(prio);
+        return 0;
+    }
     if ((1u << (idx & 0x1f)) & m.playing) {
         const uint32_t old = c.priority;
         if (old > prio) return 0;
@@ -534,8 +548,7 @@ int handlerMusic(const SoundDescriptor& d) {
             m.done |= 0x20u << (f.channel & 0x1f);
         }
     }
-    startMusicChannel(c.index, d.voice);
-    ctx.fadeVolumes[c.index] = 0;
+    startMusicChannel(c.index, d.voice); // OpenDash: at full volume (the exe set its fade volume to 0 here, faded in)
     return 0;
 }
 
@@ -815,6 +828,7 @@ void RecordingSoundBackend::streamResume(uint32_t s) {
     if (next) next->streamResume(s);
 }
 bool RecordingSoundBackend::streamPlaying(uint32_t s) { return next ? next->streamPlaying(s) : false; }
+double RecordingSoundBackend::streamSeconds(uint32_t s) { return next ? next->streamSeconds(s) : -1.0; }
 std::vector<uint8_t> RecordingSoundBackend::readVoiceTrack(const std::string& file, uint32_t track) {
     return next ? next->readVoiceTrack(file, track) : std::vector<uint8_t>{};
 }
@@ -1429,6 +1443,15 @@ void unloadMp3Slot(uint32_t slot) {
     s.clearWords();
 }
 
+void keepMusicStream(uint32_t stream) { g_keptMusicStream = stream; }
+
+uint32_t musicChannelOfStream(uint32_t stream) {
+    const MusicState& m = musicState();
+    for (uint32_t ch = 0; ch < kMusicChannels; ++ch)
+        if (((1u << ch) & m.playing) && m.channels[ch].stream == stream) return ch;
+    return kMusicChannels;
+}
+
 void loadMp3Slot(std::span<const uint8_t> seg, uint32_t slot, uint32_t loop) {
     unloadMp3Slot(slot);
     auto&& s = mp3Slots().slots[slot];
@@ -1446,6 +1469,11 @@ void voiceClipStop() {
     be().destroyStream(c.stream);
     c.stream = kNoStream;
     c.data = 0;
+}
+
+VoiceClipInfo& voiceClipInfo() {
+    static VoiceClipInfo s;
+    return s;
 }
 
 void voiceClipPlay(uint32_t id) {
@@ -1469,6 +1497,10 @@ void voiceClipPlay(uint32_t id) {
     const std::string& name = files.names[entry.file];
     const std::vector<uint8_t> track = be().readVoiceTrack(name, entry.track);
     if (track.empty()) return; // exe 0x40b410 failed
+    VoiceClipInfo& info = voiceClipInfo();
+    info.file = name;
+    info.track = entry.track;
+    ++info.serial;
     VoiceClipState& c = voiceClip();
     c.data = kVoiceClipMarker;
     const uint32_t s = be().createStream(track, 0);
@@ -1489,6 +1521,11 @@ void voiceClipFadeOut(uint32_t step) {
 bool voiceClipPlaying() {
     if (voiceClip().stream == kNoStream) return false;
     return be().streamPlaying(voiceClip().stream);
+}
+
+double voiceClipSeconds() {
+    if (voiceClip().stream == kNoStream) return -1.0;
+    return be().streamSeconds(voiceClip().stream);
 }
 
 void buildSin64Tables() {

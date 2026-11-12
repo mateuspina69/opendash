@@ -299,7 +299,7 @@ void pageHeaderDraw(StatusScreen& s) {
         labelNext(kLblPageTab, uint16_t(1 | s.page << 8));
         otSprite(c, 0xf0 + extra, 0x12, kRightTabArt, 0x40, 0x10);
     }
-    labelNext(kLblMenuBar);
+    labelNext(kLblMenuBar, optionsSoundTestOn() ? 1 : 0); // (OpenDash: the sound test's Play / Stop)
     otSprite(c, 0x68, 0xd0, kMenuBarArt, 0x80, 0x10);
 }
 

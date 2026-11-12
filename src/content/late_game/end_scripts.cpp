@@ -1517,7 +1517,13 @@ struct StaffDecor : DataRecord {
 };
 constexpr uint32_t kStaffPageSize = 0x10;
 constexpr uint8_t kPagesEnd = 0xff;
-enum class StaffPhase : uint8_t { Start = 0, Intro = 1, Pages = 2, Finish = 3 };
+// Extras (OpenDash): its added pages after the game's last one, each faded in, held, faded out as the game's
+enum class StaffPhase : uint8_t { Start = 0, Intro = 1, Pages = 2, Finish = 3, Extras = 4, Viewer = 5 };
+constexpr uint16_t kExtraFade = 0x1e, kExtraHold = 0xd2; // ticks (the pages' fades; ~7 s held)
+int gExtra = -1;          // OpenDash's added page being shown
+bool gExtrasDone = false; // shown in this staff roll
+uint8_t gExtraStep = 0;   // its PagePhase
+uint16_t gExtraFade = 0;
 enum class PagePhase : uint8_t { Show = 0, FadeIn = 1, Hold = 2, FadeOut = 3, Wait = 4 };
 enum class BackgroundRamp : uint8_t { None = 0, Down = 1, Up = 2 };
 
@@ -1548,6 +1554,7 @@ void staffPageDraw() {
     const StaffPage page = dataRecord<StaffPage>(f.page, StaffPage::kBytes);
     StaffPicture& pic = staffRoll().picture;
     pic.page = true;
+    pic.pageIndex = int16_t((f.page - stateAddress(TableId::EndScriptsStaffPages)) / kStaffPageSize);
     pic.brightness = f.pageBrightness;
     pic.vramX = int16_t(page.vramX + (int32_t(page.buffer) << ((page.mode & 0x1f) + 6)));
     pic.vramY = page.vramY;
@@ -1580,13 +1587,22 @@ void staffStep(const RoutineRef& routine) {
     switch (StaffPhase(s.stepPhase)) {
     case StaffPhase::Start: // exe 0x53be70
         f.page = stateAddress(TableId::EndScriptsStaffPages);
+        gExtrasDone = false;
+        gExtra = -1;
         f.pageBrightness = 0x80;
         f.shown = 0;
         f.ticks = 0;
         f.units = 0;
-        if (g_host.musicStart) g_host.musicStart(0, 0); // exe 0x40dc90(0, 0, 0)
-        staffNextSegment();
-        s.stepPhase = uint8_t(StaffPhase::Intro);
+        // OpenDash (Herbert): the HD credits over the dimmed illustration, spread over the song (creditsView*): the
+        // song is the host's (the credits' own choice of song), the game's pages are not drawn
+        creditsViewStart(false);
+        s.stepPhase = uint8_t(StaffPhase::Viewer);
+        break;
+    case StaffPhase::Viewer:
+        if (!creditsViewTick(false)) {
+            s.enterStepPhase(uint8_t(StaffPhase::Finish));
+            f.ramp = uint8_t(BackgroundRamp::Up);
+        }
         break;
     case StaffPhase::Intro: // exe 0x53bec0: 10 units, then the background dims and the pages start at unit 0x16
         unskippable(false);
@@ -1642,6 +1658,16 @@ void staffStep(const RoutineRef& routine) {
             break;
         }
         case PagePhase::Wait:
+            // OpenDash: its own pages (the other voice casts, the translations, its credits) before the last one
+            if (!gExtrasDone && int32_t(f.units) >= int32_t(f.nextUnit) && g_host.extraPages &&
+                g_host.extraPages() > 0 &&
+                dataRecord<StaffPage>(f.page + 2 * kStaffPageSize, StaffPage::kBytes).end == kPagesEnd) {
+                gExtrasDone = true;
+                gExtra = 0;
+                gExtraStep = uint8_t(PagePhase::Show);
+                s.enterStepPhase(uint8_t(StaffPhase::Extras));
+                break;
+            }
             if (int32_t(f.units) >= int32_t(f.nextUnit)) {
                 staffNextSegment();
                 const uint32_t p = f.page;
@@ -1658,6 +1684,43 @@ void staffStep(const RoutineRef& routine) {
         }
         staffPageDraw(); // exe 0x53c0c0
         break;
+    case StaffPhase::Extras: { // OpenDash: its pages, as the game's (fade in 0x1e, hold, fade out 0x1e)
+        StaffPicture& pic = staffRoll().picture;
+        switch (PagePhase(gExtraStep)) {
+        case PagePhase::Show:
+            gExtraFade = kExtraFade;
+            gExtraStep = uint8_t(PagePhase::FadeIn);
+            [[fallthrough]];
+        case PagePhase::FadeIn:
+            pic.extraBrightness = uint8_t(((kExtraFade - gExtraFade) << 7) / kExtraFade);
+            if (--gExtraFade == 0) {
+                gExtraFade = kExtraHold;
+                gExtraStep = uint8_t(PagePhase::Hold);
+            }
+            break;
+        case PagePhase::Hold:
+            pic.extraBrightness = 0x80;
+            if (--gExtraFade == 0) {
+                gExtraFade = kExtraFade;
+                gExtraStep = uint8_t(PagePhase::FadeOut);
+            }
+            break;
+        default: // FadeOut
+            pic.extraBrightness = uint8_t((gExtraFade << 7) / kExtraFade);
+            if (--gExtraFade == 0) {
+                gExtraStep = uint8_t(PagePhase::Show);
+                if (++gExtra >= (g_host.extraPages ? g_host.extraPages() : 0)) { // back to the game's last page
+                    gExtra = -1;
+                    s.enterStepPhase(uint8_t(StaffPhase::Pages));
+                    s.stepSubPhase = uint8_t(PagePhase::Wait);
+                    f.nextUnit = int16_t(f.units); // its unit is now
+                }
+            }
+            break;
+        }
+        pic.extra = int16_t(gExtra);
+        break;
+    }
     case StaffPhase::Finish: // exe 0x53c0a0: the loader idle -> fade 0x12, next (-> the wrap-up)
         if (!fileLoading()) {
             scriptFade(0x12, 0);
@@ -1759,6 +1822,7 @@ void staffRollScript() {
         }
         if (const RoutineRef routine = stateRoutine(current.routine)) staffStep(routine);
         if (scriptSkipRequested() && display().drawBuffer != 0) {
+            creditsViewTick(true); // (the credits end with the skip)
             staffRoll().skipped = 1;
             scriptFade(0x22, 0);
             soundFadeOut(0xf, 0x111, 0);
@@ -1772,6 +1836,34 @@ void staffRollScript() {
     }
 }
 
+// ---- OpenDash (Herbert): the credits (creditsView*) -- the app's (app/ui/hud_ui creditsFrame): this only starts
+// and ends them and asks the host whether they still run
+bool gViewActive = false, gViewTitle = false;
+CreditsViewHost gViewHost;
+
+} // namespace
+
+void creditsViewSetHost(CreditsViewHost host) { gViewHost = std::move(host); }
+
+void creditsViewStart(bool title) {
+    gViewActive = true;
+    gViewTitle = title;
+    if (gViewHost.begin) gViewHost.begin(title);
+}
+
+bool creditsViewActive() { return gViewActive; }
+
+bool creditsViewTick(bool skip) {
+    if (!gViewActive) return false;
+    if (skip || !gViewHost.update || !gViewHost.update()) {
+        gViewActive = false;
+        if (gViewHost.end) gViewHost.end(gViewTitle);
+        return false;
+    }
+    return true;
+}
+
+namespace {
 } // namespace
 
 void st5cStageCase() {

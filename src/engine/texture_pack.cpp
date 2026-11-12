@@ -15,6 +15,7 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #define STBI_ONLY_PNG
+#define STBI_ONLY_JPEG // OpenDash: the Extras' pictures (assets/ui/extras: scans and art as .jpg)
 // static: the app links its own copy (app/ui/hd_art)
 #define STB_IMAGE_WRITE_STATIC
 #define STB_IMAGE_WRITE_IMPLEMENTATION

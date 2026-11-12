@@ -24,6 +24,7 @@ std::filesystem::path assetsDir();
 
 struct VectorUi {
     bool enabled = true;
+    float textScale = 1.0f; // the text size (MessageUi::textScale): the captions this much smaller
     // this frame's language ("ptbr", "en", "jp"); its captions are loaded on a change
     void setLanguage(const std::string& code);
 
@@ -36,6 +37,13 @@ struct VectorUi {
     bool label(od::Renderer& r, ui::Canvas& cv, const od::port::ScreenPrim& p, float s, ui::Vec2 o);
     // uploads the glyphs this frame's labels rasterized (before the canvas is drawn)
     void flush(od::Renderer& r);
+    // OpenDash: a line of text in the UI's font, centred on cx, its baseline at y (screen px), `px` the font's size
+    void text(od::Renderer& r, ui::Canvas& cv, const std::string& t, float cx, float y, float px, ui::Color c);
+    // the same, its left at x, shrunk to maxW (window px) when wider; bold: the ExtraBold face
+    void textLeft(od::Renderer& r, ui::Canvas& cv, const std::string& t, float x, float y, float px, ui::Color c,
+                  float maxW, bool bold = false);
+    // the caption `key` in this language; null = none (the pixel art stays)
+    const std::string* word(const std::string& key) const;
 
 private:
     struct Picture {
@@ -46,14 +54,31 @@ private:
         int w = 0, h = 0;
     };
     std::map<uint16_t, Picture> pics_;
+    std::map<int, Picture> flags_; // the languages' flags (kLblFlag), by language base
     UiText bold_, regular_;
+    std::string fontSet_; // the script bold_ / regular_ were loaded for ("jp" the full M+, "ko" / "zh" Noto CJK, "" Latin)
     std::string lang_;
     std::map<std::string, std::string> words_;
     mutable std::set<std::string> missing_;
     std::set<std::string> missingAt_;
-    // the caption `key` in this language; null = none (the pixel art stays)
-    const std::string* word(const std::string& key) const;
     bool fonts(od::Renderer& r);
+    // OpenDash: picture `vec` rasterized at scale s (cached); null = none
+    Picture* raster(od::Renderer& r, uint16_t vec, float s);
+    // OpenDash (Herbert's picture): the key configuration's DualShock, assets/ui/dualshock.png, scaled down on the CPU
+    // (area average) to the size it is drawn at; false = none (the SVG stays)
+    struct Bitmap {
+        bool tried = false;
+        std::vector<uint8_t> px; // RGBA
+        int w = 0, h = 0;
+        od::TextureHandle tex = 0;
+        int tw = 0, th = 0;
+    };
+    Bitmap pads_[4]; // by button style (prompts buttonStyle): dualshock / xbox / steamdeck / switch .png
+    bool padPicture(od::Renderer& r, ui::Canvas& cv, float s, ui::Vec2 o);
+    // OpenDash: the sub-screens' backdrop in HD (Doni Arts' tile, assets/ui/backdrop_tile.png, at 45 degrees, scrolling
+    // down-right as the pixel art's); false = no tile (the pixel art)
+    Bitmap backdrop_;
+    bool backdrop(od::Renderer& r, ui::Canvas& cv, float s, ui::Vec2 o, float extra);
     // the text drawn on picture `vec` (the letters of its static art)
     void pictureText(ui::Canvas& cv, uint16_t vec, float s, ui::Vec2 o);
     // the 9-slice frames (kVecFrame0..2): an SVG at the call's size (frameSvg), cached by style and size

@@ -1,6 +1,7 @@
 #include "app/own_world.hpp"
 #include "app/play_session.hpp"
 #include "app/lang_sfx.hpp"
+#include "app/music_choice.hpp"
 
 #include <utility>
 #include <SDL3/SDL.h>
@@ -25,6 +26,7 @@
 #include "content/yosyonke/st05_entry_list.hpp"
 #include "content/manda/exam_spawner.hpp"
 #include "content/nino/field_spawners.hpp"
+#include "app/ui/hud_ui.hpp"
 #include "engine/dat.hpp"
 #include "engine/data_source.hpp"
 #include "engine/texture_pack.hpp"
@@ -72,6 +74,7 @@
 #include "game/vram_moves.hpp"
 #include "game/actor_sweeps.hpp"
 #include "game/display.hpp"
+#include "game/exit_transitions.hpp"
 #include "game/fade.hpp"
 #include "game/room_params.hpp"
 #include "game/transition.hpp"
@@ -111,7 +114,7 @@ void PlayerView::playerFiles() {
             if (mixer)
                 for (const od::FilePart& seg : f.parts)
                     if (seg.kind == od::FilePart::Kind::WavSfxBank)
-                        od::lang_sfx::load(pack.get(), name, seg.bytes, seg.arg, seg.extra);
+                        od::lang_sfx::load(voicePack.get(), name, seg.bytes, seg.arg, seg.extra);
         } catch (const std::exception& e) {
             SDL_Log("player file %s: %s", name.c_str(), e.what());
             continue;
@@ -122,8 +125,36 @@ void PlayerView::playerFiles() {
     }
 }
 
+double PlayerView::mp3Seconds(std::span<const uint8_t> b) {
+    size_t i = 0;
+    if (b.size() > 10 && b[0] == 'I' && b[1] == 'D' && b[2] == '3')
+        i = 10 + (size_t(b[6] & 0x7f) << 21 | size_t(b[7] & 0x7f) << 14 | size_t(b[8] & 0x7f) << 7 | size_t(b[9] & 0x7f));
+    static const int kRates[3][3] = {{44100, 48000, 32000}, {22050, 24000, 16000}, {11025, 12000, 8000}};
+    static const int kBit1[16] = {0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0};
+    static const int kBit2[16] = {0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160, 0};
+    double seconds = 0.0;
+    int frames = 0;
+    while (i + 4 <= b.size()) {
+        if (b[i] != 0xff || (b[i + 1] & 0xe0) != 0xe0) { ++i; continue; }
+        const int ver = (b[i + 1] >> 3) & 3, layer = (b[i + 1] >> 1) & 3, br = b[i + 2] >> 4, sr = (b[i + 2] >> 2) & 3;
+        const int pad = (b[i + 2] >> 1) & 1;
+        if (ver == 1 || layer != 1 || br == 0 || br == 15 || sr == 3) { ++i; continue; } // (Layer III only)
+        const int vi = ver == 3 ? 0 : ver == 2 ? 1 : 2, rate = kRates[vi][sr];
+        const int kbps = vi == 0 ? kBit1[br] : kBit2[br], samples = vi == 0 ? 1152 : 576;
+        const size_t len = size_t(samples / 8 * kbps * 1000 / rate + pad);
+        if (len < 4) { ++i; continue; }
+        seconds += double(samples) / double(rate);
+        ++frames;
+        i += len;
+    }
+    return frames > 10 ? seconds : 0.0;
+}
+
 void PlayerView::init(const od::Config& cfg) {
     discData = cfg.data == "disc";
+    creditsMusicUs = cfg.creditsMusicUs;
+    textSize = cfg.textSize;
+    pcDatDir = cfg.datDir.parent_path() / "dat";
     try {
         files.mapCode(od::dataSource().gameFile("PL00P000.DAT"));
         od::port::registerBuiltData(kFrameByte, frameKey);
@@ -149,9 +180,18 @@ void PlayerView::loadMessageBank() {
     if (!bankRoomFile) return;
     std::vector<uint8_t> bank(0x4000, 0);
     const std::string name = "msg/" + std::filesystem::path(bankRoomName).stem().string() + ".bin";
+    bigMessageBank = false;
     if (pack && pack->has(name)) {
         const auto b = pack->file(name);
         std::copy_n(b.begin(), std::min(b.size(), bank.size()), bank.begin());
+        if (b.size() > 0x3c00 && b.size() <= kBigMessageBankSize) {
+            std::vector<uint8_t> big(kBigMessageBankSize, 0);
+            std::copy(b.begin(), b.end(), big.begin());
+            files.map(kBigMessageBank, big);
+            bigMessageBank = true;
+        } else if (b.size() > kBigMessageBankSize) {
+            SDL_Log("lang: %s is larger than 0x%x bytes: cut", name.c_str(), unsigned(kBigMessageBankSize));
+        }
     } else {
         if (pack) SDL_Log("lang: %s missing in %s, native bank", name.c_str(), pack->id().c_str());
         for (const od::FilePart& seg : bankRoomFile->parts)
@@ -159,6 +199,7 @@ void PlayerView::loadMessageBank() {
                 std::copy_n(seg.bytes.begin(), std::min(seg.bytes.size(), bank.size()), bank.begin());
     }
     files.map(od::port::kMessageBank, bank);
+    od::port::setBankRedirect(od::port::kMessageBank, bigMessageBank ? kBigMessageBank : 0);
     bankLanguage = language;
 }
 
@@ -192,22 +233,22 @@ const od::lang::LangPack* PlayerView::labelPack() {
 }
 
 bool PlayerView::restoredAvailable() const {
-    const auto dir = pack ? pack->folder() : std::filesystem::path();
+    const auto dir = voicePack ? voicePack->folder() : std::filesystem::path();
     std::error_code ec;
     return !dir.empty() && std::filesystem::is_directory(dir / "snd_restored", ec);
 }
 
 void PlayerView::applyVoiceDirs() {
     if (!mixer) return;
-    const auto dir = pack ? pack->folder() : std::filesystem::path();
+    const auto dir = voicePack ? voicePack->folder() : std::filesystem::path();
     std::vector<std::filesystem::path> dirs;
     if (!dir.empty()) {
         if (restoredVoices && restoredAvailable()) dirs.push_back(dir / "snd_restored");
         dirs.push_back(dir / "snd");
     }
     mixer->setVoiceDirs(std::move(dirs));
-    if (pack && dir.empty()) // the disc's voices (engine/lang_pack): the clips of its XA files
-        mixer->setVoiceSource([p = pack](const std::string& f, uint32_t t) { return p->voiceTrack(f, t); });
+    if (voicePack && dir.empty()) // the disc's voices (engine/lang_pack): the clips of its XA files
+        mixer->setVoiceSource([p = voicePack](const std::string& f, uint32_t t) { return p->voiceTrack(f, t); });
     else if (discData) {
         std::shared_ptr<const od::lang::LangPack> fallback = makePack(od::lang::Language::English);
         mixer->setVoiceSource([p = std::move(fallback)](const std::string& f, uint32_t t) {
@@ -227,11 +268,24 @@ void PlayerView::setLanguage(od::lang::Language l) {
         pack = makePack(l);
     }
     language = l;
-    applyVoiceDirs();
-    if (mixer) od::lang_sfx::reloadAll(pack.get()); // the voice barks (app/lang_sfx)
     loadExeBanks();
     if (bankStage >= 0 && bankLanguage != l) loadMessageBank();
-    SDL_Log("lang: %s", od::lang::code(l));
+    SDL_Log("lang: text %s", od::lang::code(l));
+}
+
+void PlayerView::setVoiceLanguage(od::lang::Language l) {
+    l = od::lang::uiLanguage(l); // the packs translated from the Japanese have no voices: their language's disc's
+    if (discData && l == od::lang::Language::Japanese) l = od::lang::Language::English; // no PC snd/
+    voicePack = makePack(l);
+    if (l != od::lang::Language::Japanese && !voicePack) {
+        SDL_Log("lang: no %s voice pack (disc image or %s)", od::lang::code(l), langDir.string().c_str());
+        l = discData ? od::lang::Language::English : od::lang::Language::Japanese;
+        voicePack = makePack(l);
+    }
+    voiceLanguage = l;
+    applyVoiceDirs();
+    if (mixer) od::lang_sfx::reloadAll(voicePack.get()); // the voice barks (app/lang_sfx)
+    SDL_Log("lang: voices %s", od::lang::code(l));
 }
 
 void PlayerView::loadExeBanks() {
@@ -310,11 +364,14 @@ void PlayerView::loadExeBanks() {
     }
     od::port::clearBankRedirects();
     for (auto [exe, pack] : redirects) od::port::setBankRedirect(exe, pack);
+    if (bigMessageBank) od::port::setBankRedirect(od::port::kMessageBank, kBigMessageBank); // loadMessageBank's
     od::port::setMenuBanks(b);
     od::port::setQuizLocale(quizAnswers);
-    od::port::setPs1Text(pack != nullptr);
+    // a pack in the PC's format (engine/lang pcScript): the PC's conventions, as without a pack
+    const bool latinPack = pack != nullptr && !od::lang::pcScript(language);
+    od::port::setPs1Text(latinPack);
     std::optional<std::array<uint8_t, 256>> latin; // no pack: the .DAT files' own text may be Latin (engine/lang)
-    if (!pack) {
+    if (!latinPack) {
         for (const od::FilePart& part : od::dataSource().gameFile("INIT.DAT").parts)
             if (part.kind == od::FilePart::Kind::PcFont && part.arg == 0)
                 latin = od::lang::latinDatWidths(part.bytes, int(part.extra));
@@ -326,7 +383,7 @@ void PlayerView::loadExeBanks() {
         od::port::setPs1Widths(latin->data(), kSingleByteGlyphs);
     } else { // the layout pass's advance = the pack font's (game/message)
         std::vector<uint8_t> w;
-        if (pack && pack->has("widths.bin")) w = pack->file("widths.bin");
+        if (latinPack && pack->has("widths.bin")) w = pack->file("widths.bin");
         od::port::setPs1Widths(w.size() >= 256 ? w.data() : nullptr, w.size() > 256 ? w[256] : 0x6b);
     }
     od::port::setNameBank(b.names);
@@ -674,7 +731,7 @@ void PlayerView::audioInit(const od::Config& cfg, bool device) {
         const od::GameFile init = od::dataSource().gameFile("INIT.DAT");
         for (const od::FilePart& seg : init.parts)
             if (seg.kind == od::FilePart::Kind::WavSfxBank)
-                od::lang_sfx::load(pack.get(), "INIT.DAT", seg.bytes, seg.arg, seg.extra);
+                od::lang_sfx::load(voicePack.get(), "INIT.DAT", seg.bytes, seg.arg, seg.extra);
         SDL_Log("audio: %s, INIT bank loaded", mixer->hasDevice() ? "device" : "silent");
     } catch (const std::exception& e) {
         SDL_Log("audio disabled: %s", e.what());
@@ -688,19 +745,53 @@ void PlayerView::audioBindRoom(const RoomMesh& mesh) {
     try {
         if (mesh.stage == audioStage) return;
         audioStage = mesh.stage;
-        od::port::soundFadeOut(0xf, 0x111, 0); // Maybe_GameModeStageTransition substate 2
+        // the new stage's music (its texture file's music parts; the originals' with the extended music off)
+        od::GameFile tex, original;
+        std::vector<const od::FilePart*> music;
+        if (od::dataSource().hasFile(mesh.textureFile)) {
+            tex = od::dataSource().gameFile(mesh.textureFile);
+            for (const od::FilePart& seg : od::music_choice::musicOf(mesh.textureFile, tex, original).parts)
+                if (seg.kind == od::FilePart::Kind::Mp3Music || seg.kind == od::FilePart::Kind::Ps1Music)
+                    music.push_back(&seg);
+        }
+        auto hashOf = [](const std::vector<uint8_t>& b) {
+            uint64_t h = 1469598103934665603ull;
+            for (const uint8_t x : b) h = (h ^ x) * 1099511628211ull;
+            return h ^ b.size();
+        };
+        // OpenDash: a slot whose music is the same as the one playing from it keeps playing (no fade out, no reload,
+        // the stage's music request leaves it running: game/audio_logic keepMusicStream)
+        uint32_t keptChannels = 0;
+        int keptSlot = -1;
+        for (size_t k = 0; k < music.size() && k < musicSlotHash.size(); ++k) {
+            const uint32_t stream = od::port::mp3Slots().slots[k].stream;
+            if (musicSlotHash[k] == 0 || musicSlotHash[k] != hashOf(music[k]->bytes) || stream != musicSlotStream[k])
+                continue;
+            const uint32_t ch = od::port::musicChannelOfStream(stream);
+            if (ch >= od::port::kMusicChannels) continue;
+            keptChannels |= 1u << ch;
+            keptSlot = int(k);
+            od::port::keepMusicStream(stream);
+            break;
+        }
+        if (keptSlot < 0) od::port::keepMusicStream(od::port::kNoStream);
+        od::port::soundFadeOut(0xfu & ~keptChannels, 0x111, 0); // Maybe_GameModeStageTransition substate 2
         int banks = 0, mp3 = 0;
         for (const od::FilePart& seg : mesh.roomFile->parts)
             if (seg.kind == od::FilePart::Kind::WavSfxBank) {
-                od::lang_sfx::load(pack.get(), mesh.roomFileName, seg.bytes, seg.arg, seg.extra);
+                od::lang_sfx::load(voicePack.get(), mesh.roomFileName, seg.bytes, seg.arg, seg.extra);
                 ++banks;
             }
-        if (od::dataSource().hasFile(mesh.textureFile)) {
-            const od::GameFile tex = od::dataSource().gameFile(mesh.textureFile);
-            for (const od::FilePart& seg : tex.parts)
-                if (seg.kind == od::FilePart::Kind::Mp3Music || seg.kind == od::FilePart::Kind::Ps1Music)
-                    od::port::loadMp3Slot(seg.bytes, uint32_t(mp3++), seg.arg);
+        for (const od::FilePart* seg : music) {
+            const size_t k = size_t(mp3++);
+            if (int(k) == keptSlot) continue;
+            od::port::loadMp3Slot(seg->bytes, uint32_t(k), seg->arg);
+            if (k < musicSlotHash.size()) {
+                musicSlotHash[k] = hashOf(seg->bytes);
+                musicSlotStream[k] = od::port::mp3Slots().slots[k].stream;
+            }
         }
+        for (size_t k = music.size(); k < musicSlotHash.size(); ++k) musicSlotHash[k] = 0;
         od::port::stageMusic(); // the stage setup's Maybe_StageSoundStart / ambience calls
         SDL_Log("audio: ST%02X: %d SFX bank(s), %d music slot(s)", mesh.stage, banks, mp3);
     } catch (const std::exception& e) {
@@ -780,7 +871,77 @@ bool PlayerView::cutsceneHold() const {
 
 float PlayerView::fade() const {
     if (cutsceneHold()) return 1.0f;
-    return play ? od::port::fadeLevel(fadeTask) : 0.0f;
+    if (!play) return 0.0f;
+    const float level = od::port::fadeLevel(fadeTask);
+    const od::port::GameState& game = od::port::gameState();
+    // OpenDash: an exit to another room plays its exit animation, then fades to black (kExitRampSeconds), black until
+    // the next room's fade in (the PS1's wipe holds the last frame; here it would show a stale frame)
+    using FS = od::port::FieldStep;
+    const bool exiting = game.gameMode() == od::port::GameMode::Field && game.fieldStep() >= FS::WaitBuffer &&
+                         game.fieldStep() <= FS::Leave && od::port::transitionRequest().fadeOut != od::port::kNoFade;
+    const uint64_t now = SDL_GetTicksNS();
+    if (!exiting) {
+        if (exitRampStartNs != 0 || exitPredicted) exitBlack = true; // the exit's fade out was running: the arrival fades in
+        exitPredicted = false;
+        exitRampStartNs = 0;
+        exitSkip = false;
+        // OpenDash: after an exit's black, the new room fades in (kArrivalRampSeconds) from its first frame on screen
+        // -- the stage load, its waits and the game's own fade-in ran fast behind the black (exitFastForward)
+        if (exitBlack) {
+            if (game.gameMode() != od::port::GameMode::Field) return 1.0f;
+            exitBlack = false;
+            arrivalRampStartNs = now;
+        }
+        if (arrivalRampStartNs != 0) {
+            const float t = float(double(now - arrivalRampStartNs) / 1e9) / kArrivalRampSeconds;
+            if (t >= 1.0f) arrivalRampStartNs = 0;
+            else return std::max(level, 1.0f - t);
+        }
+        return level;
+    }
+    arrivalRampStartNs = 0;
+    // the exit animation plays to its end and the fade out covers its last kExitRampTicks, ending with it (Herbert: the
+    // fade adds no time). The walk-out's ticks left come from its step sequence (exitTicksLeft); Start skips it
+    // (exitSkip: the fade at once, the rest behind the black). An end that cannot be known: the fade over the wipe
+    // after it (12 ticks)
+    if (exitBlack) return 1.0f;
+    if (!exitSkip && !exitPredicted && game.fieldStep() == FS::RunExitScript) {
+        const int left = od::port::exitTicksLeft();
+        if (left >= 0 && left <= kExitRampTicks) {
+            exitPredicted = true;
+            od::port::setExitWipeTicks(2);
+        }
+    }
+    if (exitPredicted && !exitSkip) {
+        if (game.fieldStep() > FS::RunExitScript || fadeTask.active) {
+            exitBlack = true;
+            return 1.0f;
+        }
+        const int left = std::max(0, od::port::exitTicksLeft());
+        const float frac = std::clamp(float(double(now - logicNs) / (1e9 / 30.0)), 0.0f, 1.0f);
+        const float t = 1.0f - (float(left) - frac) / float(kExitRampTicks);
+        return std::clamp(t, 0.0f, 1.0f);
+    }
+    if (!exitSkip && game.fieldStep() < FS::FadeOutWait && !fadeTask.active) {
+        exitRampStartNs = 0;
+        od::port::setExitWipeTicks(12);
+        return level;
+    }
+    if (exitSkip) od::port::setExitWipeTicks(2);
+    if (exitRampStartNs == 0) exitRampStartNs = now;
+    const float t = float(double(now - exitRampStartNs) / 1e9) / kExitRampSeconds;
+    if (t >= 1.0f) exitBlack = true;
+    return std::min(1.0f, t); // (the exit's own wipe would read as black at once: the ramp alone)
+}
+
+// OpenDash: the screen is black between an exit and the next room (fade()): the game ticks on fast there, so the
+// rest of the exit animation, the wipe and the load's waits take no time on screen
+bool PlayerView::exitFastForward() const {
+    if (!play || !exitBlack || ownWorld) return false;
+    const od::port::GameState& game = od::port::gameState();
+    // the next stage's field: the fade-in shows it (fade())
+    if (game.gameMode() == od::port::GameMode::Field && game.fieldStep() < od::port::FieldStep::WaitBuffer) return false;
+    return true;
 }
 
 bool PlayerView::fadeWhite() const { return play && !cutsceneHold() && od::port::fadeAdditive(); }
@@ -991,6 +1152,22 @@ void PlayerView::setupHooks() {
     staffHost.staffSegment = [this](uint32_t, uint32_t seg) {
         if (!staffFile) return;
         if (seg == 0) { // its music into the slot
+            // OpenDash: the Japanese PC version's song unless the US one is chosen (dat_dir may hold the PS1 music)
+            std::error_code ec;
+            const auto pc = pcDatDir / "STAFF.DAT";
+            if (!creditsMusicUs && !discData && std::filesystem::is_regular_file(pc, ec)) {
+                try {
+                    const auto bytes = od::readFile(pc);
+                    staffMusicFile = std::make_unique<od::GameFile>(od::pcGameFile("STAFF.DAT", bytes));
+                    for (const od::FilePart& part : staffMusicFile->parts)
+                        if (part.kind == od::FilePart::Kind::Mp3Music) {
+                            od::port::loadMp3Slot(part.bytes, 0, part.arg);
+                            return;
+                        }
+                } catch (const std::exception& e) {
+                    SDL_Log("staff roll: %s: %s", pc.string().c_str(), e.what());
+                }
+            }
             for (const od::FilePart& part : staffFile->parts)
                 if (part.kind == od::FilePart::Kind::Mp3Music || part.kind == od::FilePart::Kind::Ps1Music) {
                     od::port::loadMp3Slot(part.bytes, 0, part.arg);
@@ -1010,7 +1187,62 @@ void PlayerView::setupHooks() {
     };
     staffHost.staffFree = [this](uint32_t) { staffFile.reset(); };
     staffHost.musicStart = [](uint32_t channel, uint32_t slot) { od::port::musicChannelStart(channel, slot); };
+    staffHost.extraPages = [this] { // OpenDash's credit pages (app/ui/hud_ui creditPage)
+        return od::app::creditExtraPages(od::lang::code(od::lang::uiLanguage(language)));
+    };
     od::port::staffRollSetHost(std::move(staffHost));
+    // OpenDash (Herbert): the staff roll on its own, from the title's options (content/late_game creditsView*): the
+    // same file and pages; the song in slot 3 (the title's stays in its slots), the VRAM it overwrites kept and put back
+    od::port::CreditsViewHost viewHost;
+    viewHost.begin = [this](bool) {
+        try {
+            staffFile = std::make_unique<od::GameFile>(od::dataSource().gameFile("STAFF.DAT"));
+        } catch (const std::exception& e) {
+            SDL_Log("credits: STAFF.DAT: %s", e.what());
+            staffFile.reset();
+        }
+        constexpr uint32_t kSlot = 3; // (the title's song keeps its slots)
+        std::span<const uint8_t> song;
+        uint32_t loop = 0;
+        std::error_code ec;
+        const auto pc = pcDatDir / "STAFF.DAT";
+        if (!creditsMusicUs && !discData && std::filesystem::is_regular_file(pc, ec)) {
+            try {
+                staffMusicFile = std::make_unique<od::GameFile>(od::pcGameFile("STAFF.DAT", od::readFile(pc)));
+                for (const od::FilePart& part : staffMusicFile->parts)
+                    if (part.kind == od::FilePart::Kind::Mp3Music && song.empty()) song = part.bytes, loop = part.arg;
+            } catch (const std::exception& e) {
+                SDL_Log("credits: %s: %s", pc.string().c_str(), e.what());
+            }
+        }
+        if (song.empty() && staffFile)
+            for (const od::FilePart& part : staffFile->parts)
+                if ((part.kind == od::FilePart::Kind::Mp3Music || part.kind == od::FilePart::Kind::Ps1Music) && song.empty())
+                    song = part.bytes, loop = part.arg;
+        creditsSong = mp3Seconds(song);
+        SDL_Log("credits: the song is %.1f s", creditsSong);
+        od::port::stopMusicChannel(0);
+        if (!song.empty()) {
+            od::port::loadMp3Slot(song, kSlot, 0); // (once: the cards end with it)
+            od::port::musicChannelStart(0, kSlot);
+        }
+        (void)loop;
+        creditsStart = SDL_GetTicks();
+        creditsFrame = od::app::CreditsFrame{};
+    };
+    viewHost.update = [this] {
+        const double t = double(SDL_GetTicks() - creditsStart) / 1000.0;
+        creditsFrame = od::app::creditsFrame(t, creditsSong, od::app::creditCards(od::lang::code(od::lang::uiLanguage(language))));
+        return !creditsFrame.done;
+    };
+    viewHost.end = [this](bool title) {
+        od::port::stopMusicChannel(0);
+        od::port::unloadMp3Slot(3); // (its stream reads the file's bytes)
+        staffFile.reset();
+        creditsFrame = od::app::CreditsFrame{};
+        if (title) od::port::soundPlayMusicIfIdle(0); // the title's song again
+    };
+    od::port::creditsViewSetHost(std::move(viewHost));
     // Maybe_TickRoomScripts' per-stage handler (story spawns)
     hooks.roomHandler = [this] {
         if (ownWorld && ownWorld->inWorld()) return; // the room's logic is its world's
@@ -1753,7 +1985,7 @@ void PlayerView::processDatQueue() {
                 } else if (sg.kind == od::FilePart::Kind::Vram) {
                     vramSeg = true;
                 } else if (sg.kind == od::FilePart::Kind::WavSfxBank) { // 0x40ed0e: Maybe_LoadSfxBank 0x5d5010(data, size, TOC arg, extra)
-                    od::lang_sfx::load(pack.get(), name, d, sg.arg, sg.extra);
+                    od::lang_sfx::load(voicePack.get(), name, d, sg.arg, sg.extra);
                 } else if (sg.kind == od::FilePart::Kind::Mp3Music || sg.kind == od::FilePart::Kind::Ps1Music) {
                     od::port::loadMp3Slot(d, mp3++, sg.arg);
                 }
@@ -1806,6 +2038,11 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
         // Start opens the status sub-screen: the game opens it on pad bit 0x1 (select) in field play
         // (FUN_005413a0); OpenDash also sends 0x1 on the frame Start goes down there (only that frame: start +
         // select held is the soft reset, FUN_005410b0)
+        // OpenDash: Start during an exit's animation skips it (the fade out at once, the rest behind the black)
+        if ((ps1Buttons & 0x8) && !startWasDown && game.gameMode() == od::port::GameMode::Field &&
+            game.fieldStep() >= od::port::FieldStep::WaitBuffer && game.fieldStep() <= od::port::FieldStep::RunExitScript &&
+            od::port::transitionRequest().fadeOut != od::port::kNoFade)
+            exitSkip = true;
         if ((ps1Buttons & 0x8) && !startWasDown && game.gameMode() == od::port::GameMode::Field) ps1Buttons |= 0x1;
         startWasDown = (ps1Buttons & 0x8) != 0;
         if (ownWorld) ownWorld->overridePad(ps1Buttons);
@@ -1887,7 +2124,7 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
         if (!headless) dcStats = od::dc::decode(g_fxTextures, dcPrims);
         processDatQueue();
         logMessages();
-        audioTick();
+        if (!fastTick) audioTick(); // OpenDash: the fast ticks behind the black leave the sound alone
         // the double-buffer index the render step flips every frame: the field mode's sub-state 3 / the room
         // load wait for it, the cutscene skip reads it
         od::port::display().drawBuffer ^= 1u;
@@ -1900,6 +2137,7 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
             hud.tickEnemyGauges(); // its type-3 elements (boss gauges) live in the game state
             staffPicture = od::port::staffRollPictureTake();
             overlayPrims = od::hud::overlayDrawPass(); // FUN_005f2690 (draw pass): the scripted sprite banner
+            overlayBannerPrims = overlayPrims.size();
             for (const od::hud::Prim& q : od::port::escapeTimerDraw()) overlayPrims.push_back(q); // 0x4270a0's packets
             for (const od::hud::Prim& q : od::port::alarmFlashDraw()) overlayPrims.push_back(q); // 0x428de0's packet
             for (const od::hud::Prim& q : od::port::examTimerDraw()) overlayPrims.push_back(q); // 0x422d60's packets

@@ -1,5 +1,8 @@
+#include "app/ui/prompts.hpp"
 #include "app/own_world.hpp"
 #include "app/app.hpp"
+#include "content/late_game/end_scripts.hpp"
+#include "app/music_choice.hpp"
 
 #include <imgui.h>
 
@@ -350,8 +353,10 @@ int App::init() {
             SDL_Log("data: the PS1 disc %s", cfg.disc.string().c_str());
         } else {
             data = std::make_unique<od::PcDataSource>(cfg.datDir, cfg.exePath);
+            od::music_choice::configure(cfg.extendedMusic, cfg.datDir.parent_path() / "musicas-originais");
         }
         od::bindDataSource(data.get());
+        setButtonStyle(cfg.buttonStyle); // the gamepad prompts' style (app/ui/prompts)
         { // the texture pack (the pages' larger images, engine/texture_pack): textures/ next to the executable unless
           // texture_pack= says otherwise; texture_dump= (or --texture-dump) the folder the pages it lacks go to
           // (relative paths are from the executable's folder)
@@ -407,7 +412,11 @@ int App::init() {
         playerView.audioInit(cfg, audioArg && (!scripted || audioDeviceArg)); // scripted runs: silent (no device)
         playerView.langDir = cfg.langDir;
         playerView.restoredVoices = cfg.restoredVoices;
+        subtitles.enabled = cfg.subtitles;
+        subtitles.direct = cfg.subtitlesDirect;
         playerView.setLanguage(od::lang::parseLanguage(langArg.empty() ? cfg.lang : langArg));
+        playerView.setVoiceLanguage(od::lang::parseLanguage(
+            !cfg.voiceLang.empty() ? cfg.voiceLang : langArg.empty() ? cfg.lang : langArg));
         {
             const std::string fm = fogArg.empty() ? cfg.fog : fogArg;
             if (!noFog) fogMode = fm == "off" ? od::FogMode::Off : fm == "classic" ? od::FogMode::Classic
@@ -555,18 +564,259 @@ int App::init() {
     renderer->setVsync(vsync);
     { // the options page (game/status_options page 6: the status menu and the title's options) on OpenDash's settings
         od::port::OptionsHost& h = od::port::optionsHost();
-        h.language = [&] { return int(playerView.language); };
-        h.languageCount = [] { return 3; };
+        h.language = [&] { return int(od::lang::uiLanguage(playerView.language)); };
+        h.languageCount = [] { return od::lang::kLanguageCount; };
+        h.textLanguage = [&] { return int(playerView.language); };
+        h.textLanguageOffered = [&](int l) { return playerView.packOffered(od::lang::Language(l)); };
+        h.languageName = [](int l) { return od::lang::menuName(od::lang::Language(l)); };
+        h.voiceLanguageCount = [] { return od::lang::kVoiceLanguageCount; };
+        h.languageDescription = [&](int l) -> const char* { // assets/ui/text/<ui language>.txt langdesc.<code>
+            const std::string* w = vectorUi.word(std::string("langdesc.") + od::lang::code(od::lang::Language(l)));
+            return w ? w->c_str() : nullptr;
+        };
+        h.uiWord = [&](const char* key) -> const char* {
+            const std::string* w = vectorUi.word(key);
+            return w ? w->c_str() : nullptr;
+        };
         h.setLanguage = [&](int l) {
             playerView.setLanguage(od::lang::Language(l));
             od::saveConfigValue("lang", od::lang::code(playerView.language));
         };
+        h.voiceLanguage = [&] { return int(playerView.voiceLanguage); };
+        h.setVoiceLanguage = [&](int l) {
+            playerView.setVoiceLanguage(od::lang::Language(l));
+            od::saveConfigValue("voice_lang", od::lang::code(playerView.voiceLanguage));
+        };
+        h.subtitles = [&] { return subtitles.enabled; };
+        h.setSubtitles = [&](bool on) {
+            subtitles.enabled = on;
+            od::saveConfigValue("subtitles", on ? "1" : "0");
+        };
+        h.subtitleSource = [&] { return subtitles.direct ? 1 : 0; };
+        h.setSubtitleSource = [&](int s) {
+            subtitles.direct = s == 1;
+            od::saveConfigValue("subtitles_direct", s == 1 ? "1" : "0");
+        };
+        h.creditsMusic = [&] { return playerView.creditsMusicUs ? 1 : 0; };
+        h.setCreditsMusic = [&](int m) {
+            playerView.creditsMusicUs = m == 1;
+            od::saveConfigValue("credits_music", m == 1 ? "us" : "jp");
+        };
+        h.buttonStyle = [] { return buttonStyle(); };
+        h.setButtonStyle = [](int v) {
+            setButtonStyle(v);
+            static const char* const kNames[kButtonStyles] = {"playstation", "xbox", "steamdeck", "switch"};
+            od::saveConfigValue("button_style", kNames[buttonStyle()]);
+        };
+        // OpenDash (Herbert): the gallery -- the credits' illustrations, the Flutter's music (ST04T's, the original
+        // or the extended as the Música row says) in its own slot while it is open, the title's song back after
+        // the Extras' albums (assets/ui/extras/albums.txt: key|pt|en|jp)
+        static std::vector<std::array<std::string, 4>> albums;
+        static bool albumsRead = false;
+        auto readAlbums = [] {
+            if (albumsRead) return;
+            albumsRead = true;
+            std::ifstream f(assetsDir() / "ui" / "extras" / "albums.txt");
+            for (std::string line; std::getline(f, line);) {
+                std::array<std::string, 4> a;
+                size_t at = 0;
+                for (int k = 0; k < 4; ++k) {
+                    const size_t bar = line.find('|', at);
+                    a[size_t(k)] = line.substr(at, bar == std::string::npos ? std::string::npos : bar - at);
+                    at = bar == std::string::npos ? line.size() : bar + 1;
+                }
+                if (!a[0].empty()) albums.push_back(a);
+            }
+        };
+        auto langColumn = [&] {
+            const std::string c = od::lang::uiTextCode(playerView.language);
+            return c == "jp" || c == "ko" || c == "zh" ? 3 : c == "ptbr" ? 1 : 2;
+        };
+        // the groups (groups.txt: key|pt|en|jp) and the albums' group (albums.txt's fifth column)
+        static std::vector<std::array<std::string, 4>> groups;
+        static bool groupsRead = false;
+        auto readGroups = [] {
+            if (groupsRead) return;
+            groupsRead = true;
+            std::ifstream f(assetsDir() / "ui" / "extras" / "groups.txt");
+            for (std::string line; std::getline(f, line);) {
+                std::array<std::string, 4> a;
+                size_t at = 0;
+                for (int k = 0; k < 4; ++k) {
+                    const size_t bar = line.find('|', at);
+                    a[size_t(k)] = line.substr(at, bar == std::string::npos ? std::string::npos : bar - at);
+                    at = bar == std::string::npos ? line.size() : bar + 1;
+                }
+                if (!a[0].empty()) groups.push_back(a);
+            }
+        };
+        static std::vector<std::string> albumGroups; // (albums.txt's fifth column, by album)
+        h.groupCount = [readGroups] {
+            readGroups();
+            return int(groups.size());
+        };
+        h.groupTitle = [readGroups, langColumn](int g) -> const char* {
+            readGroups();
+            return g >= 0 && g < int(groups.size()) ? groups[size_t(g)][size_t(langColumn())].c_str() : "";
+        };
+        h.albumGroup = [readGroups, readAlbums](int k) {
+            readGroups();
+            readAlbums();
+            if (albumGroups.empty()) { // the fifth column of albums.txt
+                std::ifstream f(assetsDir() / "ui" / "extras" / "albums.txt");
+                for (std::string line; std::getline(f, line);) {
+                    const size_t bar = line.rfind('|');
+                    if (!line.empty()) albumGroups.push_back(std::count(line.begin(), line.end(), '|') >= 4 ? line.substr(bar + 1) : "");
+                }
+            }
+            if (k < 0 || k >= int(albumGroups.size())) return -1;
+            for (size_t g = 0; g < groups.size(); ++g)
+                if (groups[g][0] == albumGroups[size_t(k)]) return int(g);
+            return -1;
+        };
+        // the Extras' music: the Flutter's arranged song (dat_dir's own ST04T, the extended one) in slot 3; off: the
+        // title's song again
+        h.creditsStart = [] { od::port::creditsViewStart(); };
+        h.creditsTick = [](bool skip) { return od::port::creditsViewTick(skip); };
+        h.extrasMusic = [](bool on) {
+            static std::unique_ptr<od::GameFile> file;
+            od::port::stopMusicChannel(0);
+            od::port::unloadMp3Slot(3);
+            if (!on) {
+                file.reset();
+                od::port::soundPlayMusicIfIdle(0);
+                return;
+            }
+            try {
+                file = std::make_unique<od::GameFile>(od::dataSource().gameFile("ST04T.DAT"));
+                for (const od::FilePart& part : file->parts)
+                    if (part.kind == od::FilePart::Kind::Mp3Music || part.kind == od::FilePart::Kind::Ps1Music) {
+                        od::port::loadMp3Slot(std::span<const uint8_t>(part.bytes), 3, part.arg);
+                        od::port::musicChannelStart(0, 3);
+                        break;
+                    }
+            } catch (const std::exception& e) {
+                SDL_Log("extras: ST04T.DAT: %s", e.what());
+            }
+        };
+        // the title's fifth row, Extras (game/title): the options page opened straight on its Extras list
+        titleScreen.host.extras = [] { return true; };
+        titleScreen.host.openExtras = [] { od::port::optionsOpenExtras(); };
+        // the title's last row, Quit: the app's normal close (as the window's close button)
+        titleScreen.host.quit = [] {
+            SDL_Event e{};
+            e.type = SDL_EVENT_QUIT;
+            SDL_PushEvent(&e);
+        };
+        h.albumCount = [readAlbums] {
+            readAlbums();
+            return int(albums.size());
+        };
+        h.albumTitle = [readAlbums, langColumn](int k) -> const char* {
+            readAlbums();
+            return k >= 0 && k < int(albums.size()) ? albums[size_t(k)][size_t(langColumn())].c_str() : "";
+        };
+        h.galleryAlbum = [&, readAlbums](int k) {
+            readAlbums();
+            playerView.album.clear();
+            if (k < 0 || k >= int(albums.size())) return;
+            const auto dir = assetsDir() / "ui" / "extras" / albums[size_t(k)][0];
+            std::ifstream f(dir / "list.txt");
+            for (std::string line; std::getline(f, line);) {
+                PlayerView::AlbumPicture p;
+                size_t at = 0;
+                for (int c = 0; c < 4; ++c) {
+                    const size_t bar = line.find('|', at);
+                    const std::string v = line.substr(at, bar == std::string::npos ? std::string::npos : bar - at);
+                    at = bar == std::string::npos ? line.size() : bar + 1;
+                    if (c == 0) p.file = dir / v;
+                    else p.caption[c - 1] = v;
+                }
+                if (!p.file.filename().empty()) playerView.album.push_back(std::move(p));
+            }
+        };
+        h.galleryCount = [&] { return int(playerView.album.size()); };
+        // the sound test (assets/ui/extras/soundtest.txt: file|part|pt|en|jp): a song of a .DAT (its music part, the
+        // original or the extended as the Música row says) in slot 3, the title's song back after
+        static std::vector<std::array<std::string, 5>> songs;
+        static bool songsRead = false;
+        auto readSongs = [] {
+            if (songsRead) return;
+            songsRead = true;
+            std::ifstream f(assetsDir() / "ui" / "extras" / "soundtest.txt");
+            for (std::string line; std::getline(f, line);) {
+                std::array<std::string, 5> a;
+                size_t at = 0;
+                for (int k = 0; k < 5; ++k) {
+                    const size_t bar = line.find('|', at);
+                    a[size_t(k)] = line.substr(at, bar == std::string::npos ? std::string::npos : bar - at);
+                    at = bar == std::string::npos ? line.size() : bar + 1;
+                }
+                if (!a[0].empty()) songs.push_back(a);
+            }
+        };
+        h.soundTestCount = [readSongs] {
+            readSongs();
+            return int(songs.size());
+        };
+        h.soundTestTitle = [&, readSongs](int k) -> const char* {
+            readSongs();
+            const std::string c = od::lang::uiTextCode(playerView.language);
+            const size_t col = c == "ptbr" ? 2 : 3; // (the overlay draws Latin text: English for the others)
+            return k >= 0 && k < int(songs.size()) ? songs[size_t(k)][col].c_str() : "";
+        };
+        h.soundTestPlay = [readSongs](int k) {
+            static std::unique_ptr<od::GameFile> file, original;
+            od::port::stopMusicChannel(0);
+            od::port::unloadMp3Slot(3);
+            if (k < 0) { // stopped (the Extras' music comes back from the options' side)
+                file.reset();
+                original.reset();
+                return;
+            }
+            readSongs();
+            if (k < 0 || k >= int(songs.size())) return;
+            const auto& s = songs[size_t(k)];
+            try {
+                file = std::make_unique<od::GameFile>(od::dataSource().gameFile(s[0]));
+                original = std::make_unique<od::GameFile>();
+                int part = 0;
+                const int want = std::atoi(s[1].c_str());
+                for (const od::FilePart& p : od::music_choice::musicOf(s[0], *file, *original).parts)
+                    if (p.kind == od::FilePart::Kind::Mp3Music || p.kind == od::FilePart::Kind::Ps1Music) {
+                        if (part++ != want) continue;
+                        od::port::loadMp3Slot(std::span<const uint8_t>(p.bytes), 3, p.arg);
+                        od::port::musicChannelStart(0, 3);
+                        break;
+                    }
+            } catch (const std::exception& e) {
+                SDL_Log("sound test: %s: %s", s[0].c_str(), e.what());
+            }
+        };
+        h.galleryShow = [&](int k) { playerView.galleryIndex = k; };
+        h.galleryOpen = [&](bool open) {
+            if (!open) playerView.galleryIndex = -1; // (the music is the Extras', extrasMusic)
+        };
+        h.textSize = [&] { return playerView.textSize; };
+        (void)langColumn;
+        h.setTextSize = [&](int v) {
+            playerView.textSize = std::clamp(v, 0, 2);
+            static const char* const kNames[3] = {"grande", "medio", "pequeno"};
+            od::saveConfigValue("text_size", kNames[playerView.textSize]);
+        };
+        if (od::music_choice::available()) { // the music row (app/music_choice): only with the originals' folder
+            h.music = [] { return od::music_choice::extended() ? 1 : 0; };
+            h.setMusic = [](int m) {
+                od::music_choice::setExtended(m == 1);
+                od::saveConfigValue("extended_music", m == 1 ? "1" : "0");
+            };
+        }
         h.rumble = [&] {
             if (!pad) return false;
             return SDL_GetBooleanProperty(SDL_GetGamepadProperties(pad), SDL_PROP_GAMEPAD_CAP_RUMBLE_BOOLEAN, false);
         };
         h.padPressed = [&] {
-            for (int n = 1; n <= 10; ++n)
+            for (int n = 1; n <= 12; ++n) // 11 / 12: L3 / R3 (OpenDash)
                 if (padButtonDown(pad, n)) return n;
             return 0;
         };

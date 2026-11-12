@@ -1,3 +1,4 @@
+#include "content/late_game/end_scripts.hpp"
 #include "app/own_world.hpp"
 #include "app/app.hpp"
 #include "app/dat_cache.hpp"
@@ -237,6 +238,15 @@ void App::simStep(int gameFrames) {
                 if (godArg) od::port::player().hitPoints = od::port::player().maxHitPoints;
                 playerView.playTick(ps1, input.stickX, input.stickY, lx, ly);
                 netplay.afterTick(); // between ticks: the local state for the network / the mirror (reads only)
+            }
+            // OpenDash: behind an exit's black (the rest of the exit animation, the wipe, the stage load's waits) the
+            // game runs up to kExitFastTicks frames a step, so the next room fades in right after the fade out
+            constexpr int kExitFastTicks = 8;
+            for (int f = 0; f < kExitFastTicks && playerView.play && playerView.exitFastForward(); ++f, ++paceTicks) {
+                playerView.fastTick = true;
+                playerView.playTick(uint16_t(ps1 & ~0x9u), input.stickX, input.stickY, lx, ly);
+                playerView.fastTick = false;
+                netplay.afterTick();
             }
         } else {
             if (godArg) od::port::player().hitPoints = od::port::player().maxHitPoints;
@@ -731,7 +741,9 @@ void App::drawOverlays() {
     canvas.begin(float(width), float(height));
     menuPainter.art.enabled = titleScreen.painter.art.enabled = vectorUi.enabled = messageUi.vectorLines = hdArtArg;
     menuPainter.vector = titleScreen.painter.vector = &vectorUi;
-    vectorUi.setLanguage(od::lang::code(playerView.language));
+    vectorUi.setLanguage(od::lang::uiTextCode(playerView.language));
+    messageUi.textScale = MessageUi::kTextScales[std::clamp(playerView.textSize, 0, 2)];
+    vectorUi.textScale = messageUi.textScale;
     if (playerView.play) {
         if (!messageUi.tried) messageUi.load(*renderer);
         if (!messageUi.hdTried) messageUi.loadHd(*renderer);
@@ -754,8 +766,17 @@ void App::drawOverlays() {
         }
         if (!titleScreen.demoShown) // the demo hides the HUD elements (FUN_00542460: +0 &= ~2)
             hudUi.draw(canvas, playerView.hud.draw(), float(width), float(height));
+        hudUi.creditsLang = od::lang::code(od::lang::uiLanguage(playerView.language));
         hudUi.drawStaff(canvas, *renderer, playerView.staffPicture, float(width), float(height));
-        hudUi.draw(canvas, playerView.overlayPrims, float(width), float(height));
+        // OpenDash: the mission banners in HD in the text's language, in place of the banner's sprites
+        if (vectorUi.enabled && playerView.overlayBannerPrims > 0 &&
+            playerView.overlayBannerPrims <= playerView.overlayPrims.size() &&
+            missionArt.draw(*renderer, canvas, od::lang::uiTextCode(playerView.language), float(width), float(height))) {
+            const std::vector<od::hud::Prim> rest(playerView.overlayPrims.begin() + std::ptrdiff_t(playerView.overlayBannerPrims),
+                                                  playerView.overlayPrims.end());
+            hudUi.draw(canvas, rest, float(width), float(height));
+        } else
+            hudUi.draw(canvas, playerView.overlayPrims, float(width), float(height));
         if (!playerView.menuPrims.empty()) { // the status sub-screen (game/status_screen), under its windows
             const float s = float(height) / 240.0f;
             const ui::Vec2 o((float(width) - 320.0f * s) * 0.5f, 0.0f);
@@ -768,6 +789,11 @@ void App::drawOverlays() {
         // between the windows of layer 3 and the ones above them
         const bool lists = !playerView.shopPrims.empty() || !playerView.devPrims.empty() || !playerView.entryPrims.empty();
         messageUi.draw(canvas, float(width), float(height), lists ? 0 : -1);
+        // the voiced lines without a window: the voices' pack's legendas.tsv (app/subtitles)
+        subtitles.load(Subtitles::fileFor(playerView.langDir, od::lang::code(playerView.language),
+                                          od::lang::code(playerView.voiceLanguage),
+                                          od::lang::fromJapanese(playerView.language))); // text and subtitles: one source
+        subtitles.draw(*renderer, canvas, float(width), float(height));
         if (lists) {
             if (!playerView.menuVram.ready) playerView.menuVram.reset();
             // the development room's weapon model (content/yosyonke/dev_room devStatsDraw) is skinned by the field's pages
@@ -823,6 +849,7 @@ void App::drawOverlays() {
             messageUi.usePack(*renderer, playerView.pack.get(), playerView.labelPack());
             titleScreen.mv.setArtPack(playerView.pack);
         }
+        titleScreen.uiLang = od::lang::uiTextCode(playerView.language); // the title's logo (Rockman Dash 2's in Japanese)
         titleScreen.draw(*renderer, canvas, float(width), float(height),
                          [&](const od::port::ScreenPrim& p, float s, ui::Vec2 o) {
                              messageUi.menuText(canvas, p, s, o);
@@ -835,6 +862,61 @@ void App::drawOverlays() {
                                                           ui::rgba(0, 0, 0, int(f * 255.0f)));
     }
     if (playerView.play) titleScreen.drawDemo(*renderer, canvas, float(width), float(height));
+    if (playerView.galleryIndex >= 0 && playerView.galleryIndex < int(playerView.album.size())) {
+        // OpenDash: the Extras' album (the title's options), over everything: the picture, its caption and number
+        const auto& pic = playerView.album[size_t(playerView.galleryIndex)];
+        const int n = int(playerView.album.size());
+        const std::string code = od::lang::uiTextCode(playerView.language);
+        const int col = code == "ptbr" ? 0 : code == "jp" ? 2 : 1;
+        // a caption of parts ("name - voice of X - born ..."; Herbert: the cast's cards): the picture on the left, the
+        // parts as lines on its right (the name bigger; a date's place on its own line), not one long line under it
+        std::vector<std::string> parts;
+        {
+            const std::string& c = pic.caption[col];
+            for (size_t at = 0;;) {
+                const size_t d = c.find(" - ", at);
+                parts.push_back(c.substr(at, d == std::string::npos ? std::string::npos : d - at));
+                if (d == std::string::npos) break;
+                at = d + 3;
+            }
+            if (parts.size() >= 2)
+                for (size_t k = 1; k < parts.size(); ++k) {
+                    std::string& p = parts[k];
+                    if (!p.empty() && p[0] >= 'a' && p[0] <= 'z') p[0] = char(p[0] - 'a' + 'A');
+                    const size_t comma = p.find(", ");
+                    if (comma != std::string::npos && p.find_first_of("0123456789") < comma) {
+                        parts.insert(parts.begin() + std::ptrdiff_t(k) + 1, p.substr(comma + 2));
+                        parts[k].resize(comma);
+                        ++k;
+                    }
+                }
+        }
+        const bool side = parts.size() >= 2 && pic.file.parent_path().filename() == "elenco"; // (the cast only)
+        hudUi.drawGallery(canvas, *renderer, pic.file, playerView.galleryIndex, n, float(width), float(height), side);
+        char num[24];
+        std::snprintf(num, sizeof num, "%d / %d", playerView.galleryIndex + 1, n);
+        const float hgt = float(height);
+        if (side) {
+            const float x = float(width) * 0.5f + hgt * 0.03f, maxW = std::min(float(width) * 0.4f, hgt * 0.75f);
+            const float big = hgt * 0.05f, small = hgt * 0.034f;
+            const float total = big * 1.6f + small * 1.5f * float(parts.size() - 1);
+            float y = hgt * 0.45f - total * 0.5f + big;
+            for (size_t k = 0; k < parts.size(); ++k) {
+                const float px = k == 0 ? big : small;
+                vectorUi.textLeft(*renderer, canvas, parts[k], x, y, px,
+                                  k == 0 ? ui::rgba(0x80, 0xe8, 0xb8) : ui::rgba(240, 236, 228), maxW, k == 0);
+                y += k == 0 ? big * 0.6f + small * 1.5f : small * 1.5f;
+            }
+        } else {
+            vectorUi.text(*renderer, canvas, pic.caption[col], float(width) * 0.5f, hgt * 0.905f, hgt * 0.034f,
+                          ui::rgba(240, 236, 228));
+        }
+        if (n > 24) vectorUi.text(*renderer, canvas, num, float(width) * 0.5f, hgt * 0.965f, hgt * 0.026f, ui::rgba(170, 176, 190));
+    }
+    if (od::port::creditsViewActive()) { // OpenDash: the credits from the title's options, over everything
+        hudUi.creditsLang = od::lang::code(od::lang::uiLanguage(playerView.language));
+        hudUi.drawCredits(canvas, *renderer, playerView.creditsFrame, float(width), float(height));
+    }
     // FUN_005f3150's full-screen tiles (od::dc::screenTint: script tints, flashes), approximated like the fade:
     // abr 1 / 3 (B + F, B + F / 4) a white veil of the colour's level, abr 2 (B - F) a black one, abr 0 half the
     // colour, opaque without the semi bit
@@ -857,6 +939,7 @@ void App::drawOverlays() {
     }
     messageUi.flushHd(*renderer); // the glyphs this frame's text rasterized
     vectorUi.flush(*renderer);
+    subtitles.flush(*renderer);
 }
 
 void App::present() {
