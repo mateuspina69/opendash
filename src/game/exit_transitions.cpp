@@ -3,6 +3,7 @@
 #include "game/exit_transitions_state.hpp"
 #include "game/exit_transitions.hpp"
 
+#include <algorithm>
 #include <cstdlib>
 
 #include "game/actor_movement.hpp"
@@ -145,7 +146,8 @@ constexpr int16_t kDoorSinkDrop = 0x40;    // the player stands this far into th
 constexpr int16_t kDoorSinkMaxSpeed = 0x30, kDoorSinkAcceleration = 4;
 constexpr int32_t kDoorSinkFadeTick = 0x3c;
 constexpr uint8_t kDoorSinkFade = kFadeOutRequest | 2;
-constexpr uint8_t kDoorActorFadeOut = kFadeOutRequest, kDoorActorFadeIn = kFadeInRequest | 2;
+// OpenDash: fade in at speed 1 (64 a tick), not 2 (16): app PlayerView::fade ramps the new room in itself
+constexpr uint8_t kDoorActorFadeOut = kFadeOutRequest, kDoorActorFadeIn = kFadeInRequest | 1;
 constexpr int32_t kDoorSinkSoundTicks = 0x40;
 constexpr uint8_t kFastPace = 3;           // at 20 / s the sink's sound every 3 ticks, else every 9
 constexpr int kSinkSoundFast = 3, kSinkSoundSlow = 9;
@@ -1227,6 +1229,23 @@ template <size_t N> void runKindState(const PlayerEnv& env, const DataTable<Rout
 }
 
 } // namespace
+
+int exitTicksLeft() {
+    const ScriptState& s = scriptState();
+    const uint32_t step = s.steps.value();
+    if (s.flags == 0 || step == 0) return -1;
+    const ScriptStep current = scriptStepAt(step);
+    if (current.id == kScriptStepEnd) return 1; // the end state: the handshake next
+    if (current.ticks == kScriptStepEndless) return -1;
+    int left = std::max(0, int(current.ticks) - int(s.stepTick));
+    for (uint32_t k = 1; k < ScriptStepList::kMaxSteps; ++k) {
+        const ScriptStep next = scriptStepAt(step + k * kScriptStepSize);
+        if (next.id == kScriptStepEnd) break;
+        if (next.ticks == kScriptStepEndless) return -1;
+        left += next.ticks;
+    }
+    return left + 1;
+}
 
 void exitTransitionTick(const PlayerEnv& env) {
     const uint8_t kind = transitionRequest().kind;

@@ -5,9 +5,13 @@
 #include "game/display.hpp"
 #include "game/fade_state.hpp"
 
+#include <algorithm>
+
 namespace od::port {
 
 namespace {
+
+int gExitWipeTicks = 12;
 
 // What a request sets up (exe 0x53f6b0's switch)
 enum class FadeSetup : uint8_t {
@@ -70,6 +74,10 @@ constexpr int16_t kSecondBufferY = 0x100;
 // the strip count of a wipe's Strips phase by its type
 uint8_t wipeStripCount(FadeType type) {
     const FadeState& f = fadeState();
+    // OpenDash: the exits' wipe (room_triggers kExitFadeOut), not the PS1's 63 / 127 ticks of strips (they held the
+    // next room's load back by one or two seconds): 2 ticks when the presentation faded the screen out over the end of
+    // the walk-out, 12 (0.4 s) when it could not know that end and fades over the wipe (setExitWipeTicks)
+    if (type == FadeType::Wipe28) return uint8_t(gExitWipeTicks);
     if (type == FadeType::Wipe20) return uint8_t(((~f.variant & 2u) << 4) | 0x1fu);
     if (type == FadeType::Wipe2A) return 0x3f;
     return uint8_t(((((uint32_t(display().mode) + 1u) >> 1) + 1u) << 6) - 1u);
@@ -155,6 +163,8 @@ void approximatedSlideTick(FadeTask& fade) {
 }
 
 } // namespace
+
+void setExitWipeTicks(int ticks) { gExitWipeTicks = std::clamp(ticks, 1, 0x7f); }
 
 void fadeStart(FadeTask& fade, uint32_t request, uint8_t param) {
     FadeState& f = fadeState();

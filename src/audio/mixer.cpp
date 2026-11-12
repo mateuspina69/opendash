@@ -43,6 +43,7 @@ struct Mixer::Stream {
     bool primed = false; // a / b hold the first two source frames
     std::vector<float> pending; // decoded, not yet mixed (interleaved stereo at `rate`)
     size_t pendingAt = 0;
+    uint64_t mixedFrames = 0; // OpenDash: output frames played (kRate), pauses excluded: the subtitles' clock
 
     ~Stream() {
         if (ok && !xa && !ps1 && !streamedPcm) drmp3_uninit(&dec);
@@ -325,6 +326,7 @@ void Mixer::mix(float* out, int frames) {
     }
     for (auto& [h, st] : streams_) {
         if (!st->playing || st->paused || st->ended) continue;
+        st->mixedFrames += uint64_t(frames);
         const double step = double(st->rate) / kRate;
         // linear interpolation between consecutive source frames a / b (voices are 18.9 / 22.05 / 48 kHz: the
         // old loop output silence on the frames where no new source sample arrived when upsampling)
@@ -534,7 +536,11 @@ void Mixer::streamStop(uint32_t s) {
 
 void Mixer::streamVolume(uint32_t s, int32_t v) {
     std::lock_guard<std::mutex> g(lock_);
-    if (auto it = streams_.find(s); it != streams_.end()) it->second->gain = volumeGain(v);
+    // OpenDash: the PS1 music (the sampler's sequences, the disc-streamed tracks) 3 dB down: it stood above the
+    // effects and the voices, louder than on the PS1 (Herbert)
+    constexpr float kPs1MusicGain = 0.7f;
+    if (auto it = streams_.find(s); it != streams_.end())
+        it->second->gain = volumeGain(v) * (it->second->ps1 || it->second->streamedPcm ? kPs1MusicGain : 1.0f);
 }
 
 void Mixer::streamPause(uint32_t s) {
@@ -551,6 +557,13 @@ bool Mixer::streamPlaying(uint32_t s) {
     std::lock_guard<std::mutex> g(lock_);
     const auto it = streams_.find(s);
     return it != streams_.end() && it->second->playing && !it->second->ended;
+}
+
+double Mixer::streamSeconds(uint32_t s) {
+    std::lock_guard<std::mutex> g(lock_);
+    const auto it = streams_.find(s);
+    if (it == streams_.end()) return -1.0;
+    return double(it->second->mixedFrames) / kRate;
 }
 
 // snd\<file>: u32 offsets[n + 1] (offsets[0] = header size, offsets[n] = file size), track i = [o[i], o[i+1])

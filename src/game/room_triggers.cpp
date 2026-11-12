@@ -46,7 +46,8 @@ constexpr uint32_t kFlagFloorStatusOff = 0x240; // + the floor's kind: the floor
 constexpr uint32_t kExitIdMask = 0x1f;
 
 // the fades a transition asks for (in after the load / out before it)
-constexpr uint8_t kExitFadeIn = kFadeInRequest | 2, kExitFadeOut = kWipe28Request;
+// OpenDash: the exits' fade in at speed 1 (64 a tick), not 2 (16): app PlayerView::fade ramps the new room in itself
+constexpr uint8_t kExitFadeIn = kFadeInRequest | 1, kExitFadeOut = kWipe28Request;
 constexpr uint8_t kPassageFadeOut = kWipe26Request;
 constexpr uint8_t kFacingExitFadeIn = kFadeInRequest | kFadeWhiteRequest | 2;
 constexpr uint8_t kFacingExitFadeOut = kFadeOutRequest | kFadeWhiteRequest | 2;

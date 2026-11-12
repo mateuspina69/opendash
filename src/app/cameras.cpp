@@ -52,7 +52,9 @@ void PlayerView::orbit(float dx, float dy) {
 }
 
 uint16_t PlayerView::steer(uint16_t ps1, float lx, float ly) {
+    shoulderTurn = false;
     if (!modern) return ps1;
+    shoulderTurn = (ps1 & 0x0c00) != 0 && !skating() && !lockedOn(); // L1 / R1 (0x400 / 0x800): see skateCamera
     const float mag = std::sqrt(lx * lx + ly * ly);
     ps1 &= uint16_t(~0xf0u); // the direction is decided here
     // the game drives the player (a door / exit transition 0xa6d2e0 walking it with the replay pad, a script, the
@@ -61,6 +63,19 @@ uint16_t PlayerView::steer(uint16_t ps1, float lx, float ly) {
     if (od::port::transitionRequest().state != 0 || (od::port::scriptState().flags & od::port::kScriptRunning) ||
         (pl.inputMode & od::port::kInputOff))
         return ps1;
+    if (shoulderTurn) {
+        // L1 / R1 held: the PS1's controls as they are (Herbert: identical to the PS1). The game turns the body by its
+        // own rate (the key configuration's TurnLeft / TurnRight, player_input), the stick is the PS1 d-pad (up
+        // forward, down back, the sides its side step), no camera-relative steering -- the orbit camera chases
+        // behind the body (skateCamera), so the stick's up stays the body's ahead
+        if (mag >= 0.35f) {
+            if (ly < -0.5f * mag) ps1 |= 0x10;
+            if (ly > 0.5f * mag) ps1 |= 0x40;
+            if (lx < -0.5f * mag) ps1 |= 0x80;
+            if (lx > 0.5f * mag) ps1 |= 0x20;
+        }
+        return ps1;
+    }
     if (fireFacing(ps1, lx, ly)) return ps1; // the buster firing: face the camera, strafe (app/fire_facing)
     if (mag < 0.2f) return ps1;
     if (skating()) {
@@ -483,6 +498,22 @@ void PlayerView::skateCamera(bool locked, float dt) {
         rollT = std::clamp(float(lean) / kSkateLeanFull, -1.0f, 1.0f) * skateTune.rollDeg * 0.0174533f;
         const float speed = float(-pl.velocity.z);
         fovT = std::clamp((speed - 640.0f) / (1024.0f - 640.0f), 0.0f, 1.0f) * skateTune.fovDeg * 0.0174533f;
+    } else if (shoulderTurn && !locked) {
+        // L1 / R1 on foot: the camera stays behind the turning body by the PS1's own rule (exe 0x40e360, the same
+        // function on the USA disc): behind = the room's base yaw + the body's yaw; the follow Rigid (walking) puts
+        // it there at once, Lazy turns 0x80 a tick (30 ticks a second) and snaps within that; any other follow does
+        // not turn the camera. The shoulder wins over a recent mouse / right stick orbit
+        const od::port::CameraState& gc = od::port::cameraState();
+        constexpr float kUnit = 6.2831853f / 4096.0f;
+        const float behind = float((int(gc.basePose.yaw) + int(pl.rotation.y)) & 0xfff) * kUnit;
+        const float gap = wrapPi(behind - orbitYaw);
+        skateYawVel = 0.0f;
+        if (gc.follow() == od::port::CameraFollow::Rigid) {
+            orbitYaw += gap;
+        } else if (gc.follow() == od::port::CameraFollow::Lazy) {
+            const float step = float(od::port::kLazyFollowStep) * 30.0f * kUnit * dt;
+            orbitYaw += std::fabs(gap) <= step ? gap : std::copysign(step, gap);
+        }
     } else {
         skateYawVel = 0.0f;
     }

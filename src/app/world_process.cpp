@@ -420,6 +420,7 @@ int run(const WorldArgs& given) {
     view->langDir = cfg.langDir;
     view->restoredVoices = cfg.restoredVoices;
     view->setLanguage(od::lang::parseLanguage(cfg.lang));
+    view->setVoiceLanguage(od::lang::parseLanguage(cfg.voiceLang.empty() ? cfg.lang : cfg.voiceLang));
     // a process started ahead of its room: what came with the room (its joins, its players' first messages) is played once
     // the room runs
     std::unique_ptr<WorldLink> waitingLink;

@@ -15,6 +15,9 @@
 #include "engine/game_file.hpp"
 #include <set>
 #include <span>
+
+#include "engine/vram.hpp"
+#include "app/ui/hud_ui.hpp"
 #include <string>
 #include <tuple>
 #include <utility>
@@ -110,12 +113,22 @@ struct PlayerView {
     bool restoredVoices = true;
     bool restoredAvailable() const;
     void applyVoiceDirs();
+    // the text's language (message banks, fonts, menus, art)
     void setLanguage(od::lang::Language l);
+    // the voices' language, apart from the text's (OpenDash: e.g. Japanese voices with Portuguese text): the voice
+    // clips (snd/, snd_restored/, the disc's XA), the voice barks (sfx/) and the subtitles (legendas.tsv) of its pack
+    od::lang::Language voiceLanguage = od::lang::Language::Japanese;
+    std::shared_ptr<const od::lang::LangPack> voicePack; // nullptr: the PC's own voices (Japanese)
+    void setVoiceLanguage(od::lang::Language l);
     // the banks the PC keeps in dash2.exe (item names / descriptions, the status sub-screen texts): Japanese = the exe's
     // own; a language pack's PS1 copies are mapped at kLangBanks and the message VM (fb 20 / fb 3d) and game/menu_banks
     // pointed at them. A missing file keeps the exe's bank (Japanese).
     static constexpr uint32_t kLangBanks = 0x7c800000;
-    static constexpr uint32_t kLangBanksSize = 0x20000;
+    static constexpr uint32_t kLangBanksSize = 0x40000; // the European packs' menus are longer than the English
+    // a pack's stage bank larger than the exe's room for it (0x3c00: the clear-save image follows at 0x73fc00, the
+    // European packs' longer text): the whole bank is mapped here too and windowOpen's reads of 0x73c000 redirected
+    static constexpr uint32_t kBigMessageBank = 0x7c840000, kBigMessageBankSize = 0x10000;
+    bool bigMessageBank = false;
     bool startWasDown = false;
     void loadExeBanks();
     uint32_t bankAt = 0;        // where the bank is mapped
@@ -176,6 +189,10 @@ struct PlayerView {
     float audioVolume = 0.8f;
     float hapticGain = 0.0f; // the DualSense actuators' strength (haptics=; experimental, off by default)
     int audioStage = -1;
+    // the music slots' contents (a hash, 0 none) and streams as audioBindRoom loaded them: a stage change with the same
+    // music in the slot playing keeps it playing
+    std::array<uint64_t, 4> musicSlotHash{};
+    std::array<uint32_t, 4> musicSlotStream{};
     uint32_t audioTicks = 0;
     int voiceStarts = 0, streamStarts = 0, requests = 0;
     void audioInit(const od::Config& cfg, bool device);
@@ -208,6 +225,20 @@ struct PlayerView {
     uint8_t cutScript = 0, cutCamMode = 0; // last tick's script-running bit / camera mode (cut detection)
     // screen darkening 0..1 from the game's fade state (0xa72268 / 0xa7226e, wipes: dark)
     float fade() const;
+    // an exit's fade to black over its exit animation (fade()): when it started, its length
+    mutable uint64_t exitRampStartNs = 0;
+    static constexpr float kExitRampSeconds = 0.4f;
+    // OpenDash: the screen went black for an exit to another stage (fade()); until the next room shows, the game runs
+    // fast (exitFastForward: the rest of the exit animation, the wipe, the stage load's waits), then the room fades
+    // in over kArrivalRampSeconds from its first drawn frame
+    mutable bool exitBlack = false;
+    mutable bool exitPredicted = false; // the fade out runs over the walk-out's last ticks (exitTicksLeft)
+    static constexpr int kExitRampTicks = 12; // 0.4 s of game ticks
+    bool fastTick = false; // a tick of exitFastForward: the audio logic is not run (no bursts of sounds / jumps)
+    mutable bool exitSkip = false; // Start during the exit animation: the fade out at once (the animation runs on behind it)
+    mutable uint64_t arrivalRampStartNs = 0;
+    static constexpr float kArrivalRampSeconds = 0.2f; // half the exit ramp (Herbert)
+    bool exitFastForward() const;
     bool cutsceneHold() const; // black before a cutscene script takes the screen (see fade())
     bool fadeWhite() const; // fade types 9..0xc / 0x19..0x1c
     // the room in 0xa6d190 / 0xa6d191 (set by the transition) loaded and bound to the logic
@@ -421,6 +452,9 @@ struct PlayerView {
     static constexpr float kSkateLeanFull = 0x80; // |+0x104| skating: 0x40 accelerate, 0x60 cruise, 0x80 brake
     float manualOrbitAge = 1e9f; // s since the last mouse / right stick orbit input
     float skateYawVel = 0.0f, skateRoll = 0.0f, skateFov = 0.0f; // roll / extra FOV in radians
+    // L1 / R1 on foot (modern mode): the game turns the body with them, as on the PS1, and the orbit yaw chases
+    // behind the body while one is held by the PS1 camera's own rule (skateCamera); set by steer
+    bool shoulderTurn = false;
     bool skating() const;
     void skateCamera(bool locked, float dt);
     bool logSkateCam = false; // --skatelog 1: skatecam lines (scripted runs)
@@ -490,7 +524,27 @@ struct PlayerView {
     od::hud::Hud hud;
     od::port::StaffPicture staffPicture; // the staff roll's picture of the last tick (HudUi::drawStaff)
     std::unique_ptr<od::GameFile> staffFile; // dat\\staff.dat while the staff roll runs
+    // the staff roll's song (OpenDash's option): false = the Japanese PC version's (<dat_dir>/../dat/STAFF.DAT when
+    // dat_dir is another folder, e.g. the PS1 music's), true = dat_dir's own
+    bool creditsMusicUs = false;
+    int textSize = 1; // the text size (config text_size, the options): 0 Grande, 1 Médio, 2 Pequeno (MessageUi::kTextScales)
+    std::filesystem::path pcDatDir;
+    std::unique_ptr<od::GameFile> staffMusicFile; // that file while its song plays (the stream reads its bytes)
+    // OpenDash: the credits (content/late_game creditsView*, app/ui/hud_ui creditsFrame): their song's length, when
+    // they started, this frame's card
+    double creditsSong = 0.0;
+    int galleryIndex = -1; // OpenDash: the gallery's picture shown (-1: closed)
+    // the Extras' album open (assets/ui/extras/<key>/list.txt): its pictures and their captions (pt, en, jp)
+    struct AlbumPicture {
+        std::filesystem::path file;
+        std::string caption[3];
+    };
+    std::vector<AlbumPicture> album;
+    uint64_t creditsStart = 0;
+    od::app::CreditsFrame creditsFrame;
+    static double mp3Seconds(std::span<const uint8_t> mp3); // an MP3's length (0 = not an MP3)
     std::vector<od::hud::Prim> overlayPrims; // the draw pass's sprite banner (od::hud::overlayDrawPass), last tick
+    size_t overlayBannerPrims = 0; // the first ones of overlayPrims: the banner's sprites (app/ui/mission_art)
     // world-space triangles (port axes) of the posed model
     std::vector<od::RenderVertex> build(const RoomMesh& mesh);
 };

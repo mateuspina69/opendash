@@ -109,7 +109,9 @@ enum class PressEnterStep : uint8_t { FadeIn = 0, Brighten = 1, Idle = 2 };
 // +1 of Menu (Choose + 1 + the row chosen: the rows' own steps)
 enum class TitleMenuStep : uint8_t {
     FadeIn = 0, Music = 1, Brighten = 2, Choose = 3, NewGame = 4, Continue = 5, Tutorial = 6, Options = 7,
-    Multiplayer = 8, // OpenDash's row
+    Multiplayer = 8, // OpenDash's rows (each only with its TitleHost hook): the lobby,
+    Extras = 9,      // the options' sub-screen opened on its Extras list,
+    Quit = 10,       // the app closing as when its window is closed
 };
 // what the lobby's frame left the title to do: stay, back to the menu, or the host's start (a new game / the load menu)
 enum class LobbyChoice : uint8_t { Stay, Back, NewGame, Load };
@@ -179,6 +181,12 @@ struct TitleHost {
     std::function<LobbyChoice(std::vector<ScreenPrim>* draw)> lobby;
     // OpenDash: a netplay session is on (the idle's attract / demo do not run: a game of the session is the host's)
     std::function<bool()> sessionOn;
+    // OpenDash: the menu's fifth row, Extras (none without these): whether it is offered, and the options page told
+    // to open straight on its Extras list (the Options step then opens the sub-screen as for the options)
+    std::function<bool()> extras;
+    std::function<void()> openExtras;
+    // OpenDash: the menu's last row, Quit (none without it): the app asked to close (its normal exit)
+    std::function<void()> quit;
 };
 
 struct TitleTasks {

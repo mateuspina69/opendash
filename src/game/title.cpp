@@ -64,8 +64,13 @@ constexpr uint8_t kCursorSlideTicks = 3;
 constexpr uint8_t kPaceSteps = 3; // the pace's complement the timers scale by
 // the menu's rows / the difficulty choice's last row
 constexpr int kMenuLastRow = 3;
-constexpr int kMultiplayerRow = 4; // OpenDash: the row after the game's four (only with a lobby: TitleHost::lobby)
-int menuLastRow() { return H && H->lobby ? kMultiplayerRow : kMenuLastRow; }
+// OpenDash's rows after the game's four, each only with its host hook: the multiplayer lobby (TitleHost::lobby), Extras
+// (TitleHost::extras), Quit (TitleHost::quit); their words are the host's pictures (ScreenPrim::label kLblTitleExtras /
+// kLblTitleQuit) or, for the lobby, text in the game's font. With more rows they come closer (the steps below) so the
+// last stays above the screen's bottom.
+constexpr int kExtrasRowStep = 0x24;                   // five rows
+constexpr int kSixRowStep = 0x20, kSixRowTop = 0x10c;  // six
+constexpr int kSevenRowStep = 0x1c, kSevenRowTop = 0x108; // seven
 constexpr uint16_t kMaxDifficultyRows = 3;
 constexpr uint16_t kTitleMusic = 0;
 constexpr uint16_t kGameOverSound = 0xc;
@@ -111,6 +116,23 @@ void sprite(int x, int y, int w, int h, int u, int v, uint16_t tpage, uint16_t c
     p.clut = clut;
     p.colour = col & 0xffffff;
     D->push_back(p);
+}
+// OpenDash: the menu's Extras row is offered (TitleHost::extras)
+bool lobbyOffered() { return H && bool(H->lobby); }
+bool extrasOffered() { return H && H->extras && H->extras(); }
+bool quitOffered() { return H && bool(H->quit); }
+bool gQuitAsked = false; // the Quit row was chosen: the app is closing
+// the rows of OpenDash's entries (each only when offered), the last row
+int multiplayerRow() { return 4; }
+int extrasRow() { return 4 + (lobbyOffered() ? 1 : 0); }
+int quitRow() { return extrasRow() + (extrasOffered() ? 1 : 0); }
+int menuLastRow() { return quitRow() - (quitOffered() ? 0 : 1); }
+// the step a row's confirm goes to (the game's four: Choose + 1 + the row)
+uint8_t rowStep(int row, uint8_t choose) {
+    if (row < 4) return uint8_t(uint8_t(row) + choose + 1u);
+    if (lobbyOffered() && row == multiplayerRow()) return uint8_t(TitleMenuStep::Multiplayer);
+    if (extrasOffered() && row == extrasRow()) return uint8_t(TitleMenuStep::Extras);
+    return uint8_t(TitleMenuStep::Quit);
 }
 // a full-width G4 band from y0 to y1, `top` above, `bottom` below
 void gouraud(int y0, int y1, uint32_t top, uint32_t bottom) {
@@ -192,17 +214,21 @@ void drawMenu() {
     TitleBlock& t = titleBlock();
     const uint32_t col = grey(t.brightness);
     const int cur = t.menuRow;
+    const bool extras = extrasOffered(), quit = quitOffered();
+    const int rows = menuLastRow() + 1;
+    const int step = rows >= 7 ? kSevenRowStep : rows == 6 ? kSixRowStep : rows == 5 ? kExtrasRowStep : 0x28;
+    const int top = rows >= 7 ? kSevenRowTop : rows == 6 ? kSixRowTop : 0x110;
     for (int i = 0; i < 4; ++i) {
         const bool on = i == cur;
         gTitleRow = int16_t(i);
-        sprite(0xd4, 0x110 + i * 0x28, 0xd8, 0x28, 0, i * 0x28, on ? 0x20a : 0x20b, on ? 0x7c00 : 0x7c40, col);
+        sprite(0xd4, top + i * step, 0xd8, 0x28, 0, i * 0x28, on ? 0x20a : 0x20b, on ? 0x7c00 : 0x7c40, col);
     }
-    if (H->lobby) { // OpenDash's fifth row, in the game's font: the multiplayer lobby
-        const int y = 0x110 + kMultiplayerRow * 0x28;
+    if (lobbyOffered()) { // the multiplayer lobby, in the game's font
+        const int i = multiplayerRow(), y = top + i * step;
         ScreenPrim hit; // the mouse's target: the row's box
         hit.kind = ScreenPrim::Sprite;
         hit.hitOnly = true;
-        hit.row = int16_t(kMultiplayerRow);
+        hit.row = int16_t(i);
         hit.x = 0xd4;
         hit.y = int16_t(y);
         hit.w = 0xd8;
@@ -213,11 +239,20 @@ void drawMenu() {
         text.utf8 = "MULTIPLAYER";
         text.x = text.ax = 0xd4 + 0x24;
         text.y = int16_t(y + 0xe);
-        text.colour = cur == kMultiplayerRow ? col : grey(uint32_t(t.brightness) * 0x58 >> 7);
+        text.colour = cur == i ? col : grey(uint32_t(t.brightness) * 0x58 >> 7);
         D->push_back(text);
     }
+    // the host's pictures of the words (chosen / not), in the rows' place and size
+    auto word = [&](int i, uint16_t label) {
+        gTitleRow = int16_t(i);
+        sprite(0xd4, top + i * step, 0xd8, 0x28, 0, 0, 0x20a, 0x7c00, col);
+        D->back().label = label;
+        D->back().labelArg = cur == i ? 1 : 0;
+    };
+    if (extras) word(extrasRow(), kLblTitleExtras);
+    if (quit) word(quitRow(), kLblTitleQuit);
     const int row = (int(t.previousRow) - cur) * int(int8_t(t.slideTicks)) + cur * 4;
-    sprite(cursorWobble() + 0xac, 0x114 + row * 10, 0x20, 0x20, 0xe0, 0, 0x20a, 0x7c01, col);
+    sprite(cursorWobble() + 0xac, top + 4 + row * step / 4, 0x20, 0x20, 0xe0, 0, 0x20a, 0x7c01, col);
 }
 // the difficulty choice's last row: min(the hardest difficulty cleared, 3)
 uint32_t difficultyLastRow() {
@@ -612,7 +647,7 @@ void titleMenu() {
         if (!(p & (kPadCircle | kPadCross | kPadStart))) {
             cursorStep(t.menuRow, menuLastRow());
         } else if (p & kPadConfirm) {
-            t.step = uint8_t(uint8_t(t.menuRow) + t.step + 1u);
+            t.step = rowStep(t.menuRow, t.step);
         } else {
             t.enter(TitleState::PressEnter, uint8_t(PressEnterStep::Brighten));
             t.clearArgs();
@@ -654,6 +689,19 @@ void titleMenu() {
         soundPlayFlat(UiSound::Confirm);
         t.enter(TitleState::Lobby);
         t.clearArgs();
+        return;
+    case TitleMenuStep::Extras: // OpenDash: the options' sub-screen, opened on its Extras list
+        draws();
+        if (H && H->openExtras) H->openExtras();
+        leave(TitleState::Options);
+        return;
+    case TitleMenuStep::Quit: // OpenDash: the app closes (the menu stays drawn until it does)
+        draws();
+        if (!gQuitAsked && H && H->quit) { // asked once
+            gQuitAsked = true;
+            soundPlayFlat(UiSound::Confirm);
+            H->quit();
+        }
         return;
     default: return;
     }
