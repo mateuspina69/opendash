@@ -39,4 +39,7 @@ float fadeLevel(const FadeTask& fade);
 // Brighten requests) whitens -- the script flashes; subtractive darkens. Not while the display is masked.
 bool fadeAdditive();
 
+// OpenDash: the exits' wipe (Wipe28) length in ticks (app PlayerView::fade picks it)
+void setExitWipeTicks(int ticks);
+
 } // namespace od::port

@@ -12,7 +12,14 @@
 
 namespace od::app {
 
-enum class PromptDevice { Keyboard, PlayStation, Xbox, Nintendo };
+enum class PromptDevice { Keyboard, PlayStation, Xbox, Nintendo, PlayStation1, SteamDeck }; // PlayStation1: the PS1 pad's names (START / SELECT)
+
+// OpenDash (Herbert): the gamepad prompts' style, picked in the options (config button_style=): 0 PlayStation (the
+// PS1's names, the default), 1 Xbox / PC, 2 Steam Deck, 3 Nintendo Switch. Keyboard / mouse input still shows keys.
+constexpr int kButtonStyles = 4;
+void setButtonStyle(int style);
+int buttonStyle();
+PromptDevice buttonStyleDevice(); // the style as a device (the key configuration's list, the gamepad prompts)
 
 // the device the prompts show: keyboard / mouse input selects the keyboard, gamepad input the pad's family
 PromptDevice promptDevice();
@@ -22,5 +29,7 @@ void notePromptEvent(const SDL_Event& e);
 // edge at x, centred on y (window px); returns its width. The binding tables come from the game state (the defaults
 // when it does not map them). `text`: the font of the key / letter labels
 float drawPrompt(ui::Canvas& cv, UiText& text, uint16_t ps1, float x, float y, float h);
+// pad button `code` (1..12: input padButtonDown) in the style of `device` (the key configuration's list)
+float drawPadCode(ui::Canvas& cv, UiText& text, int code, float x, float y, float h, PromptDevice device);
 
 } // namespace od::app

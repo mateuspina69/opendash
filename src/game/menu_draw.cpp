@@ -343,12 +343,17 @@ void backdropDraw(int switching) {
     otDrawMode(c, kBackdropMode);
     const int ph = ((t & 0x3f) >> 4) * 0xf, start = int(t & 0xf) - kBackdropTile;
     const int more = (gExtra + 15) / 16;
+    bool first = true;
     for (int row = 0; row < kBackdropRows; ++row)
-        for (int col = -more; col < kBackdropColumns + more; ++col)
+        for (int col = -more; col < kBackdropColumns + more; ++col) {
+            // OpenDash: the vector UI draws the whole backdrop in HD from the first tile's label
+            labelNext(first ? kLblBackdrop : kLblBackdropRest, uint16_t(t), uint32_t(gExtra));
+            first = false;
             otSprite(c, start + col * kBackdropTile, start + row * kBackdropTile,
                      spriteUv(kBackdropClut, uint32_t(((ph + col) & 3) * 0x10 + 0x30),
                               uint32_t(((ph + row) & 3) * 0x10 + 0x20)),
                      kBackdropTile, kBackdropTile, kNeutral, kSprite16);
+        }
 }
 
 void listScrollBarDraw(const ListCursor& list, int x, int y) {

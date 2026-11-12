@@ -1,5 +1,7 @@
 #include "game/player/player_input.hpp"
+#include "app/ui/prompts.hpp"
 #include "app/app.hpp"
+#include "app/music_choice.hpp"
 
 #include <imgui.h>
 
@@ -245,6 +247,26 @@ void App::drawDebugMenu() {
                     od::precise::setEnabled(precisePoses);
             }
             ImGui::Checkbox("texto HD (desmarcado = fonte original do PS1)", &messageUi.hdText);
+            {
+                static const char* kSizes[] = {"grande (original)", "medio (padrao)", "pequeno"};
+                int ts = std::clamp(playerView.textSize, 0, 2);
+                if (ImGui::Combo("tamanho do texto", &ts, kSizes, 3)) {
+                    playerView.textSize = ts;
+                    static const char* const kNames[3] = {"grande", "medio", "pequeno"};
+                    od::saveConfigValue("text_size", kNames[ts]);
+                }
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("Janelas de dialogo e textos dos menus (as legendas das cenas ficam como estao).");
+            }
+            {
+                static const char* kStyles[] = {"PlayStation (padrao)", "Xbox / PC", "Steam Deck", "Nintendo Switch"};
+                int bs = buttonStyle();
+                if (ImGui::Combo("estilo dos botoes", &bs, kStyles, 4)) {
+                    setButtonStyle(bs);
+                    static const char* const kNames[4] = {"playstation", "xbox", "steamdeck", "switch"};
+                    od::saveConfigValue("button_style", kNames[bs]);
+                }
+            }
             ImGui::Checkbox("paineis HD (desmarcado = pixel art original)", &hdArtArg);
             {
                 bool snappy = od::port::menuSnappy();
@@ -381,23 +403,42 @@ void App::drawDebugMenu() {
                     od::saveConfigValue("haptics", std::to_string(playerView.hapticGain));
                 ImGui::SameLine();
                 ImGui::TextDisabled(playerView.mixer->hasHaptics() ? "(controle no cabo)" : "(sem DualSense no cabo)");
+                if (od::music_choice::available()) { // app/music_choice: takes effect at the next music load
+                    bool ext = od::music_choice::extended();
+                    if (ImGui::Checkbox("músicas estendidas", &ext)) {
+                        od::music_choice::setExtended(ext);
+                        od::saveConfigValue("extended_music", ext ? "1" : "0");
+                    }
+                    ImGui::SameLine();
+                    ImGui::TextDisabled("(vale ao entrar na próxima área)");
+                }
+                if (ImGui::Checkbox("legendas das falas sem janela", &subtitles.enabled))
+                    od::saveConfigValue("subtitles", subtitles.enabled ? "1" : "0");
             }
             {
                 ImGui::SeparatorText("Idioma");
-                int cur = int(playerView.language);
-                ImGui::SetNextItemWidth(220);
-                if (ImGui::BeginCombo("texto e vozes", od::lang::displayName(playerView.language))) {
-                    for (int k = 0; k < 3; ++k) {
-                        const auto l = od::lang::Language(k);
-                        const bool have = playerView.packOffered(l);
-                        if (!have) ImGui::BeginDisabled();
-                        if (ImGui::Selectable(od::lang::displayName(l), cur == k)) {
-                            playerView.setLanguage(l);
-                            od::saveConfigValue("lang", od::lang::code(playerView.language));
+                // the text and the voices, each its own language (PlayerView::setLanguage / setVoiceLanguage)
+                for (int which = 0; which < 2; ++which) {
+                    const od::lang::Language now = which == 0 ? playerView.language : playerView.voiceLanguage;
+                    ImGui::SetNextItemWidth(220);
+                    if (ImGui::BeginCombo(which == 0 ? "texto" : "vozes", od::lang::displayName(now))) {
+                        for (int k = 0; k < (which == 0 ? od::lang::kLanguageCount : od::lang::kVoiceLanguageCount); ++k) {
+                            const auto l = od::lang::Language(k);
+                            const bool have = playerView.packOffered(l);
+                            if (!have) ImGui::BeginDisabled();
+                            if (ImGui::Selectable(od::lang::displayName(l), int(now) == k)) {
+                                if (which == 0) {
+                                    playerView.setLanguage(l);
+                                    od::saveConfigValue("lang", od::lang::code(playerView.language));
+                                } else {
+                                    playerView.setVoiceLanguage(l);
+                                    od::saveConfigValue("voice_lang", od::lang::code(playerView.voiceLanguage));
+                                }
+                            }
+                            if (!have) ImGui::EndDisabled();
                         }
-                        if (!have) ImGui::EndDisabled();
+                        ImGui::EndCombo();
                     }
-                    ImGui::EndCombo();
                 }
                 if (playerView.restoredAvailable() &&
                     ImGui::Checkbox("vozes restauradas (IA)", &playerView.restoredVoices))

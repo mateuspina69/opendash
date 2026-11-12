@@ -17,6 +17,7 @@
 #include "game/distances.hpp"
 #include "game/event.hpp"
 #include "game/event_state.hpp"
+#include "game/fade.hpp"
 #include "game/fade_state.hpp"
 #include "game/hit_list.hpp"
 #include "game/loaded_data.hpp"
@@ -184,7 +185,16 @@ constexpr uint8_t kRecordMax = 0xf;
 constexpr uint32_t kMusic = 0xf;             // the fade masks of the music
 constexpr int16_t kMusicFadeStep = 0xfff;
 constexpr uint16_t kQuizJingle = 0x2f, kEndJingle = 0x2e, kRightSound = 0x141, kWrongSound = 0x142;
-constexpr uint32_t kFadeIn = 0x30, kFadeOut = 0x31;
+// (the PS1 slides 0x30 / 0x31: replaced, see below)
+// OpenDash: the show's slides 0x30 / 0x31 (not ported: 64 ticks of black, a hard cut of two seconds) are a fade out
+// (kShowFadeOutSpeed a tick: 0.4 s with the hold, like the exits), the scene switched behind the black, then a fade in
+// twice as fast (speed 1: 64 a tick, 0.2 s)
+constexpr uint32_t kShowFadeOut = kFadeOutRequest | 2, kShowFadeIn = kFadeInRequest | 1;
+constexpr uint16_t kShowFadeOutSpeed = 26;
+void showFadeOut() {
+    scriptFade(kShowFadeOut, 0);
+    fadeState().speed = kShowFadeOutSpeed;
+}
 constexpr uint32_t kVibrationStop = 0x1000000;
 constexpr uint32_t kSweepMask = 0x6dc, kSweepKeep = 0x80;
 
@@ -563,7 +573,7 @@ void quizShowSetUp(ScriptState& s) {
     Player& p = player();
     switch (QuizSetUpSub(s.subState)) {
     case QuizSetUpSub::Fade:
-        scriptFade(kFadeIn, 0);
+        showFadeOut();
         show.clearStateWords();
         soundFadeOut(kMusic, kMusicFadeStep, 0);
         show.savedPlace.x = p.pos.x.whole;
@@ -573,6 +583,7 @@ void quizShowSetUp(ScriptState& s) {
         ++s.subState;
         return;
     case QuizSetUpSub::CloseEvent:
+        if (fadeState().busy != 0) return; // OpenDash: the scene switches once the screen is black
         if (eventState().active != 0) {
             windowCloseAll(WindowClose::Force);
             p.inputMode = 0;
@@ -596,6 +607,7 @@ void quizShowSetUp(ScriptState& s) {
         scriptSequenceStart(stateAddress(TableId::St32QuizCameraScript), scriptStepList<TableId::St32QuizSteps>);
         actorsSweep(kSweepMask, kSweepKeep);
         windowLayoutVariant(WindowLayout::Dialogue); // exe 0x557860
+        scriptFade(kShowFadeIn, 0);                  // OpenDash: the show fades in
         s.enterState(CutsceneState::Steps);
         return;
     default: return;
@@ -617,10 +629,11 @@ void quizShowWrapUp(ScriptState& s) {
         ++s.subState;
         return;
     case QuizWrapUpSub::Fade:
-        scriptFade(kFadeOut, 0);
+        showFadeOut();
         ++s.subState;
         return;
     case QuizWrapUpSub::Restore: {
+        if (fadeState().busy != 0) return; // OpenDash: the room comes back once the screen is black
         QuizShowBlock& show = stageBlock().part<QuizShowBlock>();
         Player& p = player();
         CameraState& camera = cameraState();
@@ -639,6 +652,7 @@ void quizShowWrapUp(ScriptState& s) {
         for (uint32_t i = 0; i < 3; ++i)
             pointAtWord(show.contestants[i], spawnRecordTracked(stateAddress(TableId::St32QuizContestantRecords) + i * kContestantRecordSize));
         spawnRecordTracked(stateAddress(TableId::St32QuizPlateRecord));
+        scriptFade(kShowFadeIn, 0); // OpenDash: the room fades in
         ++s.subState;
         return;
     }

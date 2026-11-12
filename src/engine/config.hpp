@@ -12,11 +12,18 @@ struct Config {
     std::string aaQuality = "native"; // aa_quality= native|quality|balanced|performance
     std::filesystem::path langDir; // lang_dir= / OPENDASH_LANG_DIR: language packs, default <exe dir>/lang
     std::string lang = "jp";       // lang= jp|en|ptbr / OPENDASH_LANG (--lang overrides)
+    std::string voiceLang;         // voice_lang= jp|en|ptbr: the voices' language apart from the text's ("": lang's)
     std::filesystem::path disc;    // disc= / OPENDASH_DISC: the PS1 disc image (.cue); the English pack is read off it
     std::string data = "pc";       // data= pc|disc / OPENDASH_DATA: the game's files and tables from the PC install or
                                    // the disc image (engine/ps1_data_source)
     std::string coopGate = "wait"; // coop_gate= wait|teleport: how a session's players come to a story gate
     bool restoredVoices = true;    // restored_voices= 0|1: the pack's AI-restored voices (snd_restored) when present
+    bool extendedMusic = true;     // extended_music= 0|1: dat_dir's music; 0 = the originals' (app/music_choice)
+    bool creditsMusicUs = false;   // credits_music= jp|us: the staff roll's song (default the Japanese PC one)
+    int buttonStyle = 0;           // button_style= playstation|xbox|steamdeck|switch: the gamepad prompts' style (OpenDash, Herbert)
+    int textSize = 1;              // text_size= grande|medio|pequeno (large|medium|small): the windows and menus text size (default medio)
+    bool subtitles = true;         // subtitles= 0|1: the voiced lines without a window, from the pack's legendas.tsv
+    bool subtitlesDirect = true;   // subtitles_direct= 0|1: with other voices, their text translated straight (AI); on by default (Herbert)
     // texture_pack= the texture pack's folder (the pages' larger images, engine/texture_pack), a relative path from
     // the executable's folder; unset: textures/ next to the executable when present, else the PS1 pages as they are
     std::filesystem::path texturePack;

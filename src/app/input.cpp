@@ -34,6 +34,8 @@ bool padButtonDown(SDL_Gamepad* pad, int n) {
     case 8: return SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
     case 9: return SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_START);
     case 10: return SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_BACK);
+    case 11: return SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_LEFT_STICK);  // OpenDash: L3
+    case 12: return SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_RIGHT_STICK); // OpenDash: R3
     default: return false;
     }
 }

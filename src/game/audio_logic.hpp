@@ -46,6 +46,8 @@ struct SoundBackend {
     virtual void streamPause(uint32_t s) { (void)s; }                        // exe 0x40af40
     virtual void streamResume(uint32_t s) { (void)s; }                       // exe 0x40af90
     virtual bool streamPlaying(uint32_t s) { (void)s; return false; }        // exe 0x40aed0
+    // OpenDash: the seconds of the stream heard so far (pauses excluded); < 0 unknown
+    virtual double streamSeconds(uint32_t s) { (void)s; return -1.0; }
     // exe 0x601050's file read: track `track` of snd\<file> (u32 offset table + MP3s); empty = not found
     virtual std::vector<uint8_t> readVoiceTrack(const std::string& file, uint32_t track) {
         (void)file;
@@ -87,6 +89,7 @@ struct RecordingSoundBackend : SoundBackend {
     void streamPause(uint32_t s) override;
     void streamResume(uint32_t s) override;
     bool streamPlaying(uint32_t s) override;
+    double streamSeconds(uint32_t s) override;
     std::vector<uint8_t> readVoiceTrack(const std::string& file, uint32_t track) override;
 };
 std::string soundCallText(const SoundCall& c);
@@ -381,6 +384,9 @@ inline SfxBanks& sfxBanks() {
     static SfxBanks s;
     return s;
 }
+// OpenDash: told of each SFX entry a request starts (not the loops): its bank slot and entry -- app/lang_sfx keys the
+// voice barks' subtitles by it (Herbert)
+inline void (*gSfxStarted)(uint8_t slot, uint8_t entry) = nullptr;
 // An MP3 slot
 struct Mp3Slot {
     uint32_t marker = 0; // OpenDash: a non-null "malloc" pointer (kMp3Marker + slot * 16)
@@ -494,12 +500,26 @@ void unloadSfxBank(uint32_t slot);                                        // exe
 // exe 0x40dc90(ch, slot, 0): a slot's stream on a music channel, faded in
 void musicChannelStart(uint32_t ch, uint32_t slot);
 void loadMp3Slot(std::span<const uint8_t> seg, uint32_t slot, uint32_t loop);
+// OpenDash: a stage change whose music is the one playing keeps it: the next music request for that stream (the new
+// stage's) leaves it playing instead of restarting it
+void keepMusicStream(uint32_t stream);
+// the music channel playing `stream` (kMusicChannels: none)
+uint32_t musicChannelOfStream(uint32_t stream);
 void unloadMp3Slot(uint32_t slot);                                        // exe 0x5d4fd0
 
 // ---- voice clips (snd/xa*.dat) -------------------------------------------------------------------------------
 void voiceClipPlay(uint32_t id);       // exe 0x601050
+// OpenDash: the last voice clip started -- its PC voice file ("xa02_37.dat") and track -- and a count of the starts
+// (app/subtitles: the cutscenes' subtitles)
+struct VoiceClipInfo {
+    std::string file;
+    uint32_t track = 0;
+    uint32_t serial = 0;
+};
+VoiceClipInfo& voiceClipInfo();
 void voiceClipFadeOut(uint32_t step);  // exe 0x601220
 bool voiceClipPlaying();                 // exe 0x601240
+double voiceClipSeconds();               // OpenDash: the clip's playback position (subtitles); < 0 unknown
 inline bool voiceClipIdle() { return !voiceClipPlaying(); } // exe 0x601260
 void voiceClipPause();                   // exe 0x601200 / 0x601280 (stream pause)
 void voiceClipResume();                  // exe 0x6012a0

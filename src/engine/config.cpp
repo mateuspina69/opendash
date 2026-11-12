@@ -78,12 +78,25 @@ Config loadConfig() {
             if (key == "aa_quality") cfg.aaQuality = trim(line.substr(eq + 1));
             if (key == "lang_dir") cfg.langDir = pathValue(line.substr(eq + 1));
             if (key == "lang") { cfg.lang = trim(line.substr(eq + 1)); languageSpecified = true; }
+            if (key == "voice_lang") cfg.voiceLang = trim(line.substr(eq + 1));
             if (key == "disc") cfg.disc = pathValue(line.substr(eq + 1));
             if (key == "data") cfg.data = trim(line.substr(eq + 1));
             if (key == "texture_pack") cfg.texturePack = pathValue(line.substr(eq + 1));
             if (key == "texture_dump") cfg.textureDump = pathValue(line.substr(eq + 1));
             if (key == "coop_gate") cfg.coopGate = trim(line.substr(eq + 1));
             if (key == "restored_voices") cfg.restoredVoices = trim(line.substr(eq + 1)) != "0";
+            if (key == "extended_music") cfg.extendedMusic = trim(line.substr(eq + 1)) != "0";
+            if (key == "credits_music") cfg.creditsMusicUs = trim(line.substr(eq + 1)) == "us";
+            if (key == "button_style") {
+                const std::string v = trim(line.substr(eq + 1));
+                cfg.buttonStyle = v == "xbox" || v == "1" ? 1 : v == "steamdeck" || v == "2" ? 2 : v == "switch" || v == "3" ? 3 : 0;
+            }
+            if (key == "text_size") {
+                const std::string v = trim(line.substr(eq + 1));
+                cfg.textSize = v == "grande" || v == "large" || v == "0" ? 0 : v == "pequeno" || v == "small" || v == "2" ? 2 : 1;
+            }
+            if (key == "subtitles") cfg.subtitles = trim(line.substr(eq + 1)) != "0";
+            if (key == "subtitles_direct") cfg.subtitlesDirect = trim(line.substr(eq + 1)) != "0";
             if (key == "story_save") cfg.storySave = trim(line.substr(eq + 1));
             if (key == "display") cfg.display = trim(line.substr(eq + 1));
             if (key == "window") cfg.window = trim(line.substr(eq + 1));

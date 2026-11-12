@@ -29,7 +29,7 @@ public:
 
 } // namespace
 
-#ifndef _WIN32
+#if !defined(_WIN32) || defined(OD_NO_VENDOR_SDKS)
 // the vendor SDKs are built for D3D12 only (third_party/): outside Windows the backends are not compiled in, but FSR
 // (upscaler_fsr_vk.cpp, when cmake/fidelityfx_vk.cmake finds the SDK)
 #ifndef OD_FSR_VK

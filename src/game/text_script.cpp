@@ -45,7 +45,7 @@ const DataTable<RoutineTable<kTextCodeHandlers>> layoutHandlers{TableId::TextLay
 
 // the exe's banks and buffers the codes read and write
 // (the place names' and the key names' banks: TableId::TextScriptPlaceNameBank / TableId::TextScriptKeyNameBank, text_script.hpp)
-const DataTable<ScalarTable<uint16_t, 8>> keyNameButtons{TableId::TextScriptKeyNameButtons}; // fb 22: the pad button of each key name (0: k = 7's pair)
+const DataTable<ScalarTable<uint16_t, 10>> keyNameButtons{TableId::TextScriptKeyNameButtons}; // fb 22: the pad button of each key name (0: k = 7's pair; 8 R2, 9 L2: dash2.exe 0x8b1f00 holds 10)
 const DataTable<ScalarTable<uint16_t, 0x2c>> nameGlyphs{TableId::TextScriptNameGlyphs}; // fb 4a: the letters a name is entered from
 constexpr uint8_t kKeyGlyphBase = 0xf;      // fb 22: a key's glyph = its index + this
 constexpr uint8_t kKeyNamePair = 7;         // fb 22 7: the two keys of L1 / R1
@@ -89,8 +89,17 @@ std::set<uint32_t> gSeen; // the handlers run (logic and layout; their pointers'
     notPorted(kMessagePort, buf);
 }
 
-// circle / start pressed, or cross held (the waits' "go on")
-bool goOnPressed() { return (pad0().pressed & kPadConfirm) || (pad0().held & kPadCross); }
+// circle / start pressed, or cross held (the waits' "go on"). OpenDash: cross pressed goes on and shows the next page at
+// once (game/message messageCrossNextPage); triangle held is the exe's cross held, the fast skip -- not where the wait
+// gives triangle a use of its own (triangle false)
+bool goOnPressed(bool triangle = true) {
+    if (pad0().pressed & kPadConfirm) return true;
+    if (pad0().pressed & kPadCross) {
+        messageCrossNextPage();
+        return true;
+    }
+    return triangle && (pad0().held & kPadTriangle);
+}
 
 // exe 0x559740: the speaker byte +0x24 handed over: kSpeakerNewLine -> +0x25 (and the event's newLine),
 // kSpeakerAnimation -> +0x26 (and the event's speakerAnimation); kSpeakerNone as 0xff
@@ -139,6 +148,10 @@ uint32_t keyNameText(uint8_t k) {
         const DataArray<uint8_t> layouts(stateAddress(TableId::TextScriptKeyNameLayouts));
         return bank.message(layouts[size_t(layout * kLayoutNames + k)]);
     }
+    // OpenDash: the PC's table has 10 key names (8 R2, 9 L2: the camera's and the lock-on's help); read as 8 before, k 9
+    // ran past it and the data error dropped the game into the stage viewer (Herbert, Options > Visão). A PS1 number
+    // past them (10 / 11, used by no pack) stands for the L1 / R1 pair
+    if (k >= 10) k = kKeyNamePair;
     TextBytes name(bank.message(k));
     const uint16_t button = keyNameButtons[k];
     if (button != 0) {
@@ -817,7 +830,7 @@ uint32_t runLogicCode(MessageWindow& w, uint32_t index) {
             return kCodeStop;
         }
         if ((f & kWindowOpBusy) == 0) {
-            if (goOnPressed()) {
+            if (goOnPressed(false)) {
                 w.flags = f & ~kWindowWaitButton;
                 w.readAt = p + 3;
             } else if (pad0().pressed & kPadTriangle) {

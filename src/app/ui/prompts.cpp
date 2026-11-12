@@ -13,19 +13,10 @@ namespace od::app {
 namespace {
 
 PromptDevice gDevice = PromptDevice::Keyboard;
+int gStyle = 0;
 
-PromptDevice family(SDL_JoystickID id) {
-    switch (SDL_GetGamepadTypeForID(id)) {
-    case SDL_GAMEPAD_TYPE_PS3:
-    case SDL_GAMEPAD_TYPE_PS4:
-    case SDL_GAMEPAD_TYPE_PS5: return PromptDevice::PlayStation;
-    case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_PRO:
-    case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_LEFT:
-    case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_RIGHT:
-    case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_PAIR: return PromptDevice::Nintendo;
-    default: return PromptDevice::Xbox; // Xbox and the unknown pads: the most common labels
-    }
-}
+// OpenDash (Herbert): a gamepad shows the style picked in the options, whatever pad it is
+PromptDevice family(SDL_JoystickID) { return buttonStyleDevice(); }
 
 std::vector<ui::Vec2> circlePts(float cx, float cy, float r, int n = 28) {
     std::vector<ui::Vec2> p;
@@ -121,7 +112,18 @@ std::string keyOf(uint16_t ps1) {
 
 } // namespace
 
-PromptDevice promptDevice() { return gDevice; }
+PromptDevice promptDevice() { return gDevice == PromptDevice::Keyboard ? gDevice : buttonStyleDevice(); }
+
+void setButtonStyle(int style) { gStyle = std::clamp(style, 0, kButtonStyles - 1); }
+int buttonStyle() { return gStyle; }
+PromptDevice buttonStyleDevice() {
+    switch (gStyle) {
+    case 1: return PromptDevice::Xbox;
+    case 2: return PromptDevice::SteamDeck;
+    case 3: return PromptDevice::Nintendo;
+    default: return PromptDevice::PlayStation1;
+    }
+}
 
 void notePromptEvent(const SDL_Event& e) {
     switch (e.type) {
@@ -136,6 +138,13 @@ void notePromptEvent(const SDL_Event& e) {
 }
 
 float drawPrompt(ui::Canvas& cv, UiText& text, uint16_t ps1, float x, float y, float h) {
+    const PromptDevice d = promptDevice();
+    return drawPadCode(cv, text, d == PromptDevice::Keyboard ? -int(ps1) : padButtonOf(ps1), x, y, h, d);
+}
+
+float drawPadCode(ui::Canvas& cv, UiText& text, int code, float x, float y, float h, PromptDevice device) {
+    const PromptDevice gDevice = device; // (the style asked for, not the last device used)
+    const uint16_t ps1 = uint16_t(code < 0 ? -code : 0);
     const float r = h * 0.5f;
     const ui::Color plate = ui::rgba(0x1e, 0x26, 0x30), rim = ui::rgba(0xd8, 0xe0, 0xe8);
     auto label = [&](const char* s, ui::Color c, float cx, float cap) {
@@ -152,12 +161,21 @@ float drawPrompt(ui::Canvas& cv, UiText& text, uint16_t ps1, float x, float y, f
         text.draw(cv, k, x + (w - text.width(k, px)) * 0.5f, y + cap * 0.5f - h * 0.035f, px, ui::rgba(0x20, 0x28, 0x34));
         return w;
     }
-    const int n = padButtonOf(ps1);
+    const int n = code;
     const float cx = x + r;
+    if (n == 100) { // OpenDash: the d-pad (the key configuration's move row)
+        disc(cv, cx, y, r, rim);
+        disc(cv, cx, y, r * 0.86f, plate);
+        const float a = r * 0.58f, b = r * 0.2f;
+        const ui::Color c = ui::rgba(0xd8, 0xe0, 0xe8);
+        roundRect(cv, cx - a, y - b, cx + a, y + b, b * 0.4f, c);
+        roundRect(cv, cx - b, y - a, cx + b, y + a, b * 0.4f, c);
+        return h;
+    }
     if (n >= 2 && n <= 5) { // the face buttons: 2 south, 3 east, 4 west, 5 north
         disc(cv, cx, y, r, rim);
         disc(cv, cx, y, r * 0.86f, plate);
-        if (gDevice == PromptDevice::PlayStation) {
+        if (gDevice == PromptDevice::PlayStation || gDevice == PromptDevice::PlayStation1) {
             const float s = r * 0.48f, w = h * 0.085f;
             if (n == 5) { // triangle
                 stroke(cv, {{cx, y - s}, {cx + s * 0.95f, y + s * 0.62f}, {cx - s * 0.95f, y + s * 0.62f}}, true, w,
@@ -173,6 +191,9 @@ float drawPrompt(ui::Canvas& cv, UiText& text, uint16_t ps1, float x, float y, f
                 stroke(cv, {{cx - q, y - q}, {cx + q, y - q}, {cx + q, y + q}, {cx - q, y + q}}, true, w,
                        ui::rgba(0xff, 0x7f, 0xd1));
             }
+        } else if (gDevice == PromptDevice::SteamDeck) { // the Deck's face buttons: white letters, no colours
+            static const char* kL[4] = {"A", "B", "X", "Y"};
+            label(kL[n - 2], ui::rgba(0xf4, 0xf4, 0xf4), cx, h * 0.46f);
         } else if (gDevice == PromptDevice::Xbox) {
             static const char* kL[4] = {"A", "B", "X", "Y"};
             static const ui::Color kC[4] = {ui::rgba(0x5d, 0xc2, 0x1e), ui::rgba(0xe2, 0x31, 0x2a),
@@ -184,12 +205,26 @@ float drawPrompt(ui::Canvas& cv, UiText& text, uint16_t ps1, float x, float y, f
         }
         return h;
     }
-    // shoulders, triggers, start / select: a pill with the family's name
-    static const char* kPs[11] = {"", "R2", "", "", "", "", "L2", "L1", "R1", "OPTIONS", "SHARE"};
-    static const char* kXb[11] = {"", "RT", "", "", "", "", "LT", "LB", "RB", "MENU", "VIEW"};
-    static const char* kNi[11] = {"", "ZR", "", "", "", "", "ZL", "L", "R", "+", "-"};
-    const char* s = n >= 1 && n <= 10
-                        ? (gDevice == PromptDevice::PlayStation ? kPs[n] : gDevice == PromptDevice::Xbox ? kXb[n] : kNi[n])
+    // shoulders, triggers, start / select: a pill with the family's name (the PS1 pad's: START / SELECT)
+    if (gDevice == PromptDevice::PlayStation1) {
+        static const char* kPs1[13] = {"", "R2", "", "", "", "", "L2", "L1", "R1", "START", "SELECT", "L3", "R3"};
+        const char* s = n >= 1 && n <= 12 ? kPs1[n] : "?";
+        const float cap = h * 0.4f, px = text.em(cap);
+        const float w = std::max(h, text.width(s, px) + h * 0.6f);
+        roundRect(cv, x, y - r, x + w, y + r, r, rim);
+        roundRect(cv, x + h * 0.07f, y - r + h * 0.07f, x + w - h * 0.07f, y + r - h * 0.07f, r * 0.86f, plate);
+        text.draw(cv, s, x + (w - text.width(s, px)) * 0.5f, y + cap * 0.5f, px, ui::rgba(0xf0, 0xf0, 0xf0));
+        return w;
+    }
+    static const char* kPs[13] = {"", "R2", "", "", "", "", "L2", "L1", "R1", "OPTIONS", "SHARE", "L3", "R3"};
+    static const char* kXb[13] = {"", "RT", "", "", "", "", "LT", "LB", "RB", "MENU", "VIEW", "LS", "RS"};
+    static const char* kNi[13] = {"", "ZR", "", "", "", "", "ZL", "L", "R", "+", "-", "LS", "RS"};
+    static const char* kSd[13] = {"", "R2", "", "", "", "", "L2", "L1", "R1", "MENU", "VIEW", "L3", "R3"};
+    const char* s = n >= 1 && n <= 12
+                        ? (gDevice == PromptDevice::PlayStation ? kPs[n]
+                           : gDevice == PromptDevice::Xbox      ? kXb[n]
+                           : gDevice == PromptDevice::SteamDeck ? kSd[n]
+                                                                : kNi[n])
                         : "?";
     const float cap = h * 0.4f, px = text.em(cap);
     const float w = std::max(h, text.width(s, px) + h * 0.6f);

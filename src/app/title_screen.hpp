@@ -17,6 +17,8 @@
 #include "game/title.hpp"
 #include "game/fade.hpp"
 #include "render/renderer.hpp"
+#include "render/ui_svg.hpp"
+#include <memory>
 
 namespace od::app {
 
@@ -63,6 +65,55 @@ struct TitleScreen {
     // the 2D screen: black, then the primitives in the display's resolution (0xa7172c: 2 = 640 x 480, else 320 x
     // 240) fitted to the window height (4:3, centred); `text` draws the Glyph / Text primitives (the options page)
     PrimPainter painter;
+    // OpenDash: the opening logo (game/title drawLogo) from a picture when one is installed (assets/ui/opening_logo.png,
+    // else assets/ui/opening_logo.svg) at the window's resolution, its white over the whole window; false = not the logo's frame / no picture
+    struct LogoArt {
+        std::unique_ptr<ui::Svg> svg;
+        bool tried = false;
+        od::TextureHandle tex = 0;
+        float scale = 0.0f;
+        int w = 0, h = 0;
+        od::TextureHandle png = 0; // assets/ui/opening_logo.png (first choice over the SVG)
+        int pngW = 0, pngH = 0;
+    } logoArt;
+    bool drawLogoArt(od::Renderer& r, ui::Canvas& cv, float width, float height);
+    // OpenDash (the vector UI, painter.art.enabled): the title in high resolution. The logo's sprites (game/title
+    // drawTitleBackground: clut 0x7dc0) give way to a picture when one is installed (assets/ui/title/logo_<language>.png,
+    // else logo.png), fitted to the sprites' box, resized from its master to its size; any
+    // other 4-bit sprite whose pixels have a vector picture (assets/ui/title/sprite_<hash>.svg: the menu's words, the
+    // cursor, PRESS START -- traced from the pixel art, hash = spriteHash) is drawn from it. OD_DUMP_TITLE=<dir> writes
+    // each sprite without one as <dir>/sprite_<hash>.txt (its indices and palette: the tracer's input)
+    std::string uiLang; // this frame's text language (lang::uiTextCode; app_frame sets it)
+    struct HdImage {
+        std::vector<uint8_t> src; // RGBA8 master
+        int sw = 0, sh = 0;
+        bool tried = false;
+        od::TextureHandle tex = 0;
+        int w = 0, h = 0;
+    };
+    std::map<std::string, HdImage> hdImages;
+    struct HdSprite {
+        std::unique_ptr<ui::Svg> svg;
+        bool tried = false;
+        od::TextureHandle tex = 0;
+        float scale = 0.0f;
+        int w = 0, h = 0;
+    };
+    std::map<uint64_t, HdSprite> hdSprites;
+    // FNV-1a 64 of a 4-bit sprite's indices (row by row, one byte each) then its 16 palette words (low byte first)
+    uint64_t spriteHash(const od::port::ScreenPrim& p) const;
+    // the master `file` resized to w x h (cached until the size changes); null = no picture
+    HdImage* hdImage(od::Renderer& r, const std::string& file, int w, int h);
+    // the pictures that stand for this frame's logo / sprites (drawn over the painter's pass, window pixels); `rest` =
+    // the primitives the painter still draws
+    struct HdDraw {
+        od::TextureHandle tex;
+        ui::Vec2 a, b;
+        ui::Color c;
+    };
+    std::vector<HdDraw> hdTitle(od::Renderer& r, float s, ui::Vec2 o, std::vector<od::port::ScreenPrim>& rest);
+    // OpenDash: the menu's Extras row (kLblTitleExtras) as its word's picture; false = no picture
+    bool extrasWord(od::Renderer& r, const od::port::ScreenPrim& p, float s, ui::Vec2 o, HdDraw& out);
     void draw(od::Renderer& r, ui::Canvas& cv, float width, float height,
               const std::function<void(const od::port::ScreenPrim&, float, ui::Vec2)>& textAt);
 };

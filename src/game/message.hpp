@@ -25,6 +25,8 @@ void messageTick();
 // exe 0x557c90: per window: circle / start (or cross held) speeds the text up; while the text runs, the glyphs and
 // codes of the tick; the frame's animation; the typing sound
 void windowLogic();
+// OpenDash: cross went on to the next page (game/text_script): that page shows at once, its voice playing on
+void messageCrossNextPage();
 // exe 0x557eb0 (state only): per laid-out window: the choice's hand, the pen walked over the text typed so far; the end
 // of the text closes the window
 void windowLayout();

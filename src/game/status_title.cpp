@@ -13,6 +13,7 @@
 #include "game/status_controls.hpp"
 #include "game/status_options.hpp"
 #include "game/status_screen.hpp"
+#include "engine/pack_charset.hpp"
 
 namespace od::port {
 
@@ -52,6 +53,16 @@ int language() {
     const OptionsHost& host = optionsHost();
     return host.language ? host.language() : 0;
 }
+// the UI language's own words (assets/ui/text: title.help, title.yes, title.no): the languages after Portuguese;
+// nullptr = the tables'
+const char* ownWord(const char* key) { return optionsHost().uiWord ? optionsHost().uiWord(key) : nullptr; }
+// as the PC glyphs of a pack in the PC's format (Korean, Chinese), 0-terminated; empty if none
+std::vector<uint16_t> ownPcWord(const char* key) {
+    const char* w = lang::packGlyphsActive() ? ownWord(key) : nullptr;
+    std::vector<uint16_t> g = w ? lang::pcEncode(w) : std::vector<uint16_t>();
+    if (!g.empty()) g.push_back(0);
+    return g;
+}
 
 } // namespace
 
@@ -84,8 +95,11 @@ void panelTitleSetUp() {
                 continue;
             }
             help.header(exeBank, 0);
-            if (lang == 0) help.glyphs(kHelpJp, uint32_t(std::size(kHelpJp)));
-            else help.wrapped(kHelpLatin[lang], help.at - 1);
+            const std::vector<uint16_t> pc = lang == 0 ? ownPcWord("title.help") : std::vector<uint16_t>();
+            const char* own = lang == 0 ? nullptr : ownWord("title.help");
+            if (!pc.empty()) help.glyphs(pc.data(), uint32_t(pc.size() - 1));
+            else if (lang == 0) help.glyphs(kHelpJp, uint32_t(std::size(kHelpJp)));
+            else help.wrapped(own ? own : kHelpLatin[lang], help.at - 1);
             help.end();
         }
         entry.end = uint8_t(rows);
@@ -126,8 +140,12 @@ void panelTitleQuestion(StatusScreen& s) {
             ScreenPrim& t = otPut(c, ScreenPrim::Text);
             t.x = t.ax = 0x50;
             t.y = int16_t(0x52 + k * 0x20);
-            if (lang == 0) t.pc = k == 0 ? kYesJp : kNoJp;
-            else t.utf8 = k == 0 ? kYesLatin[lang] : kNoLatin[lang];
+            static std::vector<uint16_t> pc[2];
+            pc[k] = lang == 0 ? ownPcWord(k == 0 ? "title.yes" : "title.no") : std::vector<uint16_t>();
+            const char* own = lang == 0 ? nullptr : ownWord(k == 0 ? "title.yes" : "title.no");
+            if (!pc[k].empty()) t.pc = pc[k].data();
+            else if (lang == 0) t.pc = k == 0 ? kYesJp : kNoJp;
+            else t.utf8 = own ? own : k == 0 ? kYesLatin[lang] : kNoLatin[lang];
         }
     }
     optionsOverlay(s, 2, false);

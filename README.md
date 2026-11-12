@@ -37,6 +37,12 @@ cmake --preset vs2026
 cmake --build --preset release
 ```
 
+To put together a release folder (the exe, its DLLs and `assets/`, which the HD text and the vector UI read):
+
+```
+cmake --install build --config Release --prefix <folder>
+```
+
 The configure fetches the pinned upscaler SDKs (DLSS, FSR, XeSS, NIS) into `third_party/` (not in git) through
 `tools/fetch_sdks.py`. Every build includes all four; each one is offered at run time
 when its DLL is next to the exe and the GPU supports it.

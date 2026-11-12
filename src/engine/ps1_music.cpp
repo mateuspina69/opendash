@@ -466,6 +466,13 @@ struct Ps1MusicPlayer::Impl {
         while (!ended && event < seq.events.size() && seq.events[event].frame + cycleOffset <= clock) {
             if (loop && seq.info.hasLoop && event == seq.endLoopEvent && repeats) {
                 if (repeats != 127) --repeats;
+                // OpenDash: the key-offs at the loop end's own tick that come after its marker (the sequences often
+                // place them there: ST4DT, ST0DT, ST36T...) are still played before the jump, or their notes would
+                // ring on forever, piling up every round (Herbert: a stuck, out-of-tune note in the ST4D ruin)
+                for (size_t k = event + 1; k < seq.events.size() && seq.events[k].frame == seq.events[event].frame; ++k) {
+                    const Event& e = seq.events[k];
+                    if ((e.status >> 4) == 8 || ((e.status >> 4) == 9 && !e.b)) keyOff(e.status & 15, e.a);
+                }
                 cycleOffset += seq.info.loopEndFrame - seq.info.loopStartFrame;
                 event = seq.loopEvent;
                 continue;

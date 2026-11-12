@@ -67,7 +67,10 @@ void HelpWriter::wrapped(const char* text, uint32_t linesAt) {
 }
 
 void HelpWriter::glyphs(const uint16_t* codes, uint32_t count) {
-    for (uint32_t k = 0; k < count; ++k) out.byte(at++) = uint8_t(codes[k]);
+    for (uint32_t k = 0; k < count; ++k) { // a glyph past 0xff: its two bytes (d0 + high, low: a pack's glyphs)
+        if (codes[k] >= 0x100) out.byte(at++) = uint8_t(0xd0 + (codes[k] >> 8));
+        out.byte(at++) = uint8_t(codes[k]);
+    }
 }
 
 void HelpWriter::setOffset(uint32_t table, uint32_t i, uint32_t value) {

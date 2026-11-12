@@ -81,6 +81,7 @@ public:
     void streamPause(uint32_t s) override;
     void streamResume(uint32_t s) override;
     bool streamPlaying(uint32_t s) override;
+    double streamSeconds(uint32_t s) override;
     std::vector<uint8_t> readVoiceTrack(const std::string& file, uint32_t track) override;
     // language pack voice dirs, searched in order before the game's snd/ (same file names; ODXA or MP3 tracks):
     // e.g. <pack>/snd_restored (AI-restored voices), <pack>/snd. Empty = the game's snd/ only

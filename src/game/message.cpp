@@ -26,8 +26,14 @@ constexpr int16_t kSubScreenShopX = 0x1c, kSubScreenShopY = 0xb4;
 constexpr uint8_t kDefaultColumns = 0x18, kDefaultLines = 3, kDefaultLayer = 2;
 constexpr uint8_t kVoiceFadeStep = 4; // a stopped window's voice fades out by this a tick
 
-// circle / start pressed or cross held: the text sped up
-bool fastForwardPressed() { return (pad0().pressed & kPadConfirm) || (pad0().held & kPadCross); }
+// circle / start pressed or cross held: the text sped up. OpenDash: cross pressed shows the page at once (its voice
+// goes on: gInstantWindows), and the page cross goes on to as well (gCrossNextPage); triangle held is the exe's cross
+// held -- the fast skip through the text
+bool fastForwardPressed() {
+    return (pad0().pressed & (kPadConfirm | kPadCross)) || (pad0().held & kPadTriangle);
+}
+uint8_t gInstantWindows = 0;  // the windows whose page cross showed at once (their voice is not cut)
+bool gCrossNextPage = false;  // cross went on to the next page: that page shows at once
 
 // the window's voice stopped (exe 0x601220 / 0x601200): faded out, or paused while fb 1a still waits for it to play
 void stopVoice(const MessageWindow& w) {
@@ -99,6 +105,8 @@ void messageInit() {
     messageSystem().waitBits = 0;
 }
 
+void messageCrossNextPage() { gCrossNextPage = true; }
+
 void windowLogic() {
     uint8_t typed = 0;
     for (size_t i = 0; i < kWindowCount; ++i) {
@@ -106,10 +114,20 @@ void windowLogic() {
         uint32_t f = w.flags;
         if (f == 0) continue;
         const uint8_t bit = uint8_t(1u << i);
-        if (fastForwardPressed() && !(f & kWindowNoFastForward)) w.flags = f | kWindowFast;
+        if (f & kWindowWaitButton) gInstantWindows &= uint8_t(~bit); // a page ended: the next one decides again
+        const bool crossOnly = (pad0().pressed & kPadCross) && !(pad0().pressed & kPadConfirm) &&
+                               !(pad0().held & kPadTriangle);
+        if (!(f & kWindowNoFastForward) && !(f & kWindowWaitButton) && gCrossNextPage) {
+            w.flags = f | kWindowFast; // the page cross went on to: at once
+            gInstantWindows |= bit;
+            gCrossNextPage = false;
+        } else if (fastForwardPressed() && !(f & kWindowNoFastForward)) {
+            w.flags = f | kWindowFast;
+            if (crossOnly) gInstantWindows |= bit;
+        }
         f = w.flags;
         if ((f & kWindowVoiceStarting) == 0) {
-            if ((f & kWindowFast) && (f & kWindowVoice)) {
+            if ((f & kWindowFast) && (f & kWindowVoice) && !(gInstantWindows & bit)) {
                 voiceClipFadeOut(kVoiceFadeStep);
                 w.flags &= ~kWindowVoice;
             }

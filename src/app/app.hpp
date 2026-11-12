@@ -30,10 +30,12 @@
 #include "app/play_session.hpp"
 #include "app/room_mesh.hpp"
 #include "app/see_through.hpp"
+#include "app/subtitles.hpp"
 #include "app/game_pacer.hpp"
 #include "app/title_screen.hpp"
 #include "app/video_mode.hpp"
 #include "app/ui/hud_ui.hpp"
+#include "app/ui/mission_art.hpp"
 #include "app/ui/message_ui.hpp"
 #include "app/ui/prim_painter.hpp"
 #include "app/ui/vector_ui.hpp"
@@ -197,8 +199,10 @@ struct App {
     bool titleMouse(const SDL_Event& e); // the title's menus (TitleScreen::rowAt); true = the event was theirs
     ui::Canvas canvas; // the game's 2D layer this frame (menus, windows, HUD, fades); ImGui = the F1 panels only
     MessageUi messageUi;
+    Subtitles subtitles; // the voiced lines without a window (app/subtitles)
     PrimPainter menuPainter; // the status sub-screen's packets (game/status_screen)
     HudUi hudUi;
+    MissionArt missionArt; // the mission banners in HD in the text's language (app/ui/mission_art)
     od::FogMode fogMode = od::FogMode::Remaster; // F1 Visual; the room's fog, if it has one
     float fogDistance = 1.0f;
     FogSource fogSource = FogSource::OpenDash; // F1 Visual: the fog of a room with no range of its own (the disc's rooms)

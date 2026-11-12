@@ -9,22 +9,199 @@ const char* code(Language l) {
     switch (l) {
     case Language::English: return "en";
     case Language::Portuguese: return "ptbr";
+    case Language::PortugueseFromJp: return "ptjp";
+    case Language::EnglishFromJp: return "enjp";
+    case Language::PortugueseFromJpUs: return "ptjpus";
+    case Language::EnglishFromJpUs: return "enjpus";
+    case Language::Spanish: return "es";
+    case Language::French: return "fr";
+    case Language::Italian: return "it";
+    case Language::German: return "de";
+    case Language::Korean: return "ko";
+    case Language::Chinese: return "zh";
+    case Language::SpanishFromJp: return "esjp";
+    case Language::FrenchFromJp: return "frjp";
+    case Language::ItalianFromJp: return "itjp";
+    case Language::GermanFromJp: return "dejp";
+    case Language::SpanishFromJpUs: return "esjpus";
+    case Language::FrenchFromJpUs: return "frjpus";
+    case Language::ItalianFromJpUs: return "itjpus";
+    case Language::GermanFromJpUs: return "dejpus";
+    case Language::Russian: return "ru";
+    case Language::ChineseHK: return "zhhk";
     default: return "jp";
+    }
+}
+
+bool pcScript(Language l) { return l == Language::Korean || l == Language::Chinese || l == Language::Russian ||
+                                  l == Language::ChineseHK; }
+
+const char* uiTextCode(Language l) {
+    switch (l) {
+    case Language::PortugueseFromJp:
+    case Language::PortugueseFromJpUs: return "ptbr";
+    case Language::EnglishFromJp:
+    case Language::EnglishFromJpUs: return "en";
+    case Language::SpanishFromJp: return "es";
+    case Language::FrenchFromJp: return "fr";
+    case Language::ItalianFromJp: return "it";
+    case Language::GermanFromJp: return "de";
+    case Language::SpanishFromJpUs: return "es";
+    case Language::FrenchFromJpUs: return "fr";
+    case Language::ItalianFromJpUs: return "it";
+    case Language::GermanFromJpUs: return "de";
+    default: return code(l);
     }
 }
 
 const char* displayName(Language l) {
     switch (l) {
     case Language::English: return "English (PS1)";
-    case Language::Portuguese: return "Portugues (PS1, fandub)";
+    case Language::Portuguese: return "PT-BR (PS1, fandub)";
+    case Language::PortugueseFromJp: return "PT-BR (traduzido do japon\xc3\xaas)";
+    case Language::EnglishFromJp: return "English (straight from the Japanese)";
+    case Language::PortugueseFromJpUs: return "PT-BR (do japon\xc3\xaas, nomes dos EUA)";
+    case Language::EnglishFromJpUs: return "English (from the Japanese, US names)";
+    case Language::Spanish: return "Espa\xc3\xb1ol (from the US English)";
+    case Language::French: return "Fran\xc3\xa7" "ais (from the US English)";
+    case Language::Italian: return "Italiano (from the US English)";
+    case Language::German: return "Deutsch (from the US English)";
+    case Language::SpanishFromJp: return "Espa\xc3\xb1ol (from the Japanese)";
+    case Language::FrenchFromJp: return "Fran\xc3\xa7" "ais (from the Japanese)";
+    case Language::ItalianFromJp: return "Italiano (from the Japanese)";
+    case Language::GermanFromJp: return "Deutsch (from the Japanese)";
+    case Language::SpanishFromJpUs: return "Espa\xc3\xb1ol (from the Japanese, US names)";
+    case Language::FrenchFromJpUs: return "Fran\xc3\xa7" "ais (from the Japanese, US names)";
+    case Language::ItalianFromJpUs: return "Italiano (from the Japanese, US names)";
+    case Language::GermanFromJpUs: return "Deutsch (from the Japanese, US names)";
+    case Language::Korean: return "Korean";
+    case Language::Chinese: return "Chinese (Simplified)";
+    case Language::Russian: return "Russian (from the US English)";
+    case Language::ChineseHK: return "Chinese (Traditional, Hong Kong)";
     default: return "Japones (PC)";
     }
 }
 
+const char* menuName(Language l) {
+    switch (l) {
+    case Language::English: return "English";
+    // "language\nwhat it is": two lines in the options' row (each ~170 px: a longer line runs past the box)
+    case Language::Portuguese: return "Portugu\xc3\xaas (BR)\nfandub";
+    case Language::PortugueseFromJp: return "Portugu\xc3\xaas (BR)\ntraduzido do japon\xc3\xaas";
+    case Language::EnglishFromJp: return "English\nfrom Japanese";
+    case Language::PortugueseFromJpUs: return "Portugu\xc3\xaas (BR)\ndo japon\xc3\xaas, nomes dos EUA";
+    case Language::EnglishFromJpUs: return "English\nfrom Japanese, US names";
+    case Language::Spanish:
+    case Language::SpanishFromJpUs:
+    case Language::SpanishFromJp: return "Espa\xc3\xb1ol";
+    case Language::French:
+    case Language::FrenchFromJpUs:
+    case Language::FrenchFromJp: return "Fran\xc3\xa7" "ais";
+    case Language::Italian:
+    case Language::ItalianFromJpUs:
+    case Language::ItalianFromJp: return "Italiano";
+    case Language::German:
+    case Language::GermanFromJpUs:
+    case Language::GermanFromJp: return "Deutsch";
+    case Language::Korean: return "\xed\x95\x9c\xea\xb5\xad\xec\x96\xb4"; // hangugeo
+    case Language::Chinese: return "\xe4\xb8\xad\xe6\x96\x87";             // zhongwen
+    case Language::ChineseHK: return "\xe7\xb9\x81\xe9\xab\x94\xe4\xb8\xad\xe6\x96\x87"; // fanti zhongwen
+    case Language::Russian: return "\xd0\xa0\xd1\x83\xd1\x81\xd1\x81\xd0\xba\xd0\xb8\xd0\xb9"; // Russkiy
+    default: return "";
+    }
+}
+
 Language parseLanguage(std::string_view s) {
-    if (s == "en") return Language::English;
-    if (s == "ptbr" || s == "pt") return Language::Portuguese;
+    for (int k = 1; k < kLanguageCount; ++k)
+        if (s == code(Language(k))) return Language(k);
+    if (s == "pt") return Language::Portuguese;
     return Language::Japanese;
+}
+
+bool fromJapanese(Language l) {
+    return l == Language::PortugueseFromJp || l == Language::EnglishFromJp || l == Language::PortugueseFromJpUs ||
+           l == Language::EnglishFromJpUs || l == Language::Korean || l == Language::Chinese || l == Language::ChineseHK ||
+           l == Language::SpanishFromJp || l == Language::FrenchFromJp || l == Language::ItalianFromJp ||
+           l == Language::GermanFromJp || l == Language::SpanishFromJpUs || l == Language::FrenchFromJpUs ||
+           l == Language::ItalianFromJpUs || l == Language::GermanFromJpUs;
+}
+
+int languageBase(Language l) {
+    switch (l) {
+    case Language::English:
+    case Language::EnglishFromJp:
+    case Language::EnglishFromJpUs: return 1;
+    case Language::Portuguese:
+    case Language::PortugueseFromJp:
+    case Language::PortugueseFromJpUs: return 2;
+    case Language::Spanish:
+    case Language::SpanishFromJpUs:
+    case Language::SpanishFromJp: return 3;
+    case Language::French:
+    case Language::FrenchFromJpUs:
+    case Language::FrenchFromJp: return 4;
+    case Language::Italian:
+    case Language::ItalianFromJpUs:
+    case Language::ItalianFromJp: return 5;
+    case Language::German:
+    case Language::GermanFromJpUs:
+    case Language::GermanFromJp: return 6;
+    case Language::Korean: return 7;
+    case Language::Chinese: return 8;
+    case Language::Russian: return 10;
+    case Language::ChineseHK: return 9;
+    default: return 0;
+    }
+}
+
+int languageVersion(Language l) {
+    switch (l) {
+    case Language::EnglishFromJp:
+    case Language::PortugueseFromJp:
+    case Language::SpanishFromJp:
+    case Language::FrenchFromJp:
+    case Language::ItalianFromJp:
+    case Language::GermanFromJp: return 1;
+    case Language::EnglishFromJpUs:
+    case Language::PortugueseFromJpUs:
+    case Language::SpanishFromJpUs:
+    case Language::FrenchFromJpUs:
+    case Language::ItalianFromJpUs:
+    case Language::GermanFromJpUs: return 2;
+    default: return 0;
+    }
+}
+
+Language languageOf(int base, int version) {
+    for (int k = 0; k < kLanguageCount; ++k)
+        if (languageBase(Language(k)) == base && languageVersion(Language(k)) == version) return Language(k);
+    return Language::Count;
+}
+
+Language uiLanguage(Language l) {
+    switch (l) {
+    case Language::PortugueseFromJp:
+    case Language::PortugueseFromJpUs: return Language::Portuguese;
+    case Language::EnglishFromJp:
+    case Language::EnglishFromJpUs:
+    case Language::Spanish:
+    case Language::French:
+    case Language::Italian:
+    case Language::German:
+    case Language::SpanishFromJp:
+    case Language::FrenchFromJp:
+    case Language::ItalianFromJp:
+    case Language::GermanFromJp:
+    case Language::SpanishFromJpUs:
+    case Language::FrenchFromJpUs:
+    case Language::ItalianFromJpUs:
+    case Language::GermanFromJpUs: return Language::English;
+    case Language::Korean:
+    case Language::Chinese:
+    case Language::ChineseHK:
+    case Language::Russian: return Language::Japanese;
+    default: return l;
+    }
 }
 
 const char* ps1GlyphText(uint8_t g) {
@@ -63,6 +240,7 @@ const char* ps1GlyphText(uint8_t g) {
     case 0x61: return "-";
     case 0x62: return "=";
     case 0x63: return ";";
+    case 0x64: return "\xce\xb1"; // alpha (the Buster parts; drawn in HD from the full M+)
     case 0x65: return "\xce\xa9";
     case 0x66: return "\xe2\x86\x91";
     case 0x67: return "\xe2\x86\x93";
@@ -85,6 +263,46 @@ const char* ps1GlyphText(uint8_t g) {
     case 0x78: return "\xc3\x83"; // A tilde
     case 0x79: return "\xc3\x81"; // A acute
     case 0x7a: return "\xc3\x93"; // O acute
+    case 0x7b: return "\xc3\xbc"; // u diaeresis: OpenDash's packs translated from the Japanese (Muller), its pixel glyph too (fonte_europa)
+    // 0x7c..0xa1: the letters of the Spanish, French, Italian and German packs (ferramentas/texto japones/fonte_europa.py)
+    case 0x7c: return "\xc3\xa4"; // latin small letter a with diaeresis
+    case 0x7d: return "\xc3\xab"; // latin small letter e with diaeresis
+    case 0x7e: return "\xc3\xaf"; // latin small letter i with diaeresis
+    case 0x7f: return "\xc3\xb6"; // latin small letter o with diaeresis
+    case 0x80: return "\xc3\xa8"; // latin small letter e with grave
+    case 0x81: return "\xc3\xac"; // latin small letter i with grave
+    case 0x82: return "\xc3\xb2"; // latin small letter o with grave
+    case 0x83: return "\xc3\xb9"; // latin small letter u with grave
+    case 0x84: return "\xc3\xae"; // latin small letter i with circumflex
+    case 0x85: return "\xc3\xbb"; // latin small letter u with circumflex
+    case 0x86: return "\xc3\xb1"; // latin small letter n with tilde
+    case 0x87: return "\xc5\x93"; // latin small ligature oe
+    case 0x88: return "\xc3\xa6"; // latin small letter ae
+    case 0x89: return "\xc3\x9f"; // latin small letter sharp s
+    case 0x8a: return "\xc2\xbf"; // inverted question mark
+    case 0x8b: return "\xc2\xa1"; // inverted exclamation mark
+    case 0x8c: return "\xc3\x80"; // latin capital letter a with grave
+    case 0x8d: return "\xc3\x82"; // latin capital letter a with circumflex
+    case 0x8e: return "\xc3\x84"; // latin capital letter a with diaeresis
+    case 0x8f: return "\xc3\x87"; // latin capital letter c with cedilla
+    case 0x90: return "\xc3\x88"; // latin capital letter e with grave
+    case 0x91: return "\xc3\x8a"; // latin capital letter e with circumflex
+    case 0x92: return "\xc3\x8b"; // latin capital letter e with diaeresis
+    case 0x93: return "\xc3\x8e"; // latin capital letter i with circumflex
+    case 0x94: return "\xc3\x8f"; // latin capital letter i with diaeresis
+    case 0x95: return "\xc3\x8c"; // latin capital letter i with grave
+    case 0x96: return "\xc3\x8d"; // latin capital letter i with acute
+    case 0x97: return "\xc3\x91"; // latin capital letter n with tilde
+    case 0x98: return "\xc3\x92"; // latin capital letter o with grave
+    case 0x99: return "\xc3\x94"; // latin capital letter o with circumflex
+    case 0x9a: return "\xc3\x96"; // latin capital letter o with diaeresis
+    case 0x9b: return "\xc3\x99"; // latin capital letter u with grave
+    case 0x9c: return "\xc3\x9a"; // latin capital letter u with acute
+    case 0x9d: return "\xc3\x9b"; // latin capital letter u with circumflex
+    case 0x9e: return "\xc3\x9c"; // latin capital letter u with diaeresis
+    case 0x9f: return "\xc5\x92"; // latin capital ligature oe
+    case 0xa0: return "\xc2\xab"; // left-pointing double angle quotation mark
+    case 0xa1: return "\xc2\xbb"; // right-pointing double angle quotation mark
     default: return "";
     }
 }
@@ -133,6 +351,9 @@ std::filesystem::path bankPath(const std::filesystem::path& root, Language l, st
 bool packAvailable(const std::filesystem::path& root, Language l) {
     const auto dir = packDir(root, l);
     std::error_code ec;
+    if (pcScript(l)) // the PC's format: its glyphs' code points and its vector font's name instead of the PS1 font
+        return !dir.empty() && std::filesystem::exists(dir / "charset.bin", ec) &&
+               std::filesystem::exists(dir / "font.txt", ec) && std::filesystem::is_directory(dir / "msg", ec);
     return !dir.empty() && std::filesystem::exists(dir / "font.bin", ec) &&
            std::filesystem::exists(dir / "widths.bin", ec) && std::filesystem::is_directory(dir / "msg", ec);
 }
