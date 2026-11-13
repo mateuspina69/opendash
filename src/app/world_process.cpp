@@ -656,6 +656,9 @@ int run(const WorldArgs& given) {
             for (const auto& [client, sender] : netClients) roomPlayerMessage(client, field, value);
         });
         od::port::setWorldWarpHook([&](const od::port::TransitionRequest& r) {
+            // (a scene's warp to another room of the stage: its players' games go there by their own copies, to that
+            // room's world)
+            if (sceneOn) sceneWentAway = int(r.destStage) != w.stage || int(r.destRoom) != w.sub; // (the last one counts)
             const auto half = [](int16_t v, std::vector<uint8_t>& o) {
                 o.push_back(uint8_t(v));
                 o.push_back(uint8_t(uint16_t(v) >> 8));
@@ -687,7 +690,7 @@ int run(const WorldArgs& given) {
             if (r.exitId == 0 && r.destStage == 0 && r.destRoom == 0) return;
             // a scene's room change: every game in the room plays the scene and its script changes that game's room
             // itself (moved again from here, each would be put beside the others: a narrow door's sides are out of it)
-            if (sceneOn && (r.destStage != od::port::gameState().stage || r.destRoom != od::port::gameState().room)) sceneWentAway = true;
+            if (sceneOn) sceneWentAway = int(r.destStage) != w.stage || int(r.destRoom) != w.sub; // (the last one counts)
             if (sceneOn || sceneEndedTicksAgo <= kSceneExitTicks) return;
             const auto half = [](int16_t v, std::vector<uint8_t>& o) {
                 o.push_back(uint8_t(v));
@@ -1070,6 +1073,9 @@ int run(const WorldArgs& given) {
         if (std::vector<uint8_t> banks = encodeStageBanks(view->stageBanks()); banks != banksTold) {
             banksTold = std::move(banks);
             for (const auto& [client, sender] : netClients) banksMessage(client);
+            // ... and the players pose on them here: their looks' files, made over this world's files as they were, are
+            // made again (a stage animation of the new bank is read from there)
+            for (LookFiles& lf : lookFiles) lf.look.reset();
         }
         for (auto& [client, sender] : netClients) {
             for (auto& batch : sender.events(*netTable)) {
