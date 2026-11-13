@@ -7,7 +7,7 @@ https://github.com/Phhofm/models/releases/download/4xTextures_GTAV_rgt-s_dither/
 into the pack folder under the same name. The colour: the page with its transparent texels taking their drawn
 neighbours' colour (no black bleeding into the edges), then its tones moved back to the page's (the model shifts them).
 The alpha: the page's drawn mask through the same model, cut at half (its outlines follow the shapes, not the texel
-steps), each drawn texel at the PS1 level of its nearest drawn texel. Pages already in the pack are skipped.
+steps), 0 or 255 (the game takes the STP bit from the PS1 page). Pages already in the pack are skipped.
 
   python -m venv venv && venv/Scripts/pip install torch --index-url https://download.pytorch.org/whl/cu130
   venv/Scripts/pip install spandrel pillow numpy safetensors
@@ -107,8 +107,8 @@ def floors(model, dev, dump, pack, only):
             x0, y0, x1, y1 = max(x, 0), max(y, 0), min(x + 128, out.shape[1]), min(y + 128, out.shape[0])
             part = np.pad(out[y0:y1, x0:x1], ((y0 - y, y + 128 - y1), (x0 - x, x + 128 - x1), (0, 0)), mode='edge')
             img[sy:sy + 128, sx:sx + 128, :3] = part
-            alpha = page_of(name)[sy // 4:sy // 4 + 32, sx // 4:sx // 4 + 32, 3]
-            img[sy:sy + 128, sx:sx + 128, 3] = alpha.repeat(4, 0).repeat(4, 1)
+            drawn = page_of(name)[sy // 4:sy // 4 + 32, sx // 4:sx // 4 + 32, 3] > 0
+            img[sy:sy + 128, sx:sx + 128, 3] = (drawn * 255).astype(np.uint8).repeat(4, 0).repeat(4, 1)
         print(f'{f.stem}: {len(cells)} tiles', flush=True)
     for name, img in images.items():
         tmp = pack / f'{name}.tmp.png'
@@ -156,9 +156,7 @@ def main():
                 colour = (image(tone(enlarge(rgb), tensor(rgb))) * 255 + 0.5).astype(np.uint8)
             mask = np.ones((1024, 1024), bool) if drawn.all() else \
                 image(enlarge(np.repeat(drawn[..., None].astype(np.float32) * 255, 3, 2))).mean(-1) >= 0.5
-            level = spread(page[..., 3:4], drawn)[..., 0]
-            level = np.where(level >= 192, 255, 128).astype(np.uint8).repeat(4, 0).repeat(4, 1)
-            out = np.dstack([colour, np.where(mask, level, 0).astype(np.uint8)])
+            out = np.dstack([colour, np.where(mask, 255, 0).astype(np.uint8)])
         tmp = pack / (p.stem + '.tmp.png')
         Image.fromarray(out).save(tmp)
         tmp.replace(pack / p.name)

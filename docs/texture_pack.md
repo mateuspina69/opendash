@@ -26,8 +26,9 @@ A texture page is what one polygon samples: 256 x 256 texels of VRAM read throug
 (15-bit), with the PS1's semi-transparency bit. Its image is named after the page as the game decodes it
 (`Vram::decode`, 256 x 256 RGBA): the XXH3-64 of those bytes, 16 lowercase hex digits, `.png`. The image is the page at
 the pack's scale (1024 x 1024 for 4x; the first image's size sets it, an image of another size is skipped), its alpha
-as the PS1 page's texels: 0 transparent, 128 the semi-transparency bit (blended on a semi-transparent polygon), 255
-opaque.
+only what it draws: 128 and up drawn, below it transparent. Which drawn texels blend on a semi-transparent polygon is
+the PS1's (the semi-transparency bit): the game takes it from the page itself, each drawn texel as its PS1 texel, or as
+the nearest drawn one where that texel is transparent. An image edited in any program keeps its look.
 
 Every different decode is another page: the same texels through another CLUT (a palette swap, an animated CLUT's
 frame, a fog shade), or a page whose VRAM an animation moved. A page with no image is the PS1 page enlarged, nearest,
@@ -85,8 +86,7 @@ must not read its neighbour. Without a pack the pages are drawn nearest, the PS1
      into the outlines; then the model's output has its tones moved back to the page's, region by region (the model
      shifts them), stopping at the edges between two colours.
    - Alpha: the page's drawn mask through the same model, cut at half. The outlines follow the shapes (a diagonal is
-     a line, not the texels' steps) where an enlarged mask would keep the steps. Each drawn texel takes the level
-     (128 / 255) of its nearest drawn PS1 texel.
+     a line, not the texels' steps) where an enlarged mask would keep the steps: 0 or 255.
    - `--floors [geometry file prefixes]`: after the pages, each room's floor through the model as one image, its tones
      moved back, each cell's part going to its slot of the floor pages. The PS1's tiles connect as the floor lays them, so
      the image does too. Two floor pages with the same texels are one page, with one image.

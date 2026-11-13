@@ -2,6 +2,7 @@
 // no image enlarged, the pack's scale, the dump of the pages the pack lacks, and the slices made by the loader's threads
 #include <algorithm>
 #include <chrono>
+#include <cstring>
 #include <cstdio>
 #include <filesystem>
 #include <string>
@@ -54,10 +55,28 @@ int main() {
     stbi_write_png((root / "pack" / "sub" / (hex(od::pageName(ps1)) + ".png")).string().c_str(), 512, 512, 4, img.data(), 512 * 4);
     // not a page name: not indexed
     stbi_write_png((root / "pack" / "picture.png").string().c_str(), 512, 512, 4, img.data(), 512 * 4);
+    // a page whose left half has the STP bit, with a transparent texel in each half; its image draws everything at 255
+    // but a texel at 100
+    std::vector<uint8_t> stp = ps1;
+    for (int y = 0; y < 256; ++y)
+        for (int x = 0; x < 128; ++x) stp[(size_t(y) * 256 + size_t(x)) * 4 + 3] = od::Vram::kStpAlpha;
+    for (const int x : {60, 200}) std::memset(&stp[(size_t(9) * 256 + size_t(x)) * 4], 0, 4);
+    std::vector<uint8_t> stpImg(512 * 512 * 4, 255);
+    stpImg[(size_t(40) * 512 + 300) * 4 + 3] = 100;
+    stbi_write_png((root / "pack" / (hex(od::pageName(stp)) + ".png")).string().c_str(), 512, 512, 4, stpImg.data(), 512 * 4);
 
     od::bindTexturePack(std::make_shared<const od::TexturePack>(root / "pack"));
     CHECK(od::texturePack()->scale() == 2);
-    CHECK(od::texturePack()->size() == 1);
+    CHECK(od::texturePack()->size() == 2);
+    { // the image says what is drawn; how it blends is the PS1 texel's, or its nearest drawn one's where it has none
+        int drawn = 0;
+        const std::vector<uint8_t> s = od::pageSliceOf(stp, od::texturePack(), &drawn);
+        CHECK(drawn == 1);
+        CHECK(at(s, 512, 10, 10)[3] == od::Vram::kStpAlpha && at(s, 512, 400, 10)[3] == 255);
+        CHECK(at(s, 512, 120, 18)[3] == od::Vram::kStpAlpha && at(s, 512, 401, 19)[3] == 255); // over the transparent texels
+        CHECK(at(s, 512, 300, 40)[3] == 0);
+        CHECK(at(s, 512, 255, 0)[3] == od::Vram::kStpAlpha && at(s, 512, 256, 0)[3] == 255);
+    }
     CHECK(od::sliceEdge() == 512);
 
     int images = -1;

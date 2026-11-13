@@ -1,8 +1,9 @@
 // OpenDash's texture pack: larger images of the PS1's texture pages, made offline from the pages the game dumps
 // (tools/upscale_pages.py, docs/texture_pack.md). A page is found by what it shows: its image is
 //   <XXH3-64 of the page as Vram::decode makes it, 16 lowercase hex digits>.png
-// (any folder depth), (256 * scale)^2 RGBA, alpha 0 / Vram::kStpAlpha / 255 as the PS1 page's texels. A page with no
-// image is the PS1 page enlarged, nearest.
+// (any folder depth), (256 * scale)^2 RGBA, its alpha only what it draws (from 128 up). A drawn texel blends as its PS1
+// texel does (the STP bit: alpha Vram::kStpAlpha in the slice), as the nearest drawn one where that one is transparent.
+// A page with no image is the PS1 page enlarged, nearest.
 //
 // The game never clears VRAM, so a page's unused texels hold what the stages before left, a different page by every route
 // to a room. A page shown with no image of its own is looked up again by what the room's load alone puts there (`loaded`:

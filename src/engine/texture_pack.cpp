@@ -54,6 +54,48 @@ std::string hex(uint64_t name) {
     return s;
 }
 
+// The alpha a page's image draws with at each PS1 texel (Vram::kStpAlpha / 255): a drawn texel's own; a transparent one's
+// from the drawn texels nearest it, layer by layer (each the mean of its neighbours a layer before has; 255 from 192 up).
+// No drawn texel: 255
+std::vector<uint8_t> stpLevels(const std::vector<uint8_t>& ps1) {
+    constexpr int kEdge = 256;
+    std::vector<float> level(size_t(kEdge) * kEdge, 0.f);
+    std::vector<uint8_t> have(size_t(kEdge) * kEdge, 0);
+    std::vector<int> layer, next;
+    for (int i = 0; i < kEdge * kEdge; ++i)
+        if (const uint8_t a = ps1[size_t(i) * 4 + 3]) level[size_t(i)] = a, have[size_t(i)] = 1, layer.push_back(i);
+    if (layer.empty()) return std::vector<uint8_t>(size_t(kEdge) * kEdge, 255);
+    const auto around = [](int i, auto&& f) {
+        const int x = i % kEdge, y = i / kEdge;
+        if (y > 0) f(i - kEdge);
+        if (y < kEdge - 1) f(i + kEdge);
+        if (x > 0) f(i - 1);
+        if (x < kEdge - 1) f(i + 1);
+    };
+    std::vector<float> made;
+    while (!layer.empty()) {
+        next.clear();
+        for (const int i : layer)
+            around(i, [&](int j) {
+                if (!have[size_t(j)]) have[size_t(j)] = 2, next.push_back(j); // 2: in this layer
+            });
+        made.assign(next.size(), 0.f);
+        for (size_t k = 0; k < next.size(); ++k) {
+            float sum = 0.f;
+            int n = 0;
+            around(next[k], [&](int j) {
+                if (have[size_t(j)] == 1) sum += level[size_t(j)], ++n;
+            });
+            made[k] = sum / float(n);
+        }
+        for (size_t k = 0; k < next.size(); ++k) level[size_t(next[k])] = made[k], have[size_t(next[k])] = 1;
+        layer.swap(next);
+    }
+    std::vector<uint8_t> out(level.size());
+    for (size_t i = 0; i < level.size(); ++i) out[i] = level[i] >= 192.f ? uint8_t(255) : Vram::kStpAlpha;
+    return out;
+}
+
 } // namespace
 
 uint64_t pageName(const std::vector<uint8_t>& ps1) { return XXH3_64bits(ps1.data(), ps1.size()); }
@@ -124,6 +166,13 @@ std::vector<uint8_t> TexturePack::decode(const std::vector<uint8_t>& ps1, int* i
     }
     auto img = std::make_shared<std::vector<uint8_t>>(px, px + size_t(edge) * size_t(edge) * 4);
     stbi_image_free(px);
+    // the image's alpha says only what it draws; how a drawn texel blends is its PS1 texel's
+    const std::vector<uint8_t> levels = stpLevels(ps1);
+    for (size_t y = 0; y < size_t(edge); ++y)
+        for (size_t x = 0; x < size_t(edge); ++x) {
+            uint8_t& a = (*img)[(y * size_t(edge) + x) * 4 + 3];
+            a = a >= 128 ? levels[(y / size_t(scale_)) * 256 + x / size_t(scale_)] : uint8_t(0);
+        }
     cache_.put(name, img, img->size());
     if (images) *images = 1;
     return *img;
