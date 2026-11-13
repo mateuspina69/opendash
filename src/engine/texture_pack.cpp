@@ -192,7 +192,11 @@ void dump(const std::vector<uint8_t>& ps1) {
     }
     const std::filesystem::path p = g_dump / (hex(name) + ".png");
     std::error_code ec;
-    if (!std::filesystem::exists(p, ec)) stbi_write_png(p.string().c_str(), 256, 256, 4, ps1.data(), 256 * 4);
+    if (std::filesystem::exists(p, ec)) return;
+    // its alpha only what it draws, as a pack image's (the STP bit is the game's, from the page)
+    std::vector<uint8_t> img = ps1;
+    for (size_t i = 3; i < img.size(); i += 4) img[i] = img[i] ? 255 : 0;
+    stbi_write_png(p.string().c_str(), 256, 256, 4, img.data(), 256 * 4);
 }
 } // namespace
 

@@ -91,7 +91,7 @@ uint64_t pageName(const std::vector<uint8_t>& ps1);
 void bindTexturePack(std::shared_ptr<const TexturePack> pack);
 const TexturePack* texturePack();
 // The folder the pages with no image are written to (opendash.ini's texture_dump=; empty: none), each once, as
-// <name>.png at 256 x 256: the upscaler's input
+// <name>.png at 256 x 256, alpha 0 / 255 (what it draws): the upscaler's input
 void bindPageDump(std::filesystem::path dir);
 const std::filesystem::path& pageDumpDir();
 // writes the page there now (no folder bound: nothing), for a page no polygon shows yet (app/room_mesh's floor pages)

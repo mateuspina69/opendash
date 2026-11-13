@@ -57,7 +57,7 @@ must not read its neighbour. Without a pack the pages are drawn nearest, the PS1
 ## Making it
 
 1. **Dump the pages.** `texture_dump=` in `opendash.ini` (or `--texture-dump <dir>`) names a folder the pages with no
-   image in the pack are written to, once each, as `<name>.png` at 256 x 256. `tools/dump_pages.py` plays every
+   image in the pack are written to, once each, as `<name>.png` at 256 x 256 (alpha 0 / 255). `tools/dump_pages.py` plays every
    stage's rooms for a few seconds with it:
 
    ```

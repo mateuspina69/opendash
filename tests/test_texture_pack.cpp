@@ -11,6 +11,7 @@
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb_image_write.h>
+#include <stb_image.h> // the implementation is compiled in engine/texture_pack.cpp
 
 #include "check.hpp"
 #include "engine/texture_pack.hpp"
@@ -100,6 +101,18 @@ int main() {
     size_t dumps = 0;
     for (const auto& e : fs::directory_iterator(root / "dump")) dumps += e.is_regular_file();
     CHECK(dumps == 1);
+    { // a dumped page's alpha is only what it draws: its STP texels at 255
+        od::dumpPage(stp);
+        int w = 0, h = 0, comp = 0;
+        stbi_uc* px = stbi_load((root / "dump" / (hex(od::pageName(stp)) + ".png")).string().c_str(), &w, &h, &comp, 4);
+        CHECK(px && w == 256 && h == 256);
+        if (px) {
+            bool ok = true;
+            for (size_t i = 0; i < size_t(256) * 256; ++i) ok &= px[i * 4 + 3] == (stp[i * 4 + 3] ? 255 : 0);
+            CHECK(ok && px[(9 * 256 + 60) * 4 + 3] == 0 && px[(5 * 256 + 5) * 4 + 3] == 255);
+            stbi_image_free(px);
+        }
+    }
 
     // a page whose VRAM changed is another page
     const uint8_t two[2] = {0xff, 0xff};
