@@ -26,6 +26,8 @@ void registerSubruinsClasses(ContentRegistry& r) {
         {RoutineId::SubruinLineTriggerUpdate, &subruinLineTriggerUpdate},
         {RoutineId::SubruinDropSpawnerUpdate, &subruinDropSpawnerUpdate},
     });
+    // a session's: the tutorial's blob, beaten -- the scene after it goes on with the world's
+    r.netPictures.emplace(RoutineId::BlobBossUpdate, ContentRegistry::NetPicture{nullptr, nullptr, nullptr, &blobBossAdoptBeaten});
 }
 
 } // namespace od::content

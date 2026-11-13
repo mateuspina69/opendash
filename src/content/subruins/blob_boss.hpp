@@ -2,6 +2,7 @@
 #pragma once
 
 #include <cstdint>
+#include <span>
 
 namespace od::port {
 
@@ -13,5 +14,8 @@ struct PlayerEnv;
 // rise / sink. Spawn byte 0 is the tutorial run (messages 0x30..0x38 of bank 0x73c000 in window 4, story flag 0x75 at
 // its end).
 void blobBossUpdate(const PlayerEnv& env, uint32_t actor);
+// OpenDash's co-op (ContentRegistry::netPictures): the tutorial's blob, beaten, is this game's own for the scene after
+// it (script 0x4b) -- it stands there, its prop on it, until the scene sweeps it
+bool blobBossAdoptBeaten(const PlayerEnv& env, uint32_t actor, uint8_t script, std::span<const uint8_t> picture);
 
 } // namespace od::port

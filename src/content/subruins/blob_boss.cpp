@@ -19,6 +19,7 @@
 #include "content/subruins/blob_boss_shots.hpp"
 #include "engine/data_source.hpp"
 #include "game/actor_animation.hpp"
+#include "game/game_state.hpp"
 #include "game/actor_collision.hpp"
 #include "game/actor_model.hpp"
 #include "game/actor_movement.hpp"
@@ -1134,11 +1135,16 @@ void sinkSequence(AnimatedActor& a, BlobFields& f, BlobFightBlock& w) { // exe 0
 }
 
 // ---- states [0x8956b0] ----------------------------------------------------------------------------------------------
+void initBound(AnimatedActor& a, BlobFields& f, bool tutorialMessage);
 void init(AnimatedActor& a, BlobFields& f) { // exe 0x4d6b60 (jump table 0x4d6e64)
     if (!bindActorModel(a, a.spawnByte)) { // exe 0x5e0bc0(a, &+7)
         freeActor(a);                      // exe 0x5e1490
         return;
     }
+    initBound(a, f, true);
+}
+// (its model bound: the actor's own set-up; tutorialMessage: the tutorial's first message opens)
+void initBound(AnimatedActor& a, BlobFields& f, bool tutorialMessage) {
     a.flags |= kActorScenery;
     a.clearMotion(); // exe 0x40dc40
     const uint32_t block0 = boneBlockAddress(a, 0);
@@ -1187,7 +1193,7 @@ void init(AnimatedActor& a, BlobFields& f) { // exe 0x4d6b60 (jump table 0x4d6e6
         f.flags |= kBlobPulse;
         f.timer = 1;
         w.bodyYaw = 0;
-        if (a.spawnByte == 0) {
+        if (a.spawnByte == 0 && tutorialMessage) {
             w.messageTicks = 0x78;
             w.messageStep = 0;
             windowOpen(kMessageWindow, kMessageBank, 0x30); // exe 0x557390
@@ -1519,5 +1525,24 @@ void blobBoss(const PlayerEnv& env, AnimatedActor& a) { // exe 0x4d6b40: [0x8956
 } // namespace
 
 void blobBossUpdate(const PlayerEnv& env, uint32_t actor) { blobBoss(env, animatedActorAt(actor)); }
+
+bool blobBossAdoptBeaten(const PlayerEnv&, uint32_t actor, uint8_t script, std::span<const uint8_t>) {
+    constexpr uint8_t kTutorialStage = 0x2f, kTutorialSceneScript = 0x4b;
+    AnimatedActor& a = animatedActorAt(actor);
+    if (gameState().stage != kTutorialStage || script != kTutorialSceneScript || a.variant != uint8_t(BlobVariant::Fight) ||
+        a.spawnByte != 0)
+        return false;
+    BlobFields& f = classState<BlobFields>(a);
+    initBound(a, f, false);
+    if (!(a.flags & kActorLive) || !f.prop) return false;
+    // fightDie's last step: it stands, its life out
+    a.hitPoints = 0;
+    f.flags |= kBlobDead;
+    f.flags &= ~kBlobPulse;
+    a.subState = uint8_t(FightSub::Die);
+    a.step = 1;
+    a.scale.y = 0x280;
+    return true;
+}
 
 } // namespace od::port
