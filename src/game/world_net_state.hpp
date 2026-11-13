@@ -437,6 +437,8 @@ public:
     ActorHeader* mirrorOf(uint8_t slot) const { return slotOf(slot); }
     // what the world named the actor of this slot by, as it appeared here
     const NetActorIdentity& identityOf(uint8_t slot) const { return identity_[slot]; }
+    // the picture the world last gave of the actor in this slot (ContentRegistry::NetPicture::capture, there; none: empty)
+    const std::vector<uint8_t>& pictureOf(uint8_t slot) const { return picture_[slot]; }
     // a shot of this player of the table runs here from its event (a swing, a beam): it lasts until the world's ends
     bool shotRunsFor(uint8_t tablePlayer) const;
     // shot pool slot `index` holds a world's shot started here from its event (another player's): not this machine's fire
@@ -469,6 +471,7 @@ private:
     uint8_t ownPlayerId_ = 0;
     std::array<bool, kNetSlots> animates_{}, held_{};
     std::array<NetActorIdentity, kNetSlots> identity_{};
+    std::array<std::vector<uint8_t>, kNetSlots> picture_{};
     std::array<uint32_t, kNetSlots> ownSlot_{}; // a world's shot in a slot of the client's: its address
     std::array<uint32_t, kNetSlots> ownSerial_{}; // ... and that slot's occupant count when it came
     std::array<std::optional<uint16_t>, kNetSlots> flashed_{}; // flashed on the last tick: the tint it had before

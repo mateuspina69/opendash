@@ -246,6 +246,9 @@ void hudElementsInit();
 // none twice for one actor): frame style 3 + `style`, its length the actor's maximum hit points >> shift, the bar's
 // colour (0xBBGGRR, each channel's low bit cleared)
 void hudAddBossGauge(Actor& actor, uint8_t style, uint8_t shift, uint32_t colour);
+// OpenDash's co-op: the actor's gauge shows its life as it is now, no trail from what it was added with (an actor a
+// scene takes over from its room's world, set up and then put where the world's is)
+void hudGaugeSettle(const Actor& actor);
 // the running script draws the white screen
 bool hudScriptWhiteNow();
 // a boss's gauge is up

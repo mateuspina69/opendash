@@ -730,6 +730,16 @@ void hudAddBossGauge(Actor& actor, uint8_t style, uint8_t shift, uint32_t colour
     g.lastValue = actor.hitPoints;
 }
 
+void hudGaugeSettle(const Actor& actor) {
+    for (size_t i = 0; i < kHudEnemyGauges; ++i) {
+        auto&& g = hudMemory().elements[kHudFirstEnemyGauge + i];
+        if (g.flags == 0 || g.target != &actor) continue;
+        const int16_t life = actor.hitPoints;
+        g.fill = g.trail = uint16_t(life > 0 ? life >> (g.shift & 0x1f) : 0);
+        g.lastValue = life;
+    }
+}
+
 void hudAddTargetGauge(Actor& actor, uint8_t style, uint8_t shift, uint32_t colour) {
     if (gaugeShows(actor)) return;
     const uint8_t n = gaugesOfType(HudElementType::TargetGauge);

@@ -1567,6 +1567,7 @@ void PoolNetActors::appear(uint8_t slot, const NetActorIdentity& identity, const
     head.runFlags &= uint8_t(~kActorRun); // the pool loops pass it by: its class runs in the world
     head.worldHeld = true;
     identity_[slot] = identity;
+    picture_[slot] = state.picture;
     head.state = 1;                       // past a class's first state: the draw pass passes over a static still in it
     head.type = identity.type;
     head.subtype = identity.subtype;
@@ -1749,6 +1750,7 @@ void PoolNetActors::flash(uint8_t slot) {
 void PoolNetActors::tick(uint8_t slot, const NetActorState& state, const std::optional<AnimStart>& start) {
     ActorHeader* head = slotOf(slot);
     if (!head) return;
+    picture_[slot] = state.picture;
     Actor& a = actorLayoutOf(*head);
     if (const std::optional<uint16_t> before = std::exchange(flashed_[slot], std::nullopt)) { // the flash was one tick
         if (actorSlotClass(slot) == kAnimatedClass) asAnimated(a).tint = *before;
@@ -1941,8 +1943,10 @@ NetHeldRoom captureHeldRoom(const PoolNetActors& actors) {
         s.rotation = actorLayoutOf(a).rotation;
         s.classId = h ? h.id() : RoutineId::None;
         s.identity = actors.identityOf(a.slot);
+        // its picture: the world's, as last told (a copy's own fields are not its class's: the class runs in the world);
+        // of a class that keeps it on the copy (its `apply`), the copy's
         if (const auto it = h ? pictures.find(h.id()) : pictures.end(); it != pictures.end() && it->second.capture)
-            s.picture = it->second.capture(actorLayoutOf(a).at);
+            s.picture = it->second.apply ? it->second.capture(actorLayoutOf(a).at) : actors.pictureOf(a.slot);
     });
     return held;
 }
@@ -1966,6 +1970,7 @@ void layHeldRoom(const NetHeldRoom& held, const PlayerEnv& env, uint8_t script) 
             actor.pos = actor.prevPos = s.pos;
             actor.rotation = actor.prevRotation = s.rotation;
             it->second.lay(actor.at, s.picture);
+            hudGaugeSettle(actor);
         } else if (it->second.apply) {
             it->second.apply(actorLayoutOf(a).at, s.picture);
         }
@@ -1989,6 +1994,7 @@ void layHeldRoom(const NetHeldRoom& held, const PlayerEnv& env, uint8_t script) 
         a.rotation = a.prevRotation = s.rotation;
         const bool bound = s.identity.modelEntry != kNetNoModel && bindActorModelEntry(a, s.identity.modelEntry);
         if (!bound || !it->second.adopt(env, a.at, script, s.picture)) freeActor(head);
+        else hudGaugeSettle(a);
     }
     applyActorFrees();
 }
