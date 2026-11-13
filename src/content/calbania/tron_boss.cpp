@@ -1239,16 +1239,17 @@ constexpr size_t kLeftArmFirstPart = 1, kRightArmFirstPart = 5, kArmParts = 4; /
 
 std::vector<uint8_t> tronBossPicture(uint32_t actor) {
     AnimatedActor& a = animatedActorAt(actor);
-    if (TronState(a.state) != TronState::Fight) return {uint8_t(0)};
-    const uint32_t flags = TronFields(a).flags;
+    if (TronState(a.state) != TronState::Fight) return {uint8_t(0), uint8_t(0)};
+    const uint32_t flags = classState<TronFields>(a).flags;
     return {uint8_t(((flags & kTronDead) ? kPictureDead : 0) | ((flags & kTronLeftArmOff) ? kPictureLeftArmOff : 0) |
-                    ((flags & kTronRightArmOff) ? kPictureRightArmOff : 0))};
+                    ((flags & kTronRightArmOff) ? kPictureRightArmOff : 0)),
+            a.keyIndex};
 }
 
 void tronBossLayPicture(uint32_t actor, std::span<const uint8_t> picture) {
-    if (picture.size() != 1 || !(picture[0] & kPictureDead)) return; // (in the fight: the scene's is the rebuild's own)
+    if (picture.size() != 2 || !(picture[0] & kPictureDead)) return; // (in the fight: the scene's is the rebuild's own)
     AnimatedActor& a = animatedActorAt(actor);
-    TronFields f(a);
+    TronFields& f = classState<TronFields>(a);
     if (TronState(a.state) == TronState::SetUp) setUp(a, f);
     if (TronState(a.state) != TronState::Fight) return;
     const auto armOff = [&](uint32_t bit, size_t firstPart) {
@@ -1261,7 +1262,7 @@ void tronBossLayPicture(uint32_t actor, std::span<const uint8_t> picture) {
     a.hitPoints = 0;
     toDeath(a, f);
     f.timer = 0; // (its end is told already: the scene runs)
-    animSet(a, a.anim, 0);
+    animSet(a, a.anim, int(picture[1])); // (its fall where the world's is)
     animPose(a);
     a.prevAnim = a.anim;
 }

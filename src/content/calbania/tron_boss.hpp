@@ -13,7 +13,7 @@ namespace od::port {
 // 0x8c9220): the fight (attacks chosen by distance and RNG, hit points with Roll's / Tron's messages in window 4,
 // arms that break off, death -> flag 0x589)
 void tronBossUpdate(const PlayerEnv& env, uint32_t actor);
-// OpenDash's co-op (ContentRegistry::netPictures): the tank's picture is its end and its broken arms; the tank a scene's
+// OpenDash's co-op (ContentRegistry::netPictures): the tank's picture is its end, its broken arms and its animation's key; the tank a scene's
 // rebuild spawns goes on from the world's, beaten -- the scene after it (script 0x1c) reads its arms
 std::vector<uint8_t> tronBossPicture(uint32_t actor);
 void tronBossLayPicture(uint32_t actor, std::span<const uint8_t> picture);
