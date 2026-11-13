@@ -80,6 +80,8 @@ public:
     void testFlagNow(uint32_t flag, bool set, uint8_t stage);
     // test instrument: the story's value from the session's start
     void testStory(uint8_t story);
+    // test instrument: the worlds started from here on hold their enemies' life at this most (a fight's end in reach)
+    void testEnemyLife(int life) { testEnemyLife_ = life; }
     // The gates. Teleport: those far away are brought at once; else they are waited for
     void setGateTeleport(bool teleport) { gateTeleport_ = teleport; }
     // what went wrong, in the log and on every player's screen
@@ -118,6 +120,7 @@ private:
     // a world process that has loaded the game's files and waits for its room (WorldMessageType::Assign): the next room
     // entered starts at once from it
     std::unique_ptr<World> standby_;
+    int testEnemyLife_ = -1; // test instrument (testEnemyLife)
     void removeFromWorld(uint8_t playerId);
     void dropEmptiedStage(int stage);
     void globalChanged(const od::port::GlobalChange& change, const World* fromWorld, std::optional<uint8_t> fromPlayer);

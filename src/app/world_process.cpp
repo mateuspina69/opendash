@@ -90,6 +90,7 @@ struct WorldArgs {
     std::optional<od::port::GlobalChange> globalState; // what the session's state is by now
     std::optional<StageBanks> stageBanks;              // the stage's alternate banks the entering player's game holds
     int markDefeated = -1; // test instrument: this enemy id counts as defeated from the first tick on
+    int testEnemyLife = -1; // test instrument: the animated actors' life is held at this most
     bool client = false;       // the receiver of a world's network state (see runClient)
     uint8_t clientId = 0;      // its client id: the player whose own shots the world does not send it
     bool keepPlayer = false;   // test instrument: on a link, the world's own player stays, driven by the pad
@@ -157,6 +158,8 @@ WorldArgs parseArgs(int argc, char** argv) {
             if (!w.stageBanks) throw std::invalid_argument("--stage-banks");
         } else if (a == "--world-mark-defeated" && more) {
             w.markDefeated = std::stoi(argv[++i]);
+        } else if (a == "--world-test-enemy-life" && more) {
+            w.testEnemyLife = std::stoi(argv[++i]);
         } else if (a == "--world-client") {
             w.client = true;
         } else if (a == "--world-client-id" && more) {
@@ -1356,6 +1359,10 @@ int run(const WorldArgs& given) {
                 for (const WorldArgs::Guest& g : w.guests) od::port::remotePlayerState(g.id, guestState(g));
             if (link) playersFromOwners();
             sceneLeftTurn();
+            if (w.testEnemyLife >= 0)
+                for (size_t i = 0; i < od::port::kAnimatedFieldSlots; ++i)
+                    if (od::port::AnimatedActor& a = od::port::animatedPool()[i]; (a.flags & od::port::kActorLive) && a.hitPoints > w.testEnemyLife)
+                        a.hitPoints = int16_t(w.testEnemyLife);
             view->playTick(pad, 128, 128, lx, ly);
             if (link) {
                 od::port::remotePlayersTalkDone();

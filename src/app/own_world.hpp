@@ -122,6 +122,7 @@ public:
     void testForceAt(uint32_t tick) { testForceTick_ = tick; }
     void testBossFight() { testBossFight_ = true; }
     void testStory(uint8_t story) { if (coordinator_) coordinator_->testStory(story); }
+    void testEnemyLife(int life) { if (coordinator_) coordinator_->testEnemyLife(life); }
     void testClearFlag(uint32_t flag) { if (coordinator_) coordinator_->testClearFlag(flag); }
     // test instrument: at this local tick the session sets or clears this flag (what a room's logic does, as the session
     // shares it)

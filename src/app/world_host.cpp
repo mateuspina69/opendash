@@ -82,6 +82,10 @@ WorldHost::World& WorldHost::worldOf(WorldRoom room, const std::vector<uint8_t>&
         args.push_back("--stage-banks");
         args.push_back(hex(banks));
     }
+    if (testEnemyLife_ >= 0) {
+        args.push_back("--world-test-enemy-life");
+        args.push_back(std::to_string(testEnemyLife_));
+    }
     // the process waiting with the game's files loaded takes the room (else one started now): the save first, then the
     // room and what it is told
     std::unique_ptr<World> world;

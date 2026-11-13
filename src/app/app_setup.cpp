@@ -174,6 +174,10 @@ void App::parseArgs(int argc, char** argv) {
             const uint8_t story = uint8_t(std::stoi(argv[++i]));
             coopSetup.push_back([=](OwnWorldClient& w) { w.testStory(story); });
         }
+        else if (a == "--coop-test-enemy-life" && i + 1 < argc) { // test instrument
+            const int life = std::stoi(argv[++i]);
+            coopSetup.push_back([=](OwnWorldClient& w) { w.testEnemyLife(life); });
+        }
         else if (a == "--coop-stay") coopSetup.push_back([](OwnWorldClient& w) { w.stayOnJoin(); }); // test instrument
         else if (a == "--coop-test-weapon" && i + 1 < argc) { // test instrument
             const int weapon = std::stoi(argv[++i]);

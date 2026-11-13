@@ -57,6 +57,7 @@ public:
     void testClearFlag(uint32_t flag) { worlds_.testClearFlag(flag); }
     void testFlagNow(uint32_t flag, bool set, uint8_t stage) { worlds_.testFlagNow(flag, set, stage); }
     void testStory(uint8_t story) { worlds_.testStory(story); }
+    void testEnemyLife(int life) { worlds_.testEnemyLife(life); }
     void setGateTeleport(bool teleport) { worlds_.setGateTeleport(teleport); }
     // the host's game has written a save: a game over goes back to it
     void hostSaved(std::span<const uint8_t> save);
