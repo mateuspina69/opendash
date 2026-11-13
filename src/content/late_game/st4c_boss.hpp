@@ -5,6 +5,8 @@
 #pragma once
 
 #include <cstdint>
+#include <span>
+#include <vector>
 
 #include "game/actor_movement.hpp"
 
@@ -15,6 +17,11 @@ namespace od::port {
 // slam's shockwave; the volley of 0x2c bolts), the fog controller 0x26 at hit-point thresholds, the boss gauge; its
 // defeat -> story flag 0x681
 void elysiumBossUpdate(const PlayerEnv& env, uint32_t actor);
+// OpenDash's co-op (ContentRegistry::netPictures): the boss's picture is the key its animation is at; the world's boss,
+// defeated, is this game's own for the scene after it (script 0x6c) -- it lies there as it fell, until the scene's own
+// takes its place
+std::vector<uint8_t> elysiumBossPicture(uint32_t actor);
+bool elysiumBossAdoptDefeated(const PlayerEnv& env, uint32_t actor, uint8_t script, std::span<const uint8_t> picture);
 // exe 0x5ccc40: pool 0x40 ST4C type 0x25 -- an orbiting shot (variants 0..7) that then homes on the player (shootable)
 void elysiumOrbitShotUpdate(const PlayerEnv& env, uint32_t actor);
 // exe 0x5ce6b0: pool 0x40 ST4C type 0x27 -- a homing shot from between the boss's hands (variants 0..4)

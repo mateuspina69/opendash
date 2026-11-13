@@ -383,11 +383,16 @@ void restart(AnimatedActor& actor) { // the next move: vanish (difficulty >= 2) 
     actor.restartStep();
 }
 
+void bound(AnimatedActor& actor, BossFields& boss);
 void bind(AnimatedActor& actor, BossFields& boss) { // exe 0x507340
     if (!bindActorModel(actor, 0)) { // exe 0x5e0ba0
         freeActor(actor);            // exe 0x5e1490
         return;
     }
+    bound(actor, boss);
+}
+// (its model bound: the actor's own set-up)
+void bound(AnimatedActor& actor, BossFields& boss) {
     actor.pos.y = int32_t(0xffa00000u);
     actor.anim = uint8_t(BossAnim::Rise);
     actor.prevAnim = 0xff;
@@ -1729,6 +1734,24 @@ void elysiumOrbitShotUpdate(const PlayerEnv& env, uint32_t actor) {
         blast(shot, 0, 8);
         freeActor(shot);
     });
+}
+
+std::vector<uint8_t> elysiumBossPicture(uint32_t actor) { return {animatedActorAt(actor).keyIndex}; }
+
+bool elysiumBossAdoptDefeated(const PlayerEnv&, uint32_t actor, uint8_t script, std::span<const uint8_t> picture) {
+    constexpr uint8_t kBossStage = 0x4c, kScriptAfterBoss = 0x6c;
+    if (gameState().stage != kBossStage || script != kScriptAfterBoss) return false;
+    AnimatedActor& a = animatedActorAt(actor);
+    const auto pos = a.pos;
+    bound(a, classState<BossFields>(a));
+    a.pos = a.prevPos = pos; // (the set-up puts it under the floor, to rise)
+    // defeat()'s end: its animation where the world's is, its flag set
+    a.hitPoints = 0;
+    a.state = uint8_t(BossState::Defeat);
+    a.subState = 2;
+    a.anim = a.prevAnim = uint8_t(BossAnim::Defeat);
+    animSetPose(a, a.anim, picture.size() == 1 ? int(picture[0]) : 0);
+    return true;
 }
 
 void elysiumHomingShotUpdate(const PlayerEnv& env, uint32_t actor) {
