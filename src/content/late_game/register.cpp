@@ -148,6 +148,8 @@ void registerLateGameClasses(ContentRegistry& r) {
         {RoutineId::RollerUpdate, &rollerUpdate},
         {RoutineId::PuffEmitterUpdate, &puffEmitterUpdate},
     });
+    // a session's: the bosses, down -- the scene after each goes on with the world's
+    r.netPictures.emplace(RoutineId::St4bFlyingBossUpdate, ContentRegistry::NetPicture{nullptr, nullptr, nullptr, &st4bFlyingBossAdoptDown});
 }
 
 } // namespace od::content

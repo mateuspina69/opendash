@@ -3,6 +3,7 @@
 #pragma once
 
 #include <cstdint>
+#include <span>
 
 #include "game/actor_movement.hpp"
 
@@ -19,6 +20,9 @@ void script59WalkInCastUpdate(const PlayerEnv& env, uint32_t actor);
 // taunt windows of bank 0x73c000), its hit entries, its damage, the boss gauge, half / quarter life phases (the fall,
 // grounded), its death (story flag 0x681)
 void st4bFlyingBossUpdate(const PlayerEnv& env, uint32_t actor);
+// OpenDash's co-op (ContentRegistry::netPictures): the world's boss, down, is this game's own for the scene after it
+// (script 0x5b) -- it lies there until the scene sweeps it
+bool st4bFlyingBossAdoptDown(const PlayerEnv& env, uint32_t actor, uint8_t script, std::span<const uint8_t> picture);
 // exe 0x595d80 (static type 6): state 1 a piece circling the arena (back to (0x1200, 0x600, -0x2400) every 0x80
 // ticks); states 3 / 4 a script-driven falling piece (a hit entry, rocking exe 0x59e580)
 void st4bCirclingPieceUpdate(const PlayerEnv& env, uint32_t actor);

@@ -8,6 +8,7 @@
 
 #include "game/loaded_data.hpp"
 #include "game/actor_animation.hpp"
+#include "game/game_state.hpp"
 #include "game/actor_model.hpp"
 #include "game/actor_movement.hpp"
 #include "game/actor_pools.hpp"
@@ -1247,11 +1248,16 @@ void bossMove(AnimatedActor& actor, BossFields& boss) { // [0x89484c]
     default: notPortedAt(kStoryPort, "0x4b8ec0 sub-state (table 0x89484c)", actor.subState);
     }
 }
+void bossBound(AnimatedActor& actor, BossFields& boss);
 void bossBind(AnimatedActor& actor, BossFields& boss) { // exe 0x4b8db0
     if (!bindActorModel(actor, actor.variant)) { // exe 0x5e0bc0
         freeActor(actor);                        // exe 0x5e1490
         return;
     }
+    bossBound(actor, boss);
+}
+// (its model bound: the actor's own set-up)
+void bossBound(AnimatedActor& actor, BossFields& boss) {
     actor.flags |= kActorScenery;
     actor.clearMotion();
     allocBoneBlocks(actor, 1); // exe 0x5e16c0
@@ -1564,6 +1570,21 @@ void spinningPiece(StaticActor& actor) {
 void script59FaceRowCastUpdate(const PlayerEnv&, uint32_t actor) { faceRowCast(animatedActorAt(actor)); }
 void script59WalkInCastUpdate(const PlayerEnv&, uint32_t actor) { walkInCast(animatedActorAt(actor)); }
 void st4bFlyingBossUpdate(const PlayerEnv&, uint32_t actor) { bossTick(animatedActorAt(actor)); }
+
+bool st4bFlyingBossAdoptDown(const PlayerEnv&, uint32_t actor, uint8_t script, std::span<const uint8_t>) {
+    constexpr uint8_t kBossStage = 0x4b, kScriptAfterBoss = 0x5b, kCollapsedAnim = 0xc;
+    if (gameState().stage != kBossStage || script != kScriptAfterBoss) return false;
+    AnimatedActor& a = animatedActorAt(actor);
+    BossFields& boss = classState<BossFields>(a);
+    bossBound(a, boss);
+    // death()'s end: collapsed, its smoke over
+    a.hitPoints = 0;
+    a.subState = uint8_t(BossMove::Death);
+    a.step = uint8_t(DeathStep::Smoke) + 1;
+    a.anim = a.prevAnim = kCollapsedAnim;
+    animSetPose(a, kCollapsedAnim, 0);
+    return true;
+}
 void st4bCirclingPieceUpdate(const PlayerEnv&, uint32_t actor) { circlingPiece(staticActorAt(actor)); }
 void st4bSpinningPieceUpdate(const PlayerEnv&, uint32_t actor) { spinningPiece(staticActorAt(actor)); }
 
