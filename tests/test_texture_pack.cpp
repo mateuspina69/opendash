@@ -65,10 +65,37 @@ int main() {
     std::vector<uint8_t> stpImg(512 * 512 * 4, 255);
     stpImg[(size_t(40) * 512 + 300) * 4 + 3] = 100;
     stbi_write_png((root / "pack" / (hex(od::pageName(stp)) + ".png")).string().c_str(), 512, 512, 4, stpImg.data(), 512 * 4);
+    // a page edited at 256 x 256, first in name order: enlarged to the pack's scale (the largest image's), nearest
+    std::vector<uint8_t> small = ps1;
+    small[(3 * 256 + 3) * 4] ^= 0xff;
+    std::vector<uint8_t> smallImg(256 * 256 * 4);
+    for (size_t i = 0; i < smallImg.size(); i += 4) smallImg[i] = 10, smallImg[i + 1] = 220, smallImg[i + 2] = 30, smallImg[i + 3] = 255;
+    std::memset(&smallImg[(7 * 256 + 7) * 4], 0, 4);
+    fs::create_directories(root / "pack" / "!edits");
+    stbi_write_png((root / "pack" / "!edits" / (hex(od::pageName(small)) + ".png")).string().c_str(), 256, 256, 4, smallImg.data(), 256 * 4);
+    // an image of any other size: resampled too
+    std::vector<uint8_t> odd = ps1;
+    odd[(4 * 256 + 4) * 4] ^= 0xff;
+    std::vector<uint8_t> oddImg(300 * 300 * 4);
+    for (size_t i = 0; i < oddImg.size(); i += 4) oddImg[i] = 90, oddImg[i + 1] = 80, oddImg[i + 2] = 70, oddImg[i + 3] = 255;
+    stbi_write_png((root / "pack" / (hex(od::pageName(odd)) + ".png")).string().c_str(), 300, 300, 4, oddImg.data(), 300 * 4);
 
     od::bindTexturePack(std::make_shared<const od::TexturePack>(root / "pack"));
     CHECK(od::texturePack()->scale() == 2);
-    CHECK(od::texturePack()->size() == 2);
+    CHECK(od::texturePack()->size() == 4);
+    {
+        int drawn = 0;
+        const std::vector<uint8_t> s = od::pageSliceOf(small, od::texturePack(), &drawn);
+        CHECK(drawn == 1 && s.size() == size_t(512) * 512 * 4);
+        const uint8_t green[4] = {10, 220, 30, 255};
+        CHECK(std::equal(green, green + 4, at(s, 512, 0, 0)) && std::equal(green, green + 4, at(s, 512, 511, 511)));
+        CHECK(at(s, 512, 14, 14)[3] == 0 && at(s, 512, 15, 15)[3] == 0 && at(s, 512, 16, 14)[3] == 255);
+        CHECK(std::equal(green, green + 3, at(s, 512, 14, 15))); // its colour, its drawn neighbours'
+        const std::vector<uint8_t> o = od::pageSliceOf(odd, od::texturePack(), &drawn);
+        const uint8_t grey[4] = {90, 80, 70, 255};
+        CHECK(drawn == 1 && o.size() == size_t(512) * 512 * 4 && std::equal(grey, grey + 4, at(o, 512, 0, 0)) &&
+              std::equal(grey, grey + 4, at(o, 512, 511, 511)));
+    }
     { // the image says what is drawn; how it blends is the PS1 texel's, or its nearest drawn one's where it has none
         int drawn = 0;
         const std::vector<uint8_t> s = od::pageSliceOf(stp, od::texturePack(), &drawn);

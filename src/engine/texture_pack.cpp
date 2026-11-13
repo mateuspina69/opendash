@@ -34,6 +34,19 @@ std::vector<uint8_t> readFile(const std::filesystem::path& p) {
     return std::vector<uint8_t>((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
 }
 
+// a PNG's width and height from its IHDR chunk, the first after the signature (0, 0: not a PNG)
+std::pair<int, int> pngSize(const std::filesystem::path& p) {
+    std::ifstream f(p, std::ios::binary);
+    uint8_t head[24] = {};
+    f.read(reinterpret_cast<char*>(head), sizeof head);
+    static constexpr uint8_t kSignature[8] = {0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'};
+    if (f.gcount() != sizeof head || std::memcmp(head, kSignature, 8) || std::memcmp(head + 12, "IHDR", 4)) return {0, 0};
+    const auto be = [&](int at) {
+        return int(uint32_t(head[at]) << 24 | uint32_t(head[at + 1]) << 16 | uint32_t(head[at + 2]) << 8 | head[at + 3]);
+    };
+    return {be(16), be(20)};
+}
+
 // "<16 lowercase hex digits>.png": a page's name
 bool nameOf(const std::filesystem::path& p, uint64_t& name) {
     if (p.extension() != ".png") return false;
@@ -107,28 +120,30 @@ TexturePack::TexturePack(const std::filesystem::path& dir) {
         if (e.is_regular_file() && nameOf(e.path(), name)) found.emplace(e.path(), name);
     }
     if (found.empty()) throw std::runtime_error("no page images in " + dir.string());
-    for (const auto& [path, name] : found) images_.emplace(name, path);
-    const std::vector<uint8_t> bytes = readFile(found.begin()->first);
-    int w = 0, h = 0, comp = 0;
-    if (!stbi_info_from_memory(bytes.data(), int(bytes.size()), &w, &h, &comp) || w != h || w % 256 || w > 256 * 16)
-        throw std::runtime_error("not a page image: " + found.begin()->first.string());
-    scale_ = w / 256;
+    // the pack's scale: its largest image's (each image of another size is resampled to it)
+    int largest = 0;
+    for (const auto& [path, name] : found) {
+        images_.emplace(name, path);
+        const auto [w, h] = pngSize(path);
+        largest = std::max({largest, w, h});
+    }
+    scale_ = std::clamp((largest + 255) / 256, 1, 16);
 }
 
-std::vector<uint8_t> TexturePack::enlarge(const std::vector<uint8_t>& rgba, int scale) {
-    if (scale == 1) return rgba;
-    // the renderer filters a pack's pages: a transparent texel beside a drawn one takes its colour, not its black
-    std::vector<uint8_t> filled = rgba;
+namespace {
+// the renderer filters a pack's pages: a transparent texel beside a drawn one takes its colour, not its black (two
+// texels deep)
+void fillTransparent(std::vector<uint8_t>& rgba, int w, int h) {
     for (int pass = 0; pass < 2; ++pass) {
-        const std::vector<uint8_t> from = filled;
-        for (int y = 0; y < 256; ++y)
-            for (int x = 0; x < 256; ++x) {
-                uint8_t* t = &filled[(size_t(y) * 256 + size_t(x)) * 4];
+        const std::vector<uint8_t> was = rgba;
+        for (int y = 0; y < h; ++y)
+            for (int x = 0; x < w; ++x) {
+                uint8_t* t = &rgba[(size_t(y) * size_t(w) + size_t(x)) * 4];
                 if (t[3]) continue;
                 int sum[3] = {0, 0, 0}, n = 0;
                 for (const auto& [dx, dy] : {std::pair{1, 0}, std::pair{-1, 0}, std::pair{0, 1}, std::pair{0, -1}}) {
-                    if (x + dx < 0 || x + dx > 255 || y + dy < 0 || y + dy > 255) continue;
-                    const uint8_t* s = &from[(size_t(y + dy) * 256 + size_t(x + dx)) * 4];
+                    if (x + dx < 0 || x + dx >= w || y + dy < 0 || y + dy >= h) continue;
+                    const uint8_t* s = &was[(size_t(y + dy) * size_t(w) + size_t(x + dx)) * 4];
                     if (!s[3] && !(s[0] | s[1] | s[2])) continue; // transparent and not filled yet
                     for (int c = 0; c < 3; ++c) sum[c] += s[c];
                     ++n;
@@ -137,6 +152,40 @@ std::vector<uint8_t> TexturePack::enlarge(const std::vector<uint8_t>& rgba, int 
                     for (int c = 0; c < 3; ++c) t[c] = uint8_t(sum[c] / n);
             }
     }
+}
+
+// a w x h RGBA8 image as edge x edge: each texel the mean of the image's texels it covers (enlarging: the nearest one),
+// the drawn ones' colour where it covers some; drawn (255) when half of what it covers is
+std::vector<uint8_t> resample(std::vector<uint8_t> src, int w, int h, int edge) {
+    if (w == edge && h == edge) return src;
+    fillTransparent(src, w, h);
+    std::vector<uint8_t> out(size_t(edge) * size_t(edge) * 4);
+    for (int y = 0; y < edge; ++y) {
+        const int y0 = int(int64_t(y) * h / edge), y1 = std::max(y0 + 1, int(int64_t(y + 1) * h / edge));
+        for (int x = 0; x < edge; ++x) {
+            const int x0 = int(int64_t(x) * w / edge), x1 = std::max(x0 + 1, int(int64_t(x + 1) * w / edge));
+            uint32_t drawnSum[3] = {0, 0, 0}, allSum[3] = {0, 0, 0}, drawn = 0, all = 0;
+            for (int v = y0; v < y1; ++v)
+                for (int u = x0; u < x1; ++u) {
+                    const uint8_t* s = &src[(size_t(v) * size_t(w) + size_t(u)) * 4];
+                    const bool d = s[3] >= 128;
+                    for (int c = 0; c < 3; ++c) allSum[c] += s[c], drawnSum[c] += d ? s[c] : 0;
+                    drawn += d;
+                    ++all;
+                }
+            uint8_t* o = &out[(size_t(y) * size_t(edge) + size_t(x)) * 4];
+            for (int c = 0; c < 3; ++c) o[c] = uint8_t(drawn ? drawnSum[c] / drawn : allSum[c] / all);
+            o[3] = drawn * 2 >= all ? 255 : 0;
+        }
+    }
+    return out;
+}
+} // namespace
+
+std::vector<uint8_t> TexturePack::enlarge(const std::vector<uint8_t>& rgba, int scale) {
+    if (scale == 1) return rgba;
+    std::vector<uint8_t> filled = rgba;
+    fillTransparent(filled, 256, 256);
     const size_t edge = size_t(256) * size_t(scale);
     std::vector<uint8_t> out(edge * edge * 4);
     for (size_t y = 0; y < edge; ++y) {
@@ -160,11 +209,10 @@ std::vector<uint8_t> TexturePack::decode(const std::vector<uint8_t>& ps1, int* i
     const int edge = 256 * scale_;
     int w = 0, h = 0, comp = 0;
     stbi_uc* px = bytes.empty() ? nullptr : stbi_load_from_memory(bytes.data(), int(bytes.size()), &w, &h, &comp, 4);
-    if (!px || w != edge || h != edge) {
-        if (px) stbi_image_free(px);
-        return enlarge(ps1, scale_);
-    }
-    auto img = std::make_shared<std::vector<uint8_t>>(px, px + size_t(edge) * size_t(edge) * 4);
+    if (!px) return enlarge(ps1, scale_); // not a PNG stb reads
+    // an image of another size (an edit of the dumped page itself, 256 x 256): resampled to the pack's
+    auto img = std::make_shared<std::vector<uint8_t>>(
+        resample(std::vector<uint8_t>(px, px + size_t(w) * size_t(h) * 4), w, h, edge));
     stbi_image_free(px);
     // the image's alpha says only what it draws; how a drawn texel blends is its PS1 texel's
     const std::vector<uint8_t> levels = stpLevels(ps1);

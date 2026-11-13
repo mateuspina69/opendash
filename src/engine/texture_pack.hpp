@@ -1,7 +1,7 @@
 // OpenDash's texture pack: larger images of the PS1's texture pages, made offline from the pages the game dumps
 // (tools/upscale_pages.py, docs/texture_pack.md). A page is found by what it shows: its image is
 //   <XXH3-64 of the page as Vram::decode makes it, 16 lowercase hex digits>.png
-// (any folder depth), (256 * scale)^2 RGBA, its alpha only what it draws (from 128 up). A drawn texel blends as its PS1
+// (any folder depth), RGBA of any size (resampled to (256 * scale)^2), its alpha only what it draws (from 128 up). A drawn texel blends as its PS1
 // texel does (the STP bit: alpha Vram::kStpAlpha in the slice), as the nearest drawn one where that one is transparent.
 // A page with no image is the PS1 page enlarged, nearest.
 //
@@ -28,8 +28,8 @@ namespace od {
 
 class TexturePack {
 public:
-    // Indexes the folder's page images; throws std::runtime_error when it holds none. scale: the first image's
-    // (name order) width over 256; an image of another size is no image of its page.
+    // Indexes the folder's page images; throws std::runtime_error when it holds none. scale: the largest image's side
+    // over 256, rounded up (at most 16). An image of any other size (a page edited at 256 x 256) is resampled to it.
     explicit TexturePack(const std::filesystem::path& dir);
 
     int scale() const { return scale_; }
