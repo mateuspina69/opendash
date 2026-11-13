@@ -150,6 +150,7 @@ void registerLateGameClasses(ContentRegistry& r) {
     });
     // a session's: the bosses, down -- the scene after each goes on with the world's
     r.netPictures.emplace(RoutineId::St4bFlyingBossUpdate, ContentRegistry::NetPicture{nullptr, nullptr, nullptr, &st4bFlyingBossAdoptDown});
+    r.netPictures.emplace(RoutineId::St5cBossUpdate, ContentRegistry::NetPicture{&st5cBossPicture, nullptr, &st5cBossLayPicture});
     r.netPictures.emplace(RoutineId::ElysiumBossUpdate,
                           ContentRegistry::NetPicture{&elysiumBossPicture, nullptr, nullptr, &elysiumBossAdoptDefeated});
 }

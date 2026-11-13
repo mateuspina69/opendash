@@ -6,6 +6,8 @@
 #pragma once
 
 #include <cstdint>
+#include <span>
+#include <vector>
 
 #include "game/actor_movement.hpp"
 #include "game/actor_state.hpp"
@@ -27,6 +29,10 @@ struct SparkBurstParams {
 };
 
 void st5cBossUpdate(const PlayerEnv& env, uint32_t actor);        // exe 0x50b9c0
+// OpenDash's co-op (ContentRegistry::netPictures): the boss's picture is its end, its animation and the key it is at;
+// the boss a scene's rebuild spawns goes on from the world's, down -- it goes on falling from where the world's is
+std::vector<uint8_t> st5cBossPicture(uint32_t actor);
+void st5cBossLayPicture(uint32_t actor, std::span<const uint8_t> picture);
 void bossIntroCastUpdate(const PlayerEnv& env, uint32_t actor);   // exe 0x50d4a0
 void bossAfterImageUpdate(const PlayerEnv& env, uint32_t actor);  // exe 0x50d3d0
 void bossDefeatCastUpdate(const PlayerEnv& env, uint32_t actor);  // exe 0x50dae0

@@ -830,11 +830,16 @@ void bossAttack(const PlayerEnv& env, AnimatedActor& actor, BossFields& boss, ui
     }
 }
 // exe 0x50ba80: bind
+void bossBound(AnimatedActor& actor, BossFields& boss);
 void bossBind(AnimatedActor& actor, BossFields& boss) {
     if (!bindActorModel(actor, 0)) { // exe 0x5e0ba0
         freeActor(actor);            // exe 0x5e1490
         return;
     }
+    bossBound(actor, boss);
+}
+// (its model bound: the actor's own set-up)
+void bossBound(AnimatedActor& actor, BossFields& boss) {
     actor.pos.y = int32_t(0xfc400000u);
     actor.anim = 0;
     actor.prevAnim = 0xff;
@@ -1664,6 +1669,30 @@ void driftingPuffs(EffectActor& actor) {
 } // namespace
 
 void st5cBossUpdate(const PlayerEnv& env, uint32_t actor) { bossTick(env, animatedActorAt(actor)); }
+
+std::vector<uint8_t> st5cBossPicture(uint32_t actor) {
+    const AnimatedActor& a = animatedActorAt(actor);
+    return {uint8_t(a.state == uint8_t(BossState::Dead)), a.anim, a.keyIndex};
+}
+
+void st5cBossLayPicture(uint32_t actor, std::span<const uint8_t> picture) {
+    if (picture.size() != 3 || picture[0] == 0) return; // (in the fight: the scene's is the rebuild's own)
+    AnimatedActor& a = animatedActorAt(actor);
+    if (a.state == uint8_t(BossState::Bind)) {
+        const auto pos = a.pos;
+        const auto rotation = a.rotation;
+        bossBind(a, classState<BossFields>(a));
+        if (a.state == uint8_t(BossState::Bind)) return; // (no model: it went)
+        a.pos = a.prevPos = pos; // (the set-up puts it up in the air)
+        a.rotation = a.prevRotation = rotation;
+    }
+    // bossDead's end: its animation where the world's is, its flag set
+    a.hitPoints = -1;
+    a.state = uint8_t(BossState::Dead);
+    a.subState = 2;
+    a.anim = a.prevAnim = picture[1];
+    animSetPose(a, a.anim, int(picture[2]));
+}
 
 void bossIntroCastUpdate(const PlayerEnv& env, uint32_t actor) { introCast(env, animatedActorAt(actor)); }
 
