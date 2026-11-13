@@ -3,6 +3,7 @@
 #include <utility>
 
 #include "game/world_view.hpp"
+#include "game/presentation.hpp"
 #include "game/transition.hpp"
 
 #include "engine/data_source.hpp"
@@ -345,7 +346,15 @@ void fieldMode(const PlayerEnv& env, TransitionHooks& hooks, FadeTask& fade) {
             g.modeStep = uint8_t(step + 2);
             return run();
         }
-        fadeStart(fade, r.fadeIn, 0);
+        if (worldHasNoView()) {
+            // a world's own arrival in its room is nobody's picture: its fade-in is not one the room shows its players
+            PresentationBatch* const shown = presentationBatch();
+            setPresentationBatch(nullptr);
+            fadeStart(fade, r.fadeIn, 0);
+            setPresentationBatch(shown);
+        } else {
+            fadeStart(fade, r.fadeIn, 0);
+        }
         return next();
     case FieldStep::FadeInWait:
         if (f.busy != 0) return run();
