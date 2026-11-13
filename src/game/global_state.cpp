@@ -242,6 +242,28 @@ void globalWatchApply(const GlobalChange& c) {
     }
 }
 
+GlobalHeld globalHold() {
+    GlobalHeld held;
+    held.flags.resize(kFlagBytes);
+    for (size_t i = 0; i < kFlagBytes; ++i) held.flags[i] = flagByte(i);
+    const Values values = valuesNow();
+    held.values.assign(values.begin(), values.end());
+    held.zenny = gameState().zenny;
+    return held;
+}
+
+void globalPutBack(const GlobalHeld& held) {
+    if (held.flags.size() != kFlagBytes || held.values.size() != kValueBytes) return;
+    const Masks& m = masks();
+    for (size_t i = 0; i < kFlagBytes; ++i) {
+        const uint8_t travels = uint8_t(m.shared[i] | m.stage[i]);
+        uint8_t& byte = storyFlagByte(uint32_t(i) << 3);
+        byte = uint8_t((byte & ~travels) | (held.flags[i] & travels));
+    }
+    eachValue([&](size_t at, uint8_t& v) { v = held.values[at]; });
+    gameState().zenny = held.zenny;
+}
+
 void setStartingGlobalState(const GlobalChange& c) { g_starting = c; }
 
 void applyStartingGlobalState() {

@@ -99,6 +99,9 @@ void registerYosyonkeClasses(ContentRegistry& r) {
         {RoutineId::HerdedCreatureUpdate, &herdedCreatureUpdate},
         {RoutineId::BubbleTrailUpdate, &bubbleTrailUpdate},
     });
+    // a session's: Roll at the mine goes on with her walk where the world's is (a scene's rebuild spawns her at its start)
+    r.netPictures.emplace(RoutineId::AbandonedMineRollUpdate,
+                          ContentRegistry::NetPicture{&abandonedMineRollPicture, &abandonedMineRollTakePicture, &abandonedMineRollLayPicture});
 }
 
 } // namespace od::content

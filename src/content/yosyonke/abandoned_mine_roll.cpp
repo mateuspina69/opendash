@@ -211,6 +211,34 @@ void ruinRollHead(AnimatedActor& a, RuinRollFields& f, const Fixed16Vec3* target
     head.x = int16_t(uint16_t(uint16_t(f.headPitch) + uint16_t(head.x)));
     head.y = int16_t(uint16_t(uint16_t(head.y) + uint16_t(f.headYaw)));
 }
+// exe 0x4e6250: her first state (false: her model does not bind, she is freed)
+bool ruinRollInit(AnimatedActor& a, RuinRollFields& f) {
+    if (!bindActorModel(a, 0)) {
+        freeActor(a);
+        return false;
+    }
+    a.clearClassBlock();
+    a.collisionBox.pointAt(ruinRollCollisionBox.stateAddress());
+    a.interactionBox.pointAt(ruinRollTalkBox.stateAddress());
+    a.interaction = kInteractTalk;
+    a.anim = f.animParam;
+    a.prevAnim = kNoAnimShown;
+    a.airborne = 0;
+    a.onPlatform = 0;
+    a.maxHitPoints = 1;
+    a.hitPoints = 1;
+    a.velocity.setXY(0, 0);
+    a.velocity.setZSpare(0, 0);
+    a.spin.setXY(0, 0);
+    a.spin.setZSpare(0, 0);
+    a.scale.z = 0x200;
+    a.scale.y = 0x200;
+    a.scale.x = 0x200;
+    f.tracks.init(0, 0);
+    f.clearTalkWord();
+    a.enterState(uint8_t(RuinRollState::Main));
+    return true;
+}
 // exe 0x4e6110
 void ruinRoll(const PlayerEnv& env, AnimatedActor& a) {
     RuinRollFields& f = classState<RuinRollFields>(a);
@@ -218,31 +246,8 @@ void ruinRoll(const PlayerEnv& env, AnimatedActor& a) {
     a.prevAnim = a.anim;
     f.frameCopy = uint8_t(a.animKey.frame);
     switch (RuinRollState(a.state)) {
-    case RuinRollState::Init: // exe 0x4e6250
-        if (!bindActorModel(a, 0)) {
-            freeActor(a);
-            return;
-        }
-        a.clearClassBlock();
-        a.collisionBox.pointAt(ruinRollCollisionBox.stateAddress());
-        a.interactionBox.pointAt(ruinRollTalkBox.stateAddress());
-        a.interaction = kInteractTalk;
-        a.anim = f.animParam;
-        a.prevAnim = kNoAnimShown;
-        a.airborne = 0;
-        a.onPlatform = 0;
-        a.maxHitPoints = 1;
-        a.hitPoints = 1;
-        a.velocity.setXY(0, 0);
-        a.velocity.setZSpare(0, 0);
-        a.spin.setXY(0, 0);
-        a.spin.setZSpare(0, 0);
-        a.scale.z = 0x200;
-        a.scale.y = 0x200;
-        a.scale.x = 0x200;
-        f.tracks.init(0, 0);
-        f.clearTalkWord();
-        a.enterState(uint8_t(RuinRollState::Main));
+    case RuinRollState::Init:
+        if (!ruinRollInit(a, f)) return;
         break;
     case RuinRollState::Main: ruinRollSub(a, f); break;
     case RuinRollState::Free: freeActor(a); break; // exe 0x468fa0 -> 0x5e1490 (the walk's path end)
@@ -273,5 +278,37 @@ void ruinRoll(const PlayerEnv& env, AnimatedActor& a) {
 } // namespace
 
 void abandonedMineRollUpdate(const PlayerEnv& env, uint32_t actor) { ruinRoll(env, animatedActorAt(actor)); }
+
+// A session: where she is in her walk (her sub-state and its step, her animation, the path's point she heads for, her
+// speed). The world's gives it to its copies; a scene's rebuild spawns her at her path's start, and she goes on from
+// where the world's is
+namespace {
+constexpr size_t kPictureBytes = 6;
+void takeWalk(AnimatedActor& a, std::span<const uint8_t> picture) {
+    a.subState = picture[0];
+    a.step = picture[1];
+    a.params[1] = picture[2];
+    a.shownParts = picture[3];
+    a.velocity.z = int16_t(uint16_t(picture[4] | picture[5] << 8));
+}
+} // namespace
+
+std::vector<uint8_t> abandonedMineRollPicture(uint32_t actor) {
+    const AnimatedActor& a = animatedActorAt(actor);
+    return {a.subState, a.step, a.params[1], a.shownParts, uint8_t(uint16_t(a.velocity.z)), uint8_t(uint16_t(a.velocity.z) >> 8)};
+}
+
+void abandonedMineRollTakePicture(uint32_t actor, std::span<const uint8_t> picture) {
+    if (picture.size() == kPictureBytes) takeWalk(animatedActorAt(actor), picture);
+}
+
+void abandonedMineRollLayPicture(uint32_t actor, std::span<const uint8_t> picture) {
+    if (picture.size() != kPictureBytes) return;
+    AnimatedActor& a = animatedActorAt(actor);
+    if (RuinRollState(a.state) == RuinRollState::Init && !ruinRollInit(a, classState<RuinRollFields>(a))) return;
+    if (RuinRollState(a.state) != RuinRollState::Main) return;
+    takeWalk(a, picture);
+    a.anim = a.params[1];
+}
 
 } // namespace od::port

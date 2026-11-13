@@ -1572,6 +1572,9 @@ void PoolNetActors::appear(uint8_t slot, const NetActorIdentity& identity, const
     head.variant = identity.variant;
     head.loopFlags = uint8_t((head.loopFlags & ~(kActorStageClass | kActorLateLoop)) | identity.classFlags);
     Actor& a = actorLayoutOf(head);
+    // what this machine's Mega Man talks to or lifts of the world's is asked of the world (the Use / lift hooks): a copy
+    // answers none here, whatever the slot's last occupant of this game's own left in it (a scene's cast)
+    a.interaction = 0;
     a.pos.x.whole = state.pos[0];
     a.pos.y.whole = state.pos[1];
     a.pos.z.whole = state.pos[2];
@@ -1933,6 +1936,8 @@ NetHeldRoom captureHeldRoom() {
         NetHeldRoom::Slot& s = held.slots[a.slot];
         s.live = true;
         s.type = a.type;
+        s.pos = actorLayoutOf(a).pos;
+        s.rotation = actorLayoutOf(a).rotation;
         if (const auto it = h ? pictures.find(h.id()) : pictures.end(); it != pictures.end() && it->second.capture)
             s.picture = it->second.capture(actorLayoutOf(a).at);
     });
@@ -1952,7 +1957,15 @@ void layHeldRoom(const NetHeldRoom& held) {
             freeActor(a);
             return;
         }
-        if (!s.picture.empty() && it != pictures.end() && it->second.apply) it->second.apply(actorLayoutOf(a).at, s.picture);
+        if (s.picture.empty() || it == pictures.end()) return;
+        if (it->second.lay) { // it goes on from where the world's is
+            Actor& actor = actorLayoutOf(a);
+            actor.pos = actor.prevPos = s.pos;
+            actor.rotation = actor.prevRotation = s.rotation;
+            it->second.lay(actor.at, s.picture);
+        } else if (it->second.apply) {
+            it->second.apply(actorLayoutOf(a).at, s.picture);
+        }
     });
     applyActorFrees();
 }

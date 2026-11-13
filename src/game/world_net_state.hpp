@@ -488,6 +488,8 @@ struct NetHeldRoom {
         bool live = false;
         uint8_t type = 0;
         std::vector<uint8_t> picture;
+        Fixed16Vec3 pos{}; // where the world's stands, how it is turned
+        ShortVec4 rotation{};
     };
     std::array<Slot, kNetSlots> slots{};
 };

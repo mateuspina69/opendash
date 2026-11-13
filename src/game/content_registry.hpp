@@ -105,6 +105,10 @@ struct ContentRegistry {
     struct NetPicture {
         std::vector<uint8_t> (*capture)(uint32_t actor) = nullptr;
         void (*apply)(uint32_t actor, std::span<const uint8_t> picture) = nullptr;
+        // a class the room's logic spawns and that goes on from there (a cast walking in): how the actor a scene's rebuild
+        // spawned takes the world's picture, to go on from where the world's is (it is put where the world's stands
+        // first); none: `apply`
+        void (*lay)(uint32_t actor, std::span<const uint8_t> picture) = nullptr;
     };
     std::map<RoutineId, NetPicture> netPictures;
 

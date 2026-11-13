@@ -21,6 +21,7 @@
 #include "app/scene_pads.hpp"
 #include "game/event_state.hpp"
 #include "game/fade.hpp"
+#include "game/global_state.hpp"
 #include "game/presentation.hpp"
 #include "game/save_menus.hpp"
 #include "game/room_scripts.hpp"
@@ -76,6 +77,9 @@ public:
     // the room's scripts have run (game/transition roomScripts): on the room's first field tick, a scene they started
     // plays here from that tick, as in the normal game; else the room's world takes over
     void roomScriptsRan();
+    // ... and before them: the room's logic is about to run here (what it changes of the session's state on that tick is
+    // put back when the room's world takes the room: its logic does it there)
+    void roomLogicRuns();
     // a scene the room started here that waits for everyone (the session's gate): nothing of the field is shown
     bool sceneHeld() const { return localScene_ && heldHere_; }
     // a story scene starts here (the world said so): its script, once (the game frees the world's actors, spawns the
@@ -249,6 +253,8 @@ private:
     bool sceneHeard_ = false; // the world has started it too (a scene started here: the world's start confirms it)
     bool heldHere_ = false;   // started here, held until the world starts it (it waits for everyone)
     bool entering_ = false;   // the room is bound, its first field tick has not run its scripts yet
+    std::optional<od::port::GlobalHeld> beforeLogic_; // the session's state here before the room's logic ran on that tick
+    void logicToWorld();
     void localSceneTurn();
     void startedHere(uint8_t script);
     void freeLocalActors();
@@ -267,6 +273,7 @@ private:
     uint32_t eventTick_ = 0;
     uint16_t sentEventPad_ = 0;
     uint16_t padBefore_ = 0; // this game's pad on the frame before
+    uint16_t rawPressed_ = 0; // ... what went down on this frame (the gate's forced start reads it: a held scene's pad is nobody's)
     uint16_t eventHeld_ = 0; // ... what was held as the event began, until let go
     // another player's event of the room or of everyone's, played here on their pad: what it does is theirs (the
     // session hears it from their game), its room changes and the scripts it starts too

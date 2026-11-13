@@ -47,6 +47,16 @@ GlobalChange globalWatchTake(uint8_t stage);
 // a change from the coordinator, into the game's state: the stage-scope flags of another stage are not this one's
 void globalWatchApply(const GlobalChange& c);
 
+// What this process holds of the session's state now (the flags that travel, the values, the zenny), and that put back:
+// what a game's own run of its room's logic changed on the room's first tick is undone when the room's world takes the
+// room -- its logic does it there, once, and the session hears it from there
+struct GlobalHeld {
+    std::vector<uint8_t> flags, values;
+    int32_t zenny = 0;
+};
+GlobalHeld globalHold();
+void globalPutBack(const GlobalHeld& held);
+
 // A world started in a session takes the session's state after the stage's setup, before the room's actors look at it
 void setStartingGlobalState(const GlobalChange& c);
 void applyStartingGlobalState();

@@ -1016,6 +1016,7 @@ void PlayerView::setupHooks() {
     // Maybe_TickRoomScripts' per-stage handler (story spawns)
     hooks.roomHandler = [this] {
         if (ownWorld && ownWorld->inWorld()) return; // the room's logic is its world's
+        if (ownWorld) ownWorld->roomLogicRuns();
         od::port::RoomScriptState& roomScript = od::port::roomScriptState();
         const uint32_t before = roomScript.actorMask;
         if (!od::port::roomScriptHandler()) return;
@@ -1888,6 +1889,9 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
                 // the scene's script (the room's logic may have started it already, as the world's did)
                 if (scene && (!(od::port::scriptState().flags & od::port::kScriptRunning) || od::port::scriptState().id != *scene))
                     od::port::scriptStart(*scene);
+                // the scene's first tick takes no pad, here as in the world's copy: its owner's pad drives every copy from
+                // the next one, stamped (app/scene_pads)
+                if (scene) od::port::padUpdate(od::port::pad0(), 0, 0x80, 0x80);
             }
         }
         gameFrame();

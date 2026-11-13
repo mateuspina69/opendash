@@ -182,6 +182,7 @@ void OwnWorldClient::roomScriptsRan() {
             sceneRoom_.reset();
             od::port::presentationLoopsClear();
             bindWorld(room_->stage, room_->sub);
+            beforeLogic_.reset();
             startedHere(s.id);
             return;
         }
@@ -190,18 +191,32 @@ void OwnWorldClient::roomScriptsRan() {
         // window opens, and its logic runs no further here (the next step's message, its actors)
         if (!s.inUse()) {
             dropRoomEvent();
+            logicToWorld();
             leaveSceneHere();
         }
+        beforeLogic_.reset();
         return;
     }
     if (!entering_) return;
     entering_ = false;
     if ((s.flags & od::port::kScriptRunning) && s.id != 0) {
+        beforeLogic_.reset(); // the scene is this game's from this tick, with what its logic did
         startedHere(s.id);
         return;
     }
     dropRoomEvent();
+    logicToWorld();
     freeLocalActors();
+}
+
+void OwnWorldClient::roomLogicRuns() {
+    if (room_ && (entering_ || (sceneMoved_ && localScene_))) beforeLogic_ = od::port::globalHold();
+}
+
+// The world takes the room: what the room's logic did to the session's state on this game's own first tick (a first
+// visit's flag, the story's step) is the world's to do -- its logic runs from the room's entry, and the session hears it
+void OwnWorldClient::logicToWorld() {
+    if (const auto held = std::exchange(beforeLogic_, std::nullopt)) od::port::globalPutBack(*held);
 }
 
 // The world takes the room: a message its own logic opened here first (a mission's briefing on the room's first tick) is
@@ -1114,6 +1129,7 @@ void OwnWorldClient::followEnd() {
 void OwnWorldClient::overridePad(uint16_t& buttons) {
     const uint16_t raw = buttons;
     const uint16_t before = std::exchange(padBefore_, raw);
+    rawPressed_ = uint16_t(raw & ~before);
     if (ownEvent_ && sharedEvent_ && eventTicking()) { // what drives the others' copies, stamped with the event's tick
         // what was held as it began (the press that started it) is nobody's press in it until let go: the copies start
         // from nothing held, and so does it here
@@ -1129,7 +1145,11 @@ void OwnWorldClient::overridePad(uint16_t& buttons) {
         buttons = eventTicking() ? followPads_.step() : 0;
         return;
     }
-    if (!localScene_ || heldHere_) return;
+    if (!localScene_) return;
+    if (heldHere_) { // a scene waiting for everyone: nobody's pad reaches it or its Mega Man, here as in the world
+        buttons = 0;
+        return;
+    }
     if (sceneOwner_ == playerId_) { // what drives every copy: each change, stamped with the scene's tick it was made on
         if (buttons != sentPad_) {
             sentPad_ = buttons;
@@ -1152,7 +1172,7 @@ void OwnWorldClient::gateTurn() {
     const od::port::GameState& g = od::port::gameState();
     const bool asked = od::port::storyFlag(od::port::kFlagTransitionArmed) || r.state == od::port::kTransitionAsked;
     if (asked && r.kind == uint8_t(od::port::TransitionKind::DoorActor)) od::port::doorActorExitAhead(od::port::player());
-    if (coordinator_ && noticeTicks_ > 0 && (od::port::player().pressedNow(od::port::PlayerButton::Use) || localTick_ == testForceTick_))
+    if (coordinator_ && noticeTicks_ > 0 && ((rawPressed_ & od::port::player().button(od::port::PlayerButton::Use)) != 0 || localTick_ == testForceTick_))
         pipe_->sendReliable(playerId_, WorldMessageType::NetGateForce, {});
     bool stands = false;
     const bool gateWasAsked = gateAsked_;
