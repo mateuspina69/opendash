@@ -156,6 +156,9 @@ void registerNinoClasses(ContentRegistry& r) {
         {RoutineId::St16CraneUpdate, &st16CraneUpdate},
         {RoutineId::St18BomberBirdbotUpdate, &st18BomberBirdbotUpdate},
     });
+    // a session's: the ruin's guardian, beaten -- the scene of its end goes on with the world's
+    r.netPictures.emplace(RoutineId::RuinGuardianUpdate,
+                          ContentRegistry::NetPicture{&ruinGuardianPicture, nullptr, nullptr, &ruinGuardianAdoptBeaten});
 }
 
 } // namespace od::content

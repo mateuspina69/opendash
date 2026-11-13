@@ -11,6 +11,8 @@
 //             / homing orbs, 2 the big one (trail rings), 3 the ring of 8, 4 the floating mine (a model))
 // Render output left out as in the other ports: the shadows (exe 0x5f20f0).
 #include "content/nino/ruin_guardian.hpp"
+
+#include "game/game_state.hpp"
 #include "content/nino/ruin_guardian_state.hpp"
 
 #include <algorithm>
@@ -811,11 +813,16 @@ void twinBeams(const PlayerEnv& env, AnimatedActor& g, GuardianFields& fields) {
     }
 }
 // exe 0x4b12f0: the model, its row's hit points * 16, the box, the enemy-group entries, the boss gauge
+void guardianInitBound(AnimatedActor& g, GuardianFields& fields);
 void guardianInit(AnimatedActor& g, GuardianFields& fields) {
     if (!bindActorModel(g, 0)) { // exe 0x5e0ba0
         freeActor(g);           // exe 0x5e1490
         return;
     }
+    guardianInitBound(g, fields);
+}
+// (its model bound: the actor's own set-up)
+void guardianInitBound(AnimatedActor& g, GuardianFields& fields) {
     g.anim = 0;
     g.prevAnim = 0xff;
     const int16_t hp =
@@ -1454,6 +1461,19 @@ void guardianOrb(const PlayerEnv& env, ProjectileActor& orb) {
 
 void ruinGuardianUpdate(const PlayerEnv& env, uint32_t actor) { ruinGuardian(env, animatedActorAt(actor)); }
 void guardianBeamUpdate(const PlayerEnv&, uint32_t actor) { guardianBeam(staticActorAt(actor)); }
+
+std::vector<uint8_t> ruinGuardianPicture(uint32_t actor) { return {animatedActorAt(actor).anim}; }
+
+bool ruinGuardianAdoptBeaten(const PlayerEnv&, uint32_t actor, uint8_t script, std::span<const uint8_t> picture) {
+    constexpr uint8_t kRuinStage = 0x35, kScriptFirstBeaten = 0x16, kScriptSecondBeaten = 0x19;
+    AnimatedActor& g = animatedActorAt(actor);
+    if (gameState().stage != kRuinStage || script != (g.variant == 0 ? kScriptFirstBeaten : kScriptSecondBeaten)) return false;
+    guardianInitBound(g, classState<GuardianFields>(g));
+    g.hitPoints = -1;
+    if (picture.size() == 1) g.anim = picture[0];
+    g.enterState(uint8_t(GuardianState::Done));
+    return true;
+}
 void guardianOrbUpdate(const PlayerEnv& env, uint32_t actor) { guardianOrb(env, projectileActorAt(actor)); }
 
 } // namespace od::port
