@@ -252,6 +252,8 @@ private:
     void liftPlace();
     std::optional<std::vector<uint8_t>> sceneEndAt_; // the world's end: where its Mega Man stands, its owner
     bool sceneHeard_ = false; // the world has started it too (a scene started here: the world's start confirms it)
+    bool sceneAlone_ = false;     // the scene is this game's alone: the world plays none of it
+    bool sceneLeaveTold_ = false; // what this game's copy of the scene did was told for the room change under way
     bool heldHere_ = false;   // started here, held until the world starts it (it waits for everyone)
     bool entering_ = false;   // the room is bound, its first field tick has not run its scripts yet
     std::optional<od::port::GlobalHeld> beforeLogic_; // the session's state here before the room's logic ran on that tick

@@ -234,6 +234,7 @@ void OwnWorldClient::startedHere(uint8_t script) {
     localScene_ = true;
     sceneRan_ = false;
     scene_ = true;
+    sceneAlone_ = false;
     sceneOwner_ = 0; // the world's rule: the first player in the room, the host when here; the world's start says who
     scenePads_.start();
     sentPad_ = 0;
@@ -294,6 +295,8 @@ void OwnWorldClient::bindWorld(int stage, int sub) {
     if (followEvent_) followEnd(); // another's event of the room left
     scene_ = false;
     sceneHeard_ = false;
+    sceneAlone_ = false;
+    sceneLeaveTold_ = false;
     if (std::exchange(heldHere_, false)) od::port::setScriptsGated(false);
 }
 
@@ -387,6 +390,7 @@ void OwnWorldClient::turn(uint64_t nowNs) {
         sceneScript_ = script;
         sceneEndAt_.reset();
         sceneHeard_ = false; // the world plays none of it: it ends here with its script
+        sceneAlone_ = true;
         roomRebuild_ = true;
         SDL_Log("own world: a script of this game's started in the room's world (script %02x): a scene here", unsigned(script));
     }
@@ -399,10 +403,26 @@ void OwnWorldClient::turn(uint64_t nowNs) {
     // script is done (its world's end still to come) an exit is the player's own
     if (!localScene_ || heldHere_ || !od::port::scriptState().inUse()) gateTurn();
     od::port::presentationLoopsTick();
-    // what happened in this game goes to the session; not what a stage's load does; in a scene the world does it all
-    if (scene_ || followEvent_) { // (another's event played here: what it does comes from their game)
+    // what happened in this game goes to the session; not what a stage's load does. A scene the world plays too: the
+    // world's copy does it all -- but what its owner's copy did by the time it leaves the room (the world's copy may not
+    // get there: it is left behind, and a cursor it cannot follow leaves it elsewhere) is told then, by the owner
+    const od::port::GameState& g = od::port::gameState();
+    const bool stageHere = int(g.stage) == room_->stage && g.gameMode() != od::port::GameMode::StageLoad;
+    const bool sceneMine = scene_ && localScene_ && !heldHere_ && sceneOwner_ == playerId_;
+    if (followEvent_ || (scene_ && !sceneMine)) { // (another's event played here: what it does comes from their game)
         od::port::globalWatchRebase();
-    } else if (const od::port::GameState& g = od::port::gameState(); int(g.stage) == room_->stage && g.gameMode() != od::port::GameMode::StageLoad) {
+    } else if (scene_ && !sceneAlone_) {
+        if (od::port::transitionRequest().state == od::port::kTransitionNone) {
+            sceneLeaveTold_ = false;
+        } else if (sceneLeaveTold_) {
+            od::port::globalWatchRebase(); // (the room change's own doing -- a stage's load -- is not the scene's)
+        } else if (stageHere) {
+            sceneLeaveTold_ = true;
+            od::port::GlobalChange change = od::port::globalWatchTake(uint8_t(room_->stage));
+            change.zennyDelta.reset(); // (the world's count)
+            if (!change.empty()) pipe_->sendReliable(playerId_, WorldMessageType::GlobalChange, od::port::encode(change));
+        }
+    } else if (stageHere) { // (a scene of this game's alone included: nobody else plays it)
         if (const od::port::GlobalChange change = od::port::globalWatchTake(uint8_t(room_->stage)); !change.empty())
             pipe_->sendReliable(playerId_, WorldMessageType::GlobalChange, od::port::encode(change));
     }
@@ -648,6 +668,7 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
         // (a scene of this player's alone, m.netState[2]: the world does not play it, no end of it comes from there --
         // it ends here with its script)
         sceneHeard_ = !(m.netState.size() > 2 && m.netState[2] != 0);
+        sceneAlone_ = !sceneHeard_;
         sceneStart_ = m.netState[1];
         sceneScript_ = m.netState[1];
         sceneRoom_ = room_;
