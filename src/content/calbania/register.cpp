@@ -76,6 +76,8 @@ void registerCalbaniaClasses(ContentRegistry& r) {
         {RoutineId::GlydeBaseSceneBirdbotUpdate, &glydeBaseSceneBirdbotUpdate},
         {RoutineId::GlydeBaseKeyUpdate, &glydeBaseKeyUpdate},
     });
+    // a session's: Tron's tank, beaten -- the scene after it goes on with the world's, its arms as they broke
+    r.netPictures.emplace(RoutineId::TronBossUpdate, ContentRegistry::NetPicture{&tronBossPicture, nullptr, &tronBossLayPicture});
 }
 
 } // namespace od::content

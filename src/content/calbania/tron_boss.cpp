@@ -1232,4 +1232,38 @@ void tronBossUpdate(const PlayerEnv& env, uint32_t actor) {
     tronTank(animatedActorAt(actor));
 }
 
+namespace {
+constexpr uint8_t kPictureDead = 1, kPictureLeftArmOff = 2, kPictureRightArmOff = 4;
+constexpr size_t kLeftArmFirstPart = 1, kRightArmFirstPart = 5, kArmParts = 4; // (armDamage's)
+} // namespace
+
+std::vector<uint8_t> tronBossPicture(uint32_t actor) {
+    AnimatedActor& a = animatedActorAt(actor);
+    if (TronState(a.state) != TronState::Fight) return {uint8_t(0)};
+    const uint32_t flags = TronFields(a).flags;
+    return {uint8_t(((flags & kTronDead) ? kPictureDead : 0) | ((flags & kTronLeftArmOff) ? kPictureLeftArmOff : 0) |
+                    ((flags & kTronRightArmOff) ? kPictureRightArmOff : 0))};
+}
+
+void tronBossLayPicture(uint32_t actor, std::span<const uint8_t> picture) {
+    if (picture.size() != 1 || !(picture[0] & kPictureDead)) return; // (in the fight: the scene's is the rebuild's own)
+    AnimatedActor& a = animatedActorAt(actor);
+    TronFields f(a);
+    if (TronState(a.state) == TronState::SetUp) setUp(a, f);
+    if (TronState(a.state) != TronState::Fight) return;
+    const auto armOff = [&](uint32_t bit, size_t firstPart) {
+        f.flags |= bit;
+        for (size_t k = 0; k < kArmParts; ++k) a.parts[firstPart + k].flags |= kPartHidden;
+    };
+    if (picture[0] & kPictureLeftArmOff) armOff(kTronLeftArmOff, kLeftArmFirstPart);
+    if (picture[0] & kPictureRightArmOff) armOff(kTronRightArmOff, kRightArmFirstPart);
+    f.flags |= kTronDead;
+    a.hitPoints = 0;
+    toDeath(a, f);
+    f.timer = 0; // (its end is told already: the scene runs)
+    animSet(a, a.anim, 0);
+    animPose(a);
+    a.prevAnim = a.anim;
+}
+
 } // namespace od::port
