@@ -517,6 +517,10 @@ int run(const WorldArgs& given) {
 
     od::port::PresentationBatch present;
     bool sceneOn = false, sceneGated = false, sceneAsked = false, worldWhite = false;
+    // a scene's script asked for another room (each player's game goes there with its own copy of the scene); once that
+    // scene is over this room is over: its players are gone, what the script loaded for the next room is not this one's,
+    // and the world runs it no further until the coordinator stops it
+    bool sceneWentAway = false, roomOver = false;
     uint32_t sceneEndedTicksAgo = 0xffffffffu; // a scene's script asks its room change as it ends: that is still the scene's
     static constexpr uint32_t kSceneExitTicks = 2; // ... taken by the field mode within these ticks of the script's end
     // the player whose game last changed the room's state (a talk's answer, an event's end, a Use): a scene the room's
@@ -680,6 +684,7 @@ int run(const WorldArgs& given) {
             if (r.exitId == 0 && r.destStage == 0 && r.destRoom == 0) return;
             // a scene's room change: every game in the room plays the scene and its script changes that game's room
             // itself (moved again from here, each would be put beside the others: a narrow door's sides are out of it)
+            if (sceneOn && (r.destStage != od::port::gameState().stage || r.destRoom != od::port::gameState().room)) sceneWentAway = true;
             if (sceneOn || sceneEndedTicksAgo <= kSceneExitTicks) return;
             const auto half = [](int16_t v, std::vector<uint8_t>& o) {
                 o.push_back(uint8_t(v));
@@ -943,6 +948,7 @@ int run(const WorldArgs& given) {
         }
         if (now && !sceneOn) {
             sceneOn = true;
+            sceneWentAway = false;
             od::port::setOwnScriptsHeld(false);
             // who caused it (their talk, their step on its trigger) drives it; else the first one here
             const uint8_t cause = sceneCause != 0xff ? sceneCause : lastActorTicksAgo <= kSceneCauseTicks ? lastActor : uint8_t(0xff);
@@ -987,6 +993,10 @@ int run(const WorldArgs& given) {
             half(man.rotation.y, at);
             at.push_back(sceneOwner);
             SDL_Log("world: the scene ends");
+            if (std::exchange(sceneWentAway, false)) {
+                roomOver = true;
+                SDL_Log("world: the scene took its players to another room: this room is over");
+            }
             for (const auto& [client, sender] : netClients) {
                 WorldMessage end{WorldMessageType::NetSceneEnd};
                 end.playerId = client;
@@ -1341,17 +1351,19 @@ int run(const WorldArgs& given) {
         // the directions as the stick the logic reads when no stick is held, as the windowed game hands them
         const float lx = float(((pad & 0x20) != 0) - ((pad & 0x80) != 0));
         const float ly = float(((pad & 0x40) != 0) - ((pad & 0x10) != 0));
-        if (!w.hostAway)
-            for (const WorldArgs::Guest& g : w.guests) od::port::remotePlayerState(g.id, guestState(g));
-        if (link) playersFromOwners();
-        sceneLeftTurn();
-        view->playTick(pad, 128, 128, lx, ly);
-        if (link) {
-            od::port::remotePlayersTalkDone();
-            od::port::st16WorldCatchTick();
+        if (!roomOver) { // (a room that is over: only the link, until the coordinator stops this world)
+            if (!w.hostAway)
+                for (const WorldArgs::Guest& g : w.guests) od::port::remotePlayerState(g.id, guestState(g));
+            if (link) playersFromOwners();
+            sceneLeftTurn();
+            view->playTick(pad, 128, 128, lx, ly);
+            if (link) {
+                od::port::remotePlayersTalkDone();
+                od::port::st16WorldCatchTick();
+            }
+            netTurn(uint32_t(tick)); // (the scene's end is seen here: what it did is told on this turn still)
         }
-        netTurn(uint32_t(tick));
-        if (view->assetsDirty) {
+        if (view->assetsDirty && !roomOver) {
             view->assetsDirty = false;
             g_inStageSwitch = true;
             holdRoom(current, current.stage, current.sub);

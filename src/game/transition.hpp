@@ -44,6 +44,8 @@ void roomLoadedMode(const PlayerEnv& env, TransitionHooks& hooks, FadeTask& fade
 // exe 0x542370: the player at the request's destination (unless it keeps its position), the stage / room of the game
 // state, the story moved on
 void arrivalPlacement();
+// the story moved on to its next value (the story flag group cleared first) when they differ: a room's entry
+void advanceStory();
 // The stage load's state part after OpenDash loaded the new stage (exe 0x5411c0's substates 2..4: the arrival, the
 // game's display mode back after the title, the HUD's elements, the stage's bytes (exe 0x5d5a80 / 0x5d5ae0), the
 // stage's flag groups and the script block cleared (exe 0x5127a0(0)), the buffer mode) -> the room loaded mode at its

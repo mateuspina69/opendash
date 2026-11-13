@@ -207,7 +207,8 @@ void trialCourseWarp() {
     requestTransition(kTransitionAccepted, g.stage, g.room, at.x, at.y, at.z, at.yaw, kCourseFadeIn, kNoFade);
 }
 
-// the story moved on to its next value (the story flag group cleared first) when they differ
+} // namespace
+
 void advanceStory() {
     GameState& g = gameState();
     if (g.story != g.nextStory) {
@@ -215,6 +216,8 @@ void advanceStory() {
         g.story = g.nextStory;
     }
 }
+
+namespace {
 
 // the field menus (the select button in play): the status sub-screen, or the menus of the flags
 void openFieldMenus() {

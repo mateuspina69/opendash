@@ -11,6 +11,7 @@
 #include "game/shop.hpp"
 #include "game/world_view.hpp"
 #include "game/story_flags.hpp"
+#include "game/transition.hpp"
 
 namespace od::port {
 
@@ -271,6 +272,9 @@ void applyStartingGlobalState() {
     globalWatchRebase();
     globalWatchApply(*g_starting);
     g_starting.reset();
+    // a world's start is its room's entry: the story's next step is the story's from here, as a room change makes it (a
+    // scene that set it and went to this room did so in each player's game; the session hears it from this world)
+    advanceStory();
 }
 
 GlobalMaster::Out GlobalMaster::merge(const GlobalChange& c) {
