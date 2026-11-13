@@ -255,6 +255,9 @@ private:
     bool sceneAlone_ = false;     // the scene is this game's alone: the world plays none of it
     bool sceneLeaveTold_ = false; // what this game's copy of the scene did was told for the room change under way
     std::vector<uint8_t> sceneLeft_; // what the scene's script left in the room it went to: its world's, told on the join
+    // the session's values heard while this game plays its own copy of a scene the world plays too: taken once it is over
+    std::vector<od::port::GlobalChange::Value> sceneValues_;
+    void takeSceneValues();
     bool heldHere_ = false;   // started here, held until the world starts it (it waits for everyone)
     bool entering_ = false;   // the room is bound, its first field tick has not run its scripts yet
     std::optional<od::port::GlobalHeld> beforeLogic_; // the session's state here before the room's logic ran on that tick

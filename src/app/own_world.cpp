@@ -295,6 +295,7 @@ void OwnWorldClient::bindWorld(int stage, int sub) {
     doorPass_ = false;
     bossFight_ = false;
     od::port::globalWatchRebase();
+    takeSceneValues();
     sharedEvent_ = false;
     if (followEvent_) followEnd(); // another's event of the room left
     scene_ = false;
@@ -302,6 +303,14 @@ void OwnWorldClient::bindWorld(int stage, int sub) {
     sceneAlone_ = false;
     sceneLeaveTold_ = false;
     if (std::exchange(heldHere_, false)) od::port::setScriptsGated(false);
+}
+
+// The scene this game played its own copy of is over: the session's values heard meanwhile (the later of each)
+void OwnWorldClient::takeSceneValues() {
+    if (localScene_ || sceneValues_.empty()) return;
+    od::port::GlobalChange heard;
+    heard.values = std::exchange(sceneValues_, {});
+    od::port::globalWatchApply(heard);
 }
 
 void OwnWorldClient::joinRoom() {
@@ -561,7 +570,16 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
         break;
     }
     case WorldMessageType::GlobalChange:
-        if (const auto change = od::port::decodeGlobalChange(m.netState)) od::port::globalWatchApply(*change);
+        if (auto change = od::port::decodeGlobalChange(m.netState)) {
+            // this game's own copy of a scene the world plays too: what the scene counts (the story's next step, a
+            // counter) its own copy counts here. The world's copy, told first, would be counted on top of: the session's
+            // values wait for the scene's end, where both say the same
+            if (localScene_ && !sceneAlone_) {
+                for (const od::port::GlobalChange::Value& v : change->values) sceneValues_.push_back(v);
+                change->values.clear();
+            }
+            od::port::globalWatchApply(*change);
+        }
         break;
     case WorldMessageType::NetGift:
         if (const auto gift = od::port::decodeGift(m.netState)) {
@@ -1021,6 +1039,7 @@ void OwnWorldClient::localSceneTurn() {
         if (joined_) pipe_->sendReliable(playerId_, WorldMessageType::NetLeave, {});
         room_.reset();
         joined_ = false;
+        takeSceneValues();
         return;
     }
     od::port::presentationLoopsClear();
@@ -1049,6 +1068,7 @@ void OwnWorldClient::leaveSceneHere() {
         if (joined_) pipe_->sendReliable(playerId_, WorldMessageType::NetLeave, {});
         room_.reset();
         joined_ = false;
+        takeSceneValues();
         return;
     }
     od::port::presentationLoopsClear();
