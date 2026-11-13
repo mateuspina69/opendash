@@ -4,6 +4,8 @@
 #pragma once
 
 #include <cstdint>
+#include <span>
+#include <vector>
 
 #include "game/loaded_data.hpp"
 #include "game/vectors.hpp"
@@ -64,5 +66,37 @@ uint32_t spawnRecords(uint32_t list, uint32_t n);
 // exe 0x5110e0(record): one record into the room script's actor list (the bit of its slot in the actor mask); the
 // actor's address, 0 when its pool is full
 uint32_t spawnRecordTracked(uint32_t record);
+// spawnRecord's actor, from the record itself
+uint32_t spawnFromRecord(const SpawnRecord& r);
+
+// OpenDash's co-op: what a scene's script spawned from records in a room it went to. That room is its world's, which
+// played none of the scene: what the scene left there, the world makes (app/own_world, app/world_process). Noted while on
+// and a script's tick runs
+enum class SpawnNoteKind : uint8_t {
+    Plain = 0,   // spawnRecord
+    Listed = 1,  // spawnRecords: in the room script's list, the bit of its list index
+    Tracked = 2, // spawnRecordTracked
+    Script = 3,  // a script's actor (game/script_engine scriptActorSpawnRecord)
+};
+struct SpawnNote {
+    SpawnRecord record;
+    SpawnNoteKind kind = SpawnNoteKind::Plain;
+    uint8_t index = 0; // Listed: the record's index in its list
+    uint32_t actor = 0;
+};
+void spawnNotesStart(); // on, from none
+// off: the notes whose actor is still there (an actor's last), in the order spawned
+std::vector<SpawnNote> spawnNotesEnd();
+// a script's tick runs
+struct SpawnNoteScope {
+    SpawnNoteScope();
+    ~SpawnNoteScope();
+    SpawnNoteScope(const SpawnNoteScope&) = delete;
+    SpawnNoteScope& operator=(const SpawnNoteScope&) = delete;
+};
+// the note of `actor`, the last spawned, is of this kind
+void spawnNoteKind(uint32_t actor, SpawnNoteKind kind, uint8_t index);
+std::vector<uint8_t> encodeSpawnNotes(std::span<const SpawnNote> notes);
+std::vector<SpawnNote> decodeSpawnNotes(std::span<const uint8_t> bytes);
 
 } // namespace od::port

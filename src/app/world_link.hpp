@@ -70,10 +70,13 @@ enum class WorldMessageType : uint8_t {
     // of a room's world gives it (each argument, then a zero byte)
     Assign = 62,
     // a piece of a message that one datagram does not hold (encodeWorldMessageParts): its bytes, and whether more follow
-    Part = 63
+    Part = 63,
+    // what a scene's script left in a room it went to (game/spawn SpawnNote), from its owner's game to that room's world,
+    // which played none of it and makes them
+    NetSceneLeft = 64
 };
 // the last type: what a decoder takes (a type added after it is the new last)
-constexpr WorldMessageType kLastWorldMessageType = WorldMessageType::Part;
+constexpr WorldMessageType kLastWorldMessageType = WorldMessageType::NetSceneLeft;
 
 // What a world says of its players to the coordinator
 struct WorldBrief {

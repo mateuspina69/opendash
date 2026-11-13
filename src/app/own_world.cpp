@@ -18,6 +18,7 @@
 #include "game/story_flags.hpp"
 #include "game/story_table.hpp"
 #include "game/script_engine.hpp"
+#include "game/spawn.hpp"
 #include "game/script_state.hpp"
 #include "game/world_view.hpp"
 #include "content/nino/st16_script33.hpp"
@@ -140,6 +141,7 @@ void OwnWorldClient::roomBound(int stage, int sub) {
         warping_ = false;
         return;
     }
+    sceneLeft_.clear();
     playedScene_.reset();
     roomEntry_ = RoomEntry{WorldRoom{stage, sub}, od::port::storyFlags(), od::port::roomScriptState()};
     // the room is loaded, its first field tick still to come (also one a scene's script went to)
@@ -148,6 +150,7 @@ void OwnWorldClient::roomBound(int stage, int sub) {
         room_ = WorldRoom{stage, sub};
         sceneMoved_ = true;
         sceneLeaveTold_ = true; // (what the load did is not the scene's: nothing of this room change is told from here)
+        od::port::spawnNotesStart(); // what its script spawns here is the room's world's to make, once it is over
         return;
     }
     od::port::presentationLoopsClear();
@@ -326,6 +329,10 @@ void OwnWorldClient::turn(uint64_t nowNs) {
         playerId_ = *id;
         actors_->setPlayerMap(playerId_);
         joinRoom();
+        if (!sceneLeft_.empty()) {
+            SDL_Log("own world: what the scene left in this room is told to its world");
+            pipe_->sendReliable(playerId_, WorldMessageType::NetSceneLeft, std::exchange(sceneLeft_, {}));
+        }
     }
     ++localTick_;
     if (testLevelTick_ != 0 && localTick_ == testLevelTick_) {
@@ -991,6 +998,9 @@ void OwnWorldClient::localSceneTurn() {
         return;
     std::optional<std::vector<uint8_t>> at = std::exchange(sceneEndAt_, std::nullopt);
     const bool sameRoom = sceneRoom_ && room_ && *sceneRoom_ == *room_;
+    // (a room the scene went to: what its script left there is its world's to make -- its owner's game tells it)
+    if (const std::vector<od::port::SpawnNote> left = od::port::spawnNotesEnd(); !sameRoom && sceneOwner_ == playerId_)
+        sceneLeft_ = od::port::encodeSpawnNotes(left);
     // (the world of a room the scene went to never played it: what it shows is not the scene's)
     if (!at && sceneHeard_ && sameRoom) {
         playedScene_ = PlayedScene{*room_, sceneScript_};
@@ -1030,6 +1040,8 @@ void OwnWorldClient::localSceneTurn() {
 // The scene that brought this game to this room is over on the room's first tick (its script done there): this game is
 // in the room's world from this tick on, the room setup's actors gone as on any entry
 void OwnWorldClient::leaveSceneHere() {
+    if (const std::vector<od::port::SpawnNote> left = od::port::spawnNotesEnd(); sceneOwner_ == playerId_)
+        sceneLeft_ = od::port::encodeSpawnNotes(left);
     localScene_ = false;
     sceneRoom_.reset();
     const WorldRoom here = *room_;

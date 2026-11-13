@@ -6,6 +6,8 @@
 // 0x53a5e0, 0x537c50).
 #pragma once
 
+#include <span>
+
 #include <cstdint>
 #include <vector>
 
@@ -86,6 +88,10 @@ void scriptPlayerReset();
 // exe 0x511740(record) / exe 0x511760(record): the script actor of a spawn record spawned into the block's actors
 // [record + 1] (its address, 0 when its pool is full) / freed
 uint32_t scriptActorSpawnRecord(uint32_t record);
+// OpenDash's co-op, a room's world: what a scene's script left in this room (game/spawn SpawnNote), made here as the
+// script made it -- each in the list it was kept in
+struct SpawnNote;
+void scriptSpawnNotesReplay(std::span<const SpawnNote> notes);
 void scriptActorFreeRecord(uint32_t record);
 // exe 0x511790: start pressed (unless the block locks it) asks for the skip; the skip is taken (kScriptSkipTaken, 1)
 // once the field plays, no fade runs or covers the screen and the block allows it; else 0

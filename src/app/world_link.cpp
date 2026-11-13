@@ -148,6 +148,7 @@ std::vector<uint8_t> encodeWorldMessage(const WorldMessage& m) {
     case WorldMessageType::NetStageBanks:
     case WorldMessageType::NetStoryMove:
     case WorldMessageType::NetEventPad:
+    case WorldMessageType::NetSceneLeft:
     case WorldMessageType::Assign:
     case WorldMessageType::Part: // (entry: more of the message follows)
         w.u8(m.playerId);
@@ -234,6 +235,7 @@ std::optional<WorldMessage> decodeWorldMessage(std::span<const uint8_t> bytes) {
     case WorldMessageType::NetStageBanks:
     case WorldMessageType::NetStoryMove:
     case WorldMessageType::NetEventPad:
+    case WorldMessageType::NetSceneLeft:
     case WorldMessageType::Assign:
     case WorldMessageType::Part:
         m.playerId = r.u8();

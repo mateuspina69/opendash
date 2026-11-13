@@ -3,6 +3,8 @@
 #include "game/actor_state.hpp"
 #include "game/spawn.hpp"
 
+#include <cstring>
+
 #include "game/actor_pools.hpp"
 #include "game/game_state.hpp"
 #include "game/player/player_model.hpp"
@@ -118,8 +120,23 @@ void spawnList(uint32_t list, int32_t placement) {
     }
 }
 
-uint32_t spawnRecord(uint32_t record) {
-    const SpawnRecord r = dataRecord<SpawnRecord>(record, SpawnRecord::kBytes);
+namespace {
+
+bool g_noting = false;
+int g_noteScope = 0;
+std::vector<SpawnNote> g_notes;
+
+constexpr size_t kNoteBytes = 2 + SpawnRecord::kBytes;
+struct NoteReader {
+    const uint8_t* at;
+    template <class T> T read(size_t offset) const {
+        T v;
+        std::memcpy(&v, at + offset, sizeof v);
+        return v;
+    }
+};
+
+uint32_t allocFromRecord(const SpawnRecord& r) {
     uint32_t a = 0;
     switch (SpawnPool(r.pool)) {
     case SpawnPool::Animated:
@@ -160,6 +177,83 @@ uint32_t spawnRecord(uint32_t record) {
     }
 }
 
+} // namespace
+
+uint32_t spawnRecord(uint32_t record) { return spawnFromRecord(dataRecord<SpawnRecord>(record, SpawnRecord::kBytes)); }
+
+uint32_t spawnFromRecord(const SpawnRecord& r) {
+    const uint32_t a = allocFromRecord(r);
+    if (a != 0 && g_noting && g_noteScope > 0) {
+        SpawnNote n;
+        n.record = r;
+        n.actor = a;
+        g_notes.push_back(n);
+    }
+    return a;
+}
+
+void spawnNotesStart() {
+    g_noting = true;
+    g_notes.clear();
+}
+
+std::vector<SpawnNote> spawnNotesEnd() {
+    g_noting = false;
+    std::vector<SpawnNote> left;
+    for (size_t i = 0; i < g_notes.size(); ++i) {
+        const SpawnNote& n = g_notes[i];
+        bool again = false; // its slot spawned in again: that one is the slot's
+        for (size_t k = i + 1; k < g_notes.size(); ++k) again = again || g_notes[k].actor == n.actor;
+        const ActorHeader& h = actorHeaderAt(n.actor);
+        if (!again && (h.flags & kActorLive) && h.type == uint8_t(n.record.typeWord)) left.push_back(n);
+    }
+    g_notes.clear();
+    return left;
+}
+
+SpawnNoteScope::SpawnNoteScope() { ++g_noteScope; }
+SpawnNoteScope::~SpawnNoteScope() { --g_noteScope; }
+
+void spawnNoteKind(uint32_t actor, SpawnNoteKind kind, uint8_t index) {
+    if (!g_noting || g_noteScope <= 0 || g_notes.empty() || g_notes.back().actor != actor) return;
+    g_notes.back().kind = kind;
+    g_notes.back().index = index;
+}
+
+std::vector<uint8_t> encodeSpawnNotes(std::span<const SpawnNote> notes) {
+    std::vector<uint8_t> bytes(notes.size() * kNoteBytes);
+    uint8_t* at = bytes.data();
+    for (const SpawnNote& n : notes) {
+        const SpawnRecord& r = n.record;
+        at[0] = uint8_t(n.kind);
+        at[1] = n.index;
+        at[2] = r.flags;
+        at[3] = r.listSlot;
+        at[4] = r.pool;
+        at[5] = r.loopFlags;
+        std::memcpy(at + 6, &r.typeWord, 4);
+        std::memcpy(at + 0xa, &r.paramsWord, 4);
+        const int16_t point[4] = {r.point.x, r.point.y, r.point.z, r.yaw};
+        std::memcpy(at + 0xe, point, 8);
+        at += kNoteBytes;
+    }
+    return bytes;
+}
+
+std::vector<SpawnNote> decodeSpawnNotes(std::span<const uint8_t> bytes) {
+    std::vector<SpawnNote> notes;
+    if (bytes.size() % kNoteBytes != 0) return notes;
+    for (size_t at = 0; at < bytes.size(); at += kNoteBytes) {
+        if (bytes[at] > uint8_t(SpawnNoteKind::Script)) return {};
+        SpawnNote n;
+        n.kind = SpawnNoteKind(bytes[at]);
+        n.index = bytes[at + 1];
+        n.record = SpawnRecord::load(NoteReader{bytes.data() + at + 2});
+        notes.push_back(n);
+    }
+    return notes;
+}
+
 uint32_t spawnRecords(uint32_t list, uint32_t n) {
     RoomScriptState& room = roomScriptState();
     uint32_t i = 0;
@@ -169,6 +263,7 @@ uint32_t spawnRecords(uint32_t list, uint32_t n) {
         if (!a) break;
         room.actors[r.listSlot] = a;
         room.actorMask |= 1u << (i & 0x1f); // the bit of the list index (the exe's: not the record's slot)
+        spawnNoteKind(a, SpawnNoteKind::Listed, uint8_t(i));
     }
     return i;
 }
@@ -180,6 +275,7 @@ uint32_t spawnRecordTracked(uint32_t record) {
     RoomScriptState& room = roomScriptState();
     room.actors[r.listSlot] = a;
     room.actorMask |= 1u << (r.listSlot & 0x1f);
+    spawnNoteKind(a, SpawnNoteKind::Tracked, 0);
     return a;
 }
 

@@ -21,6 +21,7 @@
 #include "game/player/player_state.hpp"
 #include "game/port_gap.hpp"
 #include "game/room_params.hpp"
+#include "game/room_scripts.hpp"
 #include "game/script_state.hpp"
 #include "game/spawn.hpp"
 #include "game/stage_state.hpp"
@@ -119,6 +120,7 @@ void scriptRunnerTick(const PlayerEnv& env) {
     if (!(s.flags & kScriptRunning)) return;
     const uint8_t id = s.id;
     if (g_scriptsGated && storyScriptGated(id)) return;
+    const SpawnNoteScope noting;
     if (g_ownScriptsHeld && id != kExitTransitionScript && !storyScriptGated(id)) return;
     if (id != kExitTransitionScript) { // [0x89b6d0 + id * 4]: the story / cutscene scripts (game/story)
         if (!storyScriptTick(env, id)) notPortedAt(kScriptArea, "script", id);
@@ -213,7 +215,29 @@ void scriptNextStepClearingPhases() {
 uint32_t scriptActorSpawnRecord(uint32_t record) {
     const uint32_t actor = spawnRecord(record);
     if (actor != 0) pointAtWord(scriptState().actors[dataRecord<SpawnRecord>(record, SpawnRecord::kBytes).listSlot], actor);
+    if (actor != 0) spawnNoteKind(actor, SpawnNoteKind::Script, 0);
     return actor;
+}
+
+void scriptSpawnNotesReplay(std::span<const SpawnNote> notes) {
+    RoomScriptState& room = roomScriptState();
+    for (const SpawnNote& n : notes) {
+        const uint32_t actor = spawnFromRecord(n.record);
+        if (actor == 0) continue;
+        const uint8_t slot = n.record.listSlot;
+        switch (n.kind) {
+        case SpawnNoteKind::Plain: break;
+        case SpawnNoteKind::Listed:
+            room.actors[slot] = actor;
+            room.actorMask |= 1u << (n.index & 0x1f);
+            break;
+        case SpawnNoteKind::Tracked:
+            room.actors[slot] = actor;
+            room.actorMask |= 1u << (slot & 0x1f);
+            break;
+        case SpawnNoteKind::Script: pointAtWord(scriptState().actors[slot], actor); break;
+        }
+    }
 }
 
 void scriptActorFreeRecord(uint32_t record) {

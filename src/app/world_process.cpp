@@ -37,11 +37,13 @@
 #include "game/modern_aim.hpp"
 #include "game/encounter.hpp"
 #include "game/event.hpp"
+#include "game/game_state.hpp"
 #include "game/global_state.hpp"
 #include "content/nino/st16_script33.hpp"
 #include "game/player/room_player_effects.hpp"
 #include "game/presentation.hpp"
 #include "game/script_engine.hpp"
+#include "game/spawn.hpp"
 #include "game/story_table.hpp"
 #include "game/script_state.hpp"
 #include "game/transition.hpp"
@@ -1071,6 +1073,19 @@ int run(const WorldArgs& given) {
         }
         if (link && int(netTick) % w.netTicks == 0) playersToOthers(netTick);
     };
+    // what a scene's script left in this room (NetSceneLeft): made once the room plays (a world just started is still
+    // setting its room up, which would take them with it)
+    std::vector<od::port::SpawnNote> sceneLeft;
+    const auto sceneLeftTurn = [&] {
+        if (sceneLeft.empty()) return;
+        const od::port::GameState& g = od::port::gameState();
+        if (g.gameMode() != od::port::GameMode::Field || g.fieldStep() != od::port::FieldStep::Playing ||
+            od::port::transitionRequest().state != od::port::kTransitionNone)
+            return;
+        od::port::scriptSpawnNotesReplay(sceneLeft);
+        SDL_Log("world: a scene left %zu actors in this room", sceneLeft.size());
+        sceneLeft.clear();
+    };
     const auto linkTurn = [&](uint64_t tick) {
         const uint64_t now = SDL_GetTicksNS();
         std::vector<WorldMessage> arrived = std::exchange(cameWithRoom, {});
@@ -1248,6 +1263,9 @@ int run(const WorldArgs& given) {
                             od::port::playerById(m.playerId).interactionTarget.none() ? "nothing in reach" : "a target");
                 }
                 break;
+            case WorldMessageType::NetSceneLeft: // what a scene's script left in this room, from its owner's game
+                for (const od::port::SpawnNote& n : od::port::decodeSpawnNotes(m.netState)) sceneLeft.push_back(n);
+                break;
             case WorldMessageType::NetEventEnd:
                 od::port::eventOwnerEnded(m.playerId);
                 noteActor(m.playerId);
@@ -1326,6 +1344,7 @@ int run(const WorldArgs& given) {
         if (!w.hostAway)
             for (const WorldArgs::Guest& g : w.guests) od::port::remotePlayerState(g.id, guestState(g));
         if (link) playersFromOwners();
+        sceneLeftTurn();
         view->playTick(pad, 128, 128, lx, ly);
         if (link) {
             od::port::remotePlayersTalkDone();
