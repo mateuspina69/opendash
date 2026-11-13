@@ -1852,7 +1852,7 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
                 // the room started here and held for everyone is already there, at its start)
                 // (the room as its world holds it now, when this game showed it: laid on the rebuild after)
                 const std::optional<od::port::NetHeldRoom> held =
-                    ownWorld->worldShown() ? std::optional(od::port::captureHeldRoom()) : std::nullopt;
+                    ownWorld->worldShown() ? std::optional(ownWorld->heldRoom()) : std::nullopt;
                 od::port::killAllActors();
                 od::port::actorSystem().boneBlocksUsed = 0;
                 od::port::roomSetupActors(0, od::port::kSpawnSkipPlayer);
@@ -1884,7 +1884,7 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
                     od::port::storyFlags() = now;
                     od::port::applyActorFrees();
                 }
-                if (held) od::port::layHeldRoom(*held);
+                if (held) od::port::layHeldRoom(*held, env, scene ? *scene : od::port::scriptState().id);
                 reportUnported();
                 // the scene's script (the room's logic may have started it already, as the world's did)
                 if (scene && (!(od::port::scriptState().flags & od::port::kScriptRunning) || od::port::scriptState().id != *scene))

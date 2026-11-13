@@ -825,11 +825,8 @@ void mainState(const PlayerEnv& env, AnimatedActor& a, GuardianFields& f) { // e
     if (collide(env, a, f) != 0 && (f.wallBits & kGuardianWallHit)) f.bits |= kGuardianBlocked;
 }
 
-void init(const PlayerEnv& env, AnimatedActor& a, GuardianFields& f) { // exe 0x4555c0 (state 0)
-    if (!bindActorModel(a, guardianModels[a.spawnByte])) {
-        freeActor(a);
-        return;
-    }
+// exe 0x4555c0 (state 0), past its model's binding
+void initBound(const PlayerEnv& env, AnimatedActor& a, GuardianFields& f) {
     a.anim = 0;
     a.prevAnim = 0xff;
     const uint16_t hp =
@@ -857,6 +854,13 @@ void init(const PlayerEnv& env, AnimatedActor& a, GuardianFields& f) { // exe 0x
     a.subState = 0;
     a.step = 0;
     a.stepCounter = 0;
+}
+void init(const PlayerEnv& env, AnimatedActor& a, GuardianFields& f) { // exe 0x4555c0 (state 0)
+    if (!bindActorModel(a, guardianModels[a.spawnByte])) {
+        freeActor(a);
+        return;
+    }
+    initBound(env, a, f);
 }
 
 // exe 0x4568f0 (state 3): the collapse (anim 0xd), 14 blasts at random bones, the last blast, the drops
@@ -1101,5 +1105,12 @@ HitBox& guardianWeakPointBox() {
 }
 
 void guardianReaverbotUpdate(const PlayerEnv& env, uint32_t actor) { guardian(env, animatedActorAt(actor)); }
+
+void guardianReaverbotAdoptBeaten(const PlayerEnv& env, uint32_t actor) {
+    AnimatedActor& a = animatedActorAt(actor);
+    initBound(env, a, classState<GuardianFields>(a));
+    a.hitPoints = -1;
+    a.enterState(uint8_t(GuardianState::Death));
+}
 
 } // namespace od::port

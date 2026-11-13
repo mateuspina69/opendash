@@ -19,5 +19,8 @@ HitBox& guardianWeakPointBox();
 
 // exe 0x455480: the guardian's update (ActorUpdateFn)
 void guardianReaverbotUpdate(const PlayerEnv& env, uint32_t actor);
+// a session (ContentRegistry::netPictures adopt): the beaten one the scene of its end goes on with -- the world's copy,
+// bound in its slot, starts its end here
+void guardianReaverbotAdoptBeaten(const PlayerEnv& env, uint32_t actor);
 
 } // namespace od::port

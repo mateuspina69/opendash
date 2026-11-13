@@ -18,6 +18,7 @@
 #include "game/fade_state.hpp"
 #include "game/fixed_point.hpp"
 #include "game/game_state.hpp"
+#include "game/guardian_reaverbot.hpp"
 #include "game/message.hpp"
 #include "game/message_state.hpp"
 #include "game/pickups.hpp"
@@ -911,6 +912,13 @@ void runStep(const RoutineRef& routine) {
 }
 
 } // namespace
+
+bool abandonedMineGuardianAdopt(const PlayerEnv& env, uint32_t actor, uint8_t script) {
+    if (gameState().stage != kRuinStage || script != kGuardianEndScript) return false;
+    guardianReaverbotAdoptBeaten(env, actor);
+    abandonedMineStageBlock().guardian = &actorLayoutAt(actor);
+    return true;
+}
 
 bool abandonedMineScriptPorted(RoutineId handler) {
     switch (handler) {

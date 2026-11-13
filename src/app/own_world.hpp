@@ -90,6 +90,7 @@ public:
     bool takeRoomRebuild() { return std::exchange(roomRebuild_, false); }
     // this game showed its room's world's actors (a scene's rebuild lays what the world holds on what it spawns)
     bool worldShown() const { return shownAny_; }
+    od::port::NetHeldRoom heldRoom() const { return od::port::captureHeldRoom(*actors_); }
     // the room as this game entered it, before its first field tick: the story's flags and the room's logic (its
     // handler's steps), which a scene the world starts here plays the room's logic from again (what it spawns there --
     // a cast waiting by a lift -- is the scene's)

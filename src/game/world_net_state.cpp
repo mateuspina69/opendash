@@ -1566,6 +1566,7 @@ void PoolNetActors::appear(uint8_t slot, const NetActorIdentity& identity, const
     head.flags = kActorLiveDrawn;
     head.runFlags &= uint8_t(~kActorRun); // the pool loops pass it by: its class runs in the world
     head.worldHeld = true;
+    identity_[slot] = identity;
     head.state = 1;                       // past a class's first state: the draw pass passes over a static still in it
     head.type = identity.type;
     head.subtype = identity.subtype;
@@ -1928,7 +1929,7 @@ template <class F> void forEachHeldActor(F&& f) {
 }
 } // namespace
 
-NetHeldRoom captureHeldRoom() {
+NetHeldRoom captureHeldRoom(const PoolNetActors& actors) {
     NetHeldRoom held;
     const auto& pictures = content().netPictures;
     forEachHeldActor([&](ActorHeader& a, RoutineRef h) {
@@ -1938,13 +1939,15 @@ NetHeldRoom captureHeldRoom() {
         s.type = a.type;
         s.pos = actorLayoutOf(a).pos;
         s.rotation = actorLayoutOf(a).rotation;
+        s.classId = h ? h.id() : RoutineId::None;
+        s.identity = actors.identityOf(a.slot);
         if (const auto it = h ? pictures.find(h.id()) : pictures.end(); it != pictures.end() && it->second.capture)
             s.picture = it->second.capture(actorLayoutOf(a).at);
     });
     return held;
 }
 
-void layHeldRoom(const NetHeldRoom& held) {
+void layHeldRoom(const NetHeldRoom& held, const PlayerEnv& env, uint8_t script) {
     const auto& pictures = content().netPictures;
     forEachHeldActor([&](ActorHeader& a, RoutineRef h) {
         if (!(a.flags & kActorLive) || a.slot == 0 || !h) return;
@@ -1967,6 +1970,26 @@ void layHeldRoom(const NetHeldRoom& held) {
             it->second.apply(actorLayoutOf(a).at, s.picture);
         }
     });
+    applyActorFrees();
+    // what the scene goes on with that the rebuild did not spawn: the world's, in its slot again, this game's own now
+    for (size_t slot = 0; slot < kNetSlots; ++slot) {
+        const NetHeldRoom::Slot& s = held.slots[slot];
+        if (!s.live || actorSlotClass(uint32_t(slot)) != kAnimatedClass) continue;
+        const auto it = pictures.find(s.classId);
+        if (it == pictures.end() || !it->second.adopt) continue;
+        if (actorHeaderAt(actorBySlot(uint32_t(slot))).flags & kActorLive) continue; // the rebuild's own stands there
+        ActorHeader& head = claimActorSlot(uint32_t(slot));
+        head.type = s.identity.type;
+        head.subtype = s.identity.subtype;
+        head.variant = s.identity.variant;
+        head.loopFlags = uint8_t((head.loopFlags & ~(kActorStageClass | kActorLateLoop)) | s.identity.classFlags);
+        Actor& a = actorLayoutOf(head);
+        a.interaction = 0;
+        a.pos = a.prevPos = s.pos;
+        a.rotation = a.prevRotation = s.rotation;
+        const bool bound = s.identity.modelEntry != kNetNoModel && bindActorModelEntry(a, s.identity.modelEntry);
+        if (!bound || !it->second.adopt(env, a.at, script)) freeActor(head);
+    }
     applyActorFrees();
 }
 

@@ -13,6 +13,8 @@
 #include "content/yosyonke/ice_ruin_shrink_block.hpp"
 #include "content/yosyonke/abandoned_mine_relic.hpp"
 #include "content/yosyonke/abandoned_mine_roll.hpp"
+#include "content/yosyonke/abandoned_mine_scripts.hpp"
+#include "game/guardian_reaverbot.hpp"
 #include "content/yosyonke/roll_follower.hpp"
 #include "content/yosyonke/roll_spawners.hpp"
 #include "content/yosyonke/st05_st06_props.hpp"
@@ -102,6 +104,9 @@ void registerYosyonkeClasses(ContentRegistry& r) {
     // a session's: Roll at the mine goes on with her walk where the world's is (a scene's rebuild spawns her at its start)
     r.netPictures.emplace(RoutineId::AbandonedMineRollUpdate,
                           ContentRegistry::NetPicture{&abandonedMineRollPicture, &abandonedMineRollTakePicture, &abandonedMineRollLayPicture});
+    // ... and the mine's guardian, beaten: the scene of its end goes on with the world's
+    r.netPictures.emplace(RoutineId::GuardianReaverbotUpdate,
+                          ContentRegistry::NetPicture{nullptr, nullptr, nullptr, &abandonedMineGuardianAdopt});
 }
 
 } // namespace od::content

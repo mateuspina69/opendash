@@ -109,6 +109,10 @@ struct ContentRegistry {
         // spawned takes the world's picture, to go on from where the world's is (it is put where the world's stands
         // first); none: `apply`
         void (*lay)(uint32_t actor, std::span<const uint8_t> picture) = nullptr;
+        // a class a scene goes on with that the rebuild does not spawn (a boss beaten, whose end the scene shows): the
+        // world's actor's copy, bound again in its slot after the rebuild, becomes this game's own actor through this
+        // (script: the scene's; false: not one this scene goes on with -- it goes, as the rest the rebuild did not spawn)
+        bool (*adopt)(const PlayerEnv& env, uint32_t actor, uint8_t script) = nullptr;
     };
     std::map<RoutineId, NetPicture> netPictures;
 

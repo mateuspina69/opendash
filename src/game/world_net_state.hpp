@@ -435,6 +435,8 @@ public:
     void submitLockPoints();
     // the actor this machine holds for a world's slot (none: not here)
     ActorHeader* mirrorOf(uint8_t slot) const { return slotOf(slot); }
+    // what the world named the actor of this slot by, as it appeared here
+    const NetActorIdentity& identityOf(uint8_t slot) const { return identity_[slot]; }
     // a shot of this player of the table runs here from its event (a swing, a beam): it lasts until the world's ends
     bool shotRunsFor(uint8_t tablePlayer) const;
     // shot pool slot `index` holds a world's shot started here from its event (another player's): not this machine's fire
@@ -466,6 +468,7 @@ private:
     bool shotsInOwnSlots_;
     uint8_t ownPlayerId_ = 0;
     std::array<bool, kNetSlots> animates_{}, held_{};
+    std::array<NetActorIdentity, kNetSlots> identity_{};
     std::array<uint32_t, kNetSlots> ownSlot_{}; // a world's shot in a slot of the client's: its address
     std::array<uint32_t, kNetSlots> ownSerial_{}; // ... and that slot's occupant count when it came
     std::array<std::optional<uint16_t>, kNetSlots> flashed_{}; // flashed on the last tick: the tint it had before
@@ -490,11 +493,14 @@ struct NetHeldRoom {
         std::vector<uint8_t> picture;
         Fixed16Vec3 pos{}; // where the world's stands, how it is turned
         ShortVec4 rotation{};
+        RoutineId classId = RoutineId::None; // its class, and what the world named it by (PoolNetActors::identityOf)
+        NetActorIdentity identity;
     };
     std::array<Slot, kNetSlots> slots{};
 };
-NetHeldRoom captureHeldRoom();
-void layHeldRoom(const NetHeldRoom& held);
+NetHeldRoom captureHeldRoom(const PoolNetActors& actors);
+// (script: the scene's)
+void layHeldRoom(const NetHeldRoom& held, const PlayerEnv& env, uint8_t script);
 bool netClientKeepsEffect(const EffectActor& e);
 // ... its class (what it plays it plays here: the world's copy of it is not driven)
 bool netClientKeepsClassOf(RoutineId id);
