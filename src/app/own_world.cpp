@@ -147,6 +147,7 @@ void OwnWorldClient::roomBound(int stage, int sub) {
     if (localScene_) { // a room the scene's script went to: its actors are this game's, as in the normal game
         room_ = WorldRoom{stage, sub};
         sceneMoved_ = true;
+        sceneLeaveTold_ = true; // (what the load did is not the scene's: nothing of this room change is told from here)
         return;
     }
     od::port::presentationLoopsClear();
@@ -420,7 +421,10 @@ void OwnWorldClient::turn(uint64_t nowNs) {
             sceneLeaveTold_ = true;
             od::port::GlobalChange change = od::port::globalWatchTake(uint8_t(room_->stage));
             change.zennyDelta.reset(); // (the world's count)
-            if (!change.empty()) pipe_->sendReliable(playerId_, WorldMessageType::GlobalChange, od::port::encode(change));
+            if (!change.empty()) {
+                SDL_Log("own world: the scene leaves the room: what it did here is told");
+                pipe_->sendReliable(playerId_, WorldMessageType::GlobalChange, od::port::encode(change));
+            }
         }
     } else if (stageHere) { // (a scene of this game's alone included: nobody else plays it)
         if (const od::port::GlobalChange change = od::port::globalWatchTake(uint8_t(room_->stage)); !change.empty())
