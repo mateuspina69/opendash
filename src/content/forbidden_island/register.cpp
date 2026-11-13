@@ -68,6 +68,9 @@ void registerForbiddenIslandClasses(ContentRegistry& r) {
         {RoutineId::St49DropshipCableUpdate, &st49DropshipCableUpdate},
         {RoutineId::RockBurstUpdate, &rockBurstUpdate},
     });
+    // a session's: the elephant, down -- the scene of its end goes on with the world's, its tusks as they broke
+    r.netPictures.emplace(RoutineId::ElephantBossUpdate,
+                          ContentRegistry::NetPicture{&elephantBossPicture, &elephantBossTakePicture, nullptr, &elephantBossAdoptDown});
 }
 
 } // namespace od::content

@@ -1988,7 +1988,7 @@ void layHeldRoom(const NetHeldRoom& held, const PlayerEnv& env, uint8_t script) 
         a.pos = a.prevPos = s.pos;
         a.rotation = a.prevRotation = s.rotation;
         const bool bound = s.identity.modelEntry != kNetNoModel && bindActorModelEntry(a, s.identity.modelEntry);
-        if (!bound || !it->second.adopt(env, a.at, script)) freeActor(head);
+        if (!bound || !it->second.adopt(env, a.at, script, s.picture)) freeActor(head);
     }
     applyActorFrees();
 }

@@ -7,6 +7,8 @@
 #pragma once
 
 #include <cstdint>
+#include <span>
+#include <vector>
 
 #include "engine/routine_ids.hpp"
 #include "game/actor_movement.hpp"
@@ -22,6 +24,11 @@ bool elephantScriptTick(const PlayerEnv& env, RoutineId handler);
 void st1dCrystalUpdate(const PlayerEnv& env, uint32_t actor);      // 0x590260 ST1D static type 1
 void elephantCutsceneUpdate(const PlayerEnv& env, uint32_t actor); // 0x4a9770 ST1D pool 0x20 type 0x34 sub 3
 void elephantBossUpdate(const PlayerEnv& env, uint32_t actor);     // 0x4a4fd0 ST1D pool 0x20 type 0x34 sub 2
+// OpenDash's co-op (ContentRegistry::netPictures): the boss's picture is its broken tusks; the world's boss, down, is
+// this game's own for the scene of its end (script 0x29) -- it goes on down, its blasts around it
+std::vector<uint8_t> elephantBossPicture(uint32_t actor);
+void elephantBossTakePicture(uint32_t actor, std::span<const uint8_t> picture);
+bool elephantBossAdoptDown(const PlayerEnv& env, uint32_t actor, uint8_t script, std::span<const uint8_t> picture);
 void st1dRockUpdate(const PlayerEnv& env, uint32_t actor);         // 0x5a51c0 ST1D static type 0x20 sub 0
 void st1dPillarUpdate(const PlayerEnv& env, uint32_t actor);       // 0x5a5530 ST1D static type 0x20 sub 1
 void st1dExitLightUpdate(const PlayerEnv& env, uint32_t actor);    // 0x5aa060 ST1D static type 0x28

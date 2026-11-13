@@ -24,7 +24,7 @@ inline AbandonedMineStageBlock& abandonedMineStageBlock() {
     return stageBlock().part<AbandonedMineStageBlock>();
 }
 // a session (ContentRegistry::netPictures adopt): the beaten guardian the end's scene goes on with is the stage block's
-bool abandonedMineGuardianAdopt(const PlayerEnv& env, uint32_t actor, uint8_t script);
+bool abandonedMineGuardianAdopt(const PlayerEnv& env, uint32_t actor, uint8_t script, std::span<const uint8_t> picture);
 
 // the scripts' ids (the story's script table: game/story)
 constexpr uint8_t kRuinLiftScript = 0x50;

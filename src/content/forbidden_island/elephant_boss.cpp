@@ -1750,29 +1750,13 @@ void bossSub(const PlayerEnv& env, AnimatedActor& a, BossFields& f) {
 // block for its tusk block (in the fourth block, cleared), the eight pillars (static 0x20 sub 1 on the cells of the
 // exe data 0x893d64), its encounter group, the boss gauge
 constexpr uint8_t kPillarSub = 1;
+void bossInitBound(AnimatedActor& a, BossFields& f);
 void bossInit(const PlayerEnv& env, AnimatedActor& a, BossFields& f) {
     if (!bindActorModel(a, 1)) {
         freeActor(a);
         return;
     }
-    a.flags |= kActorDrawn;
-    a.prevAnim = 0;
-    a.anim = 0;
-    {
-        const uint16_t hp =
-            hasAnimatedStats(a.type) ? uint16_t(uint32_t(elephantRow(a.type, a.spawnByte).hitPoints) << 4) : 0;
-        a.maxHitPoints = int16_t(hp);
-        a.hitPoints = int16_t(hp);
-    }
-    elephantCommonInit(a);
-    a.collisionBox.pointAt(TableId::ElephantBossBox);
-    a.actorHit = 0;
-    a.platform = nullptr;
-    a.clearClassBlock();
-    allocBoneBlocks(a, 1);
-    f.tuskBlock = ownBoneBlock(a, 3).at + 0x40;
-    f.tusks().clearBytes();
-    animSetPose(a, a.anim, 0);
+    bossInitBound(a, f);
     const DataArray<uint8_t> pillarCells(stateAddress(TableId::ElephantBossPillarCells)); // exe data: {column, row} of the eight pillars
     for (size_t k = 0; k < 8; ++k) {
         const uint32_t address = allocActor60(kActorStageClass);
@@ -1792,6 +1776,27 @@ void bossInit(const PlayerEnv& env, AnimatedActor& a, BossFields& f) {
     f.groupIndex = uint8_t(enemyGroupFind(actorSlotClass(a.slot), a.type, 1));
     hudAddBossGauge(a, 1, 4, 0xffffff);
     a.enterState(uint8_t(ElephantState::Main));
+}
+// (its model bound: the actor's own set-up)
+void bossInitBound(AnimatedActor& a, BossFields& f) {
+    a.flags |= kActorDrawn;
+    a.prevAnim = 0;
+    a.anim = 0;
+    {
+        const uint16_t hp =
+            hasAnimatedStats(a.type) ? uint16_t(uint32_t(elephantRow(a.type, a.spawnByte).hitPoints) << 4) : 0;
+        a.maxHitPoints = int16_t(hp);
+        a.hitPoints = int16_t(hp);
+    }
+    elephantCommonInit(a);
+    a.collisionBox.pointAt(TableId::ElephantBossBox);
+    a.actorHit = 0;
+    a.platform = nullptr;
+    a.clearClassBlock();
+    allocBoneBlocks(a, 1);
+    f.tuskBlock = ownBoneBlock(a, 3).at + 0x40;
+    f.tusks().clearBytes();
+    animSetPose(a, a.anim, 0);
 }
 // a tusk breaks: the first one's parts hidden (1 and 2, part 13 shown) or the second's (part 1, 13 hidden, part 12
 // shown)
@@ -2592,6 +2597,46 @@ bool elephantScriptTick(const PlayerEnv& env, RoutineId handler) {
 void st1dCrystalUpdate(const PlayerEnv&, uint32_t actor) { crystal(staticActorAt(actor)); }
 void elephantCutsceneUpdate(const PlayerEnv& env, uint32_t actor) { cutsceneElephant(env, animatedActorAt(actor)); }
 void elephantBossUpdate(const PlayerEnv& env, uint32_t actor) { boss(env, animatedActorAt(actor)); }
+
+namespace {
+constexpr uint8_t kPictureFirstTusk = 1, kPictureSecondTusk = 2;
+constexpr uint8_t kElephantStage = 0x1d, kBossDownScript = 0x29;
+constexpr uint8_t kDownAnim = 0xb, kDownStepFlagged = 3; // down()'s last step: lying, its flag set
+} // namespace
+
+std::vector<uint8_t> elephantBossPicture(uint32_t actor) {
+    const uint32_t flags = animatedActorAt(actor).bossFlags;
+    return {uint8_t(((flags & kBossFirstTuskBroken) ? kPictureFirstTusk : 0) | ((flags & kBossSecondTuskBroken) ? kPictureSecondTusk : 0))};
+}
+
+void elephantBossTakePicture(uint32_t actor, std::span<const uint8_t> picture) {
+    if (picture.size() != 1) return;
+    uint32_t& flags = animatedActorAt(actor).bossFlags;
+    flags &= ~(kBossFirstTuskBroken | kBossSecondTuskBroken);
+    if (picture[0] & kPictureFirstTusk) flags |= kBossFirstTuskBroken;
+    if (picture[0] & kPictureSecondTusk) flags |= kBossSecondTuskBroken;
+}
+
+bool elephantBossAdoptDown(const PlayerEnv&, uint32_t actor, uint8_t script, std::span<const uint8_t> picture) {
+    if (gameState().stage != kElephantStage || script != kBossDownScript) return false;
+    AnimatedActor& a = animatedActorAt(actor);
+    BossFields& f = classState<BossFields>(a);
+    bossInitBound(a, f);
+    const uint8_t tusks = picture.size() == 1 ? picture[0] : uint8_t(0);
+    if (tusks & kPictureFirstTusk) breakTusk(a, f);
+    if (tusks & kPictureSecondTusk) breakTusk(a, f);
+    f.groupIndex = uint8_t(enemyGroupFind(actorSlotClass(a.slot), a.type, 1));
+    hudAddBossGauge(a, 1, 4, 0xffffff);
+    a.hitPoints = -1;
+    f.deaths = 1;
+    a.enterState(uint8_t(ElephantState::Main));
+    a.subState = uint8_t(BossSub::Down);
+    a.clearStepBytes();
+    a.step = kDownStepFlagged;
+    a.anim = a.prevAnim = kDownAnim;
+    animSetPose(a, a.anim, 0);
+    return true;
+}
 void st1dRockUpdate(const PlayerEnv& env, uint32_t actor) { static20(env, staticActorAt(actor)); }
 void st1dPillarUpdate(const PlayerEnv& env, uint32_t actor) { static20(env, staticActorAt(actor)); }
 void st1dExitLightUpdate(const PlayerEnv&, uint32_t actor) { exitLight(staticActorAt(actor)); }

@@ -913,7 +913,7 @@ void runStep(const RoutineRef& routine) {
 
 } // namespace
 
-bool abandonedMineGuardianAdopt(const PlayerEnv& env, uint32_t actor, uint8_t script) {
+bool abandonedMineGuardianAdopt(const PlayerEnv& env, uint32_t actor, uint8_t script, std::span<const uint8_t>) {
     if (gameState().stage != kRuinStage || script != kGuardianEndScript) return false;
     guardianReaverbotAdoptBeaten(env, actor);
     abandonedMineStageBlock().guardian = &actorLayoutAt(actor);
