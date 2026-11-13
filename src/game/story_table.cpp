@@ -56,8 +56,9 @@ constexpr std::array kPlaces = {
     StoryPlace{0x18, kAnySub, kAnyStory, K::Mission, kNoFlag},
 };
 
-// the scripts that are one player's own: the armed exit's transition (a door's), the shop's menu
-constexpr uint8_t kExitTransitionScript = 0, kShopScript = 8;
+// the scripts that are one player's own: the armed exit's transition (a door's), the shop's menu, the stage's callback
+// (script 0x30: the development room's menu, whose script takes that player to its room and back)
+constexpr uint8_t kExitTransitionScript = 0, kShopScript = 8, kContentCallbackScript = 0x30;
 
 } // namespace
 
@@ -79,6 +80,10 @@ bool storyDoorGated(uint8_t fromStage, uint8_t toStage, int toSub, uint8_t story
 
 bool storyStageRunsAlone(uint8_t stage) { return stage >= 0x59 && stage <= 0x5b; }
 
-bool storyScriptGated(uint8_t script) { return script != kExitTransitionScript && script != kShopScript; }
+bool storyScriptGated(uint8_t script) {
+    return script != kExitTransitionScript && script != kShopScript && script != kContentCallbackScript;
+}
+
+bool storyScriptOwnRoom(uint8_t script) { return script == kContentCallbackScript; }
 
 } // namespace od::port

@@ -24,6 +24,9 @@ void scriptRun(uint8_t id);
 void scriptRunnerTick(const PlayerEnv& env);
 // A session's world: a scene waits at its start until the coordinator says everyone is there
 void setScriptsGated(bool gated);
+// A session's world: a script that is one player's own (a menu's: the shop's, the development room's) does not run there
+// until the world has seen its start -- their game plays it (or the world's scene of it starts)
+void setOwnScriptsHeld(bool held);
 // OpenDash's co-op: no script starts (scriptStart / scriptRun do nothing) while the room's logic is replayed to spawn what
 // it spawned (a session's game rebuilding its room for a scene), and while a game plays another player's event (the
 // scripts its message starts are that player's)

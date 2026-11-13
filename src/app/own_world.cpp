@@ -880,13 +880,7 @@ void OwnWorldClient::endFrame() {
             pipe_->sendReliable(playerId_, WorldMessageType::NetSpeaker, {ev.speakerAnimation});
             ev.speakerAnimation = od::port::kNoSpeakerAnimation;
         }
-        if (ev.active == 0) {
-            restoreEventInput(ev);
-            pipe_->sendReliable(playerId_, WorldMessageType::NetEventEnd,
-                                {uint8_t(eventTick_), uint8_t(eventTick_ >> 8), uint8_t(eventTick_ >> 16), uint8_t(eventTick_ >> 24)});
-            ownEvent_ = false;
-            sharedEvent_ = false;
-        }
+        ownEventOver();
     } else if (followEvent_) {
         od::port::EventState& ev = od::port::eventState();
         ev.speakerAnimation = od::port::kNoSpeakerAnimation; // the speaker is the world's: its owner's game asks it
@@ -962,6 +956,7 @@ void OwnWorldClient::movedTo(const std::vector<uint8_t>& to) {
 // this one did, later; its start, told again on the join, is not played a second time here
 void OwnWorldClient::localSceneTurn() {
     if (!localScene_) return;
+    ownEventOver(); // an event the scene began over (a talk's answer started it) ends under it, as in the normal game
     // a scene is over once its script has run here and ended (one the world started begins on the game's next frame)
     if (od::port::scriptState().inUse()) sceneRan_ = true;
     if (!sceneRan_ || sceneStart_) return;
@@ -1058,6 +1053,7 @@ void OwnWorldClient::storyMoveTurn() {
         od::port::clearStoryFlag(od::port::kFlagTransitionArmed);
         return;
     }
+    if (localScene_ && od::port::storyScriptOwnRoom(sceneScript_)) return; // a menu's room: this player's alone
     const bool ownStory = ownEvent_ || (localScene_ && !sceneHeard_ && sceneOwner_ == playerId_);
     if (!ownStory) return;
     std::vector<uint8_t> move = {r.destStage, r.destRoom};
@@ -1101,6 +1097,18 @@ void OwnWorldClient::liftPlace() {
     if (!copy || p.interactionTarget.actor.get() != copy || (p.carryFlags & od::port::kCarryReleased)) return;
     const std::array<int32_t, 3>& at = *lifted_->place;
     od::port::carryAtHandsOf(p, od::port::actorLayoutOf(*copy), at[0], at[1], at[2]);
+}
+
+// This player's event of the room's world is over here: its world ends it there (its speaker is free again), and the
+// others' copies of it
+void OwnWorldClient::ownEventOver() {
+    const od::port::EventState& ev = od::port::eventState();
+    if (!ownEvent_ || ev.active != 0) return;
+    restoreEventInput(ev);
+    pipe_->sendReliable(playerId_, WorldMessageType::NetEventEnd,
+                        {uint8_t(eventTick_), uint8_t(eventTick_ >> 8), uint8_t(eventTick_ >> 16), uint8_t(eventTick_ >> 24)});
+    ownEvent_ = false;
+    sharedEvent_ = false;
 }
 
 bool OwnWorldClient::eventTicking() const {

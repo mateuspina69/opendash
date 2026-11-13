@@ -668,6 +668,7 @@ int run(const WorldArgs& given) {
         });
         sceneGated = !od::port::storyOptionalStage(uint8_t(w.stage));
         od::port::setScriptsGated(sceneGated);
+        od::port::setOwnScriptsHeld(true);
         od::port::setWorldExitHook([&](const od::port::TransitionRequest& r) {
             SDL_Log("world: a transition armed: state %u kind %u exit %02x %02x %02x -> ST%02X sub %u at %d %d %d", unsigned(r.state),
                     unsigned(r.kind), unsigned(r.exitId), unsigned(r.exitByte1), unsigned(r.exitByte2), unsigned(r.destStage),
@@ -940,6 +941,7 @@ int run(const WorldArgs& given) {
         }
         if (now && !sceneOn) {
             sceneOn = true;
+            od::port::setOwnScriptsHeld(false);
             // who caused it (their talk, their step on its trigger) drives it; else the first one here
             const uint8_t cause = sceneCause != 0xff ? sceneCause : lastActorTicksAgo <= kSceneCauseTicks ? lastActor : uint8_t(0xff);
             sceneCause = 0xff;
@@ -970,6 +972,7 @@ int run(const WorldArgs& given) {
             sceneAsked = false;
             sceneGated = !od::port::storyOptionalStage(uint8_t(w.stage));
             od::port::setScriptsGated(sceneGated);
+            od::port::setOwnScriptsHeld(true);
             const od::port::Player& man = od::port::player();
             const auto half = [](int16_t v, std::vector<uint8_t>& o) {
                 o.push_back(uint8_t(v));
@@ -1231,6 +1234,8 @@ int run(const WorldArgs& given) {
             case WorldMessageType::NetUse:
                 if (m.playerId < od::port::kPlayerSlots && od::port::playerIsRemote(m.playerId)) {
                     od::port::remotePlayerUse(m.playerId);
+                    SDL_Log("world: player %u uses: %s", unsigned(m.playerId),
+                            od::port::playerById(m.playerId).interactionTarget.none() ? "nothing in reach" : "a target");
                     noteActor(m.playerId);
                 }
                 break;

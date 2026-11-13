@@ -283,6 +283,7 @@ private:
     std::optional<uint32_t> followEndAt_; // the owner's last tick of it (0: at once)
     uint32_t followSinceEnd_ = 0;         // ... this game's ticks since it was heard (one still waiting for its player)
     bool eventTicking() const;
+    void ownEventOver();
     void followEnd();
     uint8_t inputBeforeEvent_ = 0; // this player's input mode as the world's event began
     void restoreEventInput(const od::port::EventState& ev);
