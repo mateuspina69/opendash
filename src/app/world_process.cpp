@@ -62,6 +62,7 @@
 #include "game/world_view.hpp"
 #include "game/world_digest.hpp"
 #include "game/world_net_state.hpp"
+#include "game/story_flags.hpp"
 
 namespace od::app {
 
@@ -509,6 +510,9 @@ int run(const WorldArgs& given) {
         SDL_Log("world: %s", view->playError.c_str());
         return 1;
     }
+    // the story flags the room's logic starts from, before its first tick: a game that plays a scene of this room rebuilds
+    // the room with them (one that came in later holds the flags this room's first visit has set since)
+    const od::port::StoryFlags entryFlags = od::port::storyFlags();
     // the banks a script mapped before in the stage, as the game keeps them through its rooms (enterRoomOfState)
     if (w.stageBanks) view->applyStageBanks(*w.stageBanks);
     const auto guestState = [](const WorldArgs::Guest& g) {
@@ -926,6 +930,7 @@ int run(const WorldArgs& given) {
         start.playerId = client;
         const uint32_t at = scenePads.tick(); // a client joining during the scene: this many ticks in
         start.netState = {sceneOwner, sceneScript, 0, uint8_t(at), uint8_t(at >> 8), uint8_t(at >> 16), uint8_t(at >> 24)};
+        start.netState.insert(start.netState.end(), entryFlags.bytes.begin(), entryFlags.bytes.end());
         link->sendReliable(start);
     };
     // a script runs in the room: a scene, played once, with one Mega Man, for everyone in it

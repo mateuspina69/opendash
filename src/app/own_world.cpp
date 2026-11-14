@@ -668,6 +668,10 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
         const uint32_t at = m.netState.size() >= 7 ? uint32_t(m.netState[3]) | uint32_t(m.netState[4]) << 8 |
                                                         uint32_t(m.netState[5]) << 16 | uint32_t(m.netState[6]) << 24
                                                   : 0u;
+        // the story flags the room's world entered the room with: the scene's rebuild replays the room's logic from them,
+        // as the world's did (this game may have come in after the room's first visit set its flags)
+        if (m.netState.size() == 7 + od::port::kStoryFlagBytes && roomEntry_ && room_ && roomEntry_->room == *room_)
+            std::copy(m.netState.begin() + 7, m.netState.end(), roomEntry_->flags.bytes.begin());
         if (localScene_) { // started here on the room's first tick: the world's start confirms it and names its owner
             if (sceneHeard_) break;
             sceneHeard_ = true;
