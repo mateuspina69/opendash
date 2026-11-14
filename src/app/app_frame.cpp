@@ -309,6 +309,10 @@ void App::simStep(int gameFrames) {
 }
 
 void App::updateCamera() {
+    if (photo.active) { // the photo mode's free camera; the blend stays where the game stopped
+        photoCamera();
+        return;
+    }
     // free-fly debug camera: WASD + Q/E, Shift = fast, right mouse = look
     const bool* k = SDL_GetKeyboardState(nullptr);
     const bool typing = ImGui::GetIO().WantCaptureKeyboard;
@@ -623,7 +627,7 @@ void App::updateScene() {
             travelOffset(travel, o.tris);
             dynFrame.push_back(std::move(o));
         }
-        for (od::DynamicObject& o : playerView.reticleOverlay(current, cam)) {
+        for (od::DynamicObject& o : photo.active ? std::vector<od::DynamicObject>{} : playerView.reticleOverlay(current, cam)) {
             travelOffset(travel, o.tris);
             dynFrame.push_back(std::move(o));
         }
@@ -744,6 +748,11 @@ void App::drawOverlays() {
     vectorUi.setLanguage(od::lang::uiTextCode(playerView.language));
     messageUi.textScale = MessageUi::kTextScales[std::clamp(playerView.textSize, 0, 2)];
     vectorUi.textScale = messageUi.textScale;
+    if (photo.active) { // the photo mode: none of the game's 2D layer, its controls only
+        photoHint();
+        vectorUi.flush(*renderer);
+        return;
+    }
     if (playerView.play) {
         if (!messageUi.tried) messageUi.load(*renderer);
         if (!messageUi.hdTried) messageUi.loadHd(*renderer);
@@ -1036,6 +1045,8 @@ void App::present() {
         std::snprintf(suffix, sizeof suffix, "_t%04llu.jpg", (unsigned long long)simTicks);
         path += suffix;
         saveShot(path, width, height, px);
+    } else if (photo.active && photo.capture) {
+        photoSave();
     } else {
         renderer->draw(drawCam, nullptr, overlay);
     }

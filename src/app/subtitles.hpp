@@ -36,6 +36,11 @@ struct Subtitles {
     bool direct = false;  // subtitles_direct= 0|1
     // one frame: the line of the clip playing (if any) at the bottom of a width x height screen
     void draw(od::Renderer& r, ui::Canvas& cv, float width, float height);
+    // the game stood still `ns` (the photo mode): the lines timed by the wall clock wait as long
+    void holdClock(uint64_t ns) {
+        if (startedNs_) startedNs_ += ns;
+        if (sfxNs_) sfxNs_ += ns;
+    }
     void flush(od::Renderer& r) { font.flush(r); }
 
 private:

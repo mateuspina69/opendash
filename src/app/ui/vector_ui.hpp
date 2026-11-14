@@ -44,6 +44,9 @@ struct VectorUi {
                   float maxW, bool bold = false);
     // the caption `key` in this language; null = none (the pixel art stays)
     const std::string* word(const std::string& key) const;
+    // OpenDash: pad button `code` (input padButtonDown 1..12, 100 the d-pad) in the options' button style, its left at
+    // x, centred on y, h px high; returns its width (0: no font yet)
+    float padButton(od::Renderer& r, ui::Canvas& cv, int code, float x, float y, float h);
 
 private:
     struct Picture {

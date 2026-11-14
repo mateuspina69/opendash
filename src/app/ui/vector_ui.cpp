@@ -324,6 +324,11 @@ void VectorUi::textLeft(od::Renderer& r, ui::Canvas& cv, const std::string& t, f
     f.draw(cv, t, x, y, size, c, std::max(1.0f, size * 0.08f), ui::rgba(8, 8, 16));
 }
 
+float VectorUi::padButton(od::Renderer& r, ui::Canvas& cv, int code, float x, float y, float h) {
+    if (!fonts(r)) return 0.0f;
+    return drawPadCode(cv, bold_, code, x, y, h, buttonStyleDevice());
+}
+
 bool VectorUi::backdrop(od::Renderer& r, ui::Canvas& cv, float s, ui::Vec2 o, float extra) {
     Bitmap& b = backdrop_;
     if (!b.tried) {

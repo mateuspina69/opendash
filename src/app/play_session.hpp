@@ -239,6 +239,13 @@ struct PlayerView {
     mutable uint64_t arrivalRampStartNs = 0;
     static constexpr float kArrivalRampSeconds = 0.2f; // half the exit ramp (Herbert)
     bool exitFastForward() const;
+    // the game stood still `ns` (the photo mode): the last tick and the exit / arrival ramps, timed by the wall clock,
+    // as long later
+    void holdClock(uint64_t ns) {
+        if (logicNs) logicNs += ns;
+        if (exitRampStartNs) exitRampStartNs += ns;
+        if (arrivalRampStartNs) arrivalRampStartNs += ns;
+    }
     bool cutsceneHold() const; // black before a cutscene script takes the screen (see fade())
     bool fadeWhite() const; // fade types 9..0xc / 0x19..0x1c
     // the room in 0xa6d190 / 0xa6d191 (set by the transition) loaded and bound to the logic

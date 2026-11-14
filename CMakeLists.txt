@@ -483,3 +483,8 @@ add_executable(test_render_logic tests/test_render_logic.cpp)
 target_link_libraries(test_render_logic PRIVATE odrender)
 target_include_directories(test_render_logic PRIVATE tests)
 add_test(NAME test_render_logic COMMAND test_render_logic)
+
+add_executable(test_photo_mode tests/test_photo_mode.cpp src/app/photo_mode.cpp)
+target_link_libraries(test_photo_mode PRIVATE odrender)
+target_include_directories(test_photo_mode PRIVATE tests src)
+add_test(NAME test_photo_mode COMMAND test_photo_mode ${CMAKE_CURRENT_BINARY_DIR})

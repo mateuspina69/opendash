@@ -27,6 +27,7 @@
 #include "app/lobby.hpp"
 #include "app/model_clearance.hpp"
 #include "app/netplay.hpp"
+#include "app/photo_mode.hpp"
 #include "app/play_session.hpp"
 #include "app/room_mesh.hpp"
 #include "app/see_through.hpp"
@@ -288,6 +289,25 @@ struct App {
     uint64_t now = 0;
     float dt = 0.0f, alpha = 0.0f;
     const char* camSource = "orbit";
+    // the photo mode (app/photo_mode, app/app_photo.cpp): the game still, a free camera, no 2D layer, P / Esc
+    PhotoMode photo;
+    std::filesystem::path photosDir;   // photos/ next to opendash.exe
+    float photoWheel = 0.0f;           // the wheel's turns since the last frame (zoom)
+    float photoLook[2]{};              // the mouse's look since the last frame (radians)
+    uint64_t photoEnteredNs = 0;       // when it opened (the wall-clock timers wait as long)
+    uint64_t photoSavedAt = 0;         // when the last picture was saved (the "saved" line), 0 = none
+    std::string photoSavedName;
+    bool photoAllowed() const;
+    void photoEnter();
+    void photoLeave();
+    // an event while the mode is open, or the one that opens it; true = it was the photo mode's
+    bool photoEvent(const SDL_Event& e);
+    // the frame's camera from the photo mode's input (updateCamera while it is open)
+    void photoCamera();
+    // the released buttons of a closed mode: the game runs again (frame, before the ticks)
+    void photoResume();
+    void photoHint(); // the controls on the canvas (drawOverlays while it is open)
+    void photoSave(); // this frame's picture without the 2D layer (present)
 
     int run(int argc, char** argv);
 

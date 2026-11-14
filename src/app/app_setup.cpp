@@ -460,6 +460,7 @@ int App::init() {
     // saves: the game's DASH2-00..02.DAT (next to dash2.exe; only ever read) and OpenDash's own (saves/ next to
     // opendash.exe; "Salvar" writes there, in the game's format)
     savesDir = std::filesystem::path(SDL_GetBasePath() ? SDL_GetBasePath() : "") / "saves";
+    photosDir = savesDir.parent_path() / "photos";
     gameDir = cfg.exePath.parent_path();
     playerView.savesDir = savesDir;
     refreshSaves();

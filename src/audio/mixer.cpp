@@ -187,6 +187,17 @@ bool Mixer::open() {
     return true;
 }
 
+void Mixer::setPaused(bool paused) { // (the main thread's, as stream_ / haptic_: no lock_, the callback may hold it)
+    if (paused == paused_) return;
+    paused_ = paused;
+    for (SDL_AudioStream* s : {stream_, haptic_}) {
+        if (!s) continue;
+        if (paused) SDL_PauseAudioStreamDevice(s);
+        else SDL_ResumeAudioStreamDevice(s);
+    }
+    if (paused && haptic_) SDL_ClearAudioStream(haptic_); // the actuators stop now, not after the queued taps
+}
+
 bool Mixer::openHaptics() {
     std::lock_guard<std::mutex> g(lock_);
     if (haptic_) SDL_DestroyAudioStream(haptic_);
@@ -213,7 +224,7 @@ bool Mixer::openHaptics() {
     }
     hapticEnv_ = {};
     hapticPhase_ = {};
-    SDL_ResumeAudioStreamDevice(haptic_);
+    if (!paused_) SDL_ResumeAudioStreamDevice(haptic_);
     SDL_Log("audio: DualSense haptics on '%s'", SDL_GetAudioDeviceName(found));
     return true;
 }

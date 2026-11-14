@@ -53,6 +53,10 @@ public:
     bool openHaptics();
     bool hasHaptics() const { return haptic_ != nullptr; }
     void setHapticGain(float g); // 0..2 (F1 menu); 0 = off
+    // the output held where it is (OpenDash's photo mode): no sound and no haptics, every voice and stream keeps its
+    // place and plays on from it when let go
+    void setPaused(bool paused);
+    bool paused() const { return paused_; }
     float masterGain() const { return master_; }
     // peak |sample| of the output since the last call (0..1), per channel, and the number of samples mixed
     std::array<float, 2> takePeak();
@@ -126,6 +130,7 @@ private:
     std::vector<float> scratch_, decode_;
     SDL_AudioStream* haptic_ = nullptr; // the DualSense's output (4 channels)
     float hapticGain_ = 1.0f;
+    bool paused_ = false;
     std::vector<float> hapticBus_, hapticOut_;
     std::array<float, 4> hapticEnv_{};             // the envelope followers: light left / right, heavy left / right
     std::array<float, 2> hapticPhase_{};           // the carriers', in turns: light, heavy

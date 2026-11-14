@@ -15,4 +15,8 @@ std::string shotJpegPath(const std::string& path);
 // Logs and returns false on failure.
 bool saveShot(const std::string& path, int w, int h, const std::vector<uint8_t>& rgba);
 
+// The photo mode's picture: the RGBA8 pixels as an opaque PNG at `path` (its folder made). Logs and returns false on
+// failure.
+bool savePhoto(const std::string& path, int w, int h, const std::vector<uint8_t>& rgba);
+
 } // namespace od::app

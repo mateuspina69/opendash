@@ -94,7 +94,7 @@ void App::frame() {
     }
     handleEvents();
     // the buttons on every rendered frame, the game frames' poll ORs them in (a tap between two of them is not lost)
-    if (!showMenu && od::port::menuUnified()) tapLatch |= pollButtons(pad, playerView.play || titleScreen.active, false, false);
+    if (!showMenu && photo.gameRuns() && od::port::menuUnified()) tapLatch |= pollButtons(pad, playerView.play || titleScreen.active, false, false);
     now = SDL_GetTicksNS();
     // --shot: a fixed clock (half a sim step per frame) so images are reproducible
     const uint64_t step = ptSpeed > 0 && !playScript.empty() ? kSimStepNs * uint64_t(ptSpeed)
@@ -110,7 +110,10 @@ void App::frame() {
     }
 
     const uint64_t simAt = SDL_GetTicksNS();
-    if (paced()) { // the title / game frames run when the exe's pacer has them due (app/game_pacer)
+    photoResume();
+    if (!photo.gameRuns()) { // the photo mode: no tick, the pacer's clock stands (no catching up afterwards)
+        accumulator = 0;
+    } else if (paced()) { // the title / game frames run when the exe's pacer has them due (app/game_pacer)
         accumulator = 0;
         pacer.tick(step);
         while (paced() && pacer.next(od::port::display().pace)) simStep(1);
@@ -169,6 +172,7 @@ void App::handleEvents() {
     for (SDL_Event e; SDL_PollEvent(&e);) {
         ImGui_ImplSDL3_ProcessEvent(&e);
         notePromptEvent(e); // the device the button prompts show
+        if (photoEvent(e)) continue; // the photo mode's (app/app_photo): none of it reaches the game
         const ImGuiIO& io = ImGui::GetIO();
         if (!io.WantCaptureMouse) menuMouse(e); // the mouse on the sub-screens
         if (e.type == SDL_EVENT_QUIT) running = false;
@@ -268,7 +272,7 @@ void App::handleEvents() {
       // focus or Esc released it; scripted --shot runs never capture
         // a sub-screen (status, shop, lists) shows the pointer: the mouse picks its rows
         const bool capture = playerView.play && !showMenu && windowFocused && !escReleased && shotPath.empty() &&
-                             !pointerScreen();
+                             (!pointerScreen() || photo.active); // the photo mode looks with the mouse
         if (capture && !SDL_GetWindowRelativeMouseMode(window)) {
             SDL_SetWindowRelativeMouseMode(window, true);
             playCapture = true;
