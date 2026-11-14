@@ -291,7 +291,7 @@ void OwnWorldClient::bindWorld(int stage, int sub) {
     reported_ = {};
     ownEvent_ = false;
     gateAsked_ = false;
-    gateAtDoor_ = false;
+    gateExit_.reset();
     doorPass_ = false;
     bossFight_ = false;
     od::port::globalWatchRebase();
@@ -411,6 +411,7 @@ void OwnWorldClient::turn(uint64_t nowNs) {
         roomRebuild_ = true;
         SDL_Log("own world: a script of this game's started in the room's world (script %02x): a scene here", unsigned(script));
     }
+    if (noticeTicks_ > 0) --noticeTicks_; // a notice lasts its ticks, a scene playing here or not
     storyMoveTurn();
     sceneTurn();
     liftTurn();
@@ -730,18 +731,24 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
             break;
         }
         const std::vector<uint8_t> move(m.netState.begin(), m.netState.end() - 2);
-        if (gateAsked_ && gateAtDoor_) {
-            // the gate this player waited at, a door's, opens: the door's own script and scene go on here, as in the game
+        if (gateAsked_ && gateExit_) {
+            // the gate this player waited at opens: the exit's own script and scene go on here, as in the game (a door
+            // actor's talk, a door leaf opening, a passage walked through)
+            const od::port::TransitionRequest exit = *std::exchange(gateExit_, std::nullopt);
             gateAsked_ = false;
-            gateAtDoor_ = false;
             doorPass_ = true;
             if (move.size() >= 8) {
                 const auto half = [&](size_t i) { return int16_t(uint16_t(move[i] | move[i + 1] << 8)); };
                 doorArrival_ = std::array<int16_t, 5>{int16_t(move[0]), int16_t(move[1]), half(2), half(4), half(6)};
             }
-            od::port::transitionRequest().kind = uint8_t(od::port::TransitionKind::DoorActor);
-            od::port::setStoryFlag(od::port::kFlagTransitionArmed);
-            SDL_Log("own world: the gate opens: through the door");
+            if (exit.kind == uint8_t(od::port::TransitionKind::DoorActor)) {
+                od::port::transitionRequest().kind = exit.kind;
+                od::port::setStoryFlag(od::port::kFlagTransitionArmed);
+            } else {
+                od::port::transitionRequest() = exit;
+                od::port::transitionRequest().state = od::port::kTransitionAsked;
+            }
+            SDL_Log("own world: the gate opens: through the exit (kind %u)", unsigned(exit.kind));
             break;
         }
         pendingMove_ = move;
@@ -1228,7 +1235,6 @@ void OwnWorldClient::overridePad(uint16_t& buttons) {
 
 // An exit this player has taken: not while a story boss is being fought; at a gate they wait, with who is at it
 void OwnWorldClient::gateTurn() {
-    if (noticeTicks_ > 0) --noticeTicks_;
     if (gateGlow_) {
         if (--gateGlowTicks_ <= 0) gateGlow_.reset();
         else if (gateGlowTicks_ % 20 == 0) od::port::doorGlowAt((*gateGlow_)[0], (*gateGlow_)[1], (*gateGlow_)[2]);
@@ -1243,10 +1249,10 @@ void OwnWorldClient::gateTurn() {
     const bool gateWasAsked = gateAsked_;
     if (asked && g.gameMode() == od::port::GameMode::Field && g.fieldStep() == od::port::FieldStep::Playing) {
         const bool mission = od::port::storyPlaceOf(uint8_t(room_->stage), room_->sub, g.story) == od::port::StoryPlaceKind::Mission;
-        const bool door = r.kind == uint8_t(od::port::TransitionKind::DoorActor);
-        // the gate opened for this door: its script runs, its own asks too (the pass lasts until the room changes)
-        const bool passing = doorPass_ && door;
+        // the gate opened for this exit: its script runs, its own asks too (the pass lasts until the room changes)
+        const bool passing = doorPass_;
         const bool gated = !passing && (mission || od::port::storyDoorGated(uint8_t(room_->stage), r.destStage, r.destRoom, g.story));
+        const od::port::TransitionRequest exitAsked = r; // the exit's request, as it asked
         if (bossFight_ || testBossFight_ || gated) {
             r.state = od::port::kTransitionNone;
             od::port::clearStoryFlag(od::port::kFlagTransitionArmed);
@@ -1271,7 +1277,7 @@ void OwnWorldClient::gateTurn() {
                 move.push_back(uint8_t(mission ? 1 : 0));
                 pipe_->sendReliable(playerId_, WorldMessageType::NetGateAsk, std::move(move));
                 gateAsked_ = true;
-                gateAtDoor_ = door;
+                gateExit_ = exitAsked;
             }
         }
     }
@@ -1281,7 +1287,7 @@ void OwnWorldClient::gateTurn() {
     } else if (gateAsked_ && od::port::distance3(gatePlace_, od::port::player().pos) > kWalkedOff) {
         pipe_->sendReliable(playerId_, WorldMessageType::NetGateLeave, {});
         gateAsked_ = false;
-        gateAtDoor_ = false;
+        gateExit_.reset();
     }
 }
 

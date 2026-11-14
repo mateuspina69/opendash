@@ -27,6 +27,7 @@
 #include "game/save_menus.hpp"
 #include "game/room_scripts.hpp"
 #include "game/story_flags.hpp"
+#include "game/transition_state.hpp"
 #include "game/ghost_buffer.hpp"
 #include "game/player/net_player.hpp"
 #include "game/player/remote_combat.hpp"
@@ -200,10 +201,12 @@ private:
     std::string alert_;        // what went wrong (notice), shown until alertUntilNs_
     uint64_t alertUntilNs_ = 0;
     bool gateAsked_ = false;
-    bool gateAtDoor_ = false; // ... at a door actor: when the gate opens its own script plays here (doorPass_: let it by)
+    // ... the exit's request it stood at (a door actor's, a door leaf's, a passage's): when the gate opens the exit's own
+    // script plays here, its door opening as in the game (doorPass_: let it by)
+    std::optional<od::port::TransitionRequest> gateExit_;
     bool doorPass_ = false;
     std::optional<std::array<int16_t, 5>> doorArrival_; // stage, sub, x, y, z the coordinator gave this player: the spot
-                                                         // beside the others where the door's script arrives
+                                                         // beside the others where the exit's script arrives
     od::port::Fixed16Vec3 gatePlace_{};
     uint32_t testForceTick_ = 0;
     struct TestFlag {
