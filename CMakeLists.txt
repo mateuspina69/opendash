@@ -217,7 +217,11 @@ if(WIN32)
 endif()
 install(DIRECTORY assets DESTINATION .)
 
-# --- tests ---
+# --- tests: built by default in Debug only (a Release build makes the game alone); one test is still built with
+# --target <test>, all of them with --target tests; OD_BUILD_TESTS=OFF leaves them out of the project ---
+option(OD_BUILD_TESTS "the tests' targets (built by default in Debug only)" ON)
+if(OD_BUILD_TESTS)
+get_directory_property(od_targets_before_tests BUILDSYSTEM_TARGETS)
 enable_testing()
 # the test-only translator between the native game state and dash2.exe's memory layout (tests/translator: the goldens
 # compare the native state in the exe's layout; never linked into the game)
@@ -500,3 +504,19 @@ add_executable(test_photo_mode tests/test_photo_mode.cpp src/app/photo_mode.cpp)
 target_link_libraries(test_photo_mode PRIVATE odrender)
 target_include_directories(test_photo_mode PRIVATE tests src)
 add_test(NAME test_photo_mode COMMAND test_photo_mode ${CMAKE_CURRENT_BINARY_DIR})
+
+# every target above is a test's: out of the default build of the configurations but Debug. Visual Studio cannot vary
+# that by configuration: there they are out of every default build, and the target `tests` builds them all
+get_directory_property(od_test_targets BUILDSYSTEM_TARGETS)
+list(REMOVE_ITEM od_test_targets ${od_targets_before_tests})
+if(CMAKE_GENERATOR MATCHES "^Visual Studio")
+    set(od_test_exclude TRUE)
+else()
+    set(od_test_exclude "$<NOT:$<CONFIG:Debug>>")
+endif()
+add_custom_target(tests)
+foreach(t IN LISTS od_test_targets)
+    set_target_properties(${t} PROPERTIES EXCLUDE_FROM_ALL "${od_test_exclude}")
+    add_dependencies(tests ${t})
+endforeach()
+endif() # OD_BUILD_TESTS
