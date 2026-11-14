@@ -214,3 +214,11 @@ photo.mouse=Mouse
 photo.wheel=Wheel
 photo.lstick=L stick
 photo.rstick=R stick
+# OpenDash: the title menu's rows (the menu's face)
+menu.gamestart=GAME START
+menu.continue=CONTINUE
+menu.tutorial=TUTORIAL
+menu.options=OPTIONS
+menu.multiplayer=MULTIPLAYER
+menu.extras=EXTRAS
+menu.quit=QUIT

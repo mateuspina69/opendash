@@ -47,6 +47,11 @@ struct VectorUi {
     // OpenDash: pad button `code` (input padButtonDown 1..12, 100 the d-pad) in the options' button style, its left at
     // x, centred on y, h px high; returns its width (0: no font yet)
     float padButton(od::Renderer& r, ui::Canvas& cv, int code, float x, float y, float h);
+    // OpenDash: a word of the title menu's own rows in the menu's face (OpenDash Menu Bold; a script it lacks: the UI's
+    // bold face), centred on (cx, cy), its capitals cap px high (shrunk to maxW when wider), fill over an outline
+    // edge px wide, that over a rim rim px wider still
+    void menuWord(od::Renderer& r, ui::Canvas& cv, const std::string& t, float cx, float cy, float cap, float maxW,
+                  ui::Color fill, ui::Color edgeCol, float edge, ui::Color rimCol, float rim);
 
 private:
     struct Picture {
@@ -59,6 +64,7 @@ private:
     std::map<uint16_t, Picture> pics_;
     std::map<int, Picture> flags_; // the languages' flags (kLblFlag), by language base
     UiText bold_, regular_;
+    UiText menu_; // the title menu's face (assets/fonts/OpenDashMenu-Bold.ttf)
     std::string fontSet_; // the script bold_ / regular_ were loaded for ("jp" the full M+, "ko" / "zh" Noto CJK, "" Latin)
     std::string lang_;
     std::map<std::string, std::string> words_;

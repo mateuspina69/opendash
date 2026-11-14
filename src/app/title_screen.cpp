@@ -354,17 +354,7 @@ std::vector<TitleScreen::HdDraw> TitleScreen::hdTitle(od::Renderer& r, float s, 
             }
         }
     }
-    // the menu's rows closer than their 40 px (five or six rows: Extras, Quit): their words a little smaller, about
-    // each row's middle, so they keep apart (the rows' boxes -- the cursor, the mouse -- stay as the game set them)
-    float rowK = 1.0f;
-    {
-        std::vector<int> ys;
-        for (const SP& p : prims)
-            if (p.kind == SP::Sprite && p.row >= 0 && p.row < 16 && p.w == 0xd8 && p.h == 0x28) ys.push_back(p.y);
-        std::sort(ys.begin(), ys.end());
-        for (size_t i = 1; i < ys.size(); ++i)
-            if (ys[i] > ys[i - 1]) rowK = std::min(rowK, float(ys[i] - ys[i - 1]) * 1.05f / 40.0f);
-    }
+    const float rowK = rowScale();
     auto rowFit = [&](HdDraw d, const SP& p) {
         if (rowK >= 1.0f || p.row < 0 || p.row >= 16 || p.w != 0xd8 || p.h != 0x28) return d;
         const ui::Vec2 c(o.x + (float(p.x) + float(p.w) * 0.5f) * s, o.y + (float(p.y) + float(p.h) * 0.5f) * s);
@@ -373,13 +363,9 @@ std::vector<TitleScreen::HdDraw> TitleScreen::hdTitle(od::Renderer& r, float s, 
         return d;
     };
     for (const SP& p : prims) {
+        if (p.label == od::port::kLblTitleGameRow && menuWordOf(p)) continue; // its word in the menu's face (menuWords)
         if (p.kind == SP::Sprite && p.clut == 0x7dc0 && (p.tpage & 0x1f) >= 0x1a && (p.tpage & 0x1f) <= 0x1e) {
             if (!logo) rest.push_back(p);
-            continue;
-        }
-        if (p.label == od::port::kLblTitleExtras || p.label == od::port::kLblTitleQuit) { // OpenDash's rows: their
-            HdDraw d;                                                                       // words' pictures
-            if (extrasWord(r, p, s, o, d)) out.push_back(rowFit(d, p));
             continue;
         }
         // a 4-bit sprite with a vector picture of its pixels
@@ -459,54 +445,63 @@ void TitleScreen::draw(od::Renderer& r, ui::Canvas& cv, float width, float heigh
         const std::vector<HdDraw> hd = hdTitle(r, s, o, rest);
         painter.draw(r, mv, cv, rest, s, o, text, sw, sh, o.x / s); // widescreen: a Clip may open past the frame
         for (const HdDraw& d : hd) cv.image(d.tex, d.a, d.b, ui::Vec2(0.0f, 0.0f), ui::Vec2(1.0f, 1.0f), d.c);
+        menuWords(r, cv, s, o, true);
         return;
     }
-    // the pixel art: the Extras row has no sprite of its own, its word's picture is drawn over the painter's pass
-    std::vector<od::port::ScreenPrim> rest;
-    std::vector<HdDraw> extras;
-    rest.reserve(prims.size());
-    for (const od::port::ScreenPrim& p : prims) {
-        HdDraw d;
-        if (p.label != od::port::kLblTitleExtras && p.label != od::port::kLblTitleQuit) rest.push_back(p);
-        else if (extrasWord(r, p, s, o, d)) extras.push_back(d);
-    }
-    painter.draw(r, mv, cv, rest, s, o, text, sw, sh, o.x / s); // widescreen: a Clip may open past the frame
-    for (const HdDraw& d : extras) cv.image(d.tex, d.a, d.b, ui::Vec2(0.0f, 0.0f), ui::Vec2(1.0f, 1.0f), d.c);
+    // the pixel art; OpenDash's rows have no sprite of their own (mouse boxes only), their words over the painter's pass
+    painter.draw(r, mv, cv, prims, s, o, text, sw, sh, o.x / s); // widescreen: a Clip may open past the frame
+    menuWords(r, cv, s, o, false);
 }
 
-bool TitleScreen::extrasWord(od::Renderer& r, const od::port::ScreenPrim& p, float s, ui::Vec2 o, HdDraw& out) {
-    // assets/ui/title/<language>/extras_sel.svg (the cursor's row) / extras_nor.svg, else the English one; the Quit
-    // row's sair_sel.svg / sair_nor.svg
-    const bool quit = p.label == od::port::kLblTitleQuit;
-    const char* st = quit ? (p.labelArg ? "sair_sel" : "sair_nor") : (p.labelArg ? "extras_sel" : "extras_nor");
-    uint64_t key = 1469598103934665603ull;
-    for (const char ch : std::string(st) + "/" + uiLang) key = (key ^ uint8_t(ch)) * 1099511628211ull;
-    HdSprite& h = hdSprites[key];
-    if (!h.tried) {
-        h.tried = true;
-        const auto dir = assetsDir() / "ui" / "title";
-        for (const auto& path : {dir / uiLang / (std::string(st) + ".svg"), dir / "en" / (std::string(st) + ".svg")}) {
-            std::error_code ec;
-            if (!std::filesystem::exists(path, ec)) continue;
-            h.svg = std::make_unique<ui::Svg>();
-            if (h.svg->load(path)) break;
-            h.svg.reset();
-        }
+float TitleScreen::rowScale() const {
+    // the menu's rows closer than their 40 px (five rows or more: OpenDash's): their words a little smaller, about
+    // each row's middle, so they keep apart (the rows' boxes -- the cursor, the mouse -- stay as the game set them)
+    float k = 1.0f;
+    std::vector<int> ys;
+    for (const od::port::ScreenPrim& p : prims)
+        if (p.kind == od::port::ScreenPrim::Sprite && p.row >= 0 && p.row < 16 && p.w == 0xd8 && p.h == 0x28)
+            ys.push_back(p.y);
+    std::sort(ys.begin(), ys.end());
+    for (size_t i = 1; i < ys.size(); ++i)
+        if (ys[i] > ys[i - 1]) k = std::min(k, float(ys[i] - ys[i - 1]) * 1.05f / 40.0f);
+    return k;
+}
+
+const std::string* TitleScreen::menuWordOf(const od::port::ScreenPrim& p) const {
+    if (!painter.vector) return nullptr;
+    static const char* const kGame[4] = {"menu.gamestart", "menu.continue", "menu.tutorial", "menu.options"};
+    const char* key = p.label == od::port::kLblTitleMultiplayer                 ? "menu.multiplayer"
+                      : p.label == od::port::kLblTitleExtras                    ? "menu.extras"
+                      : p.label == od::port::kLblTitleQuit                      ? "menu.quit"
+                      : p.label == od::port::kLblTitleGameRow && p.labelRef < 4 ? kGame[p.labelRef]
+                                                                                : nullptr;
+    return key ? painter.vector->word(key) : nullptr;
+}
+
+void TitleScreen::menuWords(od::Renderer& r, ui::Canvas& cv, float s, ui::Vec2 o, bool gameRows) {
+    // the menu's words in the menu's face, yellow over a dark green outline like the game's sprites, centred on the
+    // row's 216 x 40 box, the menu's brightness on them: OpenDash's rows (game/title drawMenu: the lobby, Extras,
+    // Quit) always, the game's four with gameRows (the HD title; the pixel art keeps their sprites)
+    if (!painter.vector) return;
+    // the words' look: yellow, a green outline, a pale teal rim round it
+    constexpr float kCap = 22.0f, kEdge = 3.0f, kRim = 2.0f, kMaxW = 204.0f;
+    const float k = rowScale();
+    for (const od::port::ScreenPrim& p : prims) {
+        if (p.label == od::port::kLblTitleGameRow && !gameRows) continue;
+        const std::string* w = menuWordOf(p);
+        if (!w) continue;
+        const uint32_t v = std::min<uint32_t>((p.colour & 0xff) * 2, 255);
+        auto lit = [v](uint32_t c) { return c * v / 255; };
+        // the cursor's row a deep yellow over a near-black green, the others a pale yellow over a mid green (the
+        // game's two palettes, clut 0x7c00 / 0x7c40)
+        const bool on = p.labelArg != 0;
+        const ui::Color fill = on ? ui::rgba(lit(0xff), lit(0xff), lit(0x24), 255) : ui::rgba(lit(0xff), lit(0xff), lit(0x64), 255),
+                        edge = on ? ui::rgba(lit(0x08), lit(0x30), lit(0x14), 255) : ui::rgba(lit(0x48), lit(0x78), lit(0x50), 255),
+                        rim = ui::rgba(lit(0x80), lit(0xb8), lit(0xa8), 255);
+        painter.vector->menuWord(r, cv, *w, o.x + (float(p.x) + float(p.w) * 0.5f) * s,
+                                 o.y + (float(p.y) + float(p.h) * 0.5f) * s, kCap * k * s, kMaxW * s, fill, edge,
+                                 kEdge * k * s, rim, kRim * k * s);
     }
-    if (!h.svg) return false;
-    if (!h.tex || h.scale != s) {
-        if (h.tex) r.destroyTexture(h.tex);
-        const std::vector<uint32_t> px = h.svg->rasterize(s, h.w, h.h);
-        h.tex = px.empty() ? 0 : r.createTexture(h.w, h.h, px.data());
-        h.scale = s;
-    }
-    if (!h.tex) return false;
-    // centred on the row's 216 x 40 box, as the other rows' pictures
-    const float mx = (h.svg->width() - float(p.w)) * 0.5f, my = (h.svg->height() - float(p.h)) * 0.5f;
-    const ui::Vec2 a(o.x + (float(p.x) - mx) * s, o.y + (float(p.y) - my) * s);
-    const uint32_t v = std::min<uint32_t>((p.colour & 0xff) * 2, 255);
-    out = {h.tex, a, ui::Vec2(a.x + float(h.w), a.y + float(h.h)), ui::rgba(v, v, v, 255)};
-    return true;
 }
 
 } // namespace od::app

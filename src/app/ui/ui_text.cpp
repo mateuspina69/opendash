@@ -45,8 +45,12 @@ void UiText::flush(od::Renderer& r) {
 float UiText::width(std::string_view text, float px) {
     float w = 0.0f;
     const int ipx = int(std::lround(px));
+    uint32_t prev = 0;
     for (size_t i = 0; i < text.size();)
-        if (const uint32_t cp = nextCodepoint(text, i)) w += font.glyph(cp, ipx, 0).advance;
+        if (const uint32_t cp = nextCodepoint(text, i)) {
+            w += pairKern(prev, cp, ipx) + font.glyph(cp, ipx, 0).advance;
+            prev = cp;
+        }
     return w;
 }
 
@@ -62,16 +66,22 @@ void UiText::draw(ui::Canvas& cv, std::string_view text, float x, float y, float
     };
     if (ie) { // the outlines first: a glyph's outline never covers its neighbour's fill
         float pen = x;
+        uint32_t prev = 0;
         for (size_t i = 0; i < text.size();) {
             const uint32_t cp = nextCodepoint(text, i);
+            pen += pairKern(prev, cp, ipx);
+            prev = cp;
             const ui::Font::Glyph g = font.glyph(cp, ipx, ie);
             if (g.ok) put(g, pen, edgeCol);
             pen += font.glyph(cp, ipx, 0).advance;
         }
     }
     float pen = x;
+    uint32_t prev = 0;
     for (size_t i = 0; i < text.size();) {
         const uint32_t cp = nextCodepoint(text, i);
+        pen += pairKern(prev, cp, ipx);
+        prev = cp;
         const ui::Font::Glyph g = font.glyph(cp, ipx, 0);
         if (g.ok) put(g, pen, col);
         pen += g.advance;

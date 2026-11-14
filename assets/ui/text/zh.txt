@@ -214,3 +214,11 @@ photo.mouse=鼠标
 photo.wheel=滚轮
 photo.lstick=左摇杆
 photo.rstick=右摇杆
+# OpenDash: the title menu's rows (the menu's face)
+menu.gamestart=开始游戏
+menu.continue=继续
+menu.tutorial=教程
+menu.options=选项
+menu.multiplayer=多人游戏
+menu.extras=特典
+menu.quit=退出

@@ -15,6 +15,7 @@ struct UiText {
     ui::Font font;
     od::TextureHandle tex = 0;
     bool tried = false;
+    bool kerning = false; // the font's pair kerning applied (the title menu's face; the UI's fonts are laid out without)
 
     bool load(od::Renderer& r, const std::filesystem::path& ttf);
     // the glyphs rasterized while this frame's canvas was built, before it is drawn
@@ -25,6 +26,8 @@ struct UiText {
     float em(float cap) const { return font.emForCapHeight(cap); }
     // the advance of `text` at em `px`
     float width(std::string_view text, float px);
+    // the kerning between a and b at em px (0 without kerning or a first letter)
+    float pairKern(uint32_t a, uint32_t b, int px) const { return kerning && a ? font.kern(a, b, px) : 0.0f; }
     // `text` with its baseline at y from x; edge > 0: an outline that many px wide in `edgeCol` under it
     void draw(ui::Canvas& cv, std::string_view text, float x, float y, float px, ui::Color col, float edge = 0.0f,
               ui::Color edgeCol = 0);

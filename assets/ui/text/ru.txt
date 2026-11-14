@@ -202,3 +202,11 @@ musicval.1.1=< Версия США >
 # OpenDash: панель теста звука
 bar.play=Играть
 bar.stop=Стоп
+# OpenDash: the title menu's rows (the menu's face)
+menu.gamestart=НОВАЯ ИГРА
+menu.continue=ПРОДОЛЖИТЬ
+menu.tutorial=ОБУЧЕНИЕ
+menu.options=НАСТРОЙКИ
+menu.multiplayer=МУЛЬТИПЛЕЕР
+menu.extras=ДОПОЛНЕНИЯ
+menu.quit=ВЫХОД

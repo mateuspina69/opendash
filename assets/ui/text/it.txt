@@ -221,3 +221,11 @@ photo.mouse=Mouse
 photo.wheel=Rotella
 photo.lstick=Levetta S
 photo.rstick=Levetta D
+# OpenDash: the title menu's rows (the menu's face)
+menu.gamestart=NUOVA PARTITA
+menu.continue=CONTINUA
+menu.tutorial=TUTORIAL
+menu.options=OPZIONI
+menu.multiplayer=MULTIGIOCATORE
+menu.extras=EXTRA
+menu.quit=ESCI

@@ -112,8 +112,13 @@ struct TitleScreen {
         ui::Color c;
     };
     std::vector<HdDraw> hdTitle(od::Renderer& r, float s, ui::Vec2 o, std::vector<od::port::ScreenPrim>& rest);
-    // OpenDash: the menu's Extras row (kLblTitleExtras) as its word's picture; false = no picture
-    bool extrasWord(od::Renderer& r, const od::port::ScreenPrim& p, float s, ui::Vec2 o, HdDraw& out);
+    // the menu's rows' closeness: 1 at the game's 40 px step, smaller when OpenDash's rows bring them closer
+    float rowScale() const;
+    // OpenDash: the menu's rows as words in the menu's face (assets/ui/text menu.*): OpenDash's own
+    // (kLblTitleMultiplayer / kLblTitleExtras / kLblTitleQuit) always, the game's four (kLblTitleGameRow) with gameRows
+    void menuWords(od::Renderer& r, ui::Canvas& cv, float s, ui::Vec2 o, bool gameRows);
+    // a menu row's word in this language; null = none (a game row keeps its sprite)
+    const std::string* menuWordOf(const od::port::ScreenPrim& p) const;
     void draw(od::Renderer& r, ui::Canvas& cv, float width, float height,
               const std::function<void(const od::port::ScreenPrim&, float, ui::Vec2)>& textAt);
 };

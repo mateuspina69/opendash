@@ -97,7 +97,8 @@ The OpenDash source code is released under the BSD 2-Clause license (see `LICENS
 original work of the OpenDash contributors; it grants no rights to the original game, its code, its data or Capcom's
 trademarks. Bundled third-party files keep
 their own licenses (the M PLUS Rounded 1c fonts are under the SIL Open Font License, see
-`assets/fonts/OFL.txt`; the Noto Sans CJK fonts too, see `assets/fonts/LICENSE-NotoSansCJK.txt`).
+`assets/fonts/OFL.txt`; the Noto Sans CJK fonts too, see `assets/fonts/LICENSE-NotoSansCJK.txt`). The title
+menu's face, OpenDash Menu, is OpenDash's own, under the SIL Open Font License (`assets/fonts/OFL-OpenDashMenu.txt`).
 
 ## Thanks
 

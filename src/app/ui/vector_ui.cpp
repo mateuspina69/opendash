@@ -97,6 +97,30 @@ bool VectorUi::fonts(od::Renderer& r) {
 void VectorUi::flush(od::Renderer& r) {
     bold_.flush(r);
     regular_.flush(r);
+    menu_.flush(r);
+}
+
+void VectorUi::menuWord(od::Renderer& r, ui::Canvas& cv, const std::string& t, float cx, float cy, float cap,
+                        float maxW, ui::Color fill, ui::Color edgeCol, float edge, ui::Color rimCol, float rim) {
+    if (t.empty()) return;
+    if (!menu_.tried) {
+        menu_.font.octagonOutline = true; // the face's cut corners stay cut in its outline
+        menu_.kerning = true;
+        menu_.load(r, assetsDir() / "fonts" / "OpenDashMenu-Bold.ttf");
+    }
+    // the menu's face when it has every letter of the word (Latin), else the UI's bold face of the language's script
+    bool covered = menu_.ready();
+    for (size_t i = 0; covered && i < t.size();)
+        if (const uint32_t c = nextCodepoint(t, i); c != 0 && c != ' ' && !menu_.font.has(c)) covered = false;
+    if (!covered && !fonts(r)) return;
+    UiText& f = covered ? menu_ : bold_;
+    float px = f.em(cap);
+    const float w = f.width(t, px);
+    const float k = w > maxW && w > 0.0f ? maxW / w : 1.0f; // (a long word: smaller, its outline with it)
+    px *= k;
+    const float x = cx - f.width(t, px) * 0.5f, y = cy + cap * k * 0.5f;
+    if (rim > 0.0f) f.draw(cv, t, x, y, px, rimCol, (edge + rim) * k, rimCol); // the rim: the word grown, all its colour
+    f.draw(cv, t, x, y, px, fill, edge * k, edgeCol);
 }
 
 namespace {

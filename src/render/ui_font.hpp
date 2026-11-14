@@ -21,6 +21,9 @@ public:
     bool load(const std::filesystem::path& ttf);
     bool loaded() const { return !data_.empty(); }
     bool has(uint32_t codepoint) const;
+    // the outline grown by an octagon instead of a disc: an angular face's 45-degree cuts stay cut (set before the
+    // first glyph)
+    bool octagonOutline = false;
     // em size of a font whose capital letters are `cap` pixels high
     float emForCapHeight(float cap) const;
 

@@ -4,6 +4,7 @@
 #include "game/title.hpp"
 #include "game/title_state.hpp"
 
+#include <algorithm>
 #include <stdexcept>
 #include <string>
 
@@ -62,11 +63,10 @@ constexpr uint16_t kScanTicks = 0x10;
 constexpr uint16_t kIdleTicksPerPace = 0x100, kSlideTicksPerPace = 0x400;
 constexpr uint8_t kCursorSlideTicks = 3;
 constexpr uint8_t kPaceSteps = 3; // the pace's complement the timers scale by
-// the menu's rows / the difficulty choice's last row
-constexpr int kMenuLastRow = 3;
-// OpenDash's rows after the game's four, each only with its host hook: the multiplayer lobby (TitleHost::lobby), Extras
-// (TitleHost::extras), Quit (TitleHost::quit); their words are the host's pictures (ScreenPrim::label kLblTitleExtras /
-// kLblTitleQuit) or, for the lobby, text in the game's font. With more rows they come closer (the steps below) so the
+// OpenDash's rows, each only with its host hook: the multiplayer lobby (TitleHost::lobby) and Extras
+// (TitleHost::extras) between the game's Tutorial and Options, Quit (TitleHost::quit) last -- Options and Quit always
+// close the menu (menuItems); the host draws their words (ScreenPrim::label kLblTitleMultiplayer /
+// kLblTitleExtras / kLblTitleQuit on the rows' mouse boxes). With more rows they come closer (the steps below) so the
 // last stays above the screen's bottom.
 constexpr int kExtrasRowStep = 0x24;                   // five rows
 constexpr int kSixRowStep = 0x20, kSixRowTop = 0x10c;  // six
@@ -122,16 +122,32 @@ bool lobbyOffered() { return H && bool(H->lobby); }
 bool extrasOffered() { return H && H->extras && H->extras(); }
 bool quitOffered() { return H && bool(H->quit); }
 bool gQuitAsked = false; // the Quit row was chosen: the app is closing
-// the rows of OpenDash's entries (each only when offered), the last row
-int multiplayerRow() { return 4; }
-int extrasRow() { return 4 + (lobbyOffered() ? 1 : 0); }
-int quitRow() { return extrasRow() + (extrasOffered() ? 1 : 0); }
-int menuLastRow() { return quitRow() - (quitOffered() ? 0 : 1); }
-// the step a row's confirm goes to (the game's four: Choose + 1 + the row)
+// the menu's items: the game's four (their sprite's index: game start, continue, tutorial, options), OpenDash's
+enum MenuItem : int { kItemGameStart = 0, kItemContinue, kItemTutorial, kItemOptions, kItemMultiplayer, kItemExtras, kItemQuit };
+constexpr int kMaxMenuRows = 7;
+// the items top to bottom (each of OpenDash's only when offered); returns how many
+int menuItems(int (&items)[kMaxMenuRows]) {
+    int n = 0;
+    items[n++] = kItemGameStart;
+    items[n++] = kItemContinue;
+    items[n++] = kItemTutorial;
+    if (lobbyOffered()) items[n++] = kItemMultiplayer;
+    if (extrasOffered()) items[n++] = kItemExtras;
+    items[n++] = kItemOptions;
+    if (quitOffered()) items[n++] = kItemQuit;
+    return n;
+}
+int menuLastRow() {
+    int items[kMaxMenuRows];
+    return menuItems(items) - 1;
+}
+// the step a row's confirm goes to (the game's four: Choose + 1 + the item)
 uint8_t rowStep(int row, uint8_t choose) {
-    if (row < 4) return uint8_t(uint8_t(row) + choose + 1u);
-    if (lobbyOffered() && row == multiplayerRow()) return uint8_t(TitleMenuStep::Multiplayer);
-    if (extrasOffered() && row == extrasRow()) return uint8_t(TitleMenuStep::Extras);
+    int items[kMaxMenuRows];
+    const int n = menuItems(items), item = items[std::clamp(row, 0, n - 1)];
+    if (item <= kItemOptions) return uint8_t(uint8_t(item) + choose + 1u);
+    if (item == kItemMultiplayer) return uint8_t(TitleMenuStep::Multiplayer);
+    if (item == kItemExtras) return uint8_t(TitleMenuStep::Extras);
     return uint8_t(TitleMenuStep::Quit);
 }
 // a full-width G4 band from y0 to y1, `top` above, `bottom` below
@@ -214,43 +230,29 @@ void drawMenu() {
     TitleBlock& t = titleBlock();
     const uint32_t col = grey(t.brightness);
     const int cur = t.menuRow;
-    const bool extras = extrasOffered(), quit = quitOffered();
-    const int rows = menuLastRow() + 1;
+    int items[kMaxMenuRows];
+    const int rows = menuItems(items);
     const int step = rows >= 7 ? kSevenRowStep : rows == 6 ? kSixRowStep : rows == 5 ? kExtrasRowStep : 0x28;
     const int top = rows >= 7 ? kSevenRowTop : rows == 6 ? kSixRowTop : 0x110;
-    for (int i = 0; i < 4; ++i) {
+    for (int i = 0; i < rows; ++i) {
         const bool on = i == cur;
         gTitleRow = int16_t(i);
-        sprite(0xd4, top + i * step, 0xd8, 0x28, 0, i * 0x28, on ? 0x20a : 0x20b, on ? 0x7c00 : 0x7c40, col);
-    }
-    if (lobbyOffered()) { // the multiplayer lobby, in the game's font
-        const int i = multiplayerRow(), y = top + i * step;
-        ScreenPrim hit; // the mouse's target: the row's box
-        hit.kind = ScreenPrim::Sprite;
-        hit.hitOnly = true;
-        hit.row = int16_t(i);
-        hit.x = 0xd4;
-        hit.y = int16_t(y);
-        hit.w = 0xd8;
-        hit.h = 0x28;
-        D->push_back(hit);
-        ScreenPrim text;
-        text.kind = ScreenPrim::Text;
-        text.utf8 = "MULTIPLAYER";
-        text.x = text.ax = 0xd4 + 0x24;
-        text.y = int16_t(y + 0xe);
-        text.colour = cur == i ? col : grey(uint32_t(t.brightness) * 0x58 >> 7);
-        D->push_back(text);
-    }
-    // the host's pictures of the words (chosen / not), in the rows' place and size
-    auto word = [&](int i, uint16_t label) {
-        gTitleRow = int16_t(i);
+        if (items[i] <= kItemOptions) { // the game's word: its sprite (the host may draw its word in the menu's face)
+            sprite(0xd4, top + i * step, 0xd8, 0x28, 0, items[i] * 0x28, on ? 0x20a : 0x20b, on ? 0x7c00 : 0x7c40, col);
+            D->back().label = kLblTitleGameRow;
+            D->back().labelRef = uint32_t(items[i]);
+            D->back().labelArg = on ? 1 : 0;
+            continue;
+        }
+        // OpenDash's rows: the row's box (the mouse's target, nothing drawn of it), its label for the host's word (arg
+        // 1 = the cursor's row), the menu's brightness in its colour
         sprite(0xd4, top + i * step, 0xd8, 0x28, 0, 0, 0x20a, 0x7c00, col);
-        D->back().label = label;
-        D->back().labelArg = cur == i ? 1 : 0;
-    };
-    if (extras) word(extrasRow(), kLblTitleExtras);
-    if (quit) word(quitRow(), kLblTitleQuit);
+        D->back().hitOnly = true;
+        D->back().label = items[i] == kItemMultiplayer ? kLblTitleMultiplayer
+                          : items[i] == kItemExtras    ? kLblTitleExtras
+                                                       : kLblTitleQuit;
+        D->back().labelArg = on ? 1 : 0;
+    }
     const int row = (int(t.previousRow) - cur) * int(int8_t(t.slideTicks)) + cur * 4;
     sprite(cursorWobble() + 0xac, top + 4 + row * step / 4, 0x20, 0x20, 0xe0, 0, 0x20a, 0x7c01, col);
 }

@@ -201,3 +201,11 @@ photo.mouse=マウス
 photo.wheel=ホイール
 photo.lstick=左スティック
 photo.rstick=右スティック
+# OpenDash: the title menu's rows (the menu's face)
+menu.gamestart=ゲームスタート
+menu.continue=コンティニュー
+menu.tutorial=チュートリアル
+menu.options=オプション
+menu.multiplayer=マルチプレイ
+menu.extras=おまけ
+menu.quit=おわる

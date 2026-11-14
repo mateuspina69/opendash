@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <fstream>
 #include <iterator>
 
@@ -86,7 +87,7 @@ const Font::Glyph& Font::glyph(uint32_t cp, int px, int outline) {
     }
     std::vector<uint8_t> cov(size_t(w) * size_t(h), 0);
     stbtt_MakeGlyphBitmap(fi, &cov[size_t(pad) * size_t(w) + size_t(pad)], bx1 - bx0, by1 - by0, w, scale, scale, gi);
-    if (outline > 0) { // grown by the disc of radius r (its rim antialiased)
+    if (outline > 0) { // grown by the disc (or the octagon) of radius r (its rim antialiased)
         std::vector<uint8_t> grown(cov.size(), 0);
         const float r = float(outline);
         for (int y = 0; y < h; ++y)
@@ -100,7 +101,10 @@ const Font::Glyph& Font::glyph(uint32_t cp, int px, int outline) {
                         if (sx < 0 || sx >= w) continue;
                         const float c = cov[size_t(sy) * size_t(w) + size_t(sx)];
                         if (c <= best) continue;
-                        const float wgt = std::clamp(r + 0.5f - std::sqrt(float(dx * dx + dy * dy)), 0.0f, 1.0f);
+                        const float ax = float(std::abs(dx)), ay = float(std::abs(dy));
+                        const float d = octagonOutline ? std::max(std::max(ax, ay), (ax + ay) * 0.70710678f)
+                                                       : std::sqrt(ax * ax + ay * ay);
+                        const float wgt = std::clamp(r + 0.5f - d, 0.0f, 1.0f);
                         best = std::max(best, c * wgt);
                     }
                 }

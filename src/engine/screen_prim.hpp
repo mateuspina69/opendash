@@ -73,13 +73,17 @@ enum VecLabel : uint16_t {
                         // primitive's utf8: arg = 0 another value, 1 the chosen one, 2 a label
     kLblFlag,           // OpenDash (Herbert): a language's flag (assets/ui/flags/<code>.svg) right-aligned in the box, its
                         // height the box's: arg = the language base (engine/lang languageBase: 0 jp .. 8 zh, 9 zh traditional)
-    kLblTitleExtras,    // OpenDash: the title menu's Extras row (game/title drawMenu, 216 x 40): the host draws its word
-                        // (assets/ui/title/<language>/extras_sel.svg / extras_nor.svg): arg 1 = the cursor's row
-    kLblTitleQuit,      // OpenDash: the title menu's Quit row (under Extras): its word sair_sel.svg / sair_nor.svg, arg as above
+    kLblTitleExtras,    // OpenDash: the title menu's Extras row (game/title drawMenu, 216 x 40, a mouse box): the host
+                        // draws its word (menu.extras): arg 1 = the cursor's row
+    kLblTitleQuit,      // OpenDash: the title menu's Quit row (under Extras): its word menu.quit, arg as above
     kLblBarrier,        // OpenDash: the equipment's barrier badge (32 x 32 green octagon): arg 0 flame, 1 light (barrier.<arg>)
     kLblVideoIcon,      // OpenDash (Herbert: icons that mean the lines): the screen row's overlay icons (25 x 25) drawn in
                         // HD -- arg 0 the anti-aliasing, 1 the resolution, 2 the display mode (the exe's art says
                         // Video / Mouse / Keyboard)
+    kLblTitleMultiplayer, // OpenDash: the title menu's multiplayer row (the lobby): its word menu.multiplayer, arg as
+                          // kLblTitleExtras
+    kLblTitleGameRow,     // OpenDash: one of the title menu's four game rows (its sprite): ref = the item (0 game start,
+                          // 1 continue, 2 tutorial, 3 options), arg as kLblTitleExtras; the HD title draws its word instead
 };
 
 struct ScreenPrim {

@@ -214,3 +214,11 @@ photo.mouse=마우스
 photo.wheel=휠
 photo.lstick=왼쪽 스틱
 photo.rstick=오른쪽 스틱
+# OpenDash: the title menu's rows (the menu's face)
+menu.gamestart=게임 시작
+menu.continue=이어하기
+menu.tutorial=튜토리얼
+menu.options=옵션
+menu.multiplayer=멀티플레이
+menu.extras=엑스트라
+menu.quit=종료
