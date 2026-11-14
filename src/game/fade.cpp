@@ -4,6 +4,7 @@
 
 #include "game/display.hpp"
 #include "game/fade_state.hpp"
+#include "game/transition_state.hpp"
 
 #include <algorithm>
 
@@ -12,6 +13,20 @@ namespace od::port {
 namespace {
 
 int gExitWipeTicks = 12;
+bool gQuickDoorExits = false;
+
+// the exits through a door: the door's leaves (or the door actor) play before the PS1's wipe
+bool doorExit(uint8_t kind) {
+    switch (TransitionKind(kind)) {
+    case TransitionKind::HingedDoor:
+    case TransitionKind::DoubleDoor:
+    case TransitionKind::SlidingPair:
+    case TransitionKind::Passage:
+    case TransitionKind::DoorActor: return true;
+    default: return false;
+    }
+}
+bool quickKind(uint8_t kind) { return gQuickDoorExits || !doorExit(kind); }
 
 // What a request sets up (exe 0x53f6b0's switch)
 enum class FadeSetup : uint8_t {
@@ -74,10 +89,10 @@ constexpr int16_t kSecondBufferY = 0x100;
 // the strip count of a wipe's Strips phase by its type
 uint8_t wipeStripCount(FadeType type) {
     const FadeState& f = fadeState();
-    // OpenDash: the exits' wipe (room_triggers kExitFadeOut), not the PS1's 63 / 127 ticks of strips (they held the
+    // OpenDash: a quick exit's wipe (room_triggers kExitFadeOut), not the PS1's 63 / 127 ticks of strips (they held the
     // next room's load back by one or two seconds): 2 ticks when the presentation faded the screen out over the end of
     // the walk-out, 12 (0.4 s) when it could not know that end and fades over the wipe (setExitWipeTicks)
-    if (type == FadeType::Wipe28) return uint8_t(gExitWipeTicks);
+    if (type == FadeType::Wipe28 && quickExit()) return uint8_t(gExitWipeTicks);
     if (type == FadeType::Wipe20) return uint8_t(((~f.variant & 2u) << 4) | 0x1fu);
     if (type == FadeType::Wipe2A) return 0x3f;
     return uint8_t(((((uint32_t(display().mode) + 1u) >> 1) + 1u) << 6) - 1u);
@@ -165,6 +180,13 @@ void approximatedSlideTick(FadeTask& fade) {
 } // namespace
 
 void setExitWipeTicks(int ticks) { gExitWipeTicks = std::clamp(ticks, 1, 0x7f); }
+void setQuickDoorExits(bool on) { gQuickDoorExits = on; }
+bool quickDoorExits() { return gQuickDoorExits; }
+bool quickExit() {
+    const TransitionRequest& r = transitionRequest();
+    return r.fadeOut != kNoFade && quickKind(r.kind);
+}
+uint8_t exitFadeIn(uint8_t kind) { return uint8_t(kFadeInRequest | (quickKind(kind) ? 1 : 2)); }
 
 void fadeStart(FadeTask& fade, uint32_t request, uint8_t param) {
     FadeState& f = fadeState();

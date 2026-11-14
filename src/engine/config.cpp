@@ -107,6 +107,7 @@ Config loadConfig() {
             if (key == "fog_source") cfg.fogSource = trim(line.substr(eq + 1));
             if (key == "water") cfg.water = trim(line.substr(eq + 1));
             if (key == "weather") cfg.weather = trim(line.substr(eq + 1));
+            if (key == "quick_door_exits") cfg.quickDoorExits = trim(line.substr(eq + 1)) == "1";
             if (key == "dissolve") cfg.dissolve = trim(line.substr(eq + 1)) != "0";
             if (key == "particle_lights") cfg.particleLights = trim(line.substr(eq + 1)) == "1";
             if (key == "clearance") cfg.clearance = trim(line.substr(eq + 1)) != "0";

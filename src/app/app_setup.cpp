@@ -321,6 +321,7 @@ int App::init() {
     }
     if (const char* base = SDL_GetBasePath()) od::setConfigDir(base); // opendash.ini next to the executable
     cfg = od::loadConfig();
+    od::port::setQuickDoorExits(cfg.quickDoorExits);
     // scripted / automated runs (--shot, --shot-every, --playscript, --doortest, the self-tests) render into a
     // hidden window and quit by themselves: nothing pops up, takes the focus or stays open; only plain interactive
     // launches show a window

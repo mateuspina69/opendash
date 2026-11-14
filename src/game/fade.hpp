@@ -41,5 +41,15 @@ bool fadeAdditive();
 
 // OpenDash: the exits' wipe (Wipe28) length in ticks (app PlayerView::fade picks it)
 void setExitWipeTicks(int ticks);
+// OpenDash: the quick exit (the walk-out's end faded to black by app PlayerView::fade, a short wipe, the load and the
+// arrival's fade-in quick behind the black). Every faded exit but a door's has it; a door (its leaves, the passages'
+// sliding doors, the door actor) plays the PS1's wipe and fades unless quick_door_exits gives it the quick exit too
+void setQuickDoorExits(bool on);
+bool quickDoorExits();
+// the armed exit (transitionRequest) leaves quick
+bool quickExit();
+// an exit's fade in (kFadeInRequest | 2), at speed 1 when the exit of `kind` leaves quick (PlayerView::fade ramps the
+// room in itself)
+uint8_t exitFadeIn(uint8_t kind);
 
 } // namespace od::port

@@ -50,6 +50,9 @@ struct Config {
     std::string water = "remaster";
     // weather= remaster|classic (F1 Video): the snow / blizzard (OpenDash's, in the world, or the game's screen quads)
     std::string weather = "remaster";
+    // quick_door_exits= 0|1 (F1 Jogo): the doors too leave by the quick exit (game/fade setQuickDoorExits); 0 = their
+    // PS1 wipe and fades
+    bool quickDoorExits = false;
     // dissolve= 0|1 (F1 Visual): the scenery between the camera and the characters in focus (the player, the lock-on
     // target) dissolves around them, Baldur's Gate style
     bool dissolve = true;

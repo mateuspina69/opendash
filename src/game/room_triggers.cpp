@@ -46,8 +46,8 @@ constexpr uint32_t kFlagFloorStatusOff = 0x240; // + the floor's kind: the floor
 constexpr uint32_t kExitIdMask = 0x1f;
 
 // the fades a transition asks for (in after the load / out before it)
-// OpenDash: the exits' fade in at speed 1 (64 a tick), not 2 (16): app PlayerView::fade ramps the new room in itself
-constexpr uint8_t kExitFadeIn = kFadeInRequest | 1, kExitFadeOut = kWipe28Request;
+// (kExitFadeIn: OpenDash's quick exit fades in at speed 1, exitFadeIn)
+constexpr uint8_t kExitFadeIn = kFadeInRequest | 2, kExitFadeOut = kWipe28Request;
 constexpr uint8_t kPassageFadeOut = kWipe26Request;
 constexpr uint8_t kFacingExitFadeIn = kFadeInRequest | kFadeWhiteRequest | 2;
 constexpr uint8_t kFacingExitFadeOut = kFadeOutRequest | kFadeWhiteRequest | 2;
@@ -134,9 +134,9 @@ void requestFrom(const ExitEntry& e, bool withPlaces) {
 // the request armed with its fades and kind (the trigger's type), flag 0x700
 void arm(uint32_t type, uint8_t fadeIn, uint8_t fadeOut) {
     TransitionRequest& r = transitionRequest();
-    r.fadeIn = fadeIn;
-    r.fadeOut = fadeOut;
     r.kind = uint8_t(type - kTransitionKindBase);
+    r.fadeIn = fadeIn == kExitFadeIn ? exitFadeIn(r.kind) : fadeIn;
+    r.fadeOut = fadeOut;
     r.keepPosition = 0;
     setStoryFlag(kFlagTransitionArmed);
 }
@@ -235,7 +235,7 @@ uint32_t roomTriggers(const PlayerEnv& env, Actor& actor) {
         request.kind = uint8_t(type - kTransitionKindBase);
         if (gameState().stage != e->destStage) { // another stage: faded
             request.fadeOut = kExitFadeOut;
-            request.fadeIn = kExitFadeIn;
+            request.fadeIn = exitFadeIn(request.kind);
         } else {
             request.fadeOut = kNoFade;
             request.fadeIn = kNoFade;

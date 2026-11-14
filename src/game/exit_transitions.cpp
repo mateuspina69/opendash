@@ -146,8 +146,7 @@ constexpr int16_t kDoorSinkDrop = 0x40;    // the player stands this far into th
 constexpr int16_t kDoorSinkMaxSpeed = 0x30, kDoorSinkAcceleration = 4;
 constexpr int32_t kDoorSinkFadeTick = 0x3c;
 constexpr uint8_t kDoorSinkFade = kFadeOutRequest | 2;
-// OpenDash: fade in at speed 1 (64 a tick), not 2 (16): app PlayerView::fade ramps the new room in itself
-constexpr uint8_t kDoorActorFadeOut = kFadeOutRequest, kDoorActorFadeIn = kFadeInRequest | 1;
+constexpr uint8_t kDoorActorFadeOut = kFadeOutRequest; // (its fade in: exitFadeIn, OpenDash's quick exit at speed 1)
 constexpr int32_t kDoorSinkSoundTicks = 0x40;
 constexpr uint8_t kFastPace = 3;           // at 20 / s the sink's sound every 3 ticks, else every 9
 constexpr int kSinkSoundFast = 3, kSinkSoundSlow = 9;
@@ -598,7 +597,7 @@ bool doorActorExitAhead(const Player& p) {
             r.destRoom = exit.destRoom;
             r.destination = exit.destination;
             r.fadeOut = kDoorActorFadeOut;
-            r.fadeIn = kDoorActorFadeIn;
+            r.fadeIn = exitFadeIn(uint8_t(TransitionKind::DoorActor));
             return true;
         }
     }
@@ -659,7 +658,7 @@ void doorActorStart() {
     r.trigger = exit.trigger;
     r.destination = exit.destination;
     r.fadeOut = kDoorActorFadeOut;
-    r.fadeIn = kDoorActorFadeIn;
+    r.fadeIn = exitFadeIn(uint8_t(TransitionKind::DoorActor));
 }
 // exe 0x53f090: the step's routine (none at the list's end: the end state), the sequence's tick
 void doorActorSequence(const PlayerEnv& env) {

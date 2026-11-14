@@ -34,6 +34,7 @@
 #include "game/actors.hpp"
 #include "game/demo_playback.hpp"
 #include "game/display.hpp"
+#include "game/fade.hpp"
 #include "game/modern_aim.hpp"
 #include "game/encounter.hpp"
 #include "game/event.hpp"
@@ -323,6 +324,7 @@ private:
 // The receiver of a world's network state: the room's files and each actor's animation, no world update
 int runClient(const WorldArgs& w) {
     od::Config cfg = od::loadConfig();
+    od::port::setQuickDoorExits(cfg.quickDoorExits); // (a world arms its players' exits: the host's choice)
     if (!ensureGameFiles(cfg, false)) return 1;
     auto view = std::make_unique<PlayerView>();
     const std::unique_ptr<od::DataSource> data = openData(cfg, *view);
@@ -412,6 +414,7 @@ int run(const WorldArgs& given) {
     if (given.client) return runClient(given);
     WorldArgs w = given;
     od::Config cfg = od::loadConfig();
+    od::port::setQuickDoorExits(cfg.quickDoorExits); // (a world arms its players' exits: the host's choice)
     if (!ensureGameFiles(cfg, false)) return 1;
     auto view = std::make_unique<PlayerView>();
     const std::unique_ptr<od::DataSource> data = openData(cfg, *view);

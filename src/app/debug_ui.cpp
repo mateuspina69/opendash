@@ -1,4 +1,5 @@
 #include "game/player/player_input.hpp"
+#include "game/fade.hpp"
 #include "app/ui/prompts.hpp"
 #include "app/app.hpp"
 #include "app/music_choice.hpp"
@@ -72,6 +73,15 @@ void App::drawDebugMenu() {
                     od::port::gameState().zenny = 9999999;
                     SDL_Log("cheat: special weapons, buster parts, helmets, armours, shoes, items, slot 3, zenny");
                 }
+                bool quickDoors = od::port::quickDoorExits();
+                if (ImGui::Checkbox("saida rapida nas portas", &quickDoors)) {
+                    od::port::setQuickDoorExits(quickDoors);
+                    od::saveConfigValue("quick_door_exits", quickDoors ? "1" : "0");
+                }
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("Desmarcado: as portas abrem e a cortina de saida do PS1 toca inteira.\n"
+                                      "Marcado: o fim da saida escurece e a sala seguinte carrega rapido, como nas\n"
+                                      "outras saidas (no multiplayer vale o do host).");
                 // the title menu offers difficulties 1..1 + min(0xa6d19c, 3) only when that record is set
                 // (0x4292cb / 0x4295b0); else a new game is difficulty 1 (0x4292e5)
                 uint16_t records = 0;

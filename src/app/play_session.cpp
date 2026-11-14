@@ -878,7 +878,7 @@ float PlayerView::fade() const {
     // the next room's fade in (the PS1's wipe holds the last frame; here it would show a stale frame)
     using FS = od::port::FieldStep;
     const bool exiting = game.gameMode() == od::port::GameMode::Field && game.fieldStep() >= FS::WaitBuffer &&
-                         game.fieldStep() <= FS::Leave && od::port::transitionRequest().fadeOut != od::port::kNoFade;
+                         game.fieldStep() <= FS::Leave && od::port::quickExit();
     const uint64_t now = SDL_GetTicksNS();
     if (!exiting) {
         if (exitRampStartNs != 0 || exitPredicted) exitBlack = true; // the exit's fade out was running: the arrival fades in
@@ -2044,7 +2044,7 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
         // OpenDash: Start during an exit's animation skips it (the fade out at once, the rest behind the black)
         if ((ps1Buttons & 0x8) && !startWasDown && game.gameMode() == od::port::GameMode::Field &&
             game.fieldStep() >= od::port::FieldStep::WaitBuffer && game.fieldStep() <= od::port::FieldStep::RunExitScript &&
-            od::port::transitionRequest().fadeOut != od::port::kNoFade)
+            od::port::quickExit())
             exitSkip = true;
         if ((ps1Buttons & 0x8) && !startWasDown && game.gameMode() == od::port::GameMode::Field) ps1Buttons |= 0x1;
         startWasDown = (ps1Buttons & 0x8) != 0;
