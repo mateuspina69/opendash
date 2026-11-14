@@ -98,9 +98,10 @@ bool playerPartShown(int block, int8_t subWeapon, int8_t buster) {
 }
 
 namespace {
-// The player's file tables (exe data): the body file's load index per costume * 6 + variant (0x8d37b4, 17 entries: the
-// other player kinds' table 0x8d37d6 follows), the weapon file's load index per special weapon (0x8d37e2)
-constexpr size_t kBodyFileCount = 17, kWeaponCount = 18;
+// The player's file tables (exe data): the body file's load index per costume * 6 + variant (0x8d37b4, 18 entries: 3
+// costumes * 6 variants; the other player kinds' table 0x8d37d6 is read by kind >= 1, so it starts at 0x8d37d8), the
+// weapon file's load index per special weapon (0x8d37e2)
+constexpr size_t kBodyFileCount = 18, kWeaponCount = 18;
 const DataTable<ScalarTable<uint16_t, kBodyFileCount>> bodyFiles{TableId::PlayerBodyFiles};
 const DataTable<ScalarTable<uint16_t, kWeaponCount>> weaponFiles{TableId::PlayerWeaponFiles};
 } // namespace
@@ -140,7 +141,7 @@ LookIndices lookIndices(const port::PlayerLook& look) {
 
 std::optional<PlayerLookFiles> playerLookFiles(const port::PlayerLook& look) {
     if (look.kind != kMegaman) return std::nullopt; // the other player kinds (0x8d37d6) are not Megaman's files
-    // outside the tables: the body table ends where the kind table begins (17 entries; exe 0x5d5c40 itself does not
+    // outside the tables: the body table ends where the kind table begins (18 entries; exe 0x5d5c40 itself does not
     // bound the index), the weapon table has the 18 weapons 0..17
     const int32_t bodyIndex = int32_t(int8_t(look.costume)) * 6 + int32_t(int8_t(look.costumeVariant));
     if (bodyIndex < 0 || bodyIndex >= int32_t(kBodyFileCount) || look.specialWeapon >= int(kWeaponCount))

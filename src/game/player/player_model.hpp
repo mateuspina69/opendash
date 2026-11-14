@@ -47,7 +47,7 @@ struct PlayerLookFiles {
 };
 // the files exe 0x5d5c40 would load for this look (pure: reads only the data source's tables
 // 0x8d37b4 / 0x8d37e2 / 0x8886d4); nullopt for kind != 0 (no other character is supported yet) and for a look
-// outside the tables (costume * 6 + variant not in the 17-entry body table 0x8d37b4..0x8d37d6, special weapon > 17;
+// outside the tables (costume * 6 + variant not in the 18-entry body table 0x8d37b4..0x8d37d8, special weapon > 17;
 // the game's code does not bound them, the table ends are the limits). With special weapon > 2 the weapon is the
 // name of the table entry as it is, exactly what the game loads (all of 3..17 are nonzero in the exe)
 std::optional<PlayerLookFiles> playerLookFiles(const port::PlayerLook& look);

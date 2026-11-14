@@ -202,7 +202,6 @@ bool lookFilesCase(const fs::path& exe) {
     int n = 0;
     for (int costume = 0; costume <= 2; ++costume)
         for (int variant = 0; variant <= 5; ++variant) {
-            if (costume * 6 + variant >= 17) continue; // body table 0x8d37b4..0x8d37d6 = 17 entries
             for (int weapon = 0; weapon <= 17; ++weapon) {
                 od::port::PlayerLook look;
                 look.costume = uint8_t(costume);
@@ -237,12 +236,13 @@ bool lookFilesCase(const fs::path& exe) {
     oob.specialWeapon = 18;
     CHECK(!od::playerLookFiles(oob).has_value());
     oob = od::port::PlayerLook{};
-    oob.costume = 3; // 3 * 6 = 18 >= 17 entries
+    oob.costume = 3; // 3 * 6 = 18 >= 18 entries
     CHECK(!od::playerLookFiles(oob).has_value());
-    oob = od::port::PlayerLook{};
-    oob.costume = 2;
-    oob.costumeVariant = 5; // 17
-    CHECK(!od::playerLookFiles(oob).has_value());
+    od::port::PlayerLook last; // the table's last entry (costume 2, variant 5 = 17): load index 0x0c
+    last.costume = 2;
+    last.costumeVariant = 5;
+    CHECK(exeMem.u16(0x8d37b4 + 17 * 2) == 0x0c);
+    CHECK(od::playerLookFiles(last).has_value());
     oob = od::port::PlayerLook{};
     oob.costume = 255; // int8 -1: a negative index
     CHECK(!od::playerLookFiles(oob).has_value());
