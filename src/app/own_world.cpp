@@ -1015,7 +1015,8 @@ void OwnWorldClient::localSceneTurn() {
     if (!localScene_) return;
     ownEventOver(); // an event the scene began over (a talk's answer started it) ends under it, as in the normal game
     // a scene is over once its script has run here and ended (one the world started begins on the game's next frame)
-    if (od::port::scriptState().inUse()) sceneRan_ = true;
+    // (its own script: another one ending, a door's, is not the scene's end)
+    if (od::port::scriptState().inUse() && od::port::scriptState().id == sceneScript_) sceneRan_ = true;
     if (!sceneRan_ || sceneStart_) return;
     const od::port::GameState& g = od::port::gameState();
     if (od::port::scriptState().inUse() || od::port::transitionRequest().state != od::port::kTransitionNone ||

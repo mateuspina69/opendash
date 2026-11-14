@@ -463,21 +463,26 @@ void passageStart(const PlayerEnv& env) {
 }
 // exe 0x42c190: arriving: the leaves freed, the flags cleared, the segments back, the end; leaving: the leaves stop,
 // the handshake, then (the room switched) the leaves freed, the segments back, flag 0x701 set (the second run)
+// the arrival's end (the walk-in done): the leaves freed, the flags cleared, the segments back, the end
+void passageArrivalEnd() {
+    DoorScriptBytes& bytes = scriptState().part<DoorScriptBytes>();
+    replayPad().held = 0;
+    leaf(kFirstLeaf).state = uint8_t(DoorLeafState::Free);
+    leaf(kSecondLeaf).state = uint8_t(DoorLeafState::Free);
+    clearStoryFlag(kFlagTransitionArmed);
+    clearStoryFlag(kFlagTransitionArriving);
+    segmentSetDoorsHidden(bytes.doorSegment, false);
+    segmentSetAltVolumes(bytes.doorSegment, false);
+    segmentSetAltVolumes(bytes.farSegment, false);
+    scriptReplayPadOff();
+    scriptEndBlock();
+}
 void passageEnd() {
     ScriptState& s = scriptState();
     DoorScriptBytes& bytes = scriptState().part<DoorScriptBytes>();
     if (storyFlag(kFlagTransitionArriving)) {
         soundPlayAtPos(kLeavesStopSound, kNoSoundPosition);
-        replayPad().held = 0;
-        leaf(kFirstLeaf).state = uint8_t(DoorLeafState::Free);
-        leaf(kSecondLeaf).state = uint8_t(DoorLeafState::Free);
-        clearStoryFlag(kFlagTransitionArmed);
-        clearStoryFlag(kFlagTransitionArriving);
-        segmentSetDoorsHidden(bytes.doorSegment, false);
-        segmentSetAltVolumes(bytes.doorSegment, false);
-        segmentSetAltVolumes(bytes.farSegment, false);
-        scriptReplayPadOff();
-        scriptEndBlock();
+        passageArrivalEnd();
         return;
     }
     switch (LeavesEndSub(s.subState)) {
@@ -580,6 +585,13 @@ void walkOffEnd() {
 // exe 0x42d5c0: the door actor within reach of the player standing on an exit's trigger found (none: the end), then,
 // once the player is script driven, the camera by the door's yaw and the request armed from that exit
 } // namespace
+
+bool endArrivalNow() {
+    const ScriptState& s = scriptState();
+    if (!(s.flags & kScriptRunning) || s.id != 0 || !storyFlag(kFlagTransitionArriving)) return false;
+    passageArrivalEnd();
+    return true;
+}
 
 bool doorActorExitAhead(const Player& p) {
     for (size_t i = 0; i < StaticPool::size(); ++i) {

@@ -59,6 +59,9 @@ void scriptFade(uint32_t request, uint8_t param);
 // a session's world: a transition asked in it goes here instead of playing
 struct TransitionRequest;
 struct Player;
+// a passage's arrival walk-in (script 0's second run, in the room entered) ended now, as its own end does (a scene that
+// takes the room over: its script starts at once, as the world's copy does); false: none running
+bool endArrivalNow();
 // the exit of the door actor in front of this player into the request (a session's gate reads where it leads)
 bool doorActorExitAhead(const Player& p);
 void setWorldExitHook(std::function<void(const TransitionRequest&)> hook);

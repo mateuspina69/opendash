@@ -2090,6 +2090,9 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
                 // (the room as its world holds it now, when this game showed it: laid on the rebuild after)
                 const std::optional<od::port::NetHeldRoom> held =
                     ownWorld->worldShown() ? std::optional(ownWorld->heldRoom()) : std::nullopt;
+                // a passage's walk-in still running here (the world's copy has none): it ends as its end does, the scene's
+                // script starts now on every copy
+                if (scene && od::port::endArrivalNow()) SDL_Log("own world: the arrival's walk-in ends: the scene takes the room");
                 od::port::killAllActors();
                 od::port::actorSystem().boneBlocksUsed = 0;
                 od::port::roomSetupActors(0, od::port::kSpawnSkipPlayer);
@@ -2126,6 +2129,9 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
                 // the scene's script (the room's logic may have started it already, as the world's did)
                 if (scene && (!(od::port::scriptState().flags & od::port::kScriptRunning) || od::port::scriptState().id != *scene))
                     od::port::scriptStart(*scene);
+                if (scene && (!(od::port::scriptState().flags & od::port::kScriptRunning) || od::port::scriptState().id != *scene))
+                    ownWorld->notice("The scene " + std::to_string(int(*scene)) + " could not start: script " +
+                                     std::to_string(int(od::port::scriptState().id)) + " is running");
                 // the scene's first tick takes no pad, here as in the world's copy: its owner's pad drives every copy from
                 // the next one, stamped (app/scene_pads)
                 if (scene) od::port::padUpdate(od::port::pad0(), 0, 0x80, 0x80);
