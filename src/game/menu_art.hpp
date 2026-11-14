@@ -29,7 +29,7 @@ Glyph ps1Glyph(std::span<const uint8_t> page, std::span<const uint8_t> widths, u
 struct Cell {
     int u, v;
 };
-constexpr Cell kCellLanguage{0xc0, 0xe0}, kCellVideo{0x90, 0xe0};
+constexpr Cell kCellLanguage{0xc0, 0xe0};
 constexpr Cell kCellKeys[3] = {{0x00, 0xd0}, {0x30, 0xd0}, {0x60, 0xd0}}; // the key configuration's pad / keys / mouse
 constexpr int kCellWidth = 0x30, kCellHeight = 0x10;
 // the panel's "To Title" row (game/status_title): a cell of its own texture page, in the VRAM's left part (the PS1's

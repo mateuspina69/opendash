@@ -153,7 +153,6 @@ void MenuVram::art() {
         };
         constexpr uint16_t kOptionsTpage = 7;
         static constexpr Text kTexts[] = {{ma::kCellLanguage, kOptionsTpage, "Language", "Idioma"},
-                                          {ma::kCellVideo, kOptionsTpage, "Video", "Vídeo"},
                                           {ma::kCellKeys[0], kOptionsTpage, "Pad", "Controle"},
                                           {ma::kCellKeys[1], kOptionsTpage, "Keys", "Teclado"},
                                           {ma::kCellKeys[2], kOptionsTpage, "Mouse", "Mouse"},

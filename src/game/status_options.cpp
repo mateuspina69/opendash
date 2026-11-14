@@ -125,7 +125,7 @@ constexpr uint32_t kCursorBarColour = 0x101080;
 // OpenDash's cells of the options texture (tpage 7, 48 x 16, see game/menu_art) as the rows' texture words
 constexpr uint16_t kCaptionClut = 0x7f12;
 constexpr uint32_t cellArt(menuart::Cell c) { return uint32_t(kCaptionClut) << 16 | uint32_t(c.v) << 8 | uint32_t(c.u); }
-constexpr uint32_t kLangCaption = cellArt(menuart::kCellLanguage), kVideoCaption = cellArt(menuart::kCellVideo);
+constexpr uint32_t kLangCaption = cellArt(menuart::kCellLanguage);
 
 // the PC glyph codes of OpenDash's Japanese texts (font slot 0: 0x80.. hiragana)
 constexpr uint16_t kLangHelpJp[] = {0xba, 0xad, 0xbb, 0xac, 0x83, 0xa6, 0xc8, 0x9e, 0x8c}; // げんごをえらびます
@@ -327,9 +327,12 @@ std::vector<uint16_t> ownPcWord(const char* key) {
     return w ? lang::pcEncode(w) : std::vector<uint16_t>();
 }
 
-// the key (row.6.<uv>) of a row whose caption is text (the music, text size and group rows), 0 = its art
+// the key (row.6.<uv>) of a row whose caption is text (the music, text size, group rows, and the video row where the
+// source page has no caption of its own for it: the video group's word), 0 = its art
 uint32_t textCaptionUv(const OptRow& r) {
     if (r.state == kMusicState) return kMusicCaptionUv;
+    if (r.state == uint8_t(OptionsState::Video) && sourceRows()[r.exe] < 0)
+        return kGroupCaptionUv + uint32_t(OptGroup::Video);
     if (r.state == kTextSizeState) return kTextSizeCaptionUv;
     if (r.state == kButtonStyleState) return kButtonStyleCaptionUv;
     if (r.state == kCreditsState) return kCreditsCaptionUv;
@@ -360,6 +363,7 @@ const char* textCaption(const OptRow& r, int lang) {
     if (r.state == kGalleryState) return kGalleryCaption[l];
     if (r.state == kExtrasState) return kExtrasCaption[l];
     if (r.state == kGroupState) return kGroupCaption[l][std::min<int>(r.arg, 3)];
+    if (r.state == uint8_t(OptionsState::Video)) return kGroupCaption[l][int(OptGroup::Video)];
     return "";
 }
 
@@ -415,8 +419,8 @@ void optLayout() {
         const uint32_t row = rowArtAt(kOptCaptions, i);
         if (gRows[i].exe == kNoExeRow || rows[gRows[i].exe] < 0) { // OpenDash's art
             storeData(row, int16_t(kCaptionX));
-            storeRowArtWord(row, 1, gRows[i].exe == kNoExeRow ? kLangCaption : kVideoCaption);
-            // the music, text size and group rows: no art (their captions are drawn as text, optionsValuesDraw)
+            storeRowArtWord(row, 1, kLangCaption);
+            // the music, video, text size and group rows: no art (their captions are drawn as text, optionsValuesDraw)
             storeRowArtWord(row, 2, textCaptionUv(gRows[i]) != 0 ? 0u : kCaptionSize);
         } else {
             storeRowArt(row, captionsFrom.row(size_t(rows[gRows[i].exe])));
@@ -654,7 +658,7 @@ void optionsValuesDraw(const StatusScreen& s) {
             if (!langName.empty()) box(0x9c, 0x7c, langName.c_str(), 1);
         }
     }
-    // the text captions (the music, text size and group rows: no cell of the texture is free for them)
+    // the text captions (the music, video, text size and group rows: drawn in the game's font)
     static std::vector<uint16_t> pcCaption[16];
     for (size_t i = 0; i < gRows.size(); ++i) {
         const uint32_t uv = textCaptionUv(gRows[i]);
