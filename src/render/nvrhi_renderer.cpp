@@ -28,6 +28,8 @@
 #include "upscaler.hpp"
 
 #include "g_blizzard_ps.h"
+#include "g_bloom_down_ps.h"
+#include "g_bloom_up_ps.h"
 #include "g_debugview_ms_ps.h"
 #include "g_debugview_ps.h"
 #include "g_debugview_vs.h"
@@ -36,13 +38,20 @@
 #include "g_full_vs.h"
 #include "g_height_ps.h"
 #include "g_height_vs.h"
+#include "g_light_blur_x_ps.h"
+#include "g_light_blur_y_ps.h"
+#include "g_light_ps.h"
+#include "g_outline_ms_ps.h"
+#include "g_outline_ps.h"
 #include "g_output_ps.h"
 #include "g_output_vs.h"
 #include "g_preview_ps.h"
 #include "g_preview_vs.h"
+#include "g_scene_pre_ps.h"
 #include "g_scene_ps.h"
 #include "g_scene_rt_ps.h"
 #include "g_scene_vs.h"
+#include "g_subdivide_cs.h"
 
 using namespace DirectX;
 
@@ -58,14 +67,19 @@ struct GpuVertex {
     float prevPos[3];
     float faceN[3];
     float pairN[3];
-    float surface; // bits 0..2: kSurfaceModel a model's face (actors, the player, bank models), clipped at the game's
+    float surface; // bits 0..3: kSurfaceModel a model's face (actors, the player, bank models), clipped at the game's
                    // near plane; kSurfaceNearFade a world effect, fading toward the camera (setEffectNearFade);
-                   // kSurfaceEffect an effect (particles, billboards, rings): its blended texels fade at the scenery.
-                   // Above them (* 8): RenderVertex::piece, the see-through's scenery piece
+                   // kSurfaceEffect an effect (particles, billboards, rings): its blended texels fade at the scenery;
+                   // kSurfaceGlow an effect that gives light (DynamicObject::glow): the bloom's source.
+                   // Above them (* kSurfacePiece): RenderVertex::piece, the see-through's scenery piece
     float uvRect[4]; // the triangle's UVs' bounds (min u, v, max u, v): what the page filter may read of its page
+    float object;    // the dynamic object it belongs to, 1 on in the frame's order (uploadDynamic); 0: the room, the sky
+    float pieceN[3]; // the anime look's shading normal (pieceNormals), not unit: linear over a face, so a draw's and the
+                     // subdivision's interpolation of it are exact; 0: none (the shading normal above)
 };
-static_assert(sizeof(RenderVertex) == 52 && sizeof(GpuVertex) == 120);
-constexpr uint32_t kSurfaceModel = 1, kSurfaceNearFade = 2, kSurfaceEffect = 4;
+static_assert(sizeof(RenderVertex) == 52 && sizeof(GpuVertex) == 136);
+constexpr uint32_t kSurfaceModel = 1, kSurfaceNearFade = 2, kSurfaceEffect = 4, kSurfaceGlow = 8;
+constexpr float kSurfacePiece = 16.0f;
 // the instances' ray masks: the sun's rays meet both; a particle light's rays each its own stretch (scene.hlsl)
 constexpr uint8_t kRayMaskRoom = 1, kRayMaskActors = 2;
 
@@ -118,7 +132,24 @@ struct FrameConstants {
     float lightPos[kMaxParticleLights][4];   // the particle lights: position, radius
     float lightColor[kMaxParticleLights][4]; // ... colour
     float lightInfo[4];                      // ... how many this draw receives, the gain
+    float lightTerms[4]; // the traced light on this draw: the sun's visibility from it, the occlusion's strength, the
+                         // shadows' colour; 1 = its glowing effects' light goes to the glow target
+    float lightTrace[4]; // ps_light: tan of the sun's angular radius (< 0 no ray), the occlusion rays' reach, how many,
+                         // the sample pattern's turn
+    float toon[4];       // the anime look: how much deeper a model's dark band is, its rim light, 1 = on
+    float outline[4];    // ps_outline: the line's width in pixels, its strength, 1 = the scenery too, the depth it is gone at
+    float outlineLook[4]; // ... how much of the colour of what it goes around it takes
+    float sunDisc[4];     // the sun in the sky (SunLight::disc): its angular radius (radians), the sky draw (1 dome, 2
+                          // screen-space layer; 0 none)
 };
+// bloom.hlsl Params
+struct BloomConstants {
+    float target[2]; // 1 / the target's size
+    float texel[2];  // the source's texel
+    float gain;
+    float pad[3];
+};
+constexpr int kBloomLevels = 5; // halved copies of the glow target
 // scene.hlsl vs_flake's two fields of kFlakeCells (24 x 12 x 24) cells, 6 vertices a flake: the near one (up to
 // kFlakesNear a cell) and the far one beyond it (cells kFlakeFarScale times larger, up to kFlakesFar a cell)
 constexpr uint32_t kFlakeCellCount = 24 * 12 * 24, kFlakesNear = 32, kFlakesFar = 16;
@@ -136,6 +167,7 @@ constexpr nvrhi::Format kDepthFormat = nvrhi::Format::D24S8;
 constexpr nvrhi::Format kDepthFormat = nvrhi::Format::D32;
 #endif
 constexpr bool kDepthHasStencil = kDepthFormat == nvrhi::Format::D24S8;
+constexpr nvrhi::Format kGlowFormat = nvrhi::Format::R11G11B10_FLOAT; // the glow target and the bloom's copies
 constexpr float kFar = 200000.0f;
 
 // jitter in pixels -> NDC offset (row-major: row 2 is multiplied by view z, so the offset scales with w)
@@ -163,36 +195,189 @@ void setUvRect(GpuVertex* first) {
     for (int k = 0; k < 3; ++k) std::memcpy(first[k].uvRect, rect, sizeof rect);
 }
 
+// a position's key: the corners that meet at a point (a quarter of a world unit)
+uint64_t positionKey(const float* p) {
+    const auto q = [](float v) { return uint64_t(int64_t(std::lround(v * 4.0f)) & 0x1FFFFF); };
+    return q(p[0]) | q(p[1]) << 21 | q(p[2]) << 42;
+}
+
+// The shading normals of a model of the anime look (the vertices [first, end) of one object), into GpuVertex::pieceN.
+// A PS1 model is made of rigid pieces, each a mesh of its own (the faces that share corners). A piece is shaded as the
+// solid it stands for, not face by face: a corner's normal points out of the piece's ellipsoid of inertia (its
+// surface's covariance, inverted twice: what lies along a long piece hardly counts), so around a limb it turns as
+// around a cylinder and along it it stays the same -- the border between the light's bands runs the piece's whole
+// length, where the faces' averaged normals differed between a face's own corners and the border cut that face at a
+// slant, another way with every pose. The normal is linear in the position (one scale a piece), so it is kept not
+// unit. A face the piece's normal is nearly tangent to (a limb's end cap, a flat sheet) and a piece of fewer than four
+// faces have none.
+void pieceNormals(const std::vector<RenderVertex>& tris, size_t first, size_t end, const float* fn, GpuVertex* out) {
+    const size_t base = first / 3, faces = (end - first) / 3;
+    if (faces == 0) return;
+    std::vector<uint32_t> piece(faces);
+    for (size_t f = 0; f < faces; ++f) piece[f] = uint32_t(f);
+    const auto root = [&piece](uint32_t a) {
+        while (piece[a] != a) a = piece[a] = piece[piece[a]];
+        return a;
+    };
+    std::unordered_map<uint64_t, uint32_t> met; // a position -> a face that has it
+    for (size_t k = first; k < first + faces * 3; ++k) {
+        const uint32_t f = uint32_t(k / 3 - base);
+        const auto [it, fresh] = met.try_emplace(positionKey(tris[k].pos), f);
+        if (!fresh) piece[root(f)] = root(it->second);
+    }
+    struct Moments { // of a piece's surface, around the object's first vertex
+        double area = 0.0, sum[3]{}, square[6]{}; // xx xy xz yy yz zz
+        uint32_t faces = 0;
+        double centre[3]{}, twice[9]{}; // the centre; the covariance inverted twice (0: no solid)
+        double scale = 1.0;             // what brings twice * (a corner - the centre) near 1
+        bool solid = false;
+    };
+    std::unordered_map<uint32_t, Moments> moments;
+    const float* origin = tris[first].pos;
+    static constexpr int kPair[6][2] = {{0, 0}, {0, 1}, {0, 2}, {1, 1}, {1, 2}, {2, 2}};
+    for (size_t f = 0; f < faces; ++f) {
+        double p[3][3], g[3] = {0.0, 0.0, 0.0};
+        for (int v = 0; v < 3; ++v)
+            for (int c = 0; c < 3; ++c) {
+                p[v][c] = double(tris[first + f * 3 + size_t(v)].pos[c]) - double(origin[c]);
+                g[c] += p[v][c] / 3.0;
+            }
+        const double u[3] = {p[1][0] - p[0][0], p[1][1] - p[0][1], p[1][2] - p[0][2]};
+        const double w[3] = {p[2][0] - p[0][0], p[2][1] - p[0][1], p[2][2] - p[0][2]};
+        const double cr[3] = {u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]};
+        const double area = 0.5 * std::sqrt(cr[0] * cr[0] + cr[1] * cr[1] + cr[2] * cr[2]);
+        Moments& m = moments[root(uint32_t(f))];
+        ++m.faces;
+        m.area += area;
+        for (int c = 0; c < 3; ++c) m.sum[c] += area * g[c];
+        for (int q = 0; q < 6; ++q) { // a triangle's second moment: area / 12 * (its corners' + 9 * its centre's)
+            const int a = kPair[q][0], b = kPair[q][1];
+            m.square[q] += area / 12.0 * (p[0][a] * p[0][b] + p[1][a] * p[1][b] + p[2][a] * p[2][b] + 9.0 * g[a] * g[b]);
+        }
+    }
+    for (auto& [id, m] : moments) {
+        if (m.faces < 4 || m.area <= 1e-9) continue;
+        for (int c = 0; c < 3; ++c) m.centre[c] = m.sum[c] / m.area;
+        double cov[3][3];
+        for (int q = 0; q < 6; ++q) {
+            const int a = kPair[q][0], b = kPair[q][1];
+            cov[a][b] = cov[b][a] = m.square[q] / m.area - m.centre[a] * m.centre[b];
+        }
+        // a flat piece has no extent across: its normal there is kept finite
+        const double floor = 0.02 * (cov[0][0] + cov[1][1] + cov[2][2]) / 3.0;
+        if (floor <= 1e-12) continue;
+        for (int c = 0; c < 3; ++c) cov[c][c] += floor;
+        double inv[3][3];
+        inv[0][0] = cov[1][1] * cov[2][2] - cov[1][2] * cov[2][1];
+        inv[0][1] = cov[0][2] * cov[2][1] - cov[0][1] * cov[2][2];
+        inv[0][2] = cov[0][1] * cov[1][2] - cov[0][2] * cov[1][1];
+        inv[1][1] = cov[0][0] * cov[2][2] - cov[0][2] * cov[2][0];
+        inv[1][2] = cov[0][2] * cov[1][0] - cov[0][0] * cov[1][2];
+        inv[2][2] = cov[0][0] * cov[1][1] - cov[0][1] * cov[1][0];
+        const double det = cov[0][0] * inv[0][0] + cov[0][1] * inv[0][1] + cov[0][2] * inv[0][2];
+        if (std::abs(det) <= 1e-30) continue;
+        inv[1][0] = inv[0][1];
+        inv[2][0] = inv[0][2];
+        inv[2][1] = inv[1][2];
+        for (auto& row : inv)
+            for (double& v : row) v /= det;
+        for (int a = 0; a < 3; ++a)
+            for (int b = 0; b < 3; ++b)
+                m.twice[a * 3 + b] = inv[a][0] * inv[0][b] + inv[a][1] * inv[1][b] + inv[a][2] * inv[2][b];
+        const double spread = (cov[0][0] + cov[1][1] + cov[2][2]) / 3.0;
+        m.scale = spread * std::sqrt(spread);
+        m.solid = true;
+    }
+    for (size_t f = 0; f < faces; ++f) {
+        const Moments& m = moments[root(uint32_t(f))];
+        if (!m.solid) continue;
+        float raw[3][3];
+        double mean[3] = {0.0, 0.0, 0.0};
+        bool whole = true;
+        for (int v = 0; v < 3 && whole; ++v) {
+            const float* pos = tris[first + f * 3 + size_t(v)].pos;
+            double d[3], o[3];
+            for (int c = 0; c < 3; ++c) d[c] = double(pos[c]) - double(origin[c]) - m.centre[c];
+            for (int c = 0; c < 3; ++c) o[c] = m.twice[c * 3] * d[0] + m.twice[c * 3 + 1] * d[1] + m.twice[c * 3 + 2] * d[2];
+            const double len = std::sqrt(o[0] * o[0] + o[1] * o[1] + o[2] * o[2]);
+            whole = len > 1e-30;
+            for (int c = 0; c < 3 && whole; ++c) {
+                raw[v][c] = float(o[c] * m.scale);
+                mean[c] += o[c] / len;
+            }
+        }
+        if (!whole) continue;
+        const float* own = &fn[(base + f) * 3];
+        const double len = std::sqrt(mean[0] * mean[0] + mean[1] * mean[1] + mean[2] * mean[2]);
+        if (len <= 1e-9 || std::abs(mean[0] * own[0] + mean[1] * own[1] + mean[2] * own[2]) / len < 0.2) continue;
+        for (size_t v = 0; v < 3; ++v) std::memcpy(out[first + f * 3 + v].pieceN, raw[v], sizeof raw[v]);
+    }
+}
+
+// pieceRanges: the vertex ranges of the models of the anime look (pieceNormals), among smoothRanges'
 void toGpu(const std::vector<RenderVertex>& tris, const float* prevPos, std::vector<GpuVertex>& out,
            const std::vector<std::pair<size_t, size_t>>* smoothRanges = nullptr,
            const std::vector<std::pair<size_t, size_t>>* surfaceRanges = nullptr,
-           const std::vector<uint32_t>* surfaceBits = nullptr) {
+           const std::vector<uint32_t>* surfaceBits = nullptr,
+           const std::vector<std::pair<size_t, size_t>>* pieceRanges = nullptr) {
     out.resize(tris.size());
     const size_t faces = tris.size() / 3;
     std::vector<float> fn(faces * 3);
     for (size_t f = 0; f < faces; ++f) faceNormal(tris[f * 3].pos, tris[f * 3 + 1].pos, tris[f * 3 + 2].pos, &fn[f * 3]);
     std::vector<float> nrm(fn.size() * 3); // per vertex
     for (size_t k = 0; k < faces * 3; ++k) std::memcpy(&nrm[k * 3], &fn[k / 3 * 3], 3 * sizeof(float));
-    auto key = [](const float* p) {
-        auto q = [](float v) { return uint64_t(int64_t(std::lround(v * 4.0f)) & 0x1FFFFF); };
-        return q(p[0]) | q(p[1]) << 21 | q(p[2]) << 42;
-    };
-    if (smoothRanges)
+    const auto key = positionKey;
+    if (smoothRanges) {
+        // The corners that meet at a point fall in surfaces: two faces are of one surface when they meet at less than
+        // ~60 degrees, and so on from face to face around the point (a crease or a face wound the other way starts
+        // another). Every corner of a surface takes the same normal there, its faces' weighted by their angles at the
+        // point: the normal is continuous from a face to its neighbour (a light's border runs on across their edge), and
+        // how a quad is split in two triangles does not turn it. (Each corner averaging the faces within 60 degrees of
+        // its own gave neighbours different normals at the point they share: the border broke off at their edge.)
+        constexpr size_t kMostCorners = 256; // a model fallen on one point has no surface there: its faces' own normals
+        std::vector<uint32_t> group;
+        std::vector<float> sum;
         for (const auto& [first, end] : *smoothRanges) {
-            std::unordered_map<uint64_t, std::vector<uint32_t>> shared; // quantised position -> the model's faces
-            for (size_t k = first; k < end; ++k) shared[key(tris[k].pos)].push_back(uint32_t(k / 3));
-            for (size_t k = first; k < end; ++k) {
-                const float* own = &fn[k / 3 * 3];
-                float n[3] = {0.0f, 0.0f, 0.0f};
-                for (uint32_t f : shared[key(tris[k].pos)]) {
-                    const float* o = &fn[size_t(f) * 3];
-                    if (o[0] * own[0] + o[1] * own[1] + o[2] * own[2] < 0.5f) continue; // crease / opposite winding
-                    for (int c = 0; c < 3; ++c) n[c] += o[c];
+            std::unordered_map<uint64_t, std::vector<uint32_t>> shared; // quantised position -> the model's corners there
+            for (size_t k = first; k < end; ++k) shared[key(tris[k].pos)].push_back(uint32_t(k));
+            for (const auto& [position, corners] : shared) {
+                const size_t count = corners.size();
+                if (count < 2 || count > kMostCorners) continue;
+                group.resize(count);
+                for (size_t a = 0; a < count; ++a) group[a] = uint32_t(a);
+                const auto root = [&group](uint32_t a) {
+                    while (group[a] != a) a = group[a] = group[group[a]];
+                    return a;
+                };
+                for (size_t a = 0; a < count; ++a)
+                    for (size_t b = a + 1; b < count; ++b) {
+                        const float* p = &fn[corners[a] / 3 * 3];
+                        const float* q = &fn[corners[b] / 3 * 3];
+                        if (p[0] * q[0] + p[1] * q[1] + p[2] * q[2] >= 0.5f) group[root(uint32_t(a))] = root(uint32_t(b));
+                    }
+                sum.assign(count * 3, 0.0f);
+                for (size_t a = 0; a < count; ++a) {
+                    const size_t k = corners[a], f = k / 3 * 3;
+                    const float* p0 = tris[k].pos;
+                    const float* p1 = tris[f + (k + 1) % 3].pos;
+                    const float* p2 = tris[f + (k + 2) % 3].pos;
+                    const float u[3] = {p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]};
+                    const float v[3] = {p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]};
+                    const float lengths = std::sqrt((u[0] * u[0] + u[1] * u[1] + u[2] * u[2]) * (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]));
+                    if (lengths <= 1e-12f) continue; // a degenerate corner
+                    const float angle = std::acos(std::clamp((u[0] * v[0] + u[1] * v[1] + u[2] * v[2]) / lengths, -1.0f, 1.0f));
+                    const size_t r = root(uint32_t(a));
+                    for (size_t c = 0; c < 3; ++c) sum[r * 3 + c] += fn[f + c] * angle;
                 }
-                const float len = std::sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
-                for (int c = 0; c < 3; ++c) nrm[k * 3 + size_t(c)] = len > 1e-6f ? n[c] / len : own[c];
+                for (size_t a = 0; a < count; ++a) {
+                    const float* n = &sum[size_t(root(uint32_t(a))) * 3];
+                    const float len = std::sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
+                    if (len <= 1e-6f) continue; // (its face's own normal)
+                    for (size_t c = 0; c < 3; ++c) nrm[size_t(corners[a]) * 3 + c] = n[c] / len;
+                }
             }
         }
+    }
     for (size_t k = 0; k < faces * 3; ++k) {
         const float* own = &fn[k / 3 * 3];
         const float* n = &nrm[k * 3];
@@ -203,74 +388,31 @@ void toGpu(const std::vector<RenderVertex>& tris, const float* prevPos, std::vec
         std::memcpy(out[k].faceN, own, sizeof out[k].faceN);
         std::memcpy(out[k].pairN, &fn[pf * 3], sizeof out[k].pairN);
         std::memcpy(out[k].prevPos, prevPos ? prevPos + k * 3 : tris[k].pos, sizeof out[k].prevPos);
-        out[k].surface = tris[k].piece * 8.0f;
+        out[k].surface = tris[k].piece * kSurfacePiece;
+        out[k].object = 0.0f;
+        std::memset(out[k].pieceN, 0, sizeof out[k].pieceN);
     }
     for (size_t f = 0; f < faces; ++f) setUvRect(&out[f * 3]);
+    if (pieceRanges)
+        for (const auto& [first, end] : *pieceRanges) pieceNormals(tris, first, end, fn.data(), out.data());
     if (surfaceRanges)
         for (size_t r = 0; r < surfaceRanges->size(); ++r)
             for (size_t k = (*surfaceRanges)[r].first; k < (*surfaceRanges)[r].second; ++k)
                 out[k].surface += float((*surfaceBits)[r]);
 }
 
-// a model's triangles (ModelSubdivision) appended to `out`, each split in level^2, as `plan` says: the vertices take the
-// plan's normals over this frame's faces. A new vertex interpolates its triangle's attributes; its position and its previous
-// position follow phongPoint with the same normals, and on a straight edge it stays on that edge. Each small triangle
-// is culled by its own facing (subdividedCull)
-void subdivideModel(GpuVertex* v, size_t count, const SubdivisionPlan& plan, int level, float amount, std::vector<float>& faces,
-                    std::vector<GpuVertex>& out) {
-    faces.resize(count);
-    for (size_t f = 0; f + 2 < count; f += 3) std::memcpy(&faces[f], v[f].faceN, 3 * sizeof(float));
-    for (size_t k = 0; k < count; ++k) subdivisionNormal(plan, k, faces.data(), v[k].normal);
-    GpuVertex grid[15]; // (level + 1) * (level + 2) / 2 points at level 4, row by row
-    const auto at = [level](int i, int j) { return j * (level + 1) - j * (j - 1) / 2 + i; };
-    for (size_t f = 0; f + 2 < count; f += 3) {
-        const GpuVertex& a = v[f];
-        const GpuVertex& b = v[f + 1];
-        const GpuVertex& c = v[f + 2];
-        const uint8_t round = plan.roundEdges[f / 3];
-        const bool opposite = a.faceN[0] * a.pairN[0] + a.faceN[1] * a.pairN[1] + a.faceN[2] * a.pairN[2] < 0.0f;
-        const SubdividedCull cull = subdividedCull(int(std::lround(a.v.cull)), opposite);
-        for (int j = 0; j <= level; ++j)
-            for (int i = 0; i + j <= level; ++i) {
-                const float s = float(i) / float(level), t = float(j) / float(level), r = 1.0f - s - t;
-                GpuVertex& o = grid[at(i, j)];
-                o = a;
-                o.v.cull = float(cull.mode);
-                const auto mix = [&](const float* x, const float* y, const float* z, float* to, int n) {
-                    for (int k = 0; k < n; ++k) to[k] = x[k] * r + y[k] * s + z[k] * t;
-                };
-                mix(a.v.uv, b.v.uv, c.v.uv, o.v.uv, 2);
-                mix(a.v.color, b.v.color, c.v.color, o.v.color, 3);
-                o.v.shade = a.v.shade * r + b.v.shade * s + c.v.shade * t;
-                mix(a.normal, b.normal, c.normal, o.normal, 3);
-                const float len = std::sqrt(o.normal[0] * o.normal[0] + o.normal[1] * o.normal[1] + o.normal[2] * o.normal[2]);
-                if (len > 1e-6f)
-                    for (float& n : o.normal) n /= len;
-                const bool straight = (j == 0 && !(round & 1)) || (i + j == level && !(round & 2)) || (i == 0 && !(round & 4));
-                const float by = straight ? 0.0f : amount;
-                phongPoint(a.v.pos, b.v.pos, c.v.pos, a.normal, b.normal, c.normal, r, s, t, by, o.v.pos);
-                phongPoint(a.prevPos, b.prevPos, c.prevPos, a.normal, b.normal, c.normal, r, s, t, by, o.prevPos);
-            }
-        const auto emit = [&](int p, int q, int s) {
-            out.push_back(grid[p]);
-            out.push_back(grid[cull.reverse ? s : q]);
-            out.push_back(grid[cull.reverse ? q : s]);
-        };
-        for (int j = 0; j < level; ++j)
-            for (int i = 0; i + j < level; ++i) {
-                emit(at(i, j), at(i + 1, j), at(i, j + 1));
-                if (i + j + 1 < level) emit(at(i + 1, j), at(i + 1, j + 1), at(i, j + 1));
-            }
-    }
-}
+// subdivide.hlsl's word about a triangle that goes in: split it (a model with a plan), its round edges (bit e of the
+// three after kTriSplit: SubdivisionPlan::roundEdges), and how its small triangles are culled (subdividedCull)
+constexpr uint32_t kTriSplit = 1, kTriRoundShift = 1, kTriCullOne = 16, kTriReverse = 32;
 
-// ray-tracing attributes per vertex: (u, v, slice, 0) -- what the shadow rays' alpha test reads
+// ray-tracing attributes per vertex: (u, v, slice, object) -- what the shadow rays' alpha test reads, and whose face it is
 void toAttr(const std::vector<GpuVertex>& v, uint32_t count, std::vector<float>& out) {
     out.assign(size_t(std::max<uint32_t>(count, 1)) * 4, 0.0f);
     for (uint32_t i = 0; i < count; ++i) {
         out[i * 4 + 0] = v[i].v.uv[0];
         out[i * 4 + 1] = v[i].v.uv[1];
         out[i * 4 + 2] = v[i].v.slice;
+        out[i * 4 + 3] = v[i].object;
     }
 }
 
@@ -319,6 +461,13 @@ public:
         cb.maxVersions = 64;
         cb.debugName = "frame constants";
         frameCb_ = d->createBuffer(cb);
+        nvrhi::BufferDesc lb;
+        lb.byteSize = sizeof(LensConsts);
+        lb.isConstantBuffer = true;
+        lb.isVolatile = true;
+        lb.maxVersions = 16;
+        lb.debugName = "lens rings";
+        lensCb_ = d->createBuffer(lb);
 
         pointClamp_ = d->createSampler(nvrhi::SamplerDesc()
                                            .setAllFilters(false)
@@ -368,7 +517,9 @@ public:
             attr("FACEN", nvrhi::Format::RGB32_FLOAT, offsetof(GpuVertex, faceN)),
             attr("PAIRN", nvrhi::Format::RGB32_FLOAT, offsetof(GpuVertex, pairN)),
             attr("SURFACE", nvrhi::Format::R32_FLOAT, offsetof(GpuVertex, surface)),
-            attr("UVRECT", nvrhi::Format::RGBA32_FLOAT, offsetof(GpuVertex, uvRect))};
+            attr("UVRECT", nvrhi::Format::RGBA32_FLOAT, offsetof(GpuVertex, uvRect)),
+            attr("OBJECT", nvrhi::Format::R32_FLOAT, offsetof(GpuVertex, object)),
+            attr("PIECEN", nvrhi::Format::RGB32_FLOAT, offsetof(GpuVertex, pieceN))};
         inputLayout_ = d->createInputLayout(attrs, uint32_t(std::size(attrs)), sceneVs_);
 
         nvrhi::BindingLayoutDesc bl;
@@ -380,17 +531,61 @@ public:
             bl.bindings.push_back(nvrhi::BindingLayoutItem::RayTracingAccelStruct(1));
             bl.bindings.push_back(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2));
             bl.bindings.push_back(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(3));
+            bl.bindings.push_back(nvrhi::BindingLayoutItem::Texture_SRV(7)); // the traced light, its prepass depth
+            bl.bindings.push_back(nvrhi::BindingLayoutItem::Texture_SRV(8));
             tlas_ = d->createAccelStruct(nvrhi::rt::AccelStructDesc().setTopLevelMaxInstances(2).setDebugName("scene tlas"));
             const std::vector<float> none(4, 0.0f);
             dynAttr_ = attrBuffer(none, "dynamic rt attributes");
             uploadBuffer(dynAttr_, none);
+            // the traced light (scene.hlsl lightTex): the prepass, the rays, the two blur passes
+            prePs_ = d->createShader({nvrhi::ShaderType::Pixel, "", "ps_main"}, g_scene_pre_ps, sizeof(g_scene_pre_ps));
+            lightPs_ = d->createShader({nvrhi::ShaderType::Pixel, "", "ps_light"}, g_light_ps, sizeof(g_light_ps));
+            lightBlurPs_[0] = d->createShader({nvrhi::ShaderType::Pixel, "", "ps_lightBlurX"}, g_light_blur_x_ps,
+                                              sizeof(g_light_blur_x_ps));
+            lightBlurPs_[1] = d->createShader({nvrhi::ShaderType::Pixel, "", "ps_lightBlurY"}, g_light_blur_y_ps,
+                                              sizeof(g_light_blur_y_ps));
+            nvrhi::BindingLayoutDesc ll;
+            ll.visibility = nvrhi::ShaderType::All;
+            ll.bindings = {nvrhi::BindingLayoutItem::VolatileConstantBuffer(0), nvrhi::BindingLayoutItem::Texture_SRV(0),
+                           nvrhi::BindingLayoutItem::Sampler(0)};
+            preLayout_ = d->createBindingLayout(ll);
+            ll.bindings.push_back(nvrhi::BindingLayoutItem::RayTracingAccelStruct(1));
+            ll.bindings.push_back(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2));
+            ll.bindings.push_back(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(3));
+            ll.bindings.push_back(nvrhi::BindingLayoutItem::Texture_SRV(8));
+            ll.bindings.push_back(nvrhi::BindingLayoutItem::Texture_SRV(9));
+            lightLayout_ = d->createBindingLayout(ll);
+            ll.bindings = {nvrhi::BindingLayoutItem::VolatileConstantBuffer(0), nvrhi::BindingLayoutItem::Texture_SRV(8),
+                           nvrhi::BindingLayoutItem::Texture_SRV(9), nvrhi::BindingLayoutItem::Texture_SRV(10)};
+            lightBlurLayout_ = d->createBindingLayout(ll);
+            // what the scene binds while no light is traced (never read: scene.hlsl lightTerms)
+            lightNone_ = makeTarget(1, 1, nvrhi::Format::RG8_UNORM, "no traced light");
+            preDepthNone_ = makeTarget(1, 1, nvrhi::Format::R32_FLOAT, "no light prepass");
         }
         sceneLayout_ = d->createBindingLayout(bl);
+        outlinePs_[0] = d->createShader({nvrhi::ShaderType::Pixel, "", "ps_outline"}, g_outline_ps, sizeof(g_outline_ps));
+        outlinePs_[1] = d->createShader({nvrhi::ShaderType::Pixel, "", "ps_outline"}, g_outline_ms_ps, sizeof(g_outline_ms_ps));
+        {
+            nvrhi::BindingLayoutDesc ol; // the frame, the depth copy, the normal target
+            ol.visibility = nvrhi::ShaderType::All;
+            ol.bindings = {nvrhi::BindingLayoutItem::VolatileConstantBuffer(0), nvrhi::BindingLayoutItem::Texture_SRV(5),
+                           nvrhi::BindingLayoutItem::Texture_SRV(6), nvrhi::BindingLayoutItem::Texture_SRV(11)};
+            outlineLayout_ = d->createBindingLayout(ol);
+        }
+        bloomPs_[0] = d->createShader({nvrhi::ShaderType::Pixel, "", "ps_down"}, g_bloom_down_ps, sizeof(g_bloom_down_ps));
+        bloomPs_[1] = d->createShader({nvrhi::ShaderType::Pixel, "", "ps_up"}, g_bloom_up_ps, sizeof(g_bloom_up_ps));
+        {
+            nvrhi::BindingLayoutDesc ml;
+            ml.visibility = nvrhi::ShaderType::Pixel;
+            ml.bindings = {nvrhi::BindingLayoutItem::PushConstants(0, sizeof(BloomConstants)),
+                           nvrhi::BindingLayoutItem::Texture_SRV(0), nvrhi::BindingLayoutItem::Sampler(0)};
+            bloomLayout_ = d->createBindingLayout(ml);
+        }
         nvrhi::BindingLayoutDesc ol;
         ol.visibility = nvrhi::ShaderType::Pixel;
         ol.bindings = {nvrhi::BindingLayoutItem::PushConstants(0, sizeof(OutConsts)), nvrhi::BindingLayoutItem::Texture_SRV(0),
                        nvrhi::BindingLayoutItem::Sampler(0), nvrhi::BindingLayoutItem::Sampler(1),
-                       nvrhi::BindingLayoutItem::Texture_SRV(1)};
+                       nvrhi::BindingLayoutItem::Texture_SRV(1), nvrhi::BindingLayoutItem::VolatileConstantBuffer(1)};
         outLayout_ = d->createBindingLayout(ol);
         nvrhi::BindingLayoutDesc dl;
         dl.visibility = nvrhi::ShaderType::Pixel;
@@ -509,6 +704,9 @@ public:
     }
 
     void setSun(const SunLight& sun) override { sun_ = sun; }
+    void setAmbientOcclusion(const AmbientOcclusion& ao) override { occlusion_ = ao; }
+    void setBloom(const Bloom& bloom) override { bloom_ = bloom; }
+    void setToonStyle(const ToonStyle& style) override { toon_ = style; }
     void setParticleLighting(const ParticleLighting& l) override { particleLighting_ = l; }
     void setModelSubdivision(const ModelSubdivision& s) override { subdivision_ = s; }
     void setPrecipitation(const Precipitation& p) override { precip_ = p; }
@@ -705,6 +903,7 @@ public:
         effectNearFade_[1] = to;
     }
     void setScreenRipples(const std::vector<ScreenRipple>& ripples) override { ripples_ = ripples; }
+    void setLensRings(const std::vector<LensRing>& rings) override { lensRings_ = rings; }
     void setScreenWave(float amplitude, float phase, const float tint[3], bool remaster, float seconds, bool heat) override {
         waveHeat_ = heat;
         wave_[0] = amplitude;
@@ -735,6 +934,7 @@ public:
         dyn_.clear();
         dynStart_.fill(0);
         std::vector<std::pair<size_t, size_t>> models; // the objects' vertex ranges, smoothed per object
+        std::vector<std::pair<size_t, size_t>> pieces; // ... the models' of the anime look, shaded by their pieces
         // the surface bits by object: the model draws (exe 0x5f4980 / 0x5f3820) and the effects
         std::vector<std::pair<size_t, size_t>> surfaces;
         std::vector<uint32_t> surfaceBits;
@@ -747,8 +947,10 @@ public:
                 models.push_back({dyn_.size(), dyn_.size() + o.tris.size()});
             uint32_t bits = 0;
             if (isModel(kind)) bits |= kSurfaceModel;
+            if (isModel(kind) && toon_.shading) pieces.push_back({dyn_.size(), dyn_.size() + o.tris.size()});
             if (kind == kKindEffect) bits |= kSurfaceEffect;
             if (o.nearFade) bits |= kSurfaceNearFade;
+            if (o.glow[0] > 0.0f || o.glow[1] > 0.0f || o.glow[2] > 0.0f) bits |= kSurfaceGlow;
             if (bits) {
                 surfaces.push_back({dyn_.size(), dyn_.size() + o.tris.size()});
                 surfaceBits.push_back(bits);
@@ -759,26 +961,53 @@ public:
         if (particleLighting_.enabled)
             particleLights_ = gatherParticleLights(sorted, particleLighting_.radius, kMaxParticleLights);
         history_.apply(sorted, dynPrev_);
-        toGpu(dyn_, dynPrev_.data(), dynGpu_, &models, &surfaces, &surfaceBits);
-        if (subdivision_.level > 1) {
-            dynFine_.clear();
-            dynFine_.reserve(dynGpu_.size() * 2);
-            dynStart_.fill(0);
-            size_t at = 0;
+        toGpu(dyn_, dynPrev_.data(), dynGpu_, &models, &surfaces, &surfaceBits, &pieces);
+        {
+            size_t at = 0, number = 0;
             for (const DynamicObject& o : sorted) {
-                const size_t first = dynFine_.size();
-                const SubdivisionPlan* plan = isModel(o.id >> 24) ? subdivisionPlan(o, dyn_.data() + at) : nullptr;
-                if (plan)
-                    subdivideModel(dynGpu_.data() + at, o.tris.size(), *plan, subdivision_.level, subdivision_.amount, planFaces_, dynFine_);
-                else
-                    dynFine_.insert(dynFine_.end(), dynGpu_.begin() + std::ptrdiff_t(at), dynGpu_.begin() + std::ptrdiff_t(at + o.tris.size()));
-                for (int m = std::min<int>(o.blend, 4); m < 5; ++m) dynStart_[m] += uint32_t(dynFine_.size() - first);
+                ++number;
+                for (size_t k = 0; k < o.tris.size(); ++k) dynGpu_[at + k].object = float(number);
                 at += o.tris.size();
             }
-            dynGpu_.swap(dynFine_);
+        }
+        // the subdivision: here only what the GPU needs to make it (expandDynamic): the models' vertices take their
+        // plan's normals over this frame's faces, and each triangle says where its vertices go and how it splits
+        dynTris_.clear();
+        dynCount_ = uint32_t(dynGpu_.size());
+        if (subdivision_.level > 1 && !dynGpu_.empty()) {
+            const uint32_t split = uint32_t(subdivision_.level * subdivision_.level) * 3;
+            dynStart_.fill(0);
+            size_t at = 0;
+            uint32_t out = 0;
+            for (const DynamicObject& o : sorted) {
+                const uint32_t first = out;
+                const size_t count = o.tris.size();
+                GpuVertex* v = dynGpu_.data() + at;
+                const SubdivisionPlan* plan = isModel(o.id >> 24) ? subdivisionPlan(o, dyn_.data() + at) : nullptr;
+                if (plan) {
+                    planFaces_.resize(count);
+                    for (size_t f = 0; f + 2 < count; f += 3) std::memcpy(&planFaces_[f], v[f].faceN, 3 * sizeof(float));
+                    for (size_t k = 0; k < count; ++k) subdivisionNormal(*plan, k, planFaces_.data(), v[k].normal);
+                }
+                for (size_t f = 0; f + 2 < count; f += 3) {
+                    uint32_t flags = 0;
+                    if (plan) {
+                        const GpuVertex& a = v[f];
+                        const bool opposite = a.faceN[0] * a.pairN[0] + a.faceN[1] * a.pairN[1] + a.faceN[2] * a.pairN[2] < 0.0f;
+                        const SubdividedCull cull = subdividedCull(int(std::lround(a.v.cull)), opposite);
+                        flags = kTriSplit | uint32_t(plan->roundEdges[f / 3]) << kTriRoundShift | (cull.mode ? kTriCullOne : 0) |
+                                (cull.reverse ? kTriReverse : 0);
+                    }
+                    dynTris_.insert(dynTris_.end(), {uint32_t(at + f), out, flags});
+                    out += plan ? split : 3;
+                }
+                for (int m = std::min<int>(o.blend, 4); m < 5; ++m) dynStart_[m] += out - first;
+                at += count;
+            }
+            dynCount_ = out;
         }
         costs_.dynamicMs = msSince(began);
-        costs_.dynamicVertices = uint32_t(dynGpu_.size());
+        costs_.dynamicVertices = dynCount_;
         costs_.dynamicOpaque = dynStart_[0];
     }
 
@@ -981,8 +1210,10 @@ public:
         nvrhi::IDevice* d = dev_.device();
         if (!vbuf_ || !sceneSet_) return false;
         const std::vector<GpuVertex> dynKeep = dynGpu_;
+        const uint32_t dynCountKeep = dynCount_;
         const std::vector<RenderVertex> skyKeep = sky_;
         dynGpu_.clear(); // static scene only: actors would move between the two frames
+        dynCount_ = 0;
         jitter_ = {0.0f, 0.0f};
         sky_.clear();
         auto frame = [&](const Camera& cam, std::vector<float>* motion, std::vector<float>* depth) {
@@ -1004,6 +1235,7 @@ public:
         frame(b, &mv, &dep);
         frame(b, &still, nullptr);
         dynGpu_ = dynKeep;
+        dynCount_ = dynCountKeep;
         sky_ = skyKeep;
         resetHistory();
 
@@ -1073,7 +1305,10 @@ public:
             cl_->resolveTexture(t_.motion, nvrhi::AllSubresources, t_.msMotion, nvrhi::AllSubresources);
             cl_->resolveTexture(t_.normal, nvrhi::AllSubresources, t_.msNormal, nvrhi::AllSubresources);
             cl_->resolveTexture(t_.reactive, nvrhi::AllSubresources, t_.msReactive, nvrhi::AllSubresources);
+            if (glowDrawn_) cl_->resolveTexture(t_.glow, nvrhi::AllSubresources, t_.msGlow, nvrhi::AllSubresources);
         }
+        if (glowDrawn_) drawBloom(); // under the blown snow: the medium dims it as it dims the scene
+        glowDrawn_ = false;
         if (vbuf_ && sceneSet_ && precip_.blizzard > 0.0f) drawBlowingSnow();
         if (view_ == DebugView::Final) {
             upscale(cam);
@@ -1161,10 +1396,17 @@ private:
     struct Targets {
         nvrhi::TextureHandle color, motion, normal, reactive, depth, upscaled;
         // aa=msaa: the scene draws into these (and a multisampled depth), resolved into color..reactive
-        nvrhi::TextureHandle msColor, msMotion, msNormal, msReactive;
+        nvrhi::TextureHandle msColor, msMotion, msNormal, msReactive, msGlow;
+        nvrhi::TextureHandle glow; // the light the glowing effects add (scene.hlsl PSOut::glow): the bloom's source
         int samples = 1;
         nvrhi::FramebufferHandle scene;
         nvrhi::FramebufferHandle post; // color + reactive at render size (after the MSAA resolve): the blown snow
+        nvrhi::FramebufferHandle colorOnly; // color at render size (after the resolve): the bloom's last pass
+        nvrhi::FramebufferHandle lines;     // the scene's colour + reactive (multisampled with aa=msaa): the anime line
+        // the bloom's halved copies of glow, made when first needed (drawBloom)
+        nvrhi::TextureHandle bloom[kBloomLevels];
+        nvrhi::FramebufferHandle bloomFb[kBloomLevels];
+        nvrhi::BindingSetHandle bloomDown[kBloomLevels], bloomUp[kBloomLevels]; // level k's source: the pass into it
         int renderW = 0, renderH = 0, outW = 0, outH = 0;
     };
 
@@ -1200,8 +1442,10 @@ private:
         t_.motion = makeTarget(rw, rh, nvrhi::Format::RG16_FLOAT, "motion");
         t_.normal = makeTarget(rw, rh, nvrhi::Format::R10G10B10A2_UNORM, "normal");
         t_.reactive = makeTarget(rw, rh, nvrhi::Format::R8_UNORM, "reactive");
+        t_.glow = makeTarget(rw, rh, kGlowFormat, "glow");
         t_.depth = makeTarget(rw, rh, kDepthFormat, "depth", true, samples);
         if (samples > 1) {
+            t_.msGlow = makeTarget(rw, rh, kGlowFormat, "ms glow", false, samples);
             t_.msColor = makeTarget(rw, rh, nvrhi::Format::RGBA16_FLOAT, "ms color", false, samples);
             t_.msMotion = makeTarget(rw, rh, nvrhi::Format::RG16_FLOAT, "ms motion", false, samples);
             t_.msNormal = makeTarget(rw, rh, nvrhi::Format::R10G10B10A2_UNORM, "ms normal", false, samples);
@@ -1225,8 +1469,14 @@ private:
                                             .addColorAttachment(ms ? t_.msMotion : t_.motion)
                                             .addColorAttachment(ms ? t_.msNormal : t_.normal)
                                             .addColorAttachment(ms ? t_.msReactive : t_.reactive)
+                                            .addColorAttachment(ms ? t_.msGlow : t_.glow)
                                             .setDepthAttachment(t_.depth));
         t_.post = d->createFramebuffer(nvrhi::FramebufferDesc().addColorAttachment(t_.color).addColorAttachment(t_.reactive));
+        t_.colorOnly = d->createFramebuffer(nvrhi::FramebufferDesc().addColorAttachment(t_.color));
+        t_.lines = d->createFramebuffer(nvrhi::FramebufferDesc()
+                                            .addColorAttachment(ms ? t_.msColor : t_.color)
+                                            .addColorAttachment(ms ? t_.msReactive : t_.reactive));
+        outlineSet_ = nullptr; // it binds the old normal target
         blizzardSet_ = nullptr; // it binds the old depth copy
         if (!blizzardPipe_) { // the blown snow over the resolved colour: premultiplied (One / SrcAlpha), reactive = max
             nvrhi::GraphicsPipelineDesc bp;
@@ -1268,6 +1518,8 @@ private:
         ds.depthTestEnable = true;
         ds.depthWriteEnable = true;
         ds.depthFunc = nvrhi::ComparisonFunc::Less;
+        // the glow target takes only the light the additive draws add (the semi pipelines of B + F and B + F/4 below)
+        pd.renderState.blendState.targets[4].colorWriteMask = nvrhi::ColorMask(0);
         const nvrhi::FramebufferInfo& fb = t_.scene->getFramebufferInfo();
         opaque_ = d->createGraphicsPipeline(pd, fb);
 
@@ -1303,6 +1555,12 @@ private:
             r.blendOp = nvrhi::BlendOp::Max;
             r.srcBlendAlpha = r.destBlendAlpha = nvrhi::BlendFactor::One;
             r.blendOpAlpha = nvrhi::BlendOp::Max;
+            if (mode == 1 || mode == 3) { // the light added (scene.hlsl PSOut::glow gives it as it reaches the colour)
+                auto& g = sp.renderState.blendState.targets[4];
+                g.blendEnable = true;
+                g.srcBlend = g.destBlend = g.srcBlendAlpha = g.destBlendAlpha = nvrhi::BlendFactor::One;
+                g.colorWriteMask = nvrhi::ColorMask::All;
+            }
             semi_[mode] = d->createGraphicsPipeline(sp, fb);
         }
 
@@ -1324,11 +1582,53 @@ private:
         c.colorWriteMask = nvrhi::ColorMask::Red | nvrhi::ColorMask::Green | nvrhi::ColorMask::Blue;
         fp.renderState.blendState.targets[1].colorWriteMask = nvrhi::ColorMask(0);
         fp.renderState.blendState.targets[2].colorWriteMask = nvrhi::ColorMask(0);
+        fp.renderState.blendState.targets[4].colorWriteMask = nvrhi::ColorMask(0);
         auto& r = fp.renderState.blendState.targets[3];
         r.blendEnable = true;
         r.srcBlend = r.destBlend = r.srcBlendAlpha = r.destBlendAlpha = nvrhi::BlendFactor::One;
         r.blendOp = r.blendOpAlpha = nvrhi::BlendOp::Max;
         flakePipe_ = d->createGraphicsPipeline(fp, fb);
+
+        // the anime look's line (scene.hlsl ps_outline) over the opaque scene: alpha blended, reactive = max
+        nvrhi::GraphicsPipelineDesc lp;
+        lp.primType = nvrhi::PrimitiveType::TriangleList;
+        lp.VS = fullVs_;
+        lp.PS = outlinePs_[t_.samples > 1 ? 1 : 0];
+        lp.bindingLayouts = {outlineLayout_};
+        lp.renderState.rasterState.setCullNone();
+        lp.renderState.depthStencilState.depthTestEnable = false;
+        lp.renderState.depthStencilState.depthWriteEnable = false;
+        auto& lc = lp.renderState.blendState.targets[0];
+        lc.blendEnable = true;
+        lc.srcBlend = nvrhi::BlendFactor::SrcAlpha;
+        lc.destBlend = nvrhi::BlendFactor::InvSrcAlpha;
+        lc.colorWriteMask = nvrhi::ColorMask::Red | nvrhi::ColorMask::Green | nvrhi::ColorMask::Blue;
+        auto& lr = lp.renderState.blendState.targets[1];
+        lr.blendEnable = true;
+        lr.srcBlend = lr.destBlend = lr.srcBlendAlpha = lr.destBlendAlpha = nvrhi::BlendFactor::One;
+        lr.blendOp = lr.blendOpAlpha = nvrhi::BlendOp::Max;
+        outlinePipe_ = d->createGraphicsPipeline(lp, t_.lines->getFramebufferInfo());
+    }
+
+    // the anime look's line, once the opaque surfaces and the copy of their depth are drawn (the frame constants written)
+    void drawOutline() {
+        if (!outlineSet_) {
+            nvrhi::BindingSetDesc bs;
+            bs.bindings = {nvrhi::BindingSetItem::ConstantBuffer(0, frameCb_), nvrhi::BindingSetItem::Texture_SRV(5, depthCopy_),
+                           nvrhi::BindingSetItem::Texture_SRV(6, sceneCopy_),
+                           nvrhi::BindingSetItem::Texture_SRV(11, t_.samples > 1 ? t_.msNormal : t_.normal)};
+            outlineSet_ = dev_.device()->createBindingSet(bs, outlineLayout_);
+        }
+        // the scene so far, for the colour of what the line goes around (the see-through's lens copies over it later)
+        if (t_.samples > 1) cl_->resolveTexture(sceneCopy_, nvrhi::AllSubresources, t_.msColor, nvrhi::AllSubresources);
+        else cl_->copyTexture(sceneCopy_, nvrhi::TextureSlice(), t_.color, nvrhi::TextureSlice());
+        nvrhi::GraphicsState gs;
+        gs.pipeline = outlinePipe_;
+        gs.framebuffer = t_.lines;
+        gs.viewport.addViewportAndScissorRect(nvrhi::Viewport(float(t_.renderW), float(t_.renderH)));
+        gs.bindings = {outlineSet_};
+        cl_->setGraphicsState(gs);
+        cl_->draw(nvrhi::DrawArguments().setVertexCount(3));
     }
 
     // The precipitation's height map (renderer.hpp Precipitation): the room's surfaces seen from above (an orthographic
@@ -1494,6 +1794,7 @@ private:
         cl_->clearTextureFloat(ms ? t_.msMotion : t_.motion, nvrhi::AllSubresources, nvrhi::Color(0.0f));
         cl_->clearTextureFloat(ms ? t_.msNormal : t_.normal, nvrhi::AllSubresources, nvrhi::Color(0.0f));
         cl_->clearTextureFloat(ms ? t_.msReactive : t_.reactive, nvrhi::AllSubresources, nvrhi::Color(0.0f));
+        cl_->clearTextureFloat(ms ? t_.msGlow : t_.glow, nvrhi::AllSubresources, nvrhi::Color(0.0f));
         cl_->clearDepthStencilTexture(t_.depth, nvrhi::AllSubresources, true, 1.0f, kDepthHasStencil, 0);
         depthFresh_ = false;
     }
@@ -1557,7 +1858,185 @@ private:
         sceneCopy_ = makeTarget(t_.renderW, t_.renderH, t_.color->getDesc().format, "scene colour copy");
         outSets_.clear(); // they bind the old copy
         flakeSet_ = blizzardSet_ = nullptr;
+        outlineSet_ = nullptr;
+        light_ = nullptr; // the traced light's targets are of the old size: made again when next traced
+        preDepth_ = nullptr;
         makeSceneSet();
+    }
+
+    // The traced light (scene.hlsl lightTex): the sun's soft shadows and the ambient occlusion
+    bool sunSoft() const { return rt_ && sun_.enabled && !sun_.sheltered && sun_.softness > 0.0f; }
+    bool occluding() const { return rt_ && occlusion_.enabled && occlusion_.strength > 0.0f; }
+
+    // its targets at render size (the prepass's depth and normals, the rays' result and its two blur passes), made when
+    // a frame first traces; the scene's set binds the result
+    void makeLightTargets() {
+        nvrhi::IDevice* d = dev_.device();
+        const int w = t_.renderW, h = t_.renderH;
+        preDepth_ = makeTarget(w, h, nvrhi::Format::R32_FLOAT, "light prepass depth");
+        preNormal_ = makeTarget(w, h, nvrhi::Format::RGBA8_SNORM, "light prepass normals");
+        preZ_ = makeTarget(w, h, kDepthFormat, "light prepass z", true);
+        preFb_ = d->createFramebuffer(
+            nvrhi::FramebufferDesc().addColorAttachment(preDepth_).addColorAttachment(preNormal_).setDepthAttachment(preZ_));
+        static const char* const kNames[3] = {"light rays", "light blur", "light"};
+        for (int k = 0; k < 3; ++k) {
+            lightPass_[k] = makeTarget(w, h, nvrhi::Format::RG8_UNORM, kNames[k]);
+            lightFb_[k] = d->createFramebuffer(nvrhi::FramebufferDesc().addColorAttachment(lightPass_[k]));
+        }
+        light_ = lightPass_[2];
+        if (!prePipe_) {
+            nvrhi::GraphicsPipelineDesc pd; // the opaque draws' rasterisation (createScenePipelines)
+            pd.primType = nvrhi::PrimitiveType::TriangleList;
+            pd.inputLayout = inputLayout_;
+            pd.VS = sceneVs_;
+            pd.PS = prePs_;
+            pd.bindingLayouts = {preLayout_};
+            pd.renderState.rasterState.setCullNone();
+            pd.renderState.depthStencilState.depthTestEnable = true;
+            pd.renderState.depthStencilState.depthWriteEnable = true;
+            pd.renderState.depthStencilState.depthFunc = nvrhi::ComparisonFunc::Less;
+            prePipe_ = d->createGraphicsPipeline(pd, preFb_->getFramebufferInfo());
+            nvrhi::GraphicsPipelineDesc fp;
+            fp.primType = nvrhi::PrimitiveType::TriangleList;
+            fp.VS = fullVs_;
+            fp.renderState.rasterState.setCullNone();
+            fp.renderState.depthStencilState.depthTestEnable = false;
+            fp.renderState.depthStencilState.depthWriteEnable = false;
+            fp.PS = lightPs_;
+            fp.bindingLayouts = {lightLayout_};
+            lightPipe_[0] = d->createGraphicsPipeline(fp, lightFb_[0]->getFramebufferInfo());
+            fp.bindingLayouts = {lightBlurLayout_};
+            for (int k = 0; k < 2; ++k) {
+                fp.PS = lightBlurPs_[k];
+                lightPipe_[k + 1] = d->createGraphicsPipeline(fp, lightFb_[k + 1]->getFramebufferInfo());
+            }
+        }
+        makeSceneSet();
+    }
+
+    // the prepass's and the three passes' sets (after makeSceneSet: the pages, the ray-tracing buffers or the targets
+    // changed)
+    void makeLightSets() {
+        nvrhi::IDevice* d = dev_.device();
+        nvrhi::BindingSetDesc bs;
+        bs.bindings = {nvrhi::BindingSetItem::ConstantBuffer(0, frameCb_), nvrhi::BindingSetItem::Texture_SRV(0, pages_),
+                       nvrhi::BindingSetItem::Sampler(0, pointClamp_)};
+        preSet_ = d->createBindingSet(bs, preLayout_);
+        bs.bindings.push_back(nvrhi::BindingSetItem::RayTracingAccelStruct(1, tlas_));
+        bs.bindings.push_back(nvrhi::BindingSetItem::StructuredBuffer_SRV(2, staticAttr_));
+        bs.bindings.push_back(nvrhi::BindingSetItem::StructuredBuffer_SRV(3, dynAttr_));
+        bs.bindings.push_back(nvrhi::BindingSetItem::Texture_SRV(8, preDepth_));
+        bs.bindings.push_back(nvrhi::BindingSetItem::Texture_SRV(9, preNormal_));
+        lightSet_[0] = d->createBindingSet(bs, lightLayout_);
+        for (int k = 0; k < 2; ++k) {
+            bs.bindings = {nvrhi::BindingSetItem::ConstantBuffer(0, frameCb_), nvrhi::BindingSetItem::Texture_SRV(8, preDepth_),
+                           nvrhi::BindingSetItem::Texture_SRV(9, preNormal_),
+                           nvrhi::BindingSetItem::Texture_SRV(10, lightPass_[k])};
+            lightSet_[k + 1] = d->createBindingSet(bs, lightBlurLayout_);
+        }
+    }
+
+    // this frame's traced light, before the opaque draws that read it: the prepass (their surfaces, drawn as they
+    // draw them), the rays, the blur. `opaque` writes the frame constants of the opaque draws
+    void drawLight(const std::function<void()>& opaque) {
+        if (!light_ || !preDepth_) makeLightTargets();
+        if (!preSet_) makeLightSets();
+        cl_->clearTextureFloat(preDepth_, nvrhi::AllSubresources, nvrhi::Color(0.0f));
+        cl_->clearTextureFloat(preNormal_, nvrhi::AllSubresources, nvrhi::Color(0.0f));
+        cl_->clearDepthStencilTexture(preZ_, nvrhi::AllSubresources, true, 1.0f, kDepthHasStencil, 0);
+        nvrhi::GraphicsState gs;
+        gs.pipeline = prePipe_;
+        gs.framebuffer = preFb_;
+        gs.viewport.addViewportAndScissorRect(nvrhi::Viewport(float(t_.renderW), float(t_.renderH)));
+        gs.bindings = {preSet_};
+        const auto range = [&](nvrhi::IBuffer* vb, uint32_t first, uint32_t count) {
+            if (!count) return;
+            gs.vertexBuffers = {nvrhi::VertexBufferBinding().setBuffer(vb).setSlot(0).setOffset(0)};
+            cl_->setGraphicsState(gs);
+            cl_->draw(nvrhi::DrawArguments().setVertexCount(count).setStartVertexLocation(first));
+        };
+        const uint32_t dynCount = dynCount_, dynOpaque = std::min(dynStart_[0], dynCount);
+        opaque();
+        range(vbuf_, 0, semiStart_[0]);
+        if (dynCount) range(dynDrawn(), 0, dynOpaque);
+        frameSemiPass_ = 1.0f; // the semi-transparent ranges' opaque texels (drawScene)
+        opaque();
+        range(vbuf_, semiStart_[0], semiStart_[3] - semiStart_[0]);
+        if (dynOpaque < dynCount) range(dynDrawn(), dynOpaque, dynCount - dynOpaque);
+        frameSemiPass_ = 0.0f;
+        for (int k = 0; k < 3; ++k) {
+            nvrhi::GraphicsState fs;
+            fs.pipeline = lightPipe_[k];
+            fs.framebuffer = lightFb_[k];
+            fs.viewport.addViewportAndScissorRect(nvrhi::Viewport(float(t_.renderW), float(t_.renderH)));
+            fs.bindings = {lightSet_[k]};
+            cl_->setGraphicsState(fs);
+            cl_->draw(nvrhi::DrawArguments().setVertexCount(3));
+        }
+    }
+
+    // The bloom (bloom.hlsl): the glow target halved kBloomLevels times, each copy then enlarged and added to the one
+    // before it, the last onto the scene's colour (render size, before the upscaler)
+    void drawBloom() {
+        nvrhi::IDevice* d = dev_.device();
+        int w[kBloomLevels + 1] = {t_.renderW}, h[kBloomLevels + 1] = {t_.renderH};
+        for (int k = 1; k <= kBloomLevels; ++k) {
+            w[k] = std::max(w[k - 1] / 2, 1);
+            h[k] = std::max(h[k - 1] / 2, 1);
+        }
+        const auto set = [&](nvrhi::ITexture* src) {
+            nvrhi::BindingSetDesc bs;
+            bs.bindings = {nvrhi::BindingSetItem::PushConstants(0, sizeof(BloomConstants)),
+                           nvrhi::BindingSetItem::Texture_SRV(0, src), nvrhi::BindingSetItem::Sampler(0, linearClamp_)};
+            return d->createBindingSet(bs, bloomLayout_);
+        };
+        if (!t_.bloom[0]) {
+            for (int k = 0; k < kBloomLevels; ++k) {
+                t_.bloom[k] = makeTarget(w[k + 1], h[k + 1], kGlowFormat, "bloom");
+                t_.bloomFb[k] = d->createFramebuffer(nvrhi::FramebufferDesc().addColorAttachment(t_.bloom[k]));
+            }
+            for (int k = 0; k < kBloomLevels; ++k) {
+                t_.bloomDown[k] = set(k ? t_.bloom[k - 1].Get() : t_.glow.Get());
+                if (k + 1 < kBloomLevels) t_.bloomUp[k] = set(t_.bloom[k + 1]);
+            }
+            bloomLast_ = set(t_.bloom[0]);
+        }
+        if (!bloomPipe_[0]) {
+            nvrhi::GraphicsPipelineDesc pd;
+            pd.primType = nvrhi::PrimitiveType::TriangleList;
+            pd.VS = fullVs_;
+            pd.PS = bloomPs_[0];
+            pd.bindingLayouts = {bloomLayout_};
+            pd.renderState.rasterState.setCullNone();
+            pd.renderState.depthStencilState.depthTestEnable = false;
+            pd.renderState.depthStencilState.depthWriteEnable = false;
+            bloomPipe_[0] = d->createGraphicsPipeline(pd, t_.bloomFb[0]->getFramebufferInfo());
+            pd.PS = bloomPs_[1];
+            auto& c = pd.renderState.blendState.targets[0];
+            c.blendEnable = true;
+            c.srcBlend = c.destBlend = nvrhi::BlendFactor::One;
+            c.srcBlendAlpha = nvrhi::BlendFactor::Zero;
+            c.destBlendAlpha = nvrhi::BlendFactor::One;
+            c.colorWriteMask = nvrhi::ColorMask::Red | nvrhi::ColorMask::Green | nvrhi::ColorMask::Blue;
+            bloomPipe_[1] = d->createGraphicsPipeline(pd, t_.bloomFb[0]->getFramebufferInfo());
+            bloomPipe_[2] = d->createGraphicsPipeline(pd, t_.colorOnly->getFramebufferInfo());
+        }
+        const auto pass = [&](nvrhi::IGraphicsPipeline* pipe, nvrhi::IFramebuffer* fb, nvrhi::IBindingSet* from, int target,
+                              int source, float gain) {
+            nvrhi::GraphicsState gs;
+            gs.pipeline = pipe;
+            gs.framebuffer = fb;
+            gs.viewport.addViewportAndScissorRect(nvrhi::Viewport(float(w[target]), float(h[target])));
+            gs.bindings = {from};
+            cl_->setGraphicsState(gs);
+            const BloomConstants c{{1.0f / float(w[target]), 1.0f / float(h[target])},
+                                   {1.0f / float(w[source]), 1.0f / float(h[source])}, gain, {}};
+            cl_->setPushConstants(&c, sizeof c);
+            cl_->draw(nvrhi::DrawArguments().setVertexCount(3));
+        };
+        for (int k = 0; k < kBloomLevels; ++k) pass(bloomPipe_[0], t_.bloomFb[k], t_.bloomDown[k], k + 1, k, 1.0f);
+        for (int k = kBloomLevels - 2; k >= 0; --k) pass(bloomPipe_[1], t_.bloomFb[k], t_.bloomUp[k], k + 1, k + 2, 1.0f);
+        pass(bloomPipe_[2], t_.colorOnly, bloomLast_, 0, 1, bloom_.strength * kBloomGain);
     }
     // D24 depth -> the R32F copy
     nvrhi::ITexture* copyDepth() {
@@ -1651,12 +2130,86 @@ private:
             bd.byteSize = bytes + bytes / 2;
             bd.isVertexBuffer = true;
             bd.isAccelStructBuildInput = rtInput;
+            bd.canHaveRawViews = true; // expandDynamic reads the dynamic ones
             bd.initialState = nvrhi::ResourceStates::VertexBuffer;
             bd.keepInitialState = true;
             bd.debugName = name;
             buf = dev_.device()->createBuffer(bd);
         }
         cl_->writeBuffer(buf, v.data(), bytes);
+    }
+
+    // the buffer the dynamic draws and the actors' BLAS read: the streamed vertices, or the ones expandDynamic made of them
+    nvrhi::IBuffer* dynDrawn() const { return dynTris_.empty() ? dynBuf_.Get() : dynFineBuf_.Get(); }
+
+    // the frame's subdivision (uploadDynamic's dynTris_): dynBuf_'s triangles into dynFineBuf_ and the rays' attributes
+    // of its vertices into dynAttr_ (subdivide.hlsl)
+    void expandDynamic() {
+        nvrhi::IDevice* d = dev_.device();
+        struct Params { // subdivide.hlsl
+            uint32_t triCount, level;
+            float amount;
+            uint32_t pad;
+        };
+        if (!subdivPipe_) {
+            subdivCs_ = d->createShader({nvrhi::ShaderType::Compute, "", "cs_main"}, g_subdivide_cs, sizeof(g_subdivide_cs));
+            nvrhi::BindingLayoutDesc bl;
+            bl.visibility = nvrhi::ShaderType::Compute;
+            bl.bindings = {nvrhi::BindingLayoutItem::PushConstants(0, sizeof(Params)), nvrhi::BindingLayoutItem::RawBuffer_SRV(0),
+                           nvrhi::BindingLayoutItem::RawBuffer_SRV(1), nvrhi::BindingLayoutItem::RawBuffer_UAV(0),
+                           nvrhi::BindingLayoutItem::StructuredBuffer_UAV(1)};
+            subdivLayout_ = d->createBindingLayout(bl);
+            nvrhi::ComputePipelineDesc pd;
+            pd.CS = subdivCs_;
+            pd.bindingLayouts = {subdivLayout_};
+            subdivPipe_ = d->createComputePipeline(pd);
+        }
+        if (const uint64_t bytes = uint64_t(dynCount_) * sizeof(GpuVertex); !dynFineBuf_ || dynFineBuf_->getDesc().byteSize < bytes) {
+            nvrhi::BufferDesc bd;
+            bd.byteSize = bytes + bytes / 2;
+            bd.isVertexBuffer = true;
+            bd.isAccelStructBuildInput = rt_;
+            bd.canHaveUAVs = true;
+            bd.canHaveRawViews = true;
+            bd.initialState = nvrhi::ResourceStates::VertexBuffer;
+            bd.keepInitialState = true;
+            bd.debugName = "subdivided dynamic vertices";
+            dynFineBuf_ = d->createBuffer(bd);
+            subdivSet_ = nullptr;
+        }
+        if (const uint64_t floats = uint64_t(dynCount_) * 4; !dynAttr_ || dynAttr_->getDesc().byteSize < floats * sizeof(float)) {
+            dynAttr_ = attrBuffer(std::vector<float>(size_t(floats + floats / 2), 0.0f), "dynamic rt attributes");
+            subdivSet_ = nullptr;
+            if (rt_) makeSceneSet(); // (the scene's and the traced light's sets bind it)
+        }
+        if (const uint64_t bytes = dynTris_.size() * sizeof(uint32_t); !dynTriBuf_ || dynTriBuf_->getDesc().byteSize < bytes) {
+            nvrhi::BufferDesc bd;
+            bd.byteSize = bytes + bytes / 2;
+            bd.canHaveRawViews = true;
+            bd.initialState = nvrhi::ResourceStates::ShaderResource;
+            bd.keepInitialState = true;
+            bd.debugName = "subdivision triangles";
+            dynTriBuf_ = d->createBuffer(bd);
+            subdivSet_ = nullptr;
+        }
+        cl_->writeBuffer(dynTriBuf_, dynTris_.data(), dynTris_.size() * sizeof(uint32_t));
+        if (!subdivSet_ || subdivFrom_ != dynBuf_.Get() || subdivAttr_ != dynAttr_.Get()) {
+            nvrhi::BindingSetDesc bs;
+            bs.bindings = {nvrhi::BindingSetItem::PushConstants(0, sizeof(Params)), nvrhi::BindingSetItem::RawBuffer_SRV(0, dynBuf_),
+                           nvrhi::BindingSetItem::RawBuffer_SRV(1, dynTriBuf_), nvrhi::BindingSetItem::RawBuffer_UAV(0, dynFineBuf_),
+                           nvrhi::BindingSetItem::StructuredBuffer_UAV(1, dynAttr_)};
+            subdivSet_ = d->createBindingSet(bs, subdivLayout_);
+            subdivFrom_ = dynBuf_.Get();
+            subdivAttr_ = dynAttr_.Get();
+        }
+        nvrhi::ComputeState cs;
+        cs.pipeline = subdivPipe_;
+        cs.bindings = {subdivSet_};
+        cl_->setComputeState(cs);
+        const uint32_t count = uint32_t(dynTris_.size() / 3);
+        const Params p{count, uint32_t(subdivision_.level), subdivision_.amount, 0};
+        cl_->setPushConstants(&p, sizeof p);
+        cl_->dispatch((count + 63) / 64);
     }
 
     // shared index buffer 0, 1, 2 ... (grow-only, written through cl when it grows)
@@ -1681,6 +2234,7 @@ private:
         nvrhi::BufferDesc bd;
         bd.byteSize = attr.size() * sizeof(float);
         bd.structStride = 16;
+        bd.canHaveUAVs = true; // expandDynamic writes the dynamic ones
         bd.initialState = nvrhi::ResourceStates::ShaderResource;
         bd.keepInitialState = true;
         bd.debugName = name;
@@ -1695,6 +2249,8 @@ private:
     }
 
     void makeSceneSet() {
+        preSet_ = nullptr; // the traced light's sets bind the same pages and buffers (makeLightSets)
+        for (nvrhi::BindingSetHandle& s : lightSet_) s = nullptr;
         if (!pages_) return;
         if (depthCopyStale()) {
             makeDepthCopy(); // (it makes the set)
@@ -1709,6 +2265,8 @@ private:
             bs.bindings.push_back(nvrhi::BindingSetItem::RayTracingAccelStruct(1, tlas_));
             bs.bindings.push_back(nvrhi::BindingSetItem::StructuredBuffer_SRV(2, staticAttr_));
             bs.bindings.push_back(nvrhi::BindingSetItem::StructuredBuffer_SRV(3, dynAttr_));
+            bs.bindings.push_back(nvrhi::BindingSetItem::Texture_SRV(7, light_ ? light_ : lightNone_));
+            bs.bindings.push_back(nvrhi::BindingSetItem::Texture_SRV(8, preDepth_ ? preDepth_ : preDepthNone_));
         }
         sceneSet_ = dev_.device()->createBindingSet(bs, sceneLayout_);
     }
@@ -1723,26 +2281,30 @@ private:
         if (staticBlas_)
             inst[n++] = nvrhi::rt::InstanceDesc().setBLAS(staticBlas_).setInstanceID(0).setInstanceMask(kRayMaskRoom).setFlags(flags);
         const uint32_t casters = dynOpaque / 3 * 3;
-        // the characters cast the sun's shadow and the particle lights'
-        if (((sun_.enabled && !sun_.sheltered) || !particleLights_.empty()) && casters && dynBuf_) {
-            std::vector<float> attr;
-            toAttr(dynGpu_, casters, attr);
-            if (dynAttr_->getDesc().byteSize < attr.size() * sizeof(float)) {
-                std::vector<float> grown(attr.size() * 3 / 2 + 4, 0.0f);
-                dynAttr_ = attrBuffer(grown, "dynamic rt attributes");
-                makeSceneSet();
+        // the characters cast the sun's shadow and the particle lights', and close the ambient occlusion's rays
+        nvrhi::IBuffer* const dynBuf = dynDrawn();
+        if (((sun_.enabled && !sun_.sheltered) || !particleLights_.empty() || occluding()) && casters && dynBuf) {
+            if (dynTris_.empty()) { // (a subdivided frame's are expandDynamic's)
+                toAttr(dynGpu_, casters, dynAttrCpu_);
+                if (dynAttr_->getDesc().byteSize < dynAttrCpu_.size() * sizeof(float)) {
+                    std::vector<float> grown(dynAttrCpu_.size() * 3 / 2 + 4, 0.0f);
+                    dynAttr_ = attrBuffer(grown, "dynamic rt attributes");
+                    makeSceneSet();
+                }
+                cl_->writeBuffer(dynAttr_, dynAttrCpu_.data(), dynAttrCpu_.size() * sizeof(float));
             }
-            cl_->writeBuffer(dynAttr_, attr.data(), attr.size() * sizeof(float));
-            if (!dynBlas_ || dynBlasBytes_ != dynBuf_->getDesc().byteSize) { // sized for the whole grow-only buffer
-                const uint32_t capacity = uint32_t(dynBuf_->getDesc().byteSize / sizeof(GpuVertex)) / 3 * 3;
-                const nvrhi::rt::GeometryDesc full = triangleGeometry(dynBuf_, sequentialIndices(cl_, capacity), capacity);
+            // sized for the whole grow-only buffer
+            if (!dynBlas_ || dynBlasFor_ != dynBuf || dynBlasBytes_ != dynBuf->getDesc().byteSize) {
+                const uint32_t capacity = uint32_t(dynBuf->getDesc().byteSize / sizeof(GpuVertex)) / 3 * 3;
+                const nvrhi::rt::GeometryDesc full = triangleGeometry(dynBuf, sequentialIndices(cl_, capacity), capacity);
                 dynBlas_ = d->createAccelStruct(nvrhi::rt::AccelStructDesc()
                                                     .addBottomLevelGeometry(full)
                                                     .setBuildFlags(nvrhi::rt::AccelStructBuildFlags::PreferFastBuild)
                                                     .setDebugName("actors blas"));
-                dynBlasBytes_ = dynBuf_->getDesc().byteSize;
+                dynBlasBytes_ = dynBuf->getDesc().byteSize;
+                dynBlasFor_ = dynBuf;
             }
-            const nvrhi::rt::GeometryDesc g = triangleGeometry(dynBuf_, sequentialIndices(cl_, casters), casters);
+            const nvrhi::rt::GeometryDesc g = triangleGeometry(dynBuf, sequentialIndices(cl_, casters), casters);
             cl_->buildBottomLevelAccelStruct(dynBlas_, &g, 1, nvrhi::rt::AccelStructBuildFlags::PreferFastBuild);
             inst[n++] = nvrhi::rt::InstanceDesc().setBLAS(dynBlas_).setInstanceID(1).setInstanceMask(kRayMaskActors).setFlags(flags);
         }
@@ -1795,6 +2357,12 @@ private:
             f.skyPoleUp[3] = skyPoles_.fadeFrom;
             f.skyPoleDown[3] = skyPoles_.fadeTo;
         }
+        // the sun in the sky: on the sky's draws (not ST01's travel map), never in a room with no sky
+        if (frameSky_ > 0.0f && skyIsSky_ && !sun_.sheltered && sun_.disc > 0.0f) {
+            f.sunDisc[0] = std::min(sun_.disc, 20.0f) * 3.14159265f / 180.0f;
+            f.sunDisc[1] = frameSky_;
+            XMStoreFloat4x4(&f.skyRay, skyRay_);
+        }
         f.fogDensity = fog_.density;
         f.fogHeightFalloff = fog_.heightFalloff;
         f.fogMaxOpacity = fog_.maxOpacity;
@@ -1823,6 +2391,29 @@ private:
             f.lightInfo[0] = float(particleLights_.size());
             f.lightInfo[1] = particleLighting_.strength;
         }
+        if (shadow) { // the traced light, on the same draws
+            f.lightTerms[0] = sunSoft() ? 1.0f : 0.0f;
+            f.lightTerms[1] = occluding() ? std::min(occlusion_.strength, 1.0f) : 0.0f;
+            f.lightTerms[2] = std::clamp(sun_.tint, 0.0f, 1.0f);
+        }
+        f.lightTerms[3] = frameGlow_;
+        f.lightTrace[0] = sunSoft() ? std::tan(std::min(sun_.softness, 20.0f) * 3.14159265f / 180.0f) : -1.0f;
+        f.lightTrace[1] = occlusion_.radius;
+        f.lightTrace[2] = occluding() ? float(std::clamp(occlusion_.rays, 1, 8)) : 0.0f;
+        // a temporal upscaler averages the frames: the pattern turns each one, and what the blur leaves at an edge
+        // turns into noise it resolves
+        f.lightTrace[3] = up_ && up_->temporal() ? float(frameIndex_ % 64) * 2.39996323f : 0.0f;
+        if (toon_.shading) {
+            f.toon[0] = std::clamp(toon_.shade, 0.0f, 1.0f);
+            f.toon[1] = std::max(toon_.rim, 0.0f);
+            f.toon[2] = 1.0f;
+            f.toon[3] = std::max(toon_.highlight, 0.0f);
+        }
+        f.outline[0] = toon_.width * float(t_.renderH) / 720.0f;
+        f.outline[1] = std::clamp(toon_.strength, 0.0f, 1.0f);
+        f.outline[2] = toon_.scenery ? 1.0f : 0.0f;
+        f.outline[3] = std::max(toon_.reach, 1.0f);
+        f.outlineLook[0] = std::clamp(toon_.ownColour, 0.0f, 1.0f);
         if (waveRemaster_ && wave_[0] > 0.0f) { // the sky (no fog) is replaced by the water seen far away
             f.water[0] = 1.0f;
             f.water[1] = waveSeconds_;
@@ -1913,9 +2504,13 @@ private:
         toGpu(sky_, skyPrev.data(), skyGpu);
         stream(skyBuf_, skyGpu, "sky vertices");
         stream(dynBuf_, dynGpu_, "dynamic vertices", rt_);
-        if (rt_) buildScene(dynGpu_.empty() ? 0 : std::min<uint32_t>(dynStart_[0], uint32_t(dynGpu_.size())));
+        if (dynCount_ && !dynTris_.empty()) expandDynamic();
+        if (rt_) buildScene(std::min(dynStart_[0], dynCount_));
 
         if (depthCopyStale()) makeDepthCopy(); // (the set below binds it)
+        invVp_ = XMMatrixInverse(nullptr, vpJit); // the traced light's passes and the blown snow's: NDC -> world
+        if (sunSoft() || occluding())
+            drawLight([&] { writeFrame(vpJit, vp, prevVp_, cam.eye, prevEye_, fwdv, cam.cullSign, true, 0.0f, 0.0f, true); });
         nvrhi::GraphicsState gs;
         gs.framebuffer = t_.scene;
         gs.viewport.addViewportAndScissorRect(nvrhi::Viewport(float(t_.renderW), float(t_.renderH)));
@@ -1952,18 +2547,20 @@ private:
         // semi-transparent face always blends over what is behind it
         writeFrame(vpJit, vp, prevVp_, cam.eye, prevEye_, fwdv, cam.cullSign, true, 0.0f, 0.0f, true);
         drawRange(opaque_, vbuf_, 0, semiStart_[0]);
-        if (!dynGpu_.empty())
-            drawRange(opaque_, dynBuf_, 0, std::min<uint32_t>(dynStart_[0], uint32_t(dynGpu_.size())));
+        if (dynCount_) drawRange(opaque_, dynDrawn(), 0, std::min(dynStart_[0], dynCount_));
         // a semi-transparent polygon blends only the texels whose colour has the STP bit (Vram::decode): its other
         // texels are opaque surfaces, drawn here with the rest of the opaque ones (ST10's ice over the buried ship:
         // its snow is opaque, only the clear patches show the pit below)
         frameSemiPass_ = 1.0f;
         writeFrame(vpJit, vp, prevVp_, cam.eye, prevEye_, fwdv, cam.cullSign, true, 0.0f, 0.0f, true);
         drawRange(opaque_, vbuf_, semiStart_[0], semiStart_[3] - semiStart_[0]);
-        if (const uint32_t n = uint32_t(dynGpu_.size()); dynStart_[0] < n)
-            drawRange(opaque_, dynBuf_, dynStart_[0], n - dynStart_[0]);
+        if (dynStart_[0] < dynCount_) drawRange(opaque_, dynDrawn(), dynStart_[0], dynCount_ - dynStart_[0]);
         // the opaque surfaces' depth, which the blended effects and the flakes fade against (scene.hlsl softEdge)
         copyDepth();
+        if (toon_.outline && toon_.width > 0.0f && toon_.strength > 0.0f) { // under the blended draws
+            writeFrame(vpJit, vp, prevVp_, cam.eye, prevEye_, fwdv, cam.cullSign, true, 0.0f, 0.0f);
+            drawOutline();
+        }
         frameSemiPass_ = 2.0f;
         static const float kReactive[4] = {0.5f, 0.9f, 0.5f, 0.6f};      // avg, add, B*(1-F), B+F/4
         for (int mode = 0; mode < 3; ++mode) { // the room's semi quads (modes 0..2)
@@ -1973,15 +2570,19 @@ private:
             writeFrame(vpJit, vp, prevVp_, cam.eye, prevEye_, fwdv, cam.cullSign, true, kReactive[mode], 0.0f);
             drawRange(semi_[mode], vbuf_, first, last - first);
         }
-        if (!dynGpu_.empty()) {
+        if (dynCount_) {
             for (int mode = 0; mode < 4; ++mode) { // blended effects (DynamicObject::blend = mode + 1)
-                const uint32_t first = dynStart_[mode], last = std::min<uint32_t>(dynStart_[mode + 1], uint32_t(dynGpu_.size()));
+                const uint32_t first = dynStart_[mode], last = std::min(dynStart_[mode + 1], dynCount_);
                 if (last <= first) continue;
                 frameBlend_ = float(mode + 1);
-                    writeFrame(vpJit, vp, prevVp_, cam.eye, prevEye_, fwdv, cam.cullSign, true, kReactive[mode], 0.0f);
-                drawRange(semi_[mode], dynBuf_, first, last - first);
+                // the light the additive ones add (B + F, B + F/4) is the bloom's source
+                frameGlow_ = bloom_.enabled && bloom_.strength > 0.0f && (mode == 1 || mode == 3) ? 1.0f : 0.0f;
+                if (frameGlow_ > 0.0f) glowDrawn_ = true;
+                writeFrame(vpJit, vp, prevVp_, cam.eye, prevEye_, fwdv, cam.cullSign, true, kReactive[mode], 0.0f);
+                drawRange(semi_[mode], dynDrawn(), first, last - first);
             }
         }
+        frameGlow_ = 0.0f;
         frameBlend_ = 0.0f;
         frameSemiPass_ = 0.0f;
         // the see-through's open pieces: the opaque draws skipped them where they open; drawn again over everything as
@@ -1994,13 +2595,11 @@ private:
             frameLens_ = 1.0f;
             writeFrame(vpJit, vp, prevVp_, cam.eye, prevEye_, fwdv, cam.cullSign, true, kLensReactive, 0.0f);
             drawRange(semi_[0], vbuf_, 0, semiStart_[0]);
-            if (!dynGpu_.empty())
-                drawRange(semi_[0], dynBuf_, 0, std::min<uint32_t>(dynStart_[0], uint32_t(dynGpu_.size())));
+            if (dynCount_) drawRange(semi_[0], dynDrawn(), 0, std::min(dynStart_[0], dynCount_));
             frameLens_ = 0.0f;
         }
 
         // the precipitation's flakes, among the scene (the blown snow's medium follows after the resolve, draw())
-        invVp_ = XMMatrixInverse(nullptr, vpJit);
         lastVpJit_ = vpJit;
         lastVp_ = vp;
         for (int c = 0; c < 3; ++c) {
@@ -2037,9 +2636,10 @@ private:
             nvrhi::BindingSetDesc bs;
             bs.bindings = {nvrhi::BindingSetItem::PushConstants(0, sizeof(OutConsts)), nvrhi::BindingSetItem::Texture_SRV(0, src),
                            nvrhi::BindingSetItem::Sampler(0, pointClamp_), nvrhi::BindingSetItem::Sampler(1, linearClamp_),
-                           nvrhi::BindingSetItem::Texture_SRV(1, depth)};
+                           nvrhi::BindingSetItem::Texture_SRV(1, depth), nvrhi::BindingSetItem::ConstantBuffer(1, lensCb_)};
             it = outSets_.emplace(src, dev_.device()->createBindingSet(bs, outLayout_)).first;
         }
+        writeLensRings();
         nvrhi::GraphicsState gs;
         gs.pipeline = outPipe_;
         gs.framebuffer = fb;
@@ -2073,6 +2673,29 @@ private:
         }
         cl_->setPushConstants(&c, sizeof(c));
         cl_->draw(nvrhi::DrawArguments().setVertexCount(3));
+    }
+
+    // the lens rings in output pixels: each centre through the drawn camera (lastVp_; w = the view depth), the radii
+    // in the view plane scaled by the projection (a point straight above in view space, as exe 0x42e4a0 projects
+    // them); a ring behind the near plane is left out
+    void writeLensRings() {
+        LensConsts l{};
+        const float w = float(dev_.width()), h = float(dev_.height());
+        for (const LensRing& r : lensRings_) {
+            if (l.count >= kMaxLensRings) break;
+            const XMVECTOR p = XMVector4Transform(XMVectorSet(r.pos[0], r.pos[1], r.pos[2], 1.0f), lastVp_);
+            const float cw = XMVectorGetW(p);
+            if (cw <= nearZ_) continue;
+            const float pixelsPerUnit = h * 0.5f / (cw * tanHalfFov_);
+            float* q = l.ring[l.count];
+            q[0] = (XMVectorGetX(p) / cw * 0.5f + 0.5f) * w;
+            q[1] = (0.5f - XMVectorGetY(p) / cw * 0.5f) * h;
+            q[2] = r.inner * pixelsPerUnit;
+            q[3] = r.width * pixelsPerUnit;
+            l.kind[l.count][0] = r.outward ? 1.0f : 0.0f;
+            ++l.count;
+        }
+        cl_->writeBuffer(lensCb_, &l, sizeof l);
     }
 
     // RGBA8 rows, tightly packed, top row first (what --shot saves)
@@ -2123,6 +2746,14 @@ private:
     bool depthFresh_ = false; // depthCopy_ holds this frame's depth
     float nearZ_ = 8.0f, camPitch_ = 0.0f, tanHalfFov_ = 0.5f;
     std::vector<ScreenRipple> ripples_;
+    struct LensConsts { // output.hlsl's Lens buffer (b1)
+        float ring[kMaxLensRings][4]; // centre x / y, inner radius, width (output pixels)
+        float kind[kMaxLensRings][4]; // x: 1 = role bit 0
+        int count;
+        int pad[3];
+    };
+    std::vector<LensRing> lensRings_;
+    nvrhi::BufferHandle lensCb_;
     nvrhi::BindingLayoutHandle sceneLayout_, outLayout_;
     nvrhi::BindingSetHandle sceneSet_;
     nvrhi::GraphicsPipelineHandle opaque_, sky_pipe_, semi_[4], outPipe_;
@@ -2163,6 +2794,7 @@ private:
     uint32_t vertexCount_ = 0;
     std::vector<RenderVertex> sky_, dyn_;
     std::vector<GpuVertex> dynGpu_;
+    uint32_t dynCount_ = 0; // the vertices the dynamic draws read: dynGpu_'s, or what a subdivided frame makes of them
     std::array<uint32_t, 5> dynStart_{}; // dynamic vertices with blend <= m ([0] = end of the opaque objects)
     float frameSemiPass_ = 0.0f;         // FrameConstants::semiPass of the draws writeFrame is preparing
     float frameBlend_ = 0.0f;            // the blend of the draws writeFrame is preparing (FrameConstants::blendMode)
@@ -2193,6 +2825,31 @@ private:
     // sun shadows (ray queries)
     bool rt_ = false;
     SunLight sun_;
+    // the traced light (drawLight): the sun's soft shadows, the ambient occlusion
+    AmbientOcclusion occlusion_;
+    nvrhi::ShaderHandle prePs_, lightPs_, lightBlurPs_[2];
+    nvrhi::BindingLayoutHandle preLayout_, lightLayout_, lightBlurLayout_;
+    nvrhi::BindingSetHandle preSet_, lightSet_[3];           // the prepass; the rays, the blur's two passes
+    nvrhi::GraphicsPipelineHandle prePipe_, lightPipe_[3];
+    nvrhi::TextureHandle preDepth_, preNormal_, preZ_;       // the prepass's view depth, normals and depth buffer
+    nvrhi::TextureHandle lightPass_[3], light_;              // the rays' result, blurred along x, then y (= light_)
+    nvrhi::TextureHandle lightNone_, preDepthNone_;          // bound while nothing is traced
+    nvrhi::FramebufferHandle preFb_, lightFb_[3];
+    // the anime look (scene.hlsl toon, ps_outline)
+    ToonStyle toon_;
+    nvrhi::ShaderHandle outlinePs_[2]; // the normal target as it is; multisampled (aa=msaa)
+    nvrhi::BindingLayoutHandle outlineLayout_;
+    nvrhi::BindingSetHandle outlineSet_;
+    nvrhi::GraphicsPipelineHandle outlinePipe_;
+    // the bloom (drawBloom)
+    static constexpr float kBloomGain = 0.5f; // Bloom::strength 1: what the summed copies add of the glow
+    Bloom bloom_;
+    nvrhi::ShaderHandle bloomPs_[2]; // down, up
+    nvrhi::BindingLayoutHandle bloomLayout_;
+    nvrhi::BindingSetHandle bloomLast_;            // the largest copy, onto the colour
+    nvrhi::GraphicsPipelineHandle bloomPipe_[3];   // down; up into a copy; up onto the colour
+    float frameGlow_ = 0.0f;  // FrameConstants::lightTerms[3] of the draws writeFrame is preparing
+    bool glowDrawn_ = false;  // this frame drew into the glow target
     ParticleLighting particleLighting_;
     ModelSubdivision subdivision_;
     struct ModelPlan {
@@ -2201,8 +2858,18 @@ private:
         SubdivisionPlan plan;
     };
     std::unordered_map<uint32_t, ModelPlan> modelPlans_; // by object id
-    std::vector<GpuVertex> dynFine_;                     // the subdivided frame, kept for its capacity
     std::vector<float> planFaces_;
+    // a subdivided frame (uploadDynamic, expandDynamic): 3 words per triangle of dynGpu_ (its first vertex, its first
+    // vertex in dynFineBuf_, kTri*); empty: the frame is drawn as streamed
+    std::vector<uint32_t> dynTris_;
+    nvrhi::BufferHandle dynFineBuf_, dynTriBuf_;
+    nvrhi::ShaderHandle subdivCs_;
+    nvrhi::BindingLayoutHandle subdivLayout_;
+    nvrhi::ComputePipelineHandle subdivPipe_;
+    nvrhi::BindingSetHandle subdivSet_;
+    nvrhi::IBuffer* subdivFrom_ = nullptr; // the dynBuf_ / dynAttr_ subdivSet_ binds
+    nvrhi::IBuffer* subdivAttr_ = nullptr;
+    std::vector<float> dynAttrCpu_; // buildScene's attributes of a frame drawn as streamed, kept for its capacity
     std::vector<ParticleLight> particleLights_; // this frame's (uploadDynamic)
     FrameCosts costs_;
     std::vector<SeeThroughBody> seeBodies_; // setSeeThrough
@@ -2223,7 +2890,8 @@ private:
     XMMATRIX lastVpJit_ = XMMatrixIdentity(), lastVp_ = XMMatrixIdentity(), invVp_ = XMMatrixIdentity();
     float lastEye_[3]{}, lastFwd_[3]{0.0f, 0.0f, 1.0f};
     nvrhi::rt::AccelStructHandle tlas_, staticBlas_, dynBlas_;
-    uint64_t dynBlasBytes_ = 0; // size of the dynBuf_ the actors' BLAS was made for
+    uint64_t dynBlasBytes_ = 0; // size of the buffer the actors' BLAS was made for,
+    nvrhi::IBuffer* dynBlasFor_ = nullptr; // and the buffer (dynDrawn)
     nvrhi::BufferHandle staticAttr_, dynAttr_, indices_;
 };
 

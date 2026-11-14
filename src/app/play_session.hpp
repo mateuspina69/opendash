@@ -463,7 +463,11 @@ struct PlayerView {
     // behind the body while one is held by the PS1 camera's own rule (skateCamera); set by steer
     bool shoulderTurn = false;
     bool skating() const;
-    void skateCamera(bool locked, float dt);
+    void skateCamera(bool locked, float alpha, float dt);
+    // the L1 / R1 follow: the body's turn of the last tick (radians), how much of it the frames have shown, the body
+    // yaw it was measured from (trackPosition, skateCamera)
+    float shoulderTickTurn = 0.0f, shoulderTurnShown = 0.0f;
+    int shoulderBodyYaw = 0;
     bool logSkateCam = false; // --skatelog 1: skatecam lines (scripted runs)
     uint32_t skateLogFrames = 0;
     bool lockAimValid = false; // tgtPrev / tgtCur hold a target to aim at (also while the view eases out)

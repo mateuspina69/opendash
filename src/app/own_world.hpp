@@ -19,6 +19,7 @@
 #include "app/world_host.hpp"
 #include "app/ghost_view.hpp"
 #include "app/scene_pads.hpp"
+#include "game/collision.hpp"
 #include "game/event_state.hpp"
 #include "game/fade.hpp"
 #include "game/global_state.hpp"
@@ -107,7 +108,7 @@ public:
     // the part of a frame's body that runs on a client (app/play_session's frame)
     void localActors(const od::port::PlayerEnv& env, od::port::ActorContext& context, bool late);
     // the end of the frame's body: the lock-on and the radar from the world's actors, this tick's shots to the world
-    void endFrame();
+    void endFrame(const od::CollisionRoom& room); // room: the lock-on's wall test (game/lock_on_targets)
     // after the ticks of a frame: the room's other players, for the ghost slots
     void showPlayers(GhostView& ghosts, uint64_t localFingerprint, uint64_t nowNs);
     // test instrument: a second player in the world who follows this one at an offset (game units)

@@ -44,13 +44,6 @@ struct ParticleLight {
 // (to the nearest): a burst of sparks is one bright light and no effect's light is dropped
 std::vector<ParticleLight> gatherParticleLights(const std::vector<DynamicObject>& objects, float radius, size_t maxLights);
 
-// Phong tessellation (Boubekeur & Alexa 2008) of the triangle a, b, c with unit normals na, nb, nc at the point of
-// barycentric weights (u, v, w) of a, b, c: the point projected on the three vertices' tangent planes, blended by those
-// weights, `amount` of the way from the flat triangle (0 flat, 1 whole). The vertices stay where they are, and a point on
-// an edge depends only on that edge's two vertices
-void phongPoint(const float a[3], const float b[3], const float c[3], const float na[3], const float nb[3],
-                const float nc[3], float u, float v, float w, float amount, float out[3]);
-
 // How a model subdivides, decided once from one pose and kept while it animates: decided again each frame, a face near the
 // limit of the smoothing or a vertex rounded to a neighbouring position switched its edges between round and straight
 struct SubdivisionPlan {

@@ -28,7 +28,9 @@ constexpr uint32_t kObjectRecordMask = 3u;
 constexpr uint32_t kOtFt4Record = 3u, kOtGt4Record = 1u, kOtG4Record = 2u; // the OT packets' record numbers
 // the screen ring's screen-point test (x -0x160 .. 0x2a0, y -0x88 .. 0x378)
 constexpr uint16_t kScreenMarginX = 0x160, kScreenMarginY = 0x88, kScreenLimit = 0x401;
-constexpr int32_t kScreenRingDepth = 0x80; // OpenDash: the view depth a screen ring is placed at
+// OpenDash: the nearest view depth a screen ring is placed at (word 4's z is its OT depth = view z >> 2; the
+// front-of-OT discs of the lens flares carry a few units)
+constexpr int32_t kScreenRingNearDepth = 0x80;
 constexpr uint32_t kSegmentBias = 0x10;    // a ring's segment bytes count from this
 constexpr float kTexelUnit = 128.0f, kColourUnit = 255.0f; // a textured / untextured colour's neutral value
 
@@ -161,17 +163,18 @@ void decodeF0(const uint32_t* w, std::vector<fx::Prim>& out, uint32_t object) {
 
 // 0xf1..0xf7 (0xf4: the exe's else branch of 0x5f07c5): the 0xf0 ring drawn around a SCREEN point -- word 2 = s16 x |
 // s16 y in screen pixels (dropped outside x -0x160 .. 0x2a0 / y -0x88 .. 0x378), radii w5 in pixels, no projection;
-// the segments / ellipse / colours / blend as 0xf0. OpenDash places it in the camera plane at the view depth
-// kScreenRingDepth (the pixel point unprojected through the game camera 0x6d0014 / 0x6d0028, the projection distance
-// and the screen centre) with the radii scaled to that depth, so it covers the same pixels.
+// the segments / ellipse / colours / blend as 0xf0. OpenDash places it in the camera plane at the view depth the
+// emitter recorded (word 4's s16 z << 2, at least kScreenRingNearDepth): the pixel point unprojected through the game
+// camera 0x6d0014 / 0x6d0028, the projection distance and the screen centre, with the radii scaled to that depth, so
+// it covers the same pixels from the game camera and sits at the effect's world point (a boss's bone) from any other.
 void decodeF4(const uint32_t* w, std::vector<fx::Prim>& out, uint32_t object) {
     const int16_t sx = s16of(w[2]), sy = s16of(w[2] >> 16);
     if (uint16_t(sx + kScreenMarginX) >= kScreenLimit || uint16_t(sy + kScreenMarginY) >= kScreenLimit) return;
     const port::ProjectionState& proj = port::projection();
     const int32_t h = proj.focal, cx = proj.centreX, cy = proj.centreY;
     if (h == 0) return;
-    const double view[3] = {double(sx - cx) * kScreenRingDepth / h, double(sy - cy) * kScreenRingDepth / h,
-                            double(kScreenRingDepth)};
+    const int32_t depth = std::max(int32_t(s16of(w[4])) * 4, kScreenRingNearDepth);
+    const double view[3] = {double(sx - cx) * depth / h, double(sy - cy) * depth / h, double(depth)};
     double d[3];
     for (int k = 0; k < 3; ++k) d[k] = view[k] - double(port::cameraTransform().view.translation[size_t(k)]);
     int16_t c[3];
@@ -184,7 +187,7 @@ void decodeF4(const uint32_t* w, std::vector<fx::Prim>& out, uint32_t object) {
     const int b3 = int(int8_t(w[0] >> 24));
     const int s = int((w[4] >> 16) & 0x1f);
     const int start = (b0 - int(kSegmentBias)) >> s, end = ((b1 - int(kSegmentBias)) >> s) + 1;
-    const float scale = float(kScreenRingDepth) / float(h); // pixels -> camera-plane units at the depth
+    const float scale = float(depth) / float(h); // pixels -> camera-plane units at the depth
     const float rIn = float(w[5] & 0xffff) * scale, rOut = float(int32_t(w[5]) >> 16) * scale;
     const float ex = float(0x80 - b3) / 128.0f, ey = float(0x80 + b3) / 128.0f;
     const uint8_t blend = ((w[3] >> 25) & 1) ? fx::blendOfAbr(((w[3] >> 24) & 0xf0) >> 5) : 0;

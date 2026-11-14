@@ -200,9 +200,9 @@ row.6.fffa=Extra
 help.extras=I titoli di coda, la galleria e altro.
 # OpenDash: a tela de Peças (abas, selos das barreiras, títulos das caixas)
 equip.head.6=Lista parti
-row.5.7000=Casco
+row.5.7060=Casco
 row.5.7030=Armatura
-row.5.7060=Scarpe
+row.5.7000=Scarpe
 barrier.0=Barriera di Fuoco
 barrier.1=Barriera di Luce
 # OpenDash: o modo foto

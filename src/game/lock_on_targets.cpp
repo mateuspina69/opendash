@@ -1,6 +1,9 @@
 // The lock-on candidates of the hit pass (see lock_on_targets.hpp).
 #include "game/lock_on_targets.hpp"
 
+#include <cmath>
+
+#include "game/actor_movement.hpp"
 #include "game/actor_pools.hpp"
 #include "game/game_state.hpp"
 #include "game/geometry_scratch.hpp"
@@ -45,9 +48,34 @@ bool inReach(const Actor& a) {
     return uint32_t(dz * dz) + uint32_t(dx * dx) < kReachDistanceSq;
 }
 
+// OpenDash (modern aim): the room stands between the player's aim origin and the candidate's point -- the line walked
+// in kSightStep steps, each tested as a shot's point is (exe 0x40f5a0, the shots' layers), as the exe's own line of
+// sight walks its line (game/line_of_sight). The last kSightClear before the point are the target's own place
+bool wallBetween(const CollisionRoom& room, const LaneVec4& point) {
+    constexpr float kSightStep = 64.0f, kSightClear = 96.0f;
+    constexpr int kAimHeight = 0x80; // the aim's origin above the feet (game/player/player_lock_on)
+    const Player& p = player();
+    const float from[3] = {float(p.pos.x.whole), float(p.pos.y.whole - kAimHeight), float(p.pos.z.whole)};
+    const float d[3] = {float(int16_t(point.x)) - from[0], float(int16_t(point.y)) - from[1],
+                        float(int16_t(point.z)) - from[2]};
+    const float length = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+    if (length <= kSightClear + kSightStep) return false;
+    const int steps = int((length - kSightClear) / kSightStep);
+    CollisionState st{}; // its own: the game's is the scratch the selection's points are in
+    std::array<int16_t, 3> last = {int16_t(from[0]), int16_t(from[1]), int16_t(from[2])};
+    for (int i = 1; i <= steps; ++i) {
+        const float k = float(i) * kSightStep / length;
+        const std::array<int16_t, 3> at = {int16_t(std::lround(from[0] + d[0] * k)), int16_t(std::lround(from[1] + d[1] * k)),
+                                           int16_t(std::lround(from[2] + d[2] * k))};
+        if (int32_t(testMove(room, st, at, last, nullptr, kShotLayers)) < 0) return true; // kMoveBlocked
+        last = at;
+    }
+    return false;
+}
+
 } // namespace
 
-void selectLockOnTargets(uint32_t count, uint32_t groupMask) {
+void selectLockOnTargets(uint32_t count, uint32_t groupMask, const CollisionRoom* room) {
     ActorSystemState& sys = actorSystem();
     LockOnScratch& s = scratch();
     Player& p = player();
@@ -115,8 +143,18 @@ void selectLockOnTargets(uint32_t count, uint32_t groupMask) {
                     } else if (d < kReachDistanceSq) {
                         const Projected r = projectPoint();
                         bool counted = false;
+                        // OpenDash (modern aim): no new target through a wall (tested once, only for a candidate that
+                        // would be taken)
+                        bool sightTested = false, hidden = false;
+                        auto behindWall = [&]() {
+                            if (!sightTested) {
+                                sightTested = true;
+                                hidden = room && modernPlay() && wallBetween(*room, s.point);
+                            }
+                            return hidden;
+                        };
                         if (!r.clipped && inScreenX()) {
-                            if (d < minVis) {
+                            if (d < minVis && !behindWall()) {
                                 ++candidates;
                                 counted = true;
                                 if (remembered != slot) {
@@ -134,7 +172,7 @@ void selectLockOnTargets(uint32_t count, uint32_t groupMask) {
                             }
                             nearFlag = false;
                         }
-                        if (d < kNearDistanceSq && d < minNear) {
+                        if (d < kNearDistanceSq && d < minNear && !behindWall()) {
                             if (!counted) ++candidates;
                             if (remembered != slot) {
                                 minNear = d;

@@ -193,9 +193,9 @@ row.6.fffa=特典
 help.extras=制作人员名单、画廊等
 # OpenDash: a tela de Peças (abas, selos das barreiras, títulos das caixas)
 equip.head.6=零件列表
-row.5.7000=头盔
+row.5.7060=头盔
 row.5.7030=护甲
-row.5.7060=鞋子
+row.5.7000=鞋子
 barrier.0=火焰 屏障
 barrier.1=光之 屏障
 # OpenDash: o modo foto

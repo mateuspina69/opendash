@@ -300,17 +300,6 @@ std::vector<ParticleLight> gatherParticleLights(const std::vector<DynamicObject>
     return lights;
 }
 
-void phongPoint(const float a[3], const float b[3], const float c[3], const float na[3], const float nb[3],
-                const float nc[3], float u, float v, float w, float amount, float out[3]) {
-    const float flat[3] = {a[0] * u + b[0] * v + c[0] * w, a[1] * u + b[1] * v + c[1] * w, a[2] * u + b[2] * v + c[2] * w};
-    // how far the flat point lies off a vertex's tangent plane
-    const auto off = [&](const float* p, const float* n) {
-        return (flat[0] - p[0]) * n[0] + (flat[1] - p[1]) * n[1] + (flat[2] - p[2]) * n[2];
-    };
-    const float oa = off(a, na), ob = off(b, nb), oc = off(c, nc);
-    for (int k = 0; k < 3; ++k) out[k] = flat[k] - amount * (u * oa * na[k] + v * ob * nb[k] + w * oc * nc[k]);
-}
-
 bool buildSubdivisionPlan(const RenderVertex* tris, size_t count, SubdivisionPlan& plan) {
     plan = {};
     const size_t faces = count / 3;

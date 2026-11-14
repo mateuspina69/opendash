@@ -7,12 +7,16 @@
 
 #include <cstdint>
 
+#include "game/collision.hpp"
+
 namespace od::port {
 
 constexpr int kAimCentreX = 0xa0, kAimCentreY = 0x3c; // the screen point the centre candidate is measured from
 
-// exe 0x5e4b60(count, groupMask): the selection over the first `count` entries of the hit list
-void selectLockOnTargets(uint32_t count, uint32_t groupMask);
+// exe 0x5e4b60(count, groupMask): the selection over the first `count` entries of the hit list.
+// OpenDash (modern aim, not the exe): with `room`, a new target is not taken through the room's walls or floor (the exe
+// takes any candidate in reach); a target already locked stays locked behind one
+void selectLockOnTargets(uint32_t count, uint32_t groupMask, const CollisionRoom* room = nullptr);
 // OpenDash (modern aim): the actor in `slot` is no longer a target (a fire put out, still smoking): a lock on it is
 // dropped now, as the exe's selection drops it the tick it sends no point, so the hold for a target without a point
 // (selectLockOnTargets) does not keep it aimed at the actor's position and the lock goes to the next one

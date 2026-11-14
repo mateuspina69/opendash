@@ -180,9 +180,9 @@ bar.play=さいせい
 bar.stop=ていし
 # OpenDash: a tela de Peças (abas, selos das barreiras, títulos das caixas)
 equip.head.6=パーツリスト
-row.5.7000=ヘルメット
+row.5.7060=ヘルメット
 row.5.7030=アーマー
-row.5.7060=シューズ
+row.5.7000=シューズ
 barrier.0=フレイム バリア
 barrier.1=ライト バリア
 # OpenDash: o modo foto

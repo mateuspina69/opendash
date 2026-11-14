@@ -193,9 +193,9 @@ row.6.fffa=엑스트라
 help.extras=크레디트, 갤러리 등
 # OpenDash: a tela de Peças (abas, selos das barreiras, títulos das caixas)
 equip.head.6=파츠 목록
-row.5.7000=헬멧
+row.5.7060=헬멧
 row.5.7030=아머
-row.5.7060=슈즈
+row.5.7000=슈즈
 barrier.0=플레임 배리어
 barrier.1=라이트 배리어
 # OpenDash: o modo foto

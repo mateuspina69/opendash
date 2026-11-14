@@ -975,7 +975,7 @@ enum class RoutineId : uint16_t {
     SaulKadaRoomsSt48RearmHelper,
     SceneCritterUpdate, // ST2F pool 0x20 type 0x4a sub 1: script 0x49's critter (idle / hop / leap on cue; content/yosyonke/ice_ruin_critters)
     ScreenRippleUpdate, // pool 0xa0 type 0x16 (0x52b180, variant 0; variants 1 / 2 rings / ray star): a growing screen ripple (frame-buffer warp not drawn; content/nino/screen_ripple)
-    ScreenShockRingUpdate, // pool 0xa0 type 2: frame-buffer shock rings + spawner of the ball's explosion (warp not drawn; content/late_game/st5c_fx3)
+    ScreenShockRingUpdate, // pool 0xa0 type 2: frame-buffer shock rings + spawner of the ball's explosion (warp: the app's od::LensRing; content/late_game/st5c_fx3)
     Script1dAppoDahUpdate, // pool 0x20 ST1F type 0x43 sub 1: Appo / Dah of script 0x1d (content/calbania/appo_dah_b)
     Script1fAppoDahUpdate, // pool 0x20 ST1F type 0x43 sub 3: Appo / Dah of script 0x1f (content/calbania/appo_dah_b)
     Script20AppoDahUpdate, // ST1F pool 0x20 type 0x43 sub 4: script 0x20 Appo / Dah (records 0x8a3940..0x8a397c), walk in + talk (content/calbania/ch3_script_cast)

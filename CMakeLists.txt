@@ -124,6 +124,17 @@ od_add_shader(TARGET opendash FILE src/render/shaders/scene.hlsl ENTRY vs_main P
 od_add_shader(TARGET opendash FILE src/render/shaders/scene.hlsl ENTRY ps_main PROFILE ps_6_0 NAME g_scene_ps)
 od_add_shader(TARGET opendash FILE src/render/shaders/scene.hlsl ENTRY ps_main PROFILE ps_6_5 NAME g_scene_rt_ps
               DEFINES OD_RT=1)
+od_add_shader(TARGET opendash FILE src/render/shaders/scene.hlsl ENTRY ps_main PROFILE ps_6_0 NAME g_scene_pre_ps
+              DEFINES OD_PRE=1)
+od_add_shader(TARGET opendash FILE src/render/shaders/scene.hlsl ENTRY ps_light PROFILE ps_6_5 NAME g_light_ps
+              DEFINES OD_RT=1)
+od_add_shader(TARGET opendash FILE src/render/shaders/scene.hlsl ENTRY ps_lightBlurX PROFILE ps_6_0 NAME g_light_blur_x_ps)
+od_add_shader(TARGET opendash FILE src/render/shaders/scene.hlsl ENTRY ps_lightBlurY PROFILE ps_6_0 NAME g_light_blur_y_ps)
+od_add_shader(TARGET opendash FILE src/render/shaders/scene.hlsl ENTRY ps_outline PROFILE ps_6_0 NAME g_outline_ps)
+od_add_shader(TARGET opendash FILE src/render/shaders/scene.hlsl ENTRY ps_outline PROFILE ps_6_0 NAME g_outline_ms_ps
+              DEFINES OD_MSAA=1)
+od_add_shader(TARGET opendash FILE src/render/shaders/bloom.hlsl ENTRY ps_down PROFILE ps_6_0 NAME g_bloom_down_ps)
+od_add_shader(TARGET opendash FILE src/render/shaders/bloom.hlsl ENTRY ps_up PROFILE ps_6_0 NAME g_bloom_up_ps)
 od_add_shader(TARGET opendash FILE src/render/shaders/scene.hlsl ENTRY vs_height PROFILE vs_6_0 NAME g_height_vs)
 od_add_shader(TARGET opendash FILE src/render/shaders/scene.hlsl ENTRY ps_height PROFILE ps_6_0 NAME g_height_ps)
 od_add_shader(TARGET opendash FILE src/render/shaders/scene.hlsl ENTRY vs_flake PROFILE vs_6_0 NAME g_flake_vs)
@@ -133,6 +144,7 @@ od_add_shader(TARGET opendash FILE src/render/shaders/scene.hlsl ENTRY ps_blizza
 od_add_shader(TARGET opendash FILE src/render/shaders/debugview.hlsl ENTRY ps_main PROFILE ps_6_0 NAME g_debugview_ms_ps
               DEFINES OD_MSAA=1)
 od_add_shader(TARGET opendash FILE src/render/shaders/ssaa.hlsl ENTRY cs_main PROFILE cs_6_0 NAME g_ssaa_cs)
+od_add_shader(TARGET opendash FILE src/render/shaders/subdivide.hlsl ENTRY cs_main PROFILE cs_6_0 NAME g_subdivide_cs)
 if(WIN32)
     add_custom_command(TARGET opendash POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:opendash> $<TARGET_FILE_DIR:opendash>

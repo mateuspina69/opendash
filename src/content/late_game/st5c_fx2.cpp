@@ -829,8 +829,10 @@ void landingDust(EffectActor& actor) {
     scratch.texelWords[0] = cc - 0x3fe04000u;
     scratch.texelWords[1] = cc + 0xdf1fdf00u;
     const uint32_t col = dc::billboardColour(0x808080);
-    const uint32_t w3 = uint32_t(scratch.texelHalves[0]) | 0x7dd00000u, w5 = uint32_t(scratch.texelHalves[1]) | 0x2f0000u;
-    const uint32_t w7 = scratch.texelHalves[2], w9 = scratch.texelHalves[3];
+    // the exe's word & 0xffff / >> 16 (the halves unsigned: v 0xc0.. sets their top bit)
+    const uint32_t w3 = uint32_t(uint16_t(scratch.texelHalves[0])) | 0x7dd00000u;
+    const uint32_t w5 = uint32_t(uint16_t(scratch.texelHalves[1])) | 0x2f0000u;
+    const uint32_t w7 = uint16_t(scratch.texelHalves[2]), w9 = uint16_t(scratch.texelHalves[3]);
     for (uint32_t j = 0; j < 8; ++j) {
         const uint16_t random = dust.randomHalves[j];
         const uint32_t ang = ((uint32_t(random) >> 4) + j * 0x80) & 0xfff;

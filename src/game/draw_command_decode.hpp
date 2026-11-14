@@ -4,7 +4,7 @@
 //
 // Drawing improvements over the exe (kept): the records are never culled for the PS1 camera (the picture
 // is drawn from the modern camera), a ring keeps one vertex count while its arc grows / shrinks, a band draws every
-// segment from both sides, a screen ring is placed at a fixed view depth in the camera plane.
+// segment from both sides, a screen ring is placed in the camera plane at the view depth its record carries.
 #pragma once
 
 #include <cstddef>

@@ -41,7 +41,7 @@
 // of the tint, freed).
 //
 // Render output: the billboard / ring / screen-ring draw records are written with dc::emit exactly as the exe (the
-// screen rings carry screen positions; game/draw_commands does not draw them); the OT POLY_G4 through dc::otQuadG4
+// screen rings carry screen positions and their depth; game/draw_command_decode draws them); the OT POLY_G4 through dc::otQuadG4
 // (screen-pixel corners brought back to the camera plane as content/nino/nino_ruin_st35, view-plane corners as
 // content/saul_kada/saul_kada_st28fx, the blade's local frame corners as camera-input points); the OT POLY_G3 of
 // 0x5bbd30 / 0x5c1a80 through dc::otTriG3; the full-screen tints exe 0x5f3150 go through od::dc::screenTint. Models

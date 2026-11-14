@@ -648,6 +648,23 @@ void App::updateScene() {
             renderer->setParticleLighting(lighting);
             renderer->setModelSubdivision({modelSubdivisionLevel, modelSubdivisionAmount});
             applySun(); // whether this room lies under the sun (roomHasNoSky)
+            od::AmbientOcclusion occlusion; // its reach in the game's units, as the particle lights'
+            occlusion.enabled = occlusionOn;
+            occlusion.strength = occlusionStrength;
+            occlusion.radius = occlusionRadius * float(1 << current.shift);
+            renderer->setAmbientOcclusion(occlusion);
+            renderer->setBloom({bloomOn, bloomStrength});
+            od::ToonStyle toon;
+            toon.shading = toonOn;
+            toon.shade = toonShade;
+            toon.rim = toonRim;
+            toon.highlight = toonHighlight;
+            toon.ownColour = outlineOwnColour;
+            toon.outline = outlineOn;
+            toon.width = outlineWidth;
+            toon.scenery = outlineScenery;
+            toon.reach = 6000.0f * float(1 << current.shift);
+            renderer->setToonStyle(toon);
         }
         renderer->uploadDynamic(dynFrame);
     }
@@ -679,6 +696,39 @@ void App::updateScene() {
             rip.push_back(r);
         }
         renderer->setScreenRipples(rip);
+        // the frame-buffer shock rings (pool a0 type 2, exe 0x42e360: the ST5C black hole's; their picture is the tail
+        // of exe 0x42e4a0): a ring (role 1 / 2, not the spawner) still running this tick, around its point (the raw s16
+        // the exe loads into the GTE: camera-input units, y up in the renderer). The tick already moved its radius by
+        // the speed: the picture is the radius before it, r; inner max(r, 0), width min(width << 4, outer << 4 - r),
+        // less what r < 0 leaves inside the centre
+        std::vector<od::LensRing> lens;
+        for (uint32_t i = 0; playerView.play && display.drawingOff == 0 && i < 64; ++i) {
+            const uint32_t a = od::port::kEffectPool + i * 0x28;
+            od::RoutineRef h = od::port::actorHandler(od::port::actorHeaderAt(a), od::port::ActorPool::Effects);
+            if (!h) h = od::port::actorHandler(od::port::actorHeaderAt(a), od::port::ActorPool::EffectsLate);
+            const od::port::EffectActor& fx = od::port::effectActorAt(a);
+            if (!h.is(od::RoutineId::ScreenShockRingUpdate) || fx.subState == 0 || fx.stepCounter == 0) continue;
+            if (fx.state != 1 && fx.state != 4 && fx.state != 5) continue; // [0x88ca4c]: the rings' running states
+            const int r = int(int16_t(uint16_t(fx.trail[0]) - uint16_t(int16_t(int8_t(fx.params[2])))));
+            const int outer = int(fx.stepCounter) << 4;
+            int width = int(fx.params[3]) << 4;
+            if (r < -width || r > outer) continue;
+            width = std::min(width, outer - r);
+            int inner = r;
+            if (r < 0) {
+                width += r;
+                inner = 0;
+            }
+            od::LensRing ring;
+            ring.pos[0] = float(fx.pos.x);
+            ring.pos[1] = -float(fx.pos.y);
+            ring.pos[2] = float(fx.pos.z);
+            ring.inner = float(inner);
+            ring.width = float(width);
+            ring.outward = (fx.subState & 1) != 0;
+            lens.push_back(ring);
+        }
+        renderer->setLensRings(lens);
         // the flooded rooms' screen wave (pool a0 class 0x431e90 variants 0 / 1 / 5, spawned with the water by the
         // ruin's room handlers, colour +0xc = 0x706060): an empty ret on PC, the PS1 / PSP draw (PSP BOOT.BIN
         // 0x179d94) shifts every screen row by sin(((Y - phase) & 127) >> 1) >> (12 - strength) and tints the

@@ -92,6 +92,49 @@ struct SunLight {
     float dir[3]{0.0f, 1.0f, 0.0f};
     float strength = 0.45f;
     bool sheltered = false; // a room with no sky (app/room_openness): the sun reaches nothing in it, no ray needed
+    // OpenDash experiments. softness: the sun's angular radius in degrees (0 = a point: hard shadows); a shadow's edge
+    // widens with its distance from what casts it. tint 0..1: what the sun does not reach turns toward the sky's blue,
+    // what it reaches toward the sun's warm light (never in a room with no sky)
+    float softness = 0.0f;
+    float tint = 0.0f;
+    // OpenDash: the sun seen in the sky, a disc of this angular radius in degrees with its halo, toward dir (0 = none).
+    // Drawn on the sky only: never in a room with no sky, nor on a 2D layer that is not the sky. Needs no ray tracing
+    float disc = 0.0f;
+};
+
+// OpenDash experiment: ray-traced ambient occlusion. A surface loses the sky's light (what the sun's shadow keeps; all
+// of it with the sun off) by how much of the hemisphere over it the room and the characters close within `radius`
+// (world units): corners, the foot of a wall, the ground under a character
+struct AmbientOcclusion {
+    bool enabled = false;
+    float strength = 0.6f; // 0..1: what a fully closed point loses
+    float radius = 120.0f;
+    int rays = 4; // a pixel (1..8)
+};
+
+// OpenDash experiment: the bloom. The light the additive effects that give light add (DynamicObject::glow: the shots,
+// the explosions, the sparks, the fire) spreads around them
+struct Bloom {
+    bool enabled = false;
+    float strength = 0.6f;
+};
+
+// OpenDash experiment: the anime look. shading: the sun's light (SunLight; none with it off or in a room with no sky)
+// falls on a character's model in two flat bands, by its smooth normal, with no gradient on it; a shadow cast on it is
+// its dark band. That band is the scenery's shadow (the sun's strength and the shadows' colour), deeper by `shade`
+// 0..1. `rim`: the edge of a model turned away from the eye, bright by the lights that are there (the sun on its lit
+// side, the sky on what faces up, a particle light on what faces it). outline: a dark line around the models'
+// silhouettes (the scenery's too with `scenery`), `width` pixels wide on a picture 720 lines high, gone by the view
+// depth `reach` (world units)
+struct ToonStyle {
+    bool shading = false;
+    float shade = 0.2f, rim = 0.25f;
+    float highlight = 0.1f; // the third band: the bright one on what faces the sun most (fixed on the model, unlike the rim)
+    bool outline = false;
+    float width = 1.0f, strength = 0.85f;
+    float ownColour = 0.5f; // 0..1: how much of the colour of what it goes around the line takes (0 = a dark ink)
+    bool scenery = false;
+    float reach = 6000.0f;
 };
 
 // The see-through (OpenDash, Baldur's Gate style; app/see_through): a scenery piece that stands between the camera and
@@ -193,6 +236,16 @@ struct ScreenRipple {
     float cx = 0, cy = 0, r0 = 0, r1 = 0, shift = 0;
 };
 
+// a frame-buffer lens ring of the exe's class 0x42e360 (the shock rings of the ST5C boss's black hole, exe 0x42e4a0):
+// around a world point (renderer units), the annulus inner .. inner + width (world units in the view plane) redrawn
+// from the frame buffer at radii remapped by the exe's profile [0x88ca64]; `outward` = its role bit 0 (the picture
+// pulled in toward the centre), else the inverse (pushed out). The output pass projects it with the drawn camera
+struct LensRing {
+    float pos[3] = {0, 0, 0};
+    float inner = 0, width = 0;
+    bool outward = false;
+};
+
 // A model preview (OpenDash's UI model pictures, e.g. the special weapons' turning model in the menus): triangles
 // rendered with depth, light and supersampling into their own target, shown as an ImGui texture
 struct PreviewVertex {
@@ -215,6 +268,9 @@ public:
     // this frame's screen ripples (at most kMaxScreenRipples are drawn); the output pass shifts the picture in them
     static constexpr int kMaxScreenRipples = 4;
     virtual void setScreenRipples(const std::vector<ScreenRipple>& ripples) { (void)ripples; }
+    // this frame's lens rings (at most kMaxLensRings are drawn), redrawn by the output pass
+    static constexpr int kMaxLensRings = 8;
+    virtual void setLensRings(const std::vector<LensRing>& rings) { (void)rings; }
     // the flooded rooms' screen wave (pool a0 class 0x431e90 variants 0 / 1 / 5; empty ret on PC, drawn on PS1 / PSP by
     // 0x179d94 of the PSP BOOT.BIN): screen row Y shows row Y + (sin(((Y - phase) & 127) >> 1 of 64) * 4096 >> shift),
     // tinted by colour / 0x80. amplitude = 4096 >> shift rows (PS1 screen), phase in rows (0..128), off: amplitude 0.
@@ -307,6 +363,12 @@ public:
     virtual void setEffectNearFade(float from, float to) = 0;
     // sun shadows; ignored when the GPU has no ray queries (DXR 1.1)
     virtual void setSun(const SunLight& sun) = 0;
+    // the ambient occlusion (AmbientOcclusion above); ignored without ray queries
+    virtual void setAmbientOcclusion(const AmbientOcclusion& ao) { (void)ao; }
+    // the bloom (Bloom above)
+    virtual void setBloom(const Bloom& bloom) { (void)bloom; }
+    // the anime look (ToonStyle above)
+    virtual void setToonStyle(const ToonStyle& style) { (void)style; }
     // the see-through this frame: the characters in focus (at most kMaxSeeThroughBodies) and the open pieces (at most
     // kMaxSeeThroughPieces, the most open first); debug tints every piece and the open ones
     virtual void setSeeThrough(const std::vector<SeeThroughBody>& bodies, const std::vector<SeeThroughPiece>& pieces,

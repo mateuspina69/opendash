@@ -173,7 +173,7 @@ bool PlayerView::orbitCamera(const RoomMesh& mesh, od::Camera& cam, float alpha,
         lockBlend = 0.0f;
         lockAimValid = false;
     }
-    skateCamera(locked, dt);
+    skateCamera(locked, alpha, dt);
     cam.roll = skateRoll;
     // pulled in front of the first opaque room surface between `from` and the eye
     const float from[3] = {tx * scale, ty * scale, tz * scale};
@@ -366,6 +366,15 @@ void PlayerView::trackPosition(bool snapNow) {
         posPrev[i] = snapNow ? float(at[i]) / 65536.0f : posCur[i];
         posCur[i] = float(at[i]) / 65536.0f;
     }
+    // the L1 / R1 follow (skateCamera): the orbit turns by as much as the body turned this tick, brought in over the
+    // tick like the position; what the frames had not shown of the last tick's turn first
+    const int yaw = int(pl.rotation.y) & 0xfff;
+    orbitYaw += shoulderTickTurn - shoulderTurnShown;
+    shoulderTurnShown = 0.0f;
+    shoulderTickTurn = 0.0f;
+    if (!snapNow && shoulderTurn && !lockedOn() && !skating() && !gameCameraActive())
+        shoulderTickTurn = float(((yaw - shoulderBodyYaw + 0x800) & 0xfff) - 0x800) * 6.2831853f / 4096.0f;
+    shoulderBodyYaw = yaw;
     // the lock-on target (+0x174) the same way; a new target starts without a blend
     const uint32_t t = od::port::slotIdentityWord(pl.lockedActor);
     const bool fresh = snapNow || t != lockTarget;
@@ -481,7 +490,7 @@ bool PlayerView::skating() const {
            (pl.sub() == od::port::PlayerSub::Skate || pl.sub() == od::port::PlayerSub::SkateFall);
 }
 
-void PlayerView::skateCamera(bool locked, float dt) {
+void PlayerView::skateCamera(bool locked, float alpha, float dt) {
     dt = std::max(dt, 0.0f);
     manualOrbitAge += dt;
     const bool on = skating() && !locked;
@@ -498,22 +507,13 @@ void PlayerView::skateCamera(bool locked, float dt) {
         rollT = std::clamp(float(lean) / kSkateLeanFull, -1.0f, 1.0f) * skateTune.rollDeg * 0.0174533f;
         const float speed = float(-pl.velocity.z);
         fovT = std::clamp((speed - 640.0f) / (1024.0f - 640.0f), 0.0f, 1.0f) * skateTune.fovDeg * 0.0174533f;
-    } else if (shoulderTurn && !locked) {
-        // L1 / R1 on foot: the camera stays behind the turning body by the PS1's own rule (exe 0x40e360, the same
-        // function on the USA disc): behind = the room's base yaw + the body's yaw; the follow Rigid (walking) puts
-        // it there at once, Lazy turns 0x80 a tick (30 ticks a second) and snaps within that; any other follow does
-        // not turn the camera. The shoulder wins over a recent mouse / right stick orbit
-        const od::port::CameraState& gc = od::port::cameraState();
-        constexpr float kUnit = 6.2831853f / 4096.0f;
-        const float behind = float((int(gc.basePose.yaw) + int(pl.rotation.y)) & 0xfff) * kUnit;
-        const float gap = wrapPi(behind - orbitYaw);
+    } else if (shoulderTickTurn != 0.0f && !locked) {
+        // L1 / R1 on foot: the camera turns with the body, by the body's own turn (trackPosition), so it keeps its
+        // place behind it; the tick's turn comes in with the frame's alpha
+        const float shown = shoulderTickTurn * std::clamp(alpha, 0.0f, 1.0f);
+        orbitYaw += shown - shoulderTurnShown;
+        shoulderTurnShown = shown;
         skateYawVel = 0.0f;
-        if (gc.follow() == od::port::CameraFollow::Rigid) {
-            orbitYaw += gap;
-        } else if (gc.follow() == od::port::CameraFollow::Lazy) {
-            const float step = float(od::port::kLazyFollowStep) * 30.0f * kUnit * dt;
-            orbitYaw += std::fabs(gap) <= step ? gap : std::copysign(step, gap);
-        }
     } else {
         skateYawVel = 0.0f;
     }

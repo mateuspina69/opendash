@@ -1,4 +1,5 @@
-// Fullscreen copy of an RGBA16F target to the swapchain (output pass), with two frame-buffer effects of the game:
+// Fullscreen copy of an RGBA16F target to the swapchain (output pass), with the frame-buffer effects of the game:
+// - the lens rings (class 0x42e360: the shock rings around the ST5C black hole; see the Lens buffer below);
 // - the screen ripples (class 0x438750 variant 0: an annulus of the frame buffer redrawn shifted by a few pixels; here
 //   the sample is moved toward the centre by the ring's shift);
 // - the flooded rooms' screen wave (class 0x431e90 variants 0 / 1 / 5, PS1 / PSP; the PC exe left it out): every PS1
@@ -23,6 +24,36 @@ struct OutConsts {
 [[vk::push_constant]]
 #endif
 ConstantBuffer<OutConsts> c : register(b0);
+
+// the lens rings (class 0x42e360, exe 0x42e4a0: the ST5C black hole's shock rings), projected by the renderer
+#define MAX_LENS_RINGS 8
+cbuffer Lens : register(b1) {
+    float4 lens[MAX_LENS_RINGS];     // centre x / y, inner radius, width (output pixels)
+    float4 lensKind[MAX_LENS_RINGS]; // x: 1 = role bit 0 (outward table order), 0 = the inverse
+    int lensCount;
+};
+
+// exe 0x42e4a0's ring profile [0x88ca64]: 11 radii (s16 pairs a / b) across the annulus; a ring of role bit 0 draws the
+// picture at a / 1024 of the width from the frame buffer at b / 4096 (the content pulled in), the other role at b / 4096
+// from a / 1024 (pushed out). The exe draws 10 bands of 16 quads, each mapping its two radii linearly (uv from screen
+// pixels); here every pixel maps its own radius through the same piecewise-linear profile, so the bands are smooth
+static const float kLensA[11] = {0.0, 30.0 / 1024.0, 75.0 / 1024.0, 135.0 / 1024.0, 210.0 / 1024.0, 300.0 / 1024.0,
+                                 405.0 / 1024.0, 525.0 / 1024.0, 660.0 / 1024.0, 810.0 / 1024.0, 1.0};
+static const float kLensB[11] = {0.0, 188.0 / 4096.0, 470.0 / 4096.0, 842.0 / 4096.0, 1297.0 / 4096.0,
+                                 1819.0 / 4096.0, 2384.0 / 4096.0, 2953.0 / 4096.0, 3473.0 / 4096.0,
+                                 3877.0 / 4096.0, 1.0};
+
+// the fraction t (0..1) of the annulus drawn mapped to the fraction read
+float lensProfile(float t, bool outward) {
+    for (int k = 0; k < 10; ++k) {
+        const float g0 = outward ? kLensA[k] : kLensB[k], g1 = outward ? kLensA[k + 1] : kLensB[k + 1];
+        if (t <= g1) {
+            const float s0 = outward ? kLensB[k] : kLensA[k], s1 = outward ? kLensB[k + 1] : kLensA[k + 1];
+            return lerp(s0, s1, saturate((t - g0) / max(g1 - g0, 1e-6)));
+        }
+    }
+    return 1.0;
+}
 
 struct VSOut {
     float4 pos : SV_Position;
@@ -147,6 +178,15 @@ float4 ps_main(VSOut i) : SV_Target {
         if (r >= c.ring[k].z && r < c.ring[k].w && r > 0.0)
             uv -= (d / r) * c.shift[k] / c.size;
     }
+    // the lens rings read from the picture as it stands (the exe copies the frame buffer drawn so far): each ring
+    // remaps the radius of its own annulus; the rings are applied one after the other like the exe's OT order
+    for (int n = 0; n < lensCount; ++n) {
+        const float2 d = uv * c.size - lens[n].xy;
+        const float r = length(d), w = lens[n].w;
+        if (w <= 0.0 || r <= 0.0 || r < lens[n].z || r > lens[n].z + w) continue;
+        const float rr = lens[n].z + lensProfile((r - lens[n].z) / w, lensKind[n].x > 0.5) * w;
+        uv = (lens[n].xy + d * (rr / r)) / c.size;
+    }
     if (c.wave.x > 0.0 && c.wave.w > 1.5) { // hot air: 2 a cave (the void filled), 3 under an open sky (kept)
         const float2 huv = heatWarp(uv, c.seconds);
         const float3 col = src.SampleLevel(linearClamp, huv, 0).rgb;
@@ -165,7 +205,7 @@ float4 ps_main(VSOut i) : SV_Target {
         tint = c.tint.rgb;
     }
     // untouched pictures stay a 1:1 point copy; shifted ones read bilinearly
-    const bool shifted = c.count > 0 || c.wave.x > 0.0;
+    const bool shifted = c.count > 0 || lensCount > 0 || c.wave.x > 0.0;
     const float3 rgb = shifted ? src.SampleLevel(linearClamp, uv, 0).rgb : src.SampleLevel(pointClamp, uv, 0).rgb;
     return float4(rgb * tint, 1.0);
 }

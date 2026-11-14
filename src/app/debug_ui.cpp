@@ -203,17 +203,76 @@ void App::drawDebugMenu() {
                 if (ImGui::Combo("debug view", &debugView, kViews, 6))
                     renderer->setDebugView(od::DebugView(debugView));
             }
-            if (renderer->rayTracingSupported()) { // experiment: ray-traced sun shadows
-                ImGui::SeparatorText("Sol (ray tracing)");
-                bool changed = ImGui::Checkbox("sombras do sol", &sunOn);
-                changed |= ImGui::SliderFloat("direcao", &sunAzimuth, 0.0f, 360.0f, "%.0f graus");
+            { // the sun: where it is, and seen in the sky (no ray tracing needed)
+                ImGui::SeparatorText("Sol");
+                bool changed = ImGui::SliderFloat("direcao", &sunAzimuth, 0.0f, 360.0f, "%.0f graus");
                 changed |= ImGui::SliderFloat("altura", &sunElevation, 5.0f, 90.0f, "%.0f graus");
-                changed |= ImGui::SliderFloat("forca (aberto)", &sunStrength, 0.0f, 1.0f, "%.2f");
-                changed |= ImGui::SliderFloat("forca (sala fechada)", &sunStrengthClosed, 0.0f, 1.0f, "%.2f");
+                changed |= ImGui::Checkbox("sol no ceu", &sunDiscOn);
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("O disco do sol, com o brilho em volta, na direcao de onde vem a luz.\n"
+                                      "So nas salas que tem ceu.");
+                changed |= ImGui::SliderFloat("tamanho do sol", &sunDiscSize, 0.3f, 6.0f, "%.1f graus");
                 if (changed) applySun();
             }
+            if (renderer->rayTracingSupported()) { // experiment: ray-traced sun shadows
+                ImGui::SeparatorText("Sombras do sol (ray tracing)");
+                bool changed = ImGui::Checkbox("sombras do sol", &sunOn);
+                changed |= ImGui::SliderFloat("forca (aberto)", &sunStrength, 0.0f, 1.0f, "%.2f");
+                changed |= ImGui::SliderFloat("forca (sala fechada)", &sunStrengthClosed, 0.0f, 1.0f, "%.2f");
+                changed |= ImGui::SliderFloat("penumbra (experimento; 0 = sombra dura)", &sunSoftness, 0.0f, 5.0f, "%.1f graus");
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("O tamanho do sol no ceu: a sombra fica nitida perto do que a projeta\n"
+                                      "e mais suave quanto mais longe.");
+                changed |= ImGui::SliderFloat("cor na sombra (experimento)", &sunTint, 0.0f, 1.0f, "%.2f");
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("A sombra puxa para o azul do ceu e a area iluminada para o tom quente do sol.\n"
+                                      "So em salas a ceu aberto.");
+                if (changed) applySun();
+                ImGui::SeparatorText("Oclusao ambiente (experimento, ray tracing)");
+                ImGui::Checkbox("escurecer cantos e contatos", &occlusionOn);
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("Cantos, quinas e o chao sob os personagens perdem a luz do ambiente.\n"
+                                      "Funciona com o sol ligado ou desligado, e em salas fechadas.");
+                if (occlusionOn) {
+                    ImGui::SliderFloat("forca da oclusao", &occlusionStrength, 0.0f, 1.0f, "%.2f");
+                    ImGui::SliderFloat("alcance da oclusao", &occlusionRadius, 20.0f, 400.0f, "%.0f");
+                }
+            }
             else
-                ImGui::TextDisabled("Sol: GPU sem ray tracing");
+                ImGui::TextDisabled("Sol e oclusao ambiente: GPU sem ray tracing");
+            ImGui::SeparatorText("Estilo anime (experimento)");
+            ImGui::Checkbox("luz em faixas nos personagens", &toonOn);
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("A luz do sol cai nos personagens em duas faixas chapadas (claro / sombra), sem degrade.\n"
+                                  "Segue o sol acima: so aparece com 'sombras do sol' ligado. A ceu aberto a faixa\n"
+                                  "escura e a sombra do cenario (forca e cor do sol); em sala fechada a luz vem da\n"
+                                  "direcao do sol sem projetar sombra, e a faixa escura e a luz da sala escurecida\n"
+                                  "pela 'sombra a mais'.");
+            if (toonOn) {
+                ImGui::SliderFloat("sombra a mais nos personagens", &toonShade, 0.0f, 1.0f, "%.2f");
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("0 = a faixa escura dos personagens e igual a sombra do cenario.\n"
+                                      "Em sala fechada e a forca inteira da faixa escura.");
+                ImGui::SliderFloat("faixa de brilho (0 = desligada)", &toonHighlight, 0.0f, 1.0f, "%.2f");
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("Terceira faixa: a parte do personagem mais virada para o sol fica mais clara.\n"
+                                      "Fica presa ao modelo: nao muda quando a camera gira.");
+                ImGui::SliderFloat("luz de contorno (0 = desligada)", &toonRim, 0.0f, 1.0f, "%.2f");
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("A borda dos personagens acende pelas luzes que existem: o sol no lado iluminado,\n"
+                                      "o ceu no que olha para cima, e tiros e explosoes (com a luz das particulas ligada).");
+            }
+            ImGui::Checkbox("traco em volta dos personagens", &outlineOn);
+            if (outlineOn) {
+                ImGui::SliderFloat("espessura do traco", &outlineWidth, 0.5f, 5.0f, "%.1f");
+                ImGui::SliderFloat("cor do personagem no traco", &outlineOwnColour, 0.0f, 1.0f, "%.2f");
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("0 = traco escuro neutro; acima disso o traco puxa a cor do que ele contorna.");
+                ImGui::Checkbox("traco no cenario tambem", &outlineScenery);
+            }
+            ImGui::SeparatorText("Bloom (experimento)");
+            ImGui::Checkbox("brilho em volta de tiros e explosoes", &bloomOn);
+            if (bloomOn) ImGui::SliderFloat("forca do bloom", &bloomStrength, 0.0f, 3.0f, "%.2f");
             ImGui::SeparatorText("Modelos subdivididos (experimento)");
             ImGui::SliderInt("subdivisao (1 = original)", &modelSubdivisionLevel, 1, 4);
             if (modelSubdivisionLevel > 1) ImGui::SliderFloat("arredondar", &modelSubdivisionAmount, 0.0f, 1.0f, "%.2f");

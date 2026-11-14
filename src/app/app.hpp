@@ -78,10 +78,28 @@ struct App {
     std::string fogArg; // --fog: over opendash.ini fog=
     std::string weatherArg; // --weather: over opendash.ini weather=
     // experimental ray-traced sun shadows: --sun <azimuth deg> <elevation deg> (0 0 = off), F1 "Sol"
-    float sunAzimuth = 45.0f, sunElevation = 50.0f;
+    float sunAzimuth = 14.0f, sunElevation = 33.0f;
     // what a pixel out of the sun loses: under an open sky, and in a room with no sky (roomHasNoSky)
     float sunStrength = 0.2f, sunStrengthClosed = 0.4f;
     bool sunOn = false;
+    // experiments on the sun (renderer SunLight; F1 Video): its angular radius in degrees (--sun-softness, 0 = hard
+    // shadows) and the shadows' colour (--sun-tint 0..1)
+    float sunSoftness = 0.0f, sunTint = 0.0f;
+    // the sun seen in the sky (renderer SunLight::disc; F1 Video, --sun-disc <radius deg>): only where the room has a sky
+    bool sunDiscOn = false;
+    float sunDiscSize = 1.5f;
+    // the experiment of the ambient occlusion (renderer AmbientOcclusion; F1 Video, --ambient-occlusion <strength>):
+    // the rays' reach in game units
+    bool occlusionOn = false;
+    float occlusionStrength = 0.6f, occlusionRadius = 120.0f;
+    // the experiment of the bloom (renderer Bloom; F1 Video, --bloom <strength>)
+    bool bloomOn = false;
+    float bloomStrength = 1.0f;
+    // the experiment of the anime look (renderer ToonStyle; F1 Video): the sun's light in flat bands on the characters
+    // (--toon 1, --toon-shade, --toon-rim) and the line around them (--outline <width>, --outline-scenery 1)
+    bool toonOn = false, outlineOn = false, outlineScenery = false;
+    float toonShade = 0.2f, toonRim = 0.25f, outlineWidth = 1.0f;
+    float toonHighlight = 0.1f, outlineOwnColour = 0.5f; // --toon-highlight, --outline-colour
     // the light of the particles (renderer ParticleLighting; F1 Video, particle_lights=): radius in game units
     bool particleLights = false;
     int particleLightsArg = -1; // --particle-lights: wins over the file

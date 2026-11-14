@@ -17,6 +17,8 @@
 
 #include <cstdint>
 
+#include "game/collision.hpp"
+
 namespace od::port {
 
 struct HitBoxHead;
@@ -95,11 +97,12 @@ void hitListSubmitCapsule(const int16_t a[3], uint16_t ra, const int16_t b[3], u
 void hitListSubmitCapsule(const int16_t a[3], uint16_t ra, const int16_t b[3], uint16_t rb, HitBox& box,
                           uint32_t ownerShape, uint32_t attack);
 // exe 0x5e4260: the lock-on selection (exe 0x5e4b60 over every group), then every pair of entries whose groups collide
-// and whose owners differ tested (exe 0x5e4350); the list emptied
-void hitListPass();
+// and whose owners differ tested (exe 0x5e4350); the list emptied. room: the room of the lock-on's wall test (OpenDash,
+// game/lock_on_targets; none: the exe's selection)
+void hitListPass(const CollisionRoom* room = nullptr);
 // a client: an entry of an actor the world holds, as the world's hit list had it (its result box the caller's)
 void hitListPutEntry(const int16_t pos[3], uint16_t shape, uint32_t owner, uint32_t attack, HitBoxHead& box);
 // a client: the pass's selection only -- the lock-on, its aim points, the radar; the world decides what hits
-void hitListLockOnOnly();
+void hitListLockOnOnly(const CollisionRoom* room = nullptr);
 
 } // namespace od::port

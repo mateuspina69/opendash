@@ -193,9 +193,9 @@ bar.play=Play
 bar.stop=Stop
 # OpenDash: a tela de Peças (abas, selos das barreiras, títulos das caixas)
 equip.head.6=Parts list
-row.5.7000=Helmet
+row.5.7060=Helmet
 row.5.7030=Armor
-row.5.7060=Shoes
+row.5.7000=Shoes
 barrier.0=Flame Barrier
 barrier.1=Light Barrier
 # OpenDash: o modo foto

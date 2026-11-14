@@ -52,6 +52,19 @@ cbuffer Frame : register(b0) {
     float4 lightPos[32];   // the particle lights (renderer.hpp kMaxParticleLights): position, radius
     float4 lightColor[32]; // ... colour, a = how near it no character stops it (ParticleLight::clearing)
     float4 lightInfo;      // ... how many this draw receives (x), the gain (y)
+    float4 lightTerms;     // the traced light (lightTex) on this draw: x 1 = the sun's visibility comes from it (soft
+                           // shadows), y the ambient occlusion's strength (0 off), z the shadows' colour (0..1); w 1 =
+                           // the light its glowing effects add also goes to the glow target (the bloom)
+    float4 lightTrace;     // ps_light: x the tangent of the sun's angular radius (< 0: no sun ray), y the occlusion
+                           // rays' reach (world units), z how many a pixel (0 none), w the sample pattern's turn (radians)
+    float4 toon;           // the anime look (OpenDash experiment): z 1 = the sun's light falls on a model in two flat
+                           // bands; x how much deeper than the scenery's shadow its dark band is, y its rim light,
+                           // w its third band: the bright one, on what faces the sun most
+    float4 outline;        // ps_outline: x the line's width in pixels, y its strength, z 1 = around the scenery too,
+                           // w the view depth it is gone at (world units)
+    float4 outlineLook;    // ... x how much of the colour of what it goes around the line takes (0 = the dark ink)
+    float4 sunDisc;        // the sun in the sky (OpenDash): x its angular radius (radians), y the sky draw it is on (1
+                           // the dome, 2 a screen-space layer; 0 none)
 };
 Texture2DArray pages : register(t0);
 SamplerState pointClamp : register(s0);
@@ -59,10 +72,39 @@ SamplerState pageFilter : register(s1); // a page's colour: anisotropic with a t
 Texture2D<float> heightMap : register(t4);  // precipitation: the room seen from above (depth 0 = top, 1 = no surface)
 Texture2D<float> sceneDepth : register(t5); // the opaque scene's raw depth (R32F copy, before the blended draws)
 Texture2D<float4> sceneColor : register(t6); // the scene's colour before the see-through's lens (what lies behind it)
+// The traced light (OpenDash experiments: the sun's soft shadows, the ambient occlusion). A prepass draws the opaque
+// surfaces' view depth and normals (ps_main, OD_PRE); ps_light traces each pixel's rays from them, one sample of a 4 x 4
+// pattern a pixel; ps_lightBlurX / Y average the pattern away along each surface; the opaque draws read the result
+Texture2D<float2> lightTex : register(t7);  // x the sun's visibility, y the ambient occlusion (1 = open)
+Texture2D<float> preDepth : register(t8);   // the prepass: view depth (0 = no surface)
+Texture2D<float4> preNormal : register(t9); // ... octahedral normals: xy the face's, zw the shading one
+Texture2D<float2> lightIn : register(t10);  // a blur pass's input
+
+float2 octEncode(float3 n) {
+    n /= abs(n.x) + abs(n.y) + abs(n.z);
+    const float2 s = float2(n.x >= 0.0 ? 1.0 : -1.0, n.y >= 0.0 ? 1.0 : -1.0);
+    return n.z >= 0.0 ? n.xy : (1.0 - abs(n.yx)) * s;
+}
+
+float3 octDecode(float2 e) {
+    float3 n = float3(e, 1.0 - abs(e.x) - abs(e.y));
+    const float t = saturate(-n.z);
+    n.xy += float2(n.x >= 0.0 ? -t : t, n.y >= 0.0 ? -t : t);
+    return normalize(n);
+}
+
+// the world point of the prepass's pixel (px: its centre) at that view depth
+float3 preWorld(float2 px, float depth) {
+    const float2 ndc = px / renderSize * float2(2.0, -2.0) + float2(-1.0, 1.0);
+    const float4 h = mul(float4(ndc, 0.5, 1.0), invViewProj);
+    const float3 dir = h.xyz / h.w - eye;
+    return eye + dir * (depth / dot(dir, fwd));
+}
 
 #ifdef OD_RT
 // ray-traced sun shadows (DXR 1.1 inline ray queries). Instance 0 = room (opaque ranges), 1 = dynamic actors;
-// primitive i = vertices 3i..3i+2 of that instance's triangle list, attributes (u, v, slice, -) per vertex
+// primitive i = vertices 3i..3i+2 of that instance's triangle list, attributes (u, v, slice, the dynamic object) per
+// vertex
 RaytracingAccelerationStructure sceneAS : register(t1);
 StructuredBuffer<float4> staticAttr : register(t2);
 StructuredBuffer<float4> dynAttr : register(t3);
@@ -94,6 +136,25 @@ float sunVisibility(float3 wp, float3 n, float lift) {
     return q.CommittedStatus() == COMMITTED_TRIANGLE_HIT ? 0.0 : 1.0;
 }
 
+// the sun on a model of the anime look (its object: VSIn::object): the same ray, past the model's own faces. Its dark
+// band is its form (the smooth normal against the sun); its own low-poly faces would cut that band along their edges
+float sunVisibilityPastSelf(float3 wp, float3 n, float self) {
+    RayDesc r;
+    r.Origin = wp + n * 2.0;
+    r.Direction = sunDir;
+    r.TMin = 0.5;
+    r.TMax = 1.0e6;
+    RayQuery<RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> q;
+    q.TraceRayInline(sceneAS, RAY_FLAG_NONE, 0xFF, r);
+    while (q.Proceed())
+        if (q.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE) {
+            const uint inst = q.CandidateInstanceID(), prim = q.CandidatePrimitiveIndex();
+            if (inst == 1 && dynAttr[prim * 3].w == self) continue;
+            if (blocksLight(inst, prim, q.CandidateTriangleBarycentrics())) q.CommitNonOpaqueTriangleHit();
+        }
+    return q.CommittedStatus() == COMMITTED_TRIANGLE_HIT ? 0.0 : 1.0;
+}
+
 // 1 = nothing of the instances in `mask` lies along the ray up to tMax
 float rayClear(float3 from, float3 dir, float tMax, uint mask) {
     RayDesc r;
@@ -117,13 +178,36 @@ float lightVisibility(float3 from, float3 dir, float dist, float clearing) {
     if (rayClear(from, dir, dist * 0.9, 1) < 0.5) return 0.0;
     return rayClear(from, dir, dist - clearing, 2);
 }
+
+// the traced light at a pixel of the scene pass, of view depth `depth`: its own pixel of lightTex, or (an edge the
+// prepass gave to another surface: MSAA, a see-through lens) the neighbour whose surface lies nearest in depth
+float2 lightAt(float2 px, float depth) {
+    static const int2 kTap[5] = {int2(0, 0), int2(1, 0), int2(-1, 0), int2(0, 1), int2(0, -1)};
+    const int2 p = int2(px);
+    float2 terms = float2(1.0, 1.0);
+    float best = 1.0e30;
+    for (int k = 0; k < 5; ++k) {
+        const float d = preDepth.Load(int3(p + kTap[k], 0));
+        const float off = abs(d - depth);
+        if (d <= 0.0 || off >= best) continue;
+        best = off;
+        terms = lightTex.Load(int3(p + kTap[k], 0));
+        if (off < 0.5 + depth * 0.002) break;
+    }
+    return terms;
+}
 #endif
 
 // what the particle lights give a surface at wp (facing n; ns its shading normal): a soft window falloff to the light's
 // radius, soft at the terminator (a low shot still lights the floor it flies over), saturating as lights overlap. 0..1
 // per channel
-float3 particleLight(float3 wp, float3 n, float3 ns) {
+// rim: what they give an edge turned toward them (the anime look's rim light), unsaturated
+// cel (a model of the anime look; nc its band normal): no light on what turns away from it, none wrapping past that
+// edge, and the light fades to nothing before it: a light near a rounded model would ring a hard circle around itself
+// where the model turns away. Its shadows (the rays) stay hard
+float3 particleLight(float3 wp, float3 n, float3 ns, bool cel, float3 nc, out float3 rim) {
     float3 sum = float3(0, 0, 0);
+    rim = float3(0, 0, 0);
     for (int k = 0; k < int(lightInfo.x + 0.5); ++k) {
         const float3 to = lightPos[k].xyz - wp;
         const float d2 = dot(to, to), r2 = lightPos[k].w * lightPos[k].w;
@@ -131,7 +215,9 @@ float3 particleLight(float3 wp, float3 n, float3 ns) {
         const float dist = sqrt(d2);
         const float3 dir = dist > 1e-3 ? to / dist : ns;
         const float window = 1.0 - d2 / r2;
-        const float gain = window * window * saturate((dot(ns, dir) + 0.25) / 1.25);
+        const float reach = window * window;
+        const float facing = cel ? smoothstep(0.0, 0.35, dot(nc, dir)) : saturate((dot(ns, dir) + 0.25) / 1.25);
+        const float gain = reach * facing;
         const float3 add = lightColor[k].rgb * gain;
         if (dot(add, float3(1, 1, 1)) < 0.01) continue; // too little to pay a ray for
 #ifdef OD_RT
@@ -140,6 +226,7 @@ float3 particleLight(float3 wp, float3 n, float3 ns) {
         if (lightVisibility(wp + ns * lift, dir, dist, lightColor[k].w) < 0.5) continue;
 #endif
         sum += add;
+        rim += lightColor[k].rgb * reach * (cel ? facing : saturate(dot(ns, dir)));
     }
     return 1.0 - exp(-sum);
 }
@@ -169,9 +256,11 @@ struct VSIn {
     float3 prevPos : PREVPOS;
     float3 faceN : FACEN; // winding normal of this triangle
     float3 pairN : PAIRN; // ... and of the quad's other half (cull 2..5)
-    float surface : SURFACE; // bits: 1 a model's face (actors, the player, bank models), 4 an effect; * 8 the
-                             // see-through's scenery piece (RenderVertex::piece)
+    float surface : SURFACE; // bits: 1 a model's face (actors, the player, bank models), 4 an effect, 8 an effect that
+                             // gives light; * 16 the see-through's scenery piece (RenderVertex::piece)
     float4 uvRect : UVRECT;  // the triangle's UVs' bounds (min u, v, max u, v)
+    float object : OBJECT;   // the dynamic object it belongs to (1 on; 0 the room, the sky)
+    float3 pieceN : PIECEN;  // the anime look's shading normal of a model's piece, not unit (0: none)
 };
 struct VSOut {
     float4 pos : SV_Position;
@@ -188,6 +277,8 @@ struct VSOut {
     nointerpolation float3 pairN : TEXCOORD8;
     nointerpolation float surface : TEXCOORD9;
     nointerpolation float4 uvRect : TEXCOORD10;
+    nointerpolation float object : TEXCOORD11;
+    float3 pieceN : TEXCOORD12;
 };
 
 // no z-buffer on the PS1: decals win by OT order; here they move a few units toward the eye. A negative layer (the
@@ -220,6 +311,8 @@ VSOut vs_main(VSIn i) {
     o.faceN = i.faceN;
     o.pairN = i.pairN;
     o.surface = i.surface;
+    o.object = i.object;
+    o.pieceN = i.pieceN;
     return o;
 }
 
@@ -249,6 +342,19 @@ float3 skyDir(float3 world) {
     if (fogSky < 1.5) return normalize(world - eye);
     const float4 r = mul(float4(world.xy, 1.0, 1.0), skyRay);
     return normalize(r.xyz / r.w);
+}
+
+// the sun in the sky (sunDisc): a disc of radius r around sunDir, its edge one pixel soft, and a halo around it. The
+// light it adds to a sky pixel seen along dir; the remaster fog in front of the sky dims it by what it lets through
+static const float3 kSunDiscColor = float3(1.0, 0.96, 0.86);
+float3 sunInSky(float3 dir) {
+    const float r = sunDisc.x;
+    const float a = acos(clamp(dot(dir, sunDir), -1.0, 1.0));
+    const float px = max(fwidth(a), 1e-5);
+    const float core = 1.0 - smoothstep(r - px, r + px, a);
+    const float halo = 0.45 * exp(-max(a - r, 0.0) / (r * 2.5)) + 0.12 * exp(-max(a - r, 0.0) / (r * 14.0));
+    const float through = fogMode > 1.5 && fogSky > 0.5 ? 1.0 - remasterSkyFog(dir) : 1.0;
+    return kSunDiscColor * (core * 1.5 + halo * (1.0 - core)) * through;
 }
 
 float3 remasterFogColor(float3 dir) {
@@ -385,15 +491,38 @@ float3 underwater(float3 rgb, float3 wp, bool lit, bool blended) {
     return rgb + hue * float3(0.35, 0.75, 0.85) * rays * 0.8;
 }
 
+#ifdef OD_PRE // the traced light's prepass
+struct PSOut {
+    float viewDepth : SV_Target0;
+    float4 normals : SV_Target1; // octahedral: xy the face's, zw the shading one
+#ifdef __spirv__
+    float depth : SV_Depth;
+#endif
+};
+#else
 struct PSOut {
     float4 color : SV_Target0;
     float2 motion : SV_Target1;
     float4 normal : SV_Target2;
     float reactive : SV_Target3;
+    float4 glow : SV_Target4; // the light a glowing effect adds (lightTerms.w): what the bloom spreads
 #ifdef __spirv__
     float depth : SV_Depth; // Vulkan's depth is D32 (no D24 on AMD): written at D24's precision (kDepthFormat)
 #endif
 };
+#endif
+
+// the normals of a fragment at `world`: n the geometric one of the visible side (double-sided faces have no reliable
+// winding), ns the shading one (smooth on actors, per vertex, see toGpu; the face normal on the room), same side as n
+void surfaceNormals(float3 world, float3 vertexNormal, out float3 n, out float3 ns) {
+    n = normalize(cross(ddy(world), ddx(world)));
+    if (dot(n, eye - world) < 0) n = -n;
+    ns = normalize(vertexNormal);
+    if (dot(ns, n) < 0) ns = -ns;
+}
+
+// the shadows' colour (lightTerms.z): what the sun does not reach keeps the sky's light, what it reaches the sun's
+static const float3 kShadowHue = float3(0.86, 0.95, 1.08), kSunHue = float3(1.0, 0.97, 0.9);
 
 // A page's colour through pageFilter. With a texture pack the filter's reach stays inside the triangle's UVs: a page
 // packs unrelated pieces side by side (the sky's tiles), and one's edge must not read its neighbour. The reach: half the
@@ -417,7 +546,7 @@ PSOut ps_main(VSOut i, bool front : SV_IsFrontFace) {
     // drop a face whose vertices all lie before it (0x40d0c0) and clip the others there (0x40d670), so a model
     // pressed against a cutscene camera vanishes (ST08 sub 1, Joe's lab). The room draws are not clipped (the
     // renderer keeps depth clip off)
-    const uint surface = uint(round(i.surface)), piece = surface >> 3;
+    const uint surface = uint(round(i.surface)), piece = surface >> 4;
     if ((surface & 1u) && i.depth < modelNear) discard;
     // a world effect is gone this close to the camera (opaque texels have no level to fade through; below, the blended)
     if ((surface & 2u) && i.depth < softDepth.z) discard;
@@ -478,6 +607,21 @@ PSOut ps_main(VSOut i, bool front : SV_IsFrontFace) {
         const bool visible = cullMode == 1 || cullMode == 4 ? own : cullMode == 5 ? pair : (own || pair);
         if (!visible) discard;
     }
+#ifdef OD_PRE
+    // the prepass: the texels the opaque draws keep (as below), their view depth and normals
+    const float texel = i.uvs.z < 0 ? 1.0 : pages.SampleLevel(pointClamp, i.uvs, 0).a;
+    clip(texel - 0.25);
+    if (semiPass > 0.5 && (semiPass < 1.5) == (i.uvs.z < 0 || texel < 0.75)) discard;
+    float3 n, ns;
+    surfaceNormals(i.world, i.normal, n, ns);
+    PSOut o;
+    o.viewDepth = i.depth;
+    o.normals = float4(octEncode(n), octEncode(ns));
+#ifdef __spirv__
+    o.depth = round(saturate(i.pos.z) * 16777215.0) / 16777215.0;
+#endif
+    return o;
+#else
     // slice < 0: untextured. The alpha is the texel's own (0 / the STP bit / 255: a meaning, not a level to filter)
     float4 c = i.uvs.z < 0 ? float4(1, 1, 1, 1)
                            : float4(pageColor(i.uvs, i.uvRect), pages.SampleLevel(pointClamp, i.uvs, 0).a);
@@ -492,27 +636,73 @@ PSOut ps_main(VSOut i, bool front : SV_IsFrontFace) {
         rgb = lerp(rgb, up > 0.0 ? skyPoleUp.rgb : skyPoleDown.rgb, smoothstep(skyPoleUp.a, skyPoleDown.a, abs(up)));
     }
     const float3 unlit = rgb; // the texture's colour: what the particle lights multiply, shadowed or not
-    // geometric normal of the visible side (double-sided faces have no reliable winding)
-    float3 n = normalize(cross(ddy(i.world), ddx(i.world)));
-    if (dot(n, eye - i.world) < 0) n = -n;
-    // shading normal: smooth on actors (per-vertex, see toGpu), the face normal on the room; same side as n
-    float3 ns = normalize(i.normal);
-    if (dot(ns, n) < 0) ns = -ns;
-#ifdef OD_RT
-    if (shadowMode > 1.5) rgb *= 1.0 - sunStrength;
-    else if (shadowMode > 0.5) {
-        const float facing = saturate(dot(ns, sunDir) * 3.0); // soft terminator: surfaces turned away get no sun
-        // a face turned away from the sun while its smooth normal still faces it would shadow itself on its low-poly
-        // neighbours (the "shadow terminator" stair-steps) from the surface: its ray starts further out along the
-        // smooth normal, past those neighbours, but still meets everything else (a roof keeps it dark)
-        const float vis = facing > 0.0 ? sunVisibility(i.world, ns, dot(n, sunDir) > 0.0 ? 2.0 : 12.0) : 1.0;
-        const float lit = facing * vis;
-        rgb *= 1.0 - sunStrength * (1.0 - lit);
+    float3 n, ns;
+    surfaceNormals(i.world, i.normal, n, ns);
+    // the anime look: the sun's light falls on a model in two flat bands, by its smooth normal, with no gradient on it
+    // (no soft terminator, no occlusion, no penumbra). Its dark band is the scenery's shadow (the sun's strength, the
+    // shadows' colour), deeper by toon.x; in a room with no sky, by the sun's direction with no shadow cast, the room's
+    // light and that light deeper by toon.x; with the sun off there is no band. rimEdge: the
+    // edge turned away from the eye, which the lights that are there brighten (the sun, the sky, the particle lights)
+    const bool cel = toon.z > 0.5 && (surface & 1u);
+    const float rimEdge = cel ? toon.y * smoothstep(0.62, 0.7, 1.0 - saturate(dot(ns, normalize(eye - i.world)))) : 0.0;
+    // which band: by the normal of the model's piece as one solid (VSIn::pieceN), so the bands' border runs a piece's
+    // whole length whatever its faces and its pose; a face with none: by the shading normal
+    float3 nc = ns;
+    if (cel && dot(i.pieceN, i.pieceN) > 0.0) {
+        nc = normalize(i.pieceN);
+        if (dot(nc, n) < 0.0) nc = -nc;
     }
+#ifdef OD_RT
+    // the traced light of this pixel: the sun through its disc, the ambient occlusion (1 = open)
+    float2 traced = float2(1.0, 1.0);
+    if (lightTerms.x + lightTerms.y > 0.0) traced = lightAt(i.pos.xy, i.depth);
+    const float open = cel ? 1.0 : 1.0 - lightTerms.y * (1.0 - traced.y);
+    if (shadowMode > 1.5) { // a room with no sky: the sun reaches nothing in it
+        const float room = (1.0 - sunStrength) * open;
+        if (cel) {
+            // a model still parts in its bands by a light from the sun's direction that casts nothing (no ray): its lit
+            // band is the room's light, its dark band deeper by toon.x; the rim and the bright band on the lit side
+            const float lit = smoothstep(0.02, 0.08, dot(nc, sunDir));
+            rgb *= room * lerp(1.0 - toon.x, 1.0, lit);
+            rgb += unlit * room * lit * (rimEdge * saturate(dot(nc, sunDir) + 0.5) +
+                                         toon.w * smoothstep(0.72, 0.78, dot(nc, sunDir)));
+        } else rgb *= room;
+    }
+    else if (shadowMode > 0.5) {
+        // soft terminator: surfaces turned away get no sun
+        const float facing = cel ? smoothstep(0.02, 0.08, dot(nc, sunDir)) : saturate(dot(ns, sunDir) * 3.0);
+        float vis = 1.0;
+        if (facing > 0.0) {
+            // a face turned away from the sun while its smooth normal still faces it would shadow itself on its
+            // low-poly neighbours (the "shadow terminator" stair-steps) from the surface: its ray starts further out
+            // along the smooth normal, past those neighbours, but still meets everything else (a roof keeps it dark)
+            if (cel) vis = sunVisibilityPastSelf(i.world, ns, i.object);
+            else if (lightTerms.x > 0.5) vis = traced.x; // (ps_light's ray, the same way)
+            else vis = sunVisibility(i.world, ns, dot(n, sunDir) > 0.0 ? 2.0 : 12.0);
+        }
+        const float lit = facing * vis;
+        const float3 hue = lerp(float3(1.0, 1.0, 1.0), lerp(kShadowHue, kSunHue, lit), lightTerms.z);
+        if (cel) { // a shadow cast on a model is its dark band too
+            rgb *= lerp((1.0 - sunStrength) * (1.0 - 0.5 * toon.x), 1.0, lit) * hue;
+            // the rim: the sun's on the lit side; the sky's, fainter, on what faces up out of the sun
+            const float3 sunRim = lit * saturate(dot(nc, sunDir) + 0.5) * lerp(float3(1.0, 1.0, 1.0), kSunHue, lightTerms.z);
+            const float3 skyRim = 0.35 * (1.0 - lit) * saturate(ns.y) * (1.0 - sunStrength) * kShadowHue;
+            rgb += unlit * rimEdge * (sunRim + skyRim);
+            // the bright band: fixed on the model by the sun's direction, wherever the eye is
+            rgb += unlit * toon.w * lit * smoothstep(0.72, 0.78, dot(nc, sunDir)) *
+                   lerp(float3(1.0, 1.0, 1.0), kSunHue, lightTerms.z);
+        }
+        // what the shadow keeps is the sky's light: the occlusion takes from it, not from the sun's
+        else rgb *= ((1.0 - sunStrength) * open + sunStrength * lit) * hue;
+    } else rgb *= open;
 #endif
     // the particle lights on the opaque surfaces (an effect's own texels give light, they don't take it): on top of the
-    // sun's shadow, so a shot lights up a shadowed corner
-    if (lightInfo.x > 0.5 && !(surface & 4u)) rgb = saturate(rgb + unlit * lightInfo.y * particleLight(i.world, n, ns));
+    // sun's shadow, so a shot lights up a shadowed corner; on a model of the anime look, its edge toward them too
+    if (lightInfo.x > 0.5 && !(surface & 4u)) {
+        float3 rim;
+        const float3 light = particleLight(i.world, n, ns, cel, nc, rim);
+        rgb = saturate(rgb + unlit * (lightInfo.y * light + rimEdge * 2.0 * (1.0 - exp(-rim))));
+    }
     // fog: an opaque / averaged surface turns into the fog colour; light a draw adds (B+F, B+F/4) or takes away
     // (B*(1-F)) fades out instead -- pulled toward the fog colour it would add a fog-coloured veil of its own
     const bool fadeOut = blendMode > 1.5;
@@ -529,6 +719,17 @@ PSOut ps_main(VSOut i, bool front : SV_IsFrontFace) {
     }
     if (water.x > 0.5 && water.w > 0.5) rgb = hotAir(rgb, i.world, reactive > 0.0 && water.z < 0.5);
     else if (water.x > 0.5) rgb = underwater(rgb, i.world, reactive == 0.0 && water.z < 0.5, reactive > 0.0 && water.z < 0.5);
+    // the sun in the sky: the dome's world point around the eye, or the screen-space layer's NDC position (skyRay);
+    // not under water (the water seen far away replaces the sky)
+    if (sunDisc.y > 0.5 && !(water.x > 0.5 && water.w < 0.5)) {
+        float3 dir;
+        if (sunDisc.y < 1.5) dir = normalize(i.world - eye);
+        else {
+            const float4 r = mul(float4(i.world.xy, 1.0, 1.0), skyRay);
+            dir = normalize(r.xyz / r.w);
+        }
+        rgb += sunInSky(dir);
+    }
     PSOut o;
     // the PC exe's vertex alpha of a semi-transparent polygon (0x402100): 0x80 average, 0x40 B + F/4, else 0xff
     float alpha = blendMode > 0.5 && blendMode < 1.5 ? 0.5 : blendMode > 3.5 ? 0.25 : 1.0;
@@ -561,13 +762,163 @@ PSOut ps_main(VSOut i, bool front : SV_IsFrontFace) {
     float2 cur = (i.curClip.xy / i.curClip.w) * float2(0.5, -0.5) + 0.5;
     float2 prv = (i.prevClip.xy / i.prevClip.w) * float2(0.5, -0.5) + 0.5;
     o.motion = motionMode > 0.5 ? float2(0, 0) : (prv - cur) * renderSize; // pixels, prev - cur
-    o.normal = float4(normalize(i.normal) * 0.5 + 0.5, 1.0);
+    // a: what the surface is (ps_outline): 1 a model, 2/3 an effect's opaque texels, 1/3 the scenery (0: nothing drawn)
+    o.normal = float4(normalize(i.normal) * 0.5 + 0.5, (surface & 1u) ? 1.0 : (surface & 4u) ? 2.0 / 3.0 : 1.0 / 3.0);
     o.reactive = reactive;
+    // the bloom's source: the light a glowing effect's draw adds (B + F, B + F/4: the semi pipelines add it there too)
+    o.glow = float4(lightTerms.w > 0.5 && (surface & 8u) ? rgb * saturate(alpha) : float3(0, 0, 0), 1.0);
 #ifdef __spirv__
     // the D24 quantisation (coplanar faces tie as on D3D12), of the depth clamped to the viewport's 0..1 as D3D12 does
     // with depth clip off (a face past the near plane is drawn at depth 0)
     o.depth = round(saturate(i.pos.z) * 16777215.0) / 16777215.0;
 #endif
+    return o;
+#endif
+}
+
+// ---- the traced light (lightTex above) ----
+
+#ifdef OD_RT
+// a pixel's place in the 4 x 4 sample pattern (an ordered dither: neighbours take samples far apart)
+static const float kLightSlot[16] = {0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5};
+
+float2 ps_light(float4 pos : SV_Position) : SV_Target {
+    const int2 p = int2(pos.xy);
+    const float depth = preDepth.Load(int3(p, 0));
+    if (depth <= 0.0) return float2(1.0, 1.0);
+    const float3 wp = preWorld(pos.xy, depth);
+    const float4 normals = preNormal.Load(int3(p, 0));
+    const float3 n = octDecode(normals.xy), ns = octDecode(normals.zw);
+    const float slot = kLightSlot[(p.x & 3) + (p.y & 3) * 4];
+    // the sun: one point of its disc a pixel (a spiral over the pattern's 16), from where ps_main's ray starts
+    float sun = 1.0;
+    if (lightTrace.x >= 0.0 && dot(ns, sunDir) > 0.0) {
+        const float a = slot * 2.39996323 + lightTrace.w, r = sqrt((slot + 0.5) / 16.0) * lightTrace.x;
+        const float3 t = normalize(cross(abs(sunDir.y) < 0.99 ? float3(0, 1, 0) : float3(1, 0, 0), sunDir));
+        const float3 b = cross(sunDir, t);
+        const float3 d = normalize(sunDir + (t * cos(a) + b * sin(a)) * r);
+        sun = rayClear(wp + ns * (dot(n, sunDir) > 0.0 ? 2.0 : 12.0), d, 1.0e6, 0xFF);
+    }
+    // the ambient occlusion: how much of the hemisphere over the surface is open within the rays' reach
+    // (cosine-weighted directions, stratified over the pattern's pixels and each pixel's rays)
+    float open = 1.0;
+    const int rays = int(lightTrace.z + 0.5);
+    if (rays > 0) {
+        const float3 t = normalize(cross(abs(ns.y) < 0.99 ? float3(0, 1, 0) : float3(1, 0, 0), ns));
+        const float3 b = cross(ns, t);
+        float shut = 0.0;
+        for (int k = 0; k < rays; ++k) {
+            const float j = float(k) * 16.0 + slot;
+            const float u = (j + 0.5) / (16.0 * float(rays)), a = frac(j * 0.61803399) * 6.2831853 + lightTrace.w;
+            float3 d = (t * cos(a) + b * sin(a)) * sqrt(u) + ns * sqrt(1.0 - u);
+            const float under = dot(d, n); // below the face itself (a smooth normal's hemisphere dips under it)
+            if (under < 0.0) d -= 2.0 * under * n;
+            shut += 1.0 - rayClear(wp + n * 2.0, d, lightTrace.y, 0xFF);
+        }
+        open = 1.0 - shut / float(rays);
+    }
+    return float2(sun, open);
+}
+#endif
+
+// one axis of the blur that averages ps_light's pattern away: 9 pixels whose weights give each of the pattern's 4
+// columns (rows) the same share, only those on the centre's surface (near its plane, facing the same way)
+float2 lightBlur(float2 px, int2 axis) {
+    const int2 p = int2(px);
+    const float depth = preDepth.Load(int3(p, 0));
+    if (depth <= 0.0) return float2(1.0, 1.0);
+    const float3 wp = preWorld(px, depth), ns = octDecode(preNormal.Load(int3(p, 0)).zw);
+    const float reach = 3.0 + depth * 0.004; // world units off the centre's plane
+    float2 sum = float2(0.0, 0.0);
+    float total = 0.0;
+    for (int k = -4; k <= 4; ++k) {
+        const int2 q = p + axis * k;
+        const float d = preDepth.Load(int3(q, 0));
+        if (d <= 0.0) continue;
+        const float3 w = preWorld(px + float2(axis * k), d);
+        const float facing = saturate(dot(ns, octDecode(preNormal.Load(int3(q, 0)).zw)));
+        const float weight = (abs(k) == 4 ? 0.5 : 1.0) * saturate(1.0 - abs(dot(ns, w - wp)) / reach) * pow(facing, 8.0);
+        sum += lightIn.Load(int3(q, 0)) * weight;
+        total += weight;
+    }
+    return total > 0.0 ? sum / total : lightIn.Load(int3(p, 0));
+}
+
+float2 ps_lightBlurX(float4 pos : SV_Position) : SV_Target { return lightBlur(pos.xy, int2(1, 0)); }
+float2 ps_lightBlurY(float4 pos : SV_Position) : SV_Target { return lightBlur(pos.xy, int2(0, 1)); }
+
+// ---- the anime look's line (OpenDash experiment) ----
+
+// Drawn over the opaque scene, before the blended draws: a dark line just outside a model's silhouette (the scenery's
+// too with outline.z), on the pixels behind it -- those with a model's pixel within the line's width that stands in
+// front of their own surface, or (the scenery under a model's feet) lies as near. From the opaque surfaces' depth
+// (sceneDepth) and what they are (the normal target: the shading normal, a = the kind, ps_main)
+#ifdef OD_MSAA // aa=msaa: sample 0, as the depth copy's
+Texture2DMS<float4> surfaceTex : register(t11);
+float4 surfaceAt(int2 p) { return surfaceTex.Load(p, 0); }
+#else
+Texture2D<float4> surfaceTex : register(t11);
+float4 surfaceAt(int2 p) { return surfaceTex.Load(int3(p, 0)); }
+#endif
+
+// the view depth of a raw depth of the depth copy
+float viewDepthOf(float raw) { return softDepth.x * softDepth.y / (softDepth.y - raw * (softDepth.y - softDepth.x)); }
+
+struct OutlineOut {
+    float4 color : SV_Target0; // the line's colour, a = how much of it (SrcAlpha / InvSrcAlpha)
+    float reactive : SV_Target1;
+};
+
+OutlineOut ps_outline(float4 pos : SV_Position) {
+    static const float2 kRing[8] = {float2(1, 0), float2(0.7071, 0.7071), float2(0, 1), float2(-0.7071, 0.7071),
+                                    float2(-1, 0), float2(-0.7071, -0.7071), float2(0, -1), float2(0.7071, -0.7071)};
+    const int2 p = int2(pos.xy), last = int2(renderSize) - 1;
+    const float raw = sceneDepth.Load(int3(p, 0));
+    const float4 here = surfaceAt(p);
+    const bool sky = raw >= 1.0, model = here.a > 0.83;
+    const float depth = sky ? softDepth.y : viewDepthOf(raw);
+    const float2 ndc = pos.xy / renderSize * float2(2.0, -2.0) + float2(-1.0, 1.0);
+    const float4 h = mul(float4(ndc, min(raw, 0.99999), 1.0), invViewProj);
+    const float3 wp = h.xyz / h.w, n = normalize(here.rgb * 2.0 - 1.0);
+    float ink = 0.0, nearest = softDepth.y;
+    float3 own = float3(0, 0, 0); // the colour of what the line goes around (the scene so far: sceneColor)
+    for (int ring = 1; ring <= 2; ++ring)
+        for (int k = 0; k < 8; ++k) {
+            const float2 at = pos.xy + kRing[k] * (outline.x * 0.5 * float(ring));
+            const int2 q = clamp(int2(at), int2(0, 0), last);
+            const float rawQ = sceneDepth.Load(int3(q, 0));
+            if (rawQ >= 1.0) continue;
+            const float kind = surfaceAt(q).a;
+            const bool modelQ = kind > 0.83;
+            if (!modelQ && !(outline.z > 0.5 && kind > 0.17 && kind < 0.5)) continue;
+            const float depthQ = viewDepthOf(rawQ);
+            bool edge = sky;
+            if (!sky && modelQ && !model) edge = depthQ < depth + 6.0 + depth * 0.01; // a model against the scenery
+            else if (!sky && depthQ < depth) { // it stands in front of this pixel's surface
+                const float2 ndcQ = at / renderSize * float2(2.0, -2.0) + float2(-1.0, 1.0);
+                const float4 hq = mul(float4(ndcQ, rawQ, 1.0), invViewProj);
+                edge = dot(n, hq.xyz / hq.w - wp) > 4.0 + depth * 0.012;
+            }
+            if (!edge) continue;
+            ink += 1.0 / 16.0;
+            own += sceneColor.Load(int3(q, 0)).rgb;
+            nearest = min(nearest, depthQ);
+        }
+    OutlineOut o;
+    o.color = float4(0, 0, 0, 0);
+    o.reactive = 0.0;
+    if (ink <= 0.0) return o;
+    // gone with the distance and into the fog, as the surface it goes around
+    float a = saturate(ink * 2.5) * outline.y * saturate(2.0 - 2.0 * nearest / outline.w);
+    if (fogMode > 0.5 && fogMode < 1.5 && fogEnd > fogStart) a *= saturate((fogEnd - nearest) / (fogEnd - fogStart));
+    else if (fogMode > 1.5 && fogMode < 2.5) a *= 1.0 - remasterFog(eye + normalize(wp - eye) * nearest);
+    else if (fogMode > 2.5) a *= saturate(1.0 - nearest / fogEnd);
+    // its colour: the dark ink, or (outlineLook.x) the colour of what it goes around, more saturated and darker
+    const float3 mean = own / (ink * 16.0);
+    const float grey = dot(mean, float3(0.3, 0.59, 0.11));
+    const float3 tone = saturate(grey + (mean - grey) * 1.8) * 0.6;
+    o.color = float4(lerp(float3(0.07, 0.06, 0.11), tone, outlineLook.x), a);
+    o.reactive = a;
     return o;
 }
 

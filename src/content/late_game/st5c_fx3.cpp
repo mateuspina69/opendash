@@ -7,7 +7,7 @@
 // 0x5e1540), else drawn). The draw 0x5bf490: the point on the screen (exe 0x5f2dd0) and its width for 0x50 (exe
 // 0x5f2f20): three screen rings (grey (timer << 6) - 1: a disc of radius w * 3 / 2, a ring to ((rng & 0x1f) + 0x140) * w
 // >> 8, an additive one to ((rng & 0x1f) + 0x200) * w >> 8), written with dc::emit exactly as the exe
-// (game/draw_commands does not draw the screen-ring records).
+// (game/draw_command_decode draws them).
 //
 // The shock ring (pool 0xa0 type 2, exe 0x42e360; states [0x88ca4c]: 0 0x42e380, 1 by the role [0x88ca58] (0 0x42e400,
 // 1 / 2 0x42e4a0), 2 0x4358c0 (freed, exe 0x5e1580), 3 0x42e400, 4 / 5 0x42e4a0): a frame-buffer shock ring. Its bytes:
@@ -20,7 +20,7 @@
 // outer radius << 4 (speed < 0) or -(width << 4); each tick the outer radius follows the live spawner (a dead one is
 // dropped), the outer radius 0 or the radius out of [-(width << 4), outer << 4] -> freed next tick, else radius +=
 // speed, then the picture.
-// Picture (not drawn: no port primitive; the app's ScreenRipple pass is the nearest one): the identity in the GTE
+// Picture (drawn by the app as an od::LensRing: the output pass remaps the annulus by the same profile): the identity in the GTE
 // transform 0x6d0100 (game state, written), the point through the camera; drawn only at view depth 0xc0 .. the depth
 // range * 4 and inside the 0x5f2dd0 guard band; the radii max(radius, 0) and min(width << 4, outer - radius) projected
 // (points straight above in view space), 10 rings of 16 POLY_FT4 (0x2c808080, OT [0xa67840] + 0x7c) whose corners /
@@ -197,7 +197,7 @@ void shockSpawner(EffectActor& actor, ShockRingFields& spawner) {
     if (spawner.count != kEndless) spawner.count -= 1u;
 }
 // exe 0x42e4a0: a ring: its outer radius follows the live spawner (a dead one dropped); outer 0 or the radius out of
-// [-(width << 4), outer << 4] -> state 2; else radius += speed and the picture (not drawn, see the header)
+// [-(width << 4), outer << 4] -> state 2; else radius += speed and the picture (the app's, see the header)
 void shockRing(EffectActor& actor, ShockRingFields& ring) {
     if (EffectActor* spawner = ring.spawner.get()) {
         if (spawner->flags != 0) ring.outerRadius = classState<ShockRingFields>(*spawner).outerRadius;
@@ -216,7 +216,7 @@ void shockRing(EffectActor& actor, ShockRingFields& ring) {
     ring.radius = int16_t(uint16_t(uint16_t(r) + uint16_t(int16_t(ring.speed))));
     // the identity into the GTE transform 0x6d0100 (rotation 0x1000 diagonal, translation 0)
     shockPictureTransform().setIdentityWords();
-    // the rest of 0x42e4a0 builds the frame-buffer POLY_FT4 rings (GTE + OT packets only): not drawn
+    // the rest of 0x42e4a0 builds the frame-buffer POLY_FT4 rings (GTE + OT packets only): the app's od::LensRing
 }
 // exe 0x42e3e0: [0x88ca58 + role * 4]
 void shockByRole(EffectActor& actor, ShockRingFields& ring) {

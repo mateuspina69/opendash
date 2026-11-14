@@ -240,21 +240,21 @@ void hitListPutEntry(const int16_t pos[3], uint16_t shape, uint32_t owner, uint3
     writeEntry(s.hitList[s.hitCount++], pos, box, nullptr, owner, shape, attack);
 }
 
-void hitListLockOnOnly() {
+void hitListLockOnOnly(const CollisionRoom* room) {
     ActorSystemState& s = actorSystem();
     const uint32_t n = s.hitCount;
     s.hitCount = 0;
     if (modernPlay()) modernAimCollectTargets(n);
-    selectLockOnTargets(n, kHitGroupsAll);
+    selectLockOnTargets(n, kHitGroupsAll, room);
 }
 
-void hitListPass() {
+void hitListPass(const CollisionRoom* room) {
     ActorSystemState& s = actorSystem();
     const uint32_t n = s.hitCount;
     s.hitCount = 0;
     s.hitCountLast = n;
     if (modernPlay()) modernAimCollectTargets(n); // OpenDash's free aim (game/modern_aim)
-    selectLockOnTargets(n, kHitGroupsAll);
+    selectLockOnTargets(n, kHitGroupsAll, room);
     if (n < 2) return;
     for (uint32_t i = 0; i < n - 1;) {
         const HitEntry& ei = s.hitList[i];

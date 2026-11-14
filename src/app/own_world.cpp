@@ -921,7 +921,7 @@ od::LoadedFileData* OwnWorldClient::filesOfTable(size_t table) {
 
 void OwnWorldClient::addGuest(int dx, int dz) { guest_ = std::make_pair(dx, dz); }
 
-void OwnWorldClient::endFrame() {
+void OwnWorldClient::endFrame(const od::CollisionRoom& room) {
     if (!room_) return;
     if (ownEvent_) {
         od::port::talkerMenusTick(eventSaveMenu_, eventMenus_, eventHints_);
@@ -947,7 +947,7 @@ void OwnWorldClient::endFrame() {
     }
     downedTurn();
     actors_->submitLockPoints();
-    od::port::hitListLockOnOnly();
+    od::port::hitListLockOnOnly(&room);
     for (size_t i = 0; i < ownShots_.size(); ++i) {
         const od::port::ShotActor& shot = od::port::shotPool()[i];
         // this machine's Mega Man's (table 0): the others' shots run in this pool too, from the world's events, and are

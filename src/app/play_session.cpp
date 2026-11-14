@@ -1072,7 +1072,7 @@ void PlayerView::setupHooks() {
             od::port::cameraUpdate();
             ownWorld->localActors(env, actors, true);
             od::port::fieldHudFrame();
-            ownWorld->endFrame();
+            ownWorld->endFrame(env.room);
             od::port::skyLayersTick();
             return;
         }
@@ -1094,7 +1094,7 @@ void PlayerView::setupHooks() {
         od::port::updatePool(env, actors, ActorPool::StaticsLate);
         od::port::updatePool(env, actors, ActorPool::ControllersLate);
         od::port::fieldHudFrame(); // exe 0x415560: the radar's beep, the minimap's slide (game/minimap)
-        od::port::hitListPass(); // exe 0x5e4260: lock-on + pair tests (game/hit_list)
+        od::port::hitListPass(&env.room); // exe 0x5e4260: lock-on + pair tests (game/hit_list)
         od::port::skyLayersTick();
     };
     hooks.roomSetup = [this](int param) {

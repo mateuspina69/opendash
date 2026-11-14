@@ -308,33 +308,6 @@ static void particle_lights() {
     CHECK(near(l[0].color[0], 1) && near(l[1].color[0], 2) && near(l[1].pos[0], 4500));
 }
 
-static void phong_tessellation() {
-    const float a[3] = {0, 0, 0}, b[3] = {10, 0, 0}, c[3] = {0, 0, 10};
-    const float up[3] = {0, 1, 0};
-    float p[3];
-    // flat normals: the flat triangle
-    phongPoint(a, b, c, up, up, up, 0.25f, 0.25f, 0.5f, 1.0f, p);
-    CHECK(near(p[0], 2.5f) && near(p[1], 0.0f) && near(p[2], 5.0f));
-    // normals leaning outward: the vertices stay, the middle of an edge bulges along the normals
-    const float s = std::sqrt(0.5f);
-    const float na[3] = {-s, s, 0}, nb[3] = {s, s, 0}, nc[3] = {0, 1, 0};
-    phongPoint(a, b, c, na, nb, nc, 1, 0, 0, 1.0f, p);
-    CHECK(near(p[0], 0) && near(p[1], 0) && near(p[2], 0));
-    phongPoint(a, b, c, na, nb, nc, 0.5f, 0.5f, 0, 1.0f, p);
-    CHECK(near(p[0], 5) && near(p[1], 2.5f) && near(p[2], 0));
-    // amount 0: flat; half the amount: half the bulge
-    phongPoint(a, b, c, na, nb, nc, 0.5f, 0.5f, 0, 0.0f, p);
-    CHECK(near(p[1], 0));
-    phongPoint(a, b, c, na, nb, nc, 0.5f, 0.5f, 0, 0.5f, p);
-    CHECK(near(p[1], 1.25f));
-    // an edge's point does not depend on the third vertex: the two faces on it meet
-    const float d[3] = {3, -7, 9}, nd[3] = {0, 0, 1};
-    float q[3];
-    phongPoint(a, b, c, na, nb, nc, 0.3f, 0.7f, 0, 1.0f, p);
-    phongPoint(a, b, d, na, nb, nd, 0.3f, 0.7f, 0, 1.0f, q);
-    CHECK(near(p[0], q[0]) && near(p[1], q[1]) && near(p[2], q[2]));
-}
-
 static void subdivision_plan() {
     // two faces on the edge b-c; `rise` lifts the corner only the second face has
     const auto pose = [](float rise) {
@@ -405,7 +378,6 @@ static void subdivided_cull() {
 int main() {
     subdivided_cull();
     subdivision_plan();
-    phong_tessellation();
     particle_lights();
     face_normal();
     jitter_sequence();

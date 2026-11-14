@@ -195,6 +195,31 @@ void App::parseArgs(int argc, char** argv) {
         }
         else if (a == "--sun-strength") sunStrength = std::stof(argv[++i]);
         else if (a == "--sun-strength-closed") sunStrengthClosed = std::stof(argv[++i]);
+        else if (a == "--sun-softness") sunSoftness = std::stof(argv[++i]);
+        else if (a == "--sun-tint") sunTint = std::stof(argv[++i]);
+        else if (a == "--sun-disc") { // 0 = off
+            sunDiscSize = std::stof(argv[++i]);
+            sunDiscOn = sunDiscSize > 0.0f;
+        }
+        else if (a == "--ambient-occlusion") { // 0 = off
+            occlusionStrength = std::stof(argv[++i]);
+            occlusionOn = occlusionStrength > 0.0f;
+        }
+        else if (a == "--ambient-occlusion-radius") occlusionRadius = std::stof(argv[++i]);
+        else if (a == "--toon") toonOn = std::stoi(argv[++i]) != 0;
+        else if (a == "--toon-shade") toonShade = std::stof(argv[++i]);
+        else if (a == "--toon-rim") toonRim = std::stof(argv[++i]);
+        else if (a == "--toon-highlight") toonHighlight = std::stof(argv[++i]);
+        else if (a == "--outline-colour") outlineOwnColour = std::stof(argv[++i]);
+        else if (a == "--outline") { // 0 = off
+            outlineWidth = std::stof(argv[++i]);
+            outlineOn = outlineWidth > 0.0f;
+        }
+        else if (a == "--outline-scenery") outlineScenery = std::stoi(argv[++i]) != 0;
+        else if (a == "--bloom") { // 0 = off
+            bloomStrength = std::stof(argv[++i]);
+            bloomOn = bloomStrength > 0.0f;
+        }
         else if (a == "--roof-study") roofStudyPath = argv[++i]; // dev: every room's openness to the sky, a CSV, and exits
         else if (a == "--model-subdivision") modelSubdivisionLevel = std::clamp(std::stoi(argv[++i]), 1, 4);
         else if (a == "--model-subdivision-amount") modelSubdivisionAmount = std::stof(argv[++i]);
@@ -1156,6 +1181,9 @@ void App::applySun() {
     sun.dir[2] = std::cos(el) * std::cos(az);
     sun.sheltered = roomHasNoSky(current);
     sun.strength = sun.sheltered ? sunStrengthClosed : sunStrength;
+    sun.softness = sunSoftness;
+    sun.tint = sunTint;
+    sun.disc = sunDiscOn ? sunDiscSize : 0.0f;
     renderer->setSun(sun);
 }
 
