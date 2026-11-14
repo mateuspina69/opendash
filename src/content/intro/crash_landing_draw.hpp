@@ -42,6 +42,10 @@ struct Sprite {
     uint16_t tpage = 0, clut = 0; // the texture (od::fx::Texture key, see textures())
     int texture = -1;             // index into the fx::TextureCache passed to collect(), -1: none
     bool original = true;         // false: added left / right of the 320-pixel frame for wider windows
+    // the scroll's fraction of a pixel past x / y (the counters run in 1/16 or 1/4 pixels; the packet takes the whole
+    // pixels): drawing only
+    float fx = 0.0f, fy = 0.0f;
+    float dx = 0.0f, dy = 0.0f;   // drawn this frame (between()): added to x / y; the logic's place is x / y
 };
 
 // A gouraud triangle in the PS1 frame, colours 0xBBGGRR, drawn additively (PS1 semi mode 1).
@@ -94,5 +98,13 @@ std::vector<fx::Texture> textures(int stage);
 // number of od::fx::gradients() rows before gradients(); `commands` (tests): the rebuilt draw commands.
 void collect(fx::TextureCache& tex, int rowBase, Frame& frame, std::vector<fx::Prim>& prims,
              std::vector<DrawCommand>* commands = nullptr);
+
+// The frame drawn at `alpha` (0..1) of the way from tick `prev` to tick `cur` (OpenDash, drawing only: the game moves
+// its 2D layers once a tick, 30 times a second, by whole pixels of counters that run in fractions of one). A sprite goes
+// from its exact place (x + fx) in `prev` to its exact place in `cur`: its sprite of `prev` is the one showing the same
+// texels (texture, u, v, w, h) nearest to it, within half its size -- a scroll's wrap (the backdrop's grid, the
+// panorama band's column step) brings the texels back next to where they were. A sprite with no such one is drawn at
+// its exact place in `cur`; the front triangles of another count as `cur` has them. Depth chains pair by place (their centre with them), the front triangles by place.
+Frame between(const Frame& prev, const Frame& cur, float alpha);
 
 } // namespace od::storm

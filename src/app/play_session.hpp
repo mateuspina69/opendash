@@ -518,6 +518,8 @@ struct PlayerView {
     std::vector<od::fx::Prim> dcPrims; // the decoded draw commands of the last tick (game/draw_commands)
     od::dc::Stats dcStats, dcLast;
     od::storm::Frame storm; // the storm's 2D sprites / flash triangles of the last tick (content/intro/crash_landing_draw)
+    od::storm::Frame stormPrev;  // the tick before (stormShown blends from it)
+    od::storm::Frame stormShown; // the frame drawn now: od::storm::between(stormPrev, storm, alpha), set every rendered frame
     std::vector<od::weather::Quad> weather; // the blizzard layer / snow sprites of the last tick (game/weather_draw)
     size_t weatherLast = 0;
     uint32_t stormLogTick = 0;

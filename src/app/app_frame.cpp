@@ -437,6 +437,8 @@ void App::updateScene() {
     const float* travel = playerView.renderOffset;
     drawCam = cam;
     for (int c = 0; c < 3; ++c) drawCam.eye[c] += travel[c];
+    // the storm's 2D layers of this frame, between the last two ticks (the sky below, the screen overlays)
+    playerView.stormShown = od::storm::between(playerView.stormPrev, playerView.storm, alpha);
     {
         const float aspect = float(width) / float(std::max(height, 1));
         std::vector<od::RenderVertex> skyV;
@@ -450,8 +452,8 @@ void App::updateScene() {
         } else if (!current.sky.empty() || !current.skyGrad.empty())
             skyV = domeSky ? buildSkyDome(current, cam, simTicks, skyPoles) : buildSky(current, cam, simTicks, aspect);
         if (playerView.play && playerView.roomStage == current.stage && playerView.roomSub == current.sub) {
-            appendStormSky(current, playerView.storm, cam, aspect, domeSky, skyV);
-            if (!playerView.storm.back.empty()) skyPoles = {}; // its sprites follow the screen: nothing squeezes
+            appendStormSky(current, playerView.stormShown, cam, aspect, domeSky, skyV);
+            if (!playerView.stormShown.back.empty()) skyPoles = {}; // its sprites follow the screen: nothing squeezes
         }
         const bool skyScreen = skyV.empty() || !domeSky || current.travelMapSlice[0] >= 0;
         if (!skyScreen) travelOffset(travel, skyV); // the dome around the camera

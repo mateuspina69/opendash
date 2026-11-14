@@ -586,9 +586,17 @@ PlayerView::CamPose PlayerView::readCamera() const {
     if (od::precise::enabled() && camera.mode() == od::port::CameraMode::Scripted) {
         const od::port::ScriptCamera& sc = od::port::scriptCamera();
         auto fx = [](const od::port::StateArray<int32_t, 3>& v, size_t i) { return float(v[i]) / 65536.0f; };
-        // the target P (slot 0 writes it while the anchor is absolute) and the angles / Q (slot 1: lookAt picks Q)
+        // the target P and the angles / Q (slot 1: lookAt picks Q)
         float pt[3] = {fx(sc.point, 0), fx(sc.point, 1), fx(sc.point, 2)}, sl[3];
-        if (sc.anchor() == od::port::ScriptCameraAnchor::Absolute && smoothCameraSlot(0, sl)) std::copy(sl, sl + 3, pt);
+        // slot 0 eases the point itself (absolute anchor) or the offset from the anchor actor / the player, which the
+        // logic added to the anchor's position this tick (exe 0x512600)
+        // (an actor anchor with no actor left the point as it was: drawn as is)
+        const bool anchored = sc.anchor() != od::port::ScriptCameraAnchor::Actor ||
+                              od::port::slotIdentityWord(od::port::scriptState().actors[sc.anchorActor]) != 0;
+        if (anchored && smoothCameraSlot(0, sl)) {
+            const bool absolute = sc.anchor() == od::port::ScriptCameraAnchor::Absolute;
+            for (size_t i = 0; i < 3; ++i) pt[i] = absolute ? sl[i] : pt[i] - fx(sc.offset, i) + sl[i];
+        }
         const bool lookAt = sc.lookAt != 0;
         float ang[3] = {fx(sc.angles, 0), fx(sc.angles, 1), fx(sc.angles, 2)},
               q[3] = {fx(sc.lookAtPoint, 0), fx(sc.lookAtPoint, 1), fx(sc.lookAtPoint, 2)};

@@ -415,8 +415,38 @@ int main(int argc, char** argv) {
         std::printf("usage: test_storm_draw <dash2.exe> <tests/data>\n");
         return 2;
     }
-    od::bindTestDataSource(argv[1]);
     int fails = 0, files = 0, checked = 0;
+    { // od::storm::between: a sprite follows the same texels of the tick before (a scroll, a band's wrap), else as is
+        auto sp = [](int x, int y, uint8_t u) {
+            od::storm::Sprite s;
+            s.x = int16_t(x);
+            s.y = int16_t(y);
+            s.w = s.h = 32;
+            s.u = u;
+            s.texture = 0;
+            return s;
+        };
+        od::storm::Frame prev, cur;
+        prev.back = {sp(10, 0, 0), sp(-1, 40, 32), sp(31, 40, 64)};
+        // the backdrop scrolled by 3; the band wrapped: its texels one pixel right, a new column at the left; one far
+        cur.back = {sp(13, 0, 0), sp(-32, 40, 0x60), sp(0, 40, 32), sp(32, 40, 64), sp(200, 0, 128)};
+        const od::storm::Frame m = od::storm::between(prev, cur, 0.5f);
+        const bool ok = m.back[0].dx == -1.5f && m.back[0].dy == 0.0f && m.back[1].dx == 0.0f &&
+                        m.back[2].dx == -0.5f && m.back[3].dx == -0.5f && m.back[4].dx == 0.0f &&
+                        od::storm::between(prev, cur, 1.0f).back[0].dx == 0.0f && m.back[0].x == 13;
+        // a counter in 1/16 pixels: 10 + 12/16 then 11 + 0/16 -> halfway 10.875 (not a whole pixel at once); a sprite
+        // with no pair stands at its exact place
+        od::storm::Frame p2, c2;
+        p2.back = {sp(10, 0, 0)};
+        p2.back[0].fx = 0.75f;
+        c2.back = {sp(11, 0, 0), sp(100, 0, 64)};
+        c2.back[1].fx = 0.25f;
+        const od::storm::Frame m2 = od::storm::between(p2, c2, 0.5f);
+        const bool ok2 = m2.back[0].dx == -0.125f && m2.back[1].dx == 0.25f;
+        std::printf("between: %s\n", ok && ok2 ? "ok" : "FAIL");
+        fails += !(ok && ok2);
+    }
+    od::bindTestDataSource(argv[1]);
     try {
         for (const auto& e : std::filesystem::directory_iterator(argv[2])) {
             const auto n = e.path().filename().string();

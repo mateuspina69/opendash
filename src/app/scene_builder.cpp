@@ -550,11 +550,11 @@ std::vector<od::DynamicObject> PlayerView::screenOverlays(const RoomMesh& mesh, 
     const float tanHalf = std::tan(cam.fovY * 0.5f);
     // the storm's screen glow (content/intro/crash_landing_draw Frame::front, OT slot 0x78 = over the scene, additive): the PS1
     // frame (320 x 240 centred in a viewAspect window, 240 lines) on a plane just beyond the near plane
-    if (!storm.front.empty()) {
+    if (!stormShown.front.empty()) {
         od::DynamicObject obj{od::objectId(od::kKindEffect, 0x77000u | 2u), {}, 2};
         constexpr float kDepth = 12.0f; // renderer near plane 8
         const float vw = 240.0f * viewAspect, ox = (vw - 320.0f) * 0.5f;
-        for (const od::storm::Tri& t : storm.front) {
+        for (const od::storm::Tri& t : stormShown.front) {
             if (t.row < 0) continue;
             for (int k = 0; k < 3; ++k) {
                 od::RenderVertex v{};
@@ -573,12 +573,12 @@ std::vector<od::DynamicObject> PlayerView::screenOverlays(const RoomMesh& mesh, 
     // the storm's depth-OT sprites (Frame::depth, the sea of the cloud rings): opaque, the PS1 frame on a plane at the
     // static's depth along this camera's view (the room is drawn << mesh.shift), so the depth test hides what lies
     // behind the static as the OT order did; OT slot 0 (off range) is never drawn (Frame::depth)
-    if (!storm.depth.empty()) {
+    if (!stormShown.depth.empty()) {
         od::DynamicObject obj{od::objectId(od::kKindEffect, 0x77000u | 4u), {}, 0};
         constexpr float kNearDepth = 13.0f; // just beyond the renderer's near plane (8)
         const float world = float(1 << mesh.shift);
         const float vw = 240.0f * viewAspect, ox = (vw - 320.0f) * 0.5f;
-        for (const od::storm::DepthChain& d : storm.depth) {
+        for (const od::storm::DepthChain& d : stormShown.depth) {
             if (d.slot == 0) continue;
             const float c[3] = {d.centre[0] * world, -d.centre[1] * world, d.centre[2] * world};
             float depth = 0.0f;
@@ -589,8 +589,8 @@ std::vector<od::DynamicObject> PlayerView::screenOverlays(const RoomMesh& mesh, 
                 od::RenderVertex v[4]{};
                 for (int k = 0; k < 4; ++k) {
                     const int ix = k & 1, iy = k >> 1;
-                    const float nx = (float(s.x + ix * s.w) + ox) / vw * 2.0f - 1.0f;
-                    const float ny = 1.0f - float(s.y + iy * s.h) / 120.0f;
+                    const float nx = (float(s.x + ix * s.w) + s.dx + ox) / vw * 2.0f - 1.0f;
+                    const float ny = 1.0f - (float(s.y + iy * s.h) + s.dy) / 120.0f;
                     for (int q = 0; q < 3; ++q)
                         v[k].pos[q] = cam.eye[q] + depth * (f[q] + r[q] * nx * tanHalf * viewAspect + u[q] * ny * tanHalf);
                     v[k].uv[0] = (float(s.u) + float(ix * s.w)) / 256.0f;

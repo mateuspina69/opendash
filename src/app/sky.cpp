@@ -417,7 +417,7 @@ void appendStormSky(const RoomMesh& mesh, const od::storm::Frame& storm, const o
         od::RenderVertex q[4];
         for (int k = 0; k < 4; ++k) {
             const int ix = k & 1, iy = k >> 1;
-            const float x = float(s.x + ix * s.w) + ox, y = float(s.y + iy * s.h);
+            const float x = float(s.x + ix * s.w) + s.dx + ox, y = float(s.y + iy * s.h) + s.dy;
             const float nx = x / vw * 2.0f - 1.0f, ny = 1.0f - y / vh * 2.0f;
             if (dome) {
                 float d[3], len = 0.0f;

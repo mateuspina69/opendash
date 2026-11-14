@@ -2162,6 +2162,7 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
             fxPrims.clear();
             od::fx::collect(fx, g_fxTextures, fxPrims);
             // the script-6 storm (content/intro/crash_landing_draw): 2D backdrop / panorama, cloud puffs (into fxPrims), flash rings
+            stormPrev = std::move(storm); // the frames between the two ticks draw from it (od::storm::between)
             od::storm::collect(g_fxTextures, int(od::fx::gradients().size()), storm, fxPrims);
             // the weather overlays (game/weather_draw): the blizzard layer of 0x431af0, the towns' snow sprites;
             // continued left / right of the 320-pixel frame for wider windows
@@ -2242,6 +2243,7 @@ void PlayerView::playTick(uint16_t ps1Buttons, uint8_t stickX, uint8_t stickY, f
             }
             trackPosition(cut);
         }
+        if (snap) stormPrev = storm; // no 2D layer slides across a cut
         orbitArrival();
         const bool fieldPlay =
             game.gameMode() == od::port::GameMode::Field && game.fieldStep() == od::port::FieldStep::Playing;

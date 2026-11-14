@@ -129,6 +129,8 @@ void backdrop(StormContext& c, std::vector<Sprite>& chain) {
             if (!shown && (x <= -0x80 - kExtra || x >= 320 + kExtra || y <= -0x80 || y >= 240)) continue;
             chain.push_back(sprite(c, x, y, kBackdropCell, kBackdropCell, (j & 1) * 0x80, 0x80, kBackdropTpage,
                                    kBackdropClut, shown));
+            chain.back().fx = float(px & 0xf) / 16.0f; // the origin is the scroll's 1/16 pixels >> 4
+            chain.back().fy = float(py & 0xf) / 16.0f;
         }
 }
 
@@ -144,9 +146,11 @@ void panorama(StormContext& c, const port::CloudRingFields& ring, std::vector<Sp
     const uint16_t s = uint16_t(int(ring.angles[1]) >> 4);
     const int x0 = int(s & 0x1f) - 0x20;
     const uint32_t col = (s >> 5) & 0xff;
-    for (int i = -kExtra / 32; i < 11 + kExtra / 32; ++i)
+    for (int i = -kExtra / 32; i < 11 + kExtra / 32; ++i) {
         chain.push_back(sprite(c, int16_t(x0 + i * 32), bandY, 32, bandH, uint8_t((col * 7 + uint32_t(i)) * 32), 0,
                                e.tpage, clut, i >= 0 && i < 11));
+        chain.back().fx = float(uint16_t(ring.angles[1]) & 0xfu) / 16.0f; // s is the angle's 1/16 pixels >> 4
+    }
 }
 // exe 0x599a50's sea, linked into the depth OT at slot exe 0x5f2f20(the static's position, 0, &slot) (its slot local
 // starts at 0: off range, slot 0): 32 x 64 sprites at y 0xb0 for s = 0, 32 .. 0x140: x = s - (q & 0x1f), u = s +
@@ -158,9 +162,11 @@ void sea(StormContext& c, const port::StaticActor& actor, const port::CloudRingF
     port::projectedWidth(pos, 0, &chain.slot);
     for (int k = 0; k < 3; ++k) chain.centre[k] = float(pos[k]);
     const uint16_t q = uint16_t(int(ring.angles[2]) >> 2);
-    for (int s = -kExtra; s < 0x160 + kExtra; s += 32)
+    for (int s = -kExtra; s < 0x160 + kExtra; s += 32) {
         chain.sprites.push_back(sprite(c, int16_t(s - (q & 0x1f)), 0xb0, 32, 0x40, uint8_t(s + (q & 0xe0)), 0xa0,
                                        e.tpage, clut, s >= 0 && s < 0x160));
+        chain.sprites.back().fx = -float(uint16_t(ring.angles[2]) & 3u) / 4.0f; // q is the angle's 1/4 pixels >> 2
+    }
     c.f.depth.push_back(std::move(chain));
 }
 
@@ -585,6 +591,49 @@ void collect(fx::TextureCache& tex, int rowBase, Frame& frame, std::vector<fx::P
         if (port::fieldActorHandler(a, port::ActorPool::Animated).is(kCrashCraftClass))
             craftJets(c, a, kCraftObjects | i << 4);
     }
+}
+
+namespace {
+// each sprite of `cur` placed `alpha` of the way from its sprite's exact place in `prev` (the same texels, nearest,
+// within half its size) to its own exact place
+void spritesBetween(const std::vector<Sprite>& prev, std::vector<Sprite>& cur, float alpha) {
+    for (Sprite& s : cur) {
+        const Sprite* best = nullptr;
+        int bestD = 0;
+        for (const Sprite& p : prev) {
+            if (p.texture != s.texture || p.u != s.u || p.v != s.v || p.w != s.w || p.h != s.h) continue;
+            const int ax = std::abs(int(s.x) - int(p.x)), ay = std::abs(int(s.y) - int(p.y));
+            if (2 * ax >= int(s.w) || 2 * ay >= int(s.h)) continue;
+            if (!best || ax + ay < bestD) {
+                best = &p;
+                bestD = ax + ay;
+            }
+        }
+        s.dx = s.fx; // its exact place
+        s.dy = s.fy;
+        if (!best) continue;
+        s.dx += (float(int(best->x) - int(s.x)) + best->fx - s.fx) * (1.0f - alpha);
+        s.dy += (float(int(best->y) - int(s.y)) + best->fy - s.fy) * (1.0f - alpha);
+    }
+}
+} // namespace
+
+Frame between(const Frame& prev, const Frame& cur, float alpha) {
+    Frame out = cur;
+    spritesBetween(prev.back, out.back, alpha);
+    if (prev.depth.size() == out.depth.size())
+        for (size_t i = 0; i < out.depth.size(); ++i) {
+            DepthChain& d = out.depth[i];
+            for (int k = 0; k < 3; ++k) d.centre[k] = prev.depth[i].centre[k] + (d.centre[k] - prev.depth[i].centre[k]) * alpha;
+            spritesBetween(prev.depth[i].sprites, d.sprites, alpha);
+        }
+    if (prev.front.size() == out.front.size())
+        for (size_t i = 0; i < out.front.size(); ++i)
+            for (int k = 0; k < 3; ++k) {
+                out.front[i].x[k] = prev.front[i].x[k] + (out.front[i].x[k] - prev.front[i].x[k]) * alpha;
+                out.front[i].y[k] = prev.front[i].y[k] + (out.front[i].y[k] - prev.front[i].y[k]) * alpha;
+            }
+    return out;
 }
 
 } // namespace od::storm
