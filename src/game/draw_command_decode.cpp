@@ -153,6 +153,7 @@ void decodeF0(const uint32_t* w, std::vector<fx::Prim>& out, uint32_t object) {
         p.object = object;
         p.texture = fx::kUntextured;
         p.blend = blend;
+        p.overScene = (w[4] & kRingFront) != 0;
         p.v[0] = at(j - 1, shown ? rIn : 0.0f, w[1]);
         p.v[1] = at(j, shown ? rIn : 0.0f, w[1]);
         p.v[2] = at(j - 1, shown ? rOut : 0.0f, w[3]);
@@ -205,6 +206,7 @@ void decodeF4(const uint32_t* w, std::vector<fx::Prim>& out, uint32_t object) {
         p.object = object;
         p.texture = fx::kUntextured;
         p.blend = blend;
+        p.overScene = (w[4] & kRingFront) != 0;
         p.v[0] = at(j - 1, shown ? rIn : 0.0f, w[1]);
         p.v[1] = at(j, shown ? rIn : 0.0f, w[1]);
         p.v[2] = at(j - 1, shown ? rOut : 0.0f, w[3]);

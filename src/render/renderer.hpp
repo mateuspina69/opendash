@@ -246,6 +246,15 @@ struct LensRing {
     bool outward = false;
 };
 
+// a full-screen tile of exe 0x5f3150 (od::dc::screenTint: linked at OT entry 1, over the whole 3D picture and under
+// the 2D layer): its colour (0..1 a channel) and blend: semi = its code's bit 25, abr = arg >> 29 & 3 (the PS1 modes
+// as the PC exe sets them, 0x402280: 0 B/2 + F/2, 1 B + F, 2 B * (1 - F), 3 B + F/4); not semi: the colour itself
+struct ScreenTint {
+    float rgb[3] = {0, 0, 0};
+    bool semi = false;
+    int abr = 0;
+};
+
 // A model preview (OpenDash's UI model pictures, e.g. the special weapons' turning model in the menus): triangles
 // rendered with depth, light and supersampling into their own target, shown as an ImGui texture
 struct PreviewVertex {
@@ -271,6 +280,9 @@ public:
     // this frame's lens rings (at most kMaxLensRings are drawn), redrawn by the output pass
     static constexpr int kMaxLensRings = 8;
     virtual void setLensRings(const std::vector<LensRing>& rings) { (void)rings; }
+    // this frame's full-screen tiles in their order (the first kMaxScreenTints), blended by the output pass
+    static constexpr int kMaxScreenTints = 8;
+    virtual void setScreenTints(const std::vector<ScreenTint>& tints) { (void)tints; }
     // the flooded rooms' screen wave (pool a0 class 0x431e90 variants 0 / 1 / 5; empty ret on PC, drawn on PS1 / PSP by
     // 0x179d94 of the PSP BOOT.BIN): screen row Y shows row Y + (sin(((Y - phase) & 127) >> 1 of 64) * 4096 >> shift),
     // tinted by colour / 0x80. amplitude = 4096 >> shift rows (PS1 screen), phase in rows (0..128), off: amplitude 0.

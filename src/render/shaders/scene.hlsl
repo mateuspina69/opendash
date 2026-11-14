@@ -672,18 +672,31 @@ PSOut ps_main(VSOut i, bool front : SV_IsFrontFace) {
         // soft terminator: surfaces turned away get no sun
         const float facing = cel ? smoothstep(0.02, 0.08, dot(nc, sunDir)) : saturate(dot(ns, sunDir) * 3.0);
         float vis = 1.0;
-        if (facing > 0.0) {
+        // a model of the anime look: on its side away from the sun too, whether it stands in a cast shadow (its bands
+        // there are those of a room with no sky)
+        if (cel) vis = sunVisibilityPastSelf(i.world, ns, i.object);
+        else if (facing > 0.0) {
             // a face turned away from the sun while its smooth normal still faces it would shadow itself on its
             // low-poly neighbours (the "shadow terminator" stair-steps) from the surface: its ray starts further out
             // along the smooth normal, past those neighbours, but still meets everything else (a roof keeps it dark)
-            if (cel) vis = sunVisibilityPastSelf(i.world, ns, i.object);
-            else if (lightTerms.x > 0.5) vis = traced.x; // (ps_light's ray, the same way)
+            if (lightTerms.x > 0.5) vis = traced.x; // (ps_light's ray, the same way)
             else vis = sunVisibility(i.world, ns, dot(n, sunDir) > 0.0 ? 2.0 : 12.0);
         }
         const float lit = facing * vis;
         const float3 hue = lerp(float3(1.0, 1.0, 1.0), lerp(kShadowHue, kSunHue, lit), lightTerms.z);
-        if (cel) { // a shadow cast on a model is its dark band too
-            rgb *= lerp((1.0 - sunStrength) * (1.0 - 0.5 * toon.x), 1.0, lit) * hue;
+        if (cel) {
+            // in the sun: the dark band (the scenery's shadow, deeper by half of toon.x) and the lit one. In a cast
+            // shadow: the bands of a room with no sky: the scenery's shadow, and that deeper by toon.x.
+            // That light comes from the open side, away from what casts the shadow: the sun turned around, as high
+            const float shadowLevel = 1.0 - sunStrength;
+            const float3 fillDir = normalize(float3(-sunDir.x, sunDir.y, -sunDir.z));
+            const float fillFacing = smoothstep(0.02, 0.08, dot(nc, fillDir));
+            const float inSun = lerp(shadowLevel * (1.0 - 0.5 * toon.x), 1.0, facing);
+            const float inShadow = shadowLevel * lerp(1.0 - toon.x, 1.0, fillFacing);
+            rgb *= lerp(inShadow, inSun, vis) * hue;
+            // in a cast shadow, the rim and the bright band on the side toward that light, as in a room with no sky
+            rgb += unlit * shadowLevel * (1.0 - vis) * fillFacing *
+                   (rimEdge * saturate(dot(nc, fillDir) + 0.5) + toon.w * smoothstep(0.72, 0.78, dot(nc, fillDir)));
             // the rim: the sun's on the lit side; the sky's, fainter, on what faces up out of the sun
             const float3 sunRim = lit * saturate(dot(nc, sunDir) + 0.5) * lerp(float3(1.0, 1.0, 1.0), kSunHue, lightTerms.z);
             const float3 skyRim = 0.35 * (1.0 - lit) * saturate(ns.y) * (1.0 - sunStrength) * kShadowHue;

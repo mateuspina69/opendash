@@ -27,11 +27,29 @@ ConstantBuffer<OutConsts> c : register(b0);
 
 // the lens rings (class 0x42e360, exe 0x42e4a0: the ST5C black hole's shock rings), projected by the renderer
 #define MAX_LENS_RINGS 8
-cbuffer Lens : register(b1) {
+// and the full-screen tiles of exe 0x5f3150 (OT entry 1: over the 3D picture, under the 2D layer drawn after this pass)
+#define MAX_SCREEN_TINTS 8
+cbuffer Fx : register(b1) {
     float4 lens[MAX_LENS_RINGS];     // centre x / y, inner radius, width (output pixels)
     float4 lensKind[MAX_LENS_RINGS]; // x: 1 = role bit 0 (outward table order), 0 = the inverse
+    float4 tints[MAX_SCREEN_TINTS];  // rgb 0..1, w: -1 opaque, else the PS1 blend mode (abr) 0..3
     int lensCount;
+    int tintCount;
 };
+
+// one tile over the picture, the blend modes as the scene's semi-transparent pipelines (the PC exe's 0x402280)
+float3 screenTint(float3 b, float4 t) {
+    if (t.w < -0.5) return t.rgb;
+    if (t.w < 0.5) return b * 0.5 + t.rgb * 0.5;
+    if (t.w < 1.5) return b + t.rgb;
+    if (t.w < 2.5) return b * (1.0 - t.rgb);
+    return b + t.rgb * 0.25;
+}
+// the frame's tiles in their order
+float3 screenTints(float3 rgb) {
+    for (int m = 0; m < tintCount; ++m) rgb = screenTint(rgb, tints[m]);
+    return rgb;
+}
 
 // exe 0x42e4a0's ring profile [0x88ca64]: 11 radii (s16 pairs a / b) across the annulus; a ring of role bit 0 draws the
 // picture at a / 1024 of the width from the frame buffer at b / 4096 (the content pulled in), the other role at b / 4096
@@ -190,11 +208,11 @@ float4 ps_main(VSOut i) : SV_Target {
     if (c.wave.x > 0.0 && c.wave.w > 1.5) { // hot air: 2 a cave (the void filled), 3 under an open sky (kept)
         const float2 huv = heatWarp(uv, c.seconds);
         const float3 col = src.SampleLevel(linearClamp, huv, 0).rgb;
-        return float4(c.wave.w > 2.5 ? col : waterBackdrop(col, huv), 1.0);
+        return float4(screenTints(c.wave.w > 2.5 ? col : waterBackdrop(col, huv)), 1.0);
     }
     if (c.wave.x > 0.0 && c.wave.w > 0.5) {
         const float2 wuv = remasterWarp(uv, c.seconds);
-        return float4(waterBackdrop(volumeBlur(wuv), wuv), 1.0);
+        return float4(screenTints(waterBackdrop(volumeBlur(wuv), wuv)), 1.0);
     }
     float3 tint = float3(1, 1, 1);
     if (c.wave.x > 0.0) {
@@ -206,6 +224,6 @@ float4 ps_main(VSOut i) : SV_Target {
     }
     // untouched pictures stay a 1:1 point copy; shifted ones read bilinearly
     const bool shifted = c.count > 0 || lensCount > 0 || c.wave.x > 0.0;
-    const float3 rgb = shifted ? src.SampleLevel(linearClamp, uv, 0).rgb : src.SampleLevel(pointClamp, uv, 0).rgb;
-    return float4(rgb * tint, 1.0);
+    float3 rgb = shifted ? src.SampleLevel(linearClamp, uv, 0).rgb : src.SampleLevel(pointClamp, uv, 0).rgb;
+    return float4(screenTints(rgb * tint), 1.0);
 }

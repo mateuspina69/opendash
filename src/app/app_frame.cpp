@@ -433,7 +433,8 @@ static od::Precipitation precipitationOf(const od::weather::Conditions& w, float
 }
 
 void App::updateScene() {
-    if (current.depthCue && fogMode == od::FogMode::Classic) renderer->setFog(fogFor(current, fogMode, fogDistance, fogSource)); // the game's far colour as it goes
+    // the game's far colour as it goes (classic: the cue; remaster: only a colour the game sets apart from the room's)
+    if (current.depthCue) renderer->setFog(fogFor(current, fogMode, fogDistance, fogSource));
     const float* travel = playerView.renderOffset;
     drawCam = cam;
     for (int c = 0; c < 3; ++c) drawCam.eye[c] += travel[c];
@@ -731,6 +732,19 @@ void App::updateScene() {
             lens.push_back(ring);
         }
         renderer->setLensRings(lens);
+        // FUN_005f3150's full-screen tiles (od::dc::screenTint: script tints, flashes, the ST5C black hole's): at OT
+        // entry 1, over the 3D picture and under the 2D layer, so the output pass blends them (the colour's bytes, the
+        // semi bit 25, abr = arg >> 29 & 3)
+        std::vector<od::ScreenTint> tints;
+        if (playerView.play && display.drawingOff == 0)
+            for (const uint32_t t : od::dc::screenTints()) {
+                od::ScreenTint s;
+                for (int c = 0; c < 3; ++c) s.rgb[c] = float((t >> (8 * c)) & 0xff) / 255.0f;
+                s.semi = (t & 0x2000000u) != 0;
+                s.abr = int((t >> 29) & 3);
+                tints.push_back(s);
+            }
+        renderer->setScreenTints(tints);
         // the flooded rooms' screen wave (pool a0 class 0x431e90 variants 0 / 1 / 5, spawned with the water by the
         // ruin's room handlers, colour +0xc = 0x706060): an empty ret on PC, the PS1 / PSP draw (PSP BOOT.BIN
         // 0x179d94) shifts every screen row by sin(((Y - phase) & 127) >> 1) >> (12 - strength) and tints the
@@ -978,21 +992,6 @@ void App::drawOverlays() {
         hudUi.creditsLang = od::lang::code(od::lang::uiLanguage(playerView.language));
         hudUi.drawCredits(canvas, *renderer, playerView.creditsFrame, float(width), float(height));
     }
-    // FUN_005f3150's full-screen tiles (od::dc::screenTint: script tints, flashes), approximated like the fade:
-    // abr 1 / 3 (B + F, B + F / 4) a white veil of the colour's level, abr 2 (B - F) a black one, abr 0 half the
-    // colour, opaque without the semi bit
-    if (playerView.play)
-        for (const uint32_t t : od::dc::screenTints()) {
-            const int r = int(t & 0xff), g = int((t >> 8) & 0xff), b = int((t >> 16) & 0xff), k = (r + g + b) / 3;
-            const int abr = int((t >> 29) & 3);
-            ui::Color col = ui::rgba(r, g, b, 255);
-            if (t & 0x2000000u) {
-                if (abr == 0) col = ui::rgba(r, g, b, 128);
-                else if (abr == 2) col = ui::rgba(0, 0, 0, k);
-                else col = ui::rgba(255, 255, 255, abr == 3 ? k / 4 : k);
-            }
-            canvas.rectFilled(ui::Vec2(0, 0), ui::Vec2(float(width), float(height)), col);
-        }
     if (const float f = playerView.fade(); f > 0.0f) { // the screen fade: to black, or additive (white flashes)
         const int c = playerView.fadeWhite() ? 255 : 0;
         canvas.rectFilled(ui::Vec2(0, 0), ui::Vec2(float(width), float(height)),

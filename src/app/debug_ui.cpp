@@ -262,7 +262,7 @@ void App::drawDebugMenu() {
                 ImGui::SliderFloat("sombra a mais nos personagens", &toonShade, 0.0f, 1.0f, "%.2f");
                 if (ImGui::IsItemHovered())
                     ImGui::SetTooltip("0 = a faixa escura dos personagens e igual a sombra do cenario.\n"
-                                      "Em sala fechada e a forca inteira da faixa escura.");
+                                      "Em sala fechada e na sombra de paredes e objetos e a forca inteira da faixa escura.");
                 ImGui::SliderFloat("faixa de brilho (0 = desligada)", &toonHighlight, 0.0f, 1.0f, "%.2f");
                 if (ImGui::IsItemHovered())
                     ImGui::SetTooltip("Terceira faixa: a parte do personagem mais virada para o sol fica mais clara.\n"

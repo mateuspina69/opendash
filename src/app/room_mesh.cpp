@@ -291,6 +291,28 @@ od::Fog fogFor(const RoomMesh& mesh, od::FogMode mode, float distance, FogSource
         f.end = 4096.0f * float(1u << (od::port::stage().coordinateShift & 0x1f));
         return f;
     }
+    if (mesh.depthCue && mode != od::FogMode::Classic) {
+        // remaster: the room's own depth cue stays off (no darkening), but a far colour the game sets apart from the
+        // room's (the ST4C boss's fog controller 0x427640 turning it red while its attack runs) shows: the picture
+        // takes that hue by view depth as the PS1's cue does, its strength the colour's level, never darker than the
+        // hue -- the brightest channel stays as it is
+        const od::port::RoomDrawState& d = od::port::roomDraw();
+        float live[3], top = 0.0f;
+        bool moved = false;
+        for (int c = 0; c < 3; ++c) {
+            live[c] = float(d.fogColour[size_t(c)]) / 255.0f;
+            top = std::max(top, live[c]);
+            moved = moved || d.fogColour[size_t(c)] != uint8_t(std::lround(mesh.clear[c] * 255.0f));
+        }
+        if (moved && top > 0.0f) {
+            // the cue's factor at full depth (scene.hlsl: rgb * fogColor * 255 / 128): 1 - strength + strength * hue
+            const float strength = std::min(top * (255.0f / 128.0f), 1.0f);
+            f.mode = od::FogMode::DepthCue;
+            for (int c = 0; c < 3; ++c) f.color[c] = (1.0f - strength + strength * live[c] / top) * (128.0f / 255.0f);
+            f.end = 4096.0f * float(1u << (od::port::stage().coordinateShift & 0x1f));
+            return f;
+        }
+    }
     float s = mesh.fogStart, e = mesh.fogEnd;
     if (e <= s && source == FogSource::OpenDash && !mesh.d3dFog)
         for (const RoomFog& t : kRoomFog)

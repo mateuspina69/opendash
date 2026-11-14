@@ -45,6 +45,8 @@ struct Prim {
     uint32_t object = 0;         // groups the prims of one actor (stable across ticks)
     bool front = false;          // OpenDash: pushed toward the eye in the shader so the target's model never
                                  // covers it (the lock-on reticle, app/reticle_overlay)
+    bool overScene = false;      // linked at OT entry 1 (a ring record's word 4 bit 24, dc::kRingFront): drawn over the
+                                 // whole 3D picture, the models nearer than its centre included
     bool light = true;           // OpenDash: an additive prim is a light (renderer ParticleLighting); false: dust, smoke, spray
     bool ordered = false;        // OpenDash: the object's prims keep their places in its list from tick to tick, whatever
                                  // they do in the world (od::DynamicObject::ordered)

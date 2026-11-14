@@ -458,7 +458,7 @@ std::vector<od::DynamicObject> PlayerView::liveEffects(const RoomMesh& mesh, con
             for (int q = 0; q < 3; ++q) v[k].pos[q] = pos[k][q];
             v[k].slice = slice;
             v[k].cull = 0.0f;
-            v[k].layer = 0.0f;
+            v[k].layer = p.overScene ? od::kLayerInFront : 0.0f; // OT entry 1: over every model, the player's too
         }
         if (n == 3)
             for (int k = 0; k < 3; ++k) obj.tris.push_back(v[k]);

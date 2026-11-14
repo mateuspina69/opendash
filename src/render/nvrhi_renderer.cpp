@@ -180,7 +180,7 @@ XMMATRIX withJitter(XMMATRIX p, float jx, float jy, int rw, int rh) {
 }
 
 // smoothRanges: the vertex ranges [first, end) of the objects whose normals are averaged over the faces sharing a
-// position inside the same object (actors: the sun's light varies across the low-poly surface instead of
+// position inside the same object (actors and the room: the sun's light varies across the low-poly surface instead of
 // per face); creases sharper than ~60 degrees and faces wound the other way stay apart. Every other vertex (effects:
 // particles / rings / billboards, many of them starting on one point) keeps its flat face normal -- averaged over the
 // whole buffer, an effect's hundreds of coincident corners made this quadratic (the ST4B sub 5 clash: 1.5 s a frame)
@@ -653,8 +653,11 @@ public:
             return bool(height_);
         }
 
+        // the room's normals smoothed as a model's (its creases kept): on its few large faces the sun's light varies
+        // across a slope instead of stepping from face to face
         std::vector<GpuVertex> gv;
-        toGpu(tris, nullptr, gv);
+        const std::vector<std::pair<size_t, size_t>> wholeRoom{{0, tris.size()}};
+        toGpu(tris, nullptr, gv, &wholeRoom);
         nvrhi::BufferDesc bd;
         bd.byteSize = gv.size() * sizeof(GpuVertex);
         bd.isVertexBuffer = true;
@@ -904,6 +907,7 @@ public:
     }
     void setScreenRipples(const std::vector<ScreenRipple>& ripples) override { ripples_ = ripples; }
     void setLensRings(const std::vector<LensRing>& rings) override { lensRings_ = rings; }
+    void setScreenTints(const std::vector<ScreenTint>& tints) override { tints_ = tints; }
     void setScreenWave(float amplitude, float phase, const float tint[3], bool remaster, float seconds, bool heat) override {
         waveHeat_ = heat;
         wave_[0] = amplitude;
@@ -2695,6 +2699,12 @@ private:
             l.kind[l.count][0] = r.outward ? 1.0f : 0.0f;
             ++l.count;
         }
+        for (const ScreenTint& t : tints_) {
+            if (l.tintCount >= kMaxScreenTints) break;
+            float* q = l.tint[l.tintCount++];
+            for (int c = 0; c < 3; ++c) q[c] = t.rgb[c];
+            q[3] = t.semi ? float(t.abr) : -1.0f;
+        }
         cl_->writeBuffer(lensCb_, &l, sizeof l);
     }
 
@@ -2746,13 +2756,16 @@ private:
     bool depthFresh_ = false; // depthCopy_ holds this frame's depth
     float nearZ_ = 8.0f, camPitch_ = 0.0f, tanHalfFov_ = 0.5f;
     std::vector<ScreenRipple> ripples_;
-    struct LensConsts { // output.hlsl's Lens buffer (b1)
+    struct LensConsts { // output.hlsl's Fx buffer (b1)
         float ring[kMaxLensRings][4]; // centre x / y, inner radius, width (output pixels)
         float kind[kMaxLensRings][4]; // x: 1 = role bit 0
+        float tint[kMaxScreenTints][4]; // rgb, w: -1 opaque, else abr
         int count;
-        int pad[3];
+        int tintCount;
+        int pad[2];
     };
     std::vector<LensRing> lensRings_;
+    std::vector<ScreenTint> tints_;
     nvrhi::BufferHandle lensCb_;
     nvrhi::BindingLayoutHandle sceneLayout_, outLayout_;
     nvrhi::BindingSetHandle sceneSet_;

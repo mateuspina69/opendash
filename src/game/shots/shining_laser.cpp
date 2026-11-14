@@ -331,8 +331,50 @@ void shiningLaserBeamUpdate(const PlayerEnv&, uint32_t address) {
     }
 }
 
-// exe 0x560b70: two discs (screen-space 0xf4 draw commands, which game/draw_commands does not draw: not emitted); the
-// disc shrinks and its colour fades over 7 ticks, then freed
+namespace {
+// exe 0x560d90(out, ticks): the discs' two colours by the fade ticks (7 at most): [0] the core's, [1] the rim's
+void wallSparkColours(uint32_t ticks, uint32_t out[2]) {
+    if (ticks >= 8) ticks = 7;
+    const uint32_t v1 = (ticks * 0xffu) & 0x7ffffffu, v2 = v1 >> 3;
+    out[1] = (((v2 & 0xfeu) << 7) | v2) << 8 | v1 >> 4;
+    out[0] = (((v2 & 0xfcu) << 6) | (v2 & 0xffu)) << 8 | v1 >> 5;
+}
+// exe 0x560bf0's tail: at the spark's projected point (exe 0x5f2dd0) a disc of the projected disc size (at least 4,
+// core colour to the rim colour, additive) and a ring from it out to the projected size (rim colour to black,
+// additive), both screen rings at the view depth - 0x30 (0 below)
+void drawWallSpark(const EffectActor& spark, const LaserWallSparkFields& fields, const uint32_t colours[2]) {
+    const int16_t p[3] = {spark.pos.x, spark.pos.y, spark.pos.z};
+    int16_t sxy[2];
+    if (projectOnScreen(p, sxy) < 0) return;
+    int16_t depth = 0;
+    const int outer = projectedWidth(p, int16_t(uint16_t(fields.size)), &depth); // exe 0x5f2f20
+    if (int16_t(outer) == 0) return;
+    int disc = projectedWidth(p, int16_t(fields.discSize), &depth);
+    if (uint16_t(disc) == 0) return;
+    const uint32_t z = depth >= 0x30 ? uint16_t(depth - 0x30) : 0u;
+    if (uint16_t(disc) <= 3) disc = 4;
+    const uint32_t xy = uint32_t(uint16_t(sxy[0])) | uint32_t(uint16_t(sxy[1])) << 16;
+    dc::Ring core;
+    core.arc = 0x4000;
+    core.inner = colours[0] | dc::kScreenRingOpcode;
+    core.xy = xy;
+    core.outer = colours[1] | dc::kSemiAdditive;
+    core.zStep = z | dc::ringStep(2);
+    core.radii = uint32_t(disc) << 16;
+    dc::emit(core, spark.at);
+    dc::Ring rim;
+    rim.arc = 0x4000;
+    rim.inner = colours[1] | dc::kScreenRingOpcode;
+    rim.xy = xy;
+    rim.outer = dc::kSemiAdditive;
+    rim.zStep = z | dc::ringStep(2);
+    rim.radii = uint32_t(outer) << 16 | (uint32_t(disc) & 0xffffu);
+    dc::emit(rim, spark.at);
+}
+} // namespace
+
+// exe 0x560b70: two screen discs at the wall point (drawWallSpark); the disc shrinks and its colour fades over 7
+// ticks, then freed
 void laserWallSparkUpdate(const PlayerEnv&, uint32_t address) {
     EffectActor& spark = effectActorAt(address);
     auto&& fields = classState<LaserWallSparkFields>(spark);
@@ -359,11 +401,14 @@ void laserWallSparkUpdate(const PlayerEnv&, uint32_t address) {
         fields.fadeTicks = kWallSparkFade;
         spark.step = uint8_t(WallSparkStep::Shrink);
     }
+    uint32_t colours[2] = {0, 0}; // the exe's stack words, set only while it shrinks
     if (phase <= WallSparkStep::Shrink) { // exe 0x560bf0 / 0x560d90
         fields.discSize = uint16_t(fields.discSize - fields.shrink);
+        wallSparkColours(fields.fadeTicks, colours);
         --fields.fadeTicks;
         if (fields.fadeTicks == 0) ++spark.step;
     }
+    drawWallSpark(spark, fields, colours);
 }
 
 } // namespace od::port
