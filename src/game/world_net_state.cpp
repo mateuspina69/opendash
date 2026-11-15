@@ -1562,6 +1562,15 @@ void PoolNetActors::appear(uint8_t slot, const NetActorIdentity& identity, const
         ownSlot_[slot] = allocActor10();
         if (ownSlot_[slot] == 0) return; // the pool is full here: this shot is not seen
     }
+    if (ownSlot_[slot] == 0 && actorSlotClass(slot) == kAnimatedClass) {
+        // the slot's last occupant (this game's own room setup's, or a world's freed since) keeps the bone blocks it had:
+        // one still live gives them back, and the new occupant holds none until its model binds -- else its free would
+        // give back blocks another actor holds by then, and the next bind would share them (one actor's parts posed at
+        // another's place)
+        AnimatedActor& last = asAnimated(actorHeaderAt(actorBySlot(slot)));
+        if (last.flags & kActorLive) actorSystem().boneBlocksUsed &= ~uint32_t(last.boneBlocks);
+        last.boneBlocks = 0;
+    }
     ActorHeader& head = ownSlot_[slot] != 0 ? actorHeaderAt(ownSlot_[slot]) : claimActorSlot(slot);
     head.flags = kActorLiveDrawn;
     head.runFlags &= uint8_t(~kActorRun); // the pool loops pass it by: its class runs in the world
