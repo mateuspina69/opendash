@@ -322,6 +322,7 @@ private:
     void ownEventOver();
     void followEnd();
     uint8_t inputBeforeEvent_ = 0; // this player's input mode as the world's event began
+    bool drawnBeforeEvent_ = true; // ... and whether this Mega Man was drawn
     void restoreEventInput(const od::port::EventState& ev);
     void dropRoomEvent();
     void leaveSceneHere();

@@ -660,7 +660,10 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
             eventPoint_.x = e->x;
             eventPoint_.y = e->y;
             eventPoint_.z = e->z;
-            if (!ownEvent_ && !followEvent_) inputBeforeEvent_ = od::port::player().inputMode;
+            if (!ownEvent_ && !followEvent_) {
+                inputBeforeEvent_ = od::port::player().inputMode;
+                drawnBeforeEvent_ = (od::port::player().flags & od::port::kActorDrawn) != 0;
+            }
             od::port::eventStart(e->hasPos ? &eventPoint_ : nullptr, nullptr, e->param, e->window, e->message);
             eventMenus_ = e->menus; // what its talker's choices open plays here, with the event
             eventHints_ = e->hintsMessage;
@@ -1279,6 +1282,9 @@ void OwnWorldClient::followEnd() {
         od::port::windowClose(int8_t(ev.window), od::port::WindowClose::Force);
         od::port::eventAbort();
         restoreEventInput(ev);
+        // a message that hid this Mega Man shows him again at its own end (its room change's, text_script's warp): cut
+        // short here, that end never plays
+        od::port::player().setDrawn(drawnBeforeEvent_);
     }
     followEvent_ = false;
     od::port::setScriptStartsBlocked(false);
