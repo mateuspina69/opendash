@@ -6,6 +6,7 @@
 #include "game/angles.hpp"
 #include "game/camera_state.hpp"
 #include "game/fixed_point.hpp"
+#include "game/game_state.hpp"
 #include "game/player/player_state.hpp"
 #include "game/port_gap.hpp"
 #include "game/room_params.hpp"
@@ -13,6 +14,8 @@
 #include "game/script_state.hpp"
 #include "game/stage_state.hpp"
 #include "game/state_array.hpp"
+
+#include <array>
 
 namespace od::port {
 
@@ -168,6 +171,31 @@ void setFromArgs(StateArray<int32_t, 3>& to, const CameraScriptOp& op) {
     for (size_t i = 0; i < 3; ++i) to[i] = int32_t(op.args[i]);
 }
 
+// OpenDash's own: the camera points of the PS1 disc's scripts that the PC port moved, the PC's point given wherever the
+// data comes from (the remaster keeps the PC framing). ST08 sub 1, script 0x4f's dialogue shot in Joe's lab: on the
+// disc the camera stands closer, and the dropship's tilted blades (statics 3 and 4) pass the model centre test there
+// (OTZ 20 / 31) and fill the screen; at the PC's point they are at OTZ 3 / 13 and not drawn, as in the original
+struct CameraPointFix {
+    uint8_t stage, room;
+    std::array<int16_t, 3> disc, pc; // the point's whole parts
+};
+constexpr CameraPointFix kCameraPointFixes[] = {
+    {0x08, 1, {-417, -32, 415}, {-360, -32, 360}},
+};
+void setPointFromArgs(StateArray<int32_t, 3>& to, const CameraScriptOp& op) {
+    setFromArgs(to, op);
+    if (!dataSource().isPs1()) return;
+    const GameState& g = gameState();
+    for (const CameraPointFix& f : kCameraPointFixes) {
+        if (g.stage != f.stage || g.room != f.room) continue;
+        bool same = true;
+        for (size_t i = 0; i < 3; ++i) same = same && int16_t(int32_t(op.args[i]) >> 16) == f.disc[i];
+        if (!same) continue;
+        for (size_t i = 0; i < 3; ++i) to[i] = int32_t(uint32_t(uint16_t(f.pc[i])) << 16);
+        return;
+    }
+}
+
 } // namespace
 
 CameraEaseCurve scriptCameraEaseCurve(size_t k) {
@@ -253,7 +281,7 @@ void scriptCameraTick() {
             case CameraOp::AnchorPlayer: sc.setAnchor(ScriptCameraAnchor::Player); advance(kOpWordSize); continue;
             case CameraOp::SetPoint:
                 sc.setAnchor(ScriptCameraAnchor::Absolute);
-                setFromArgs(sc.point, op);
+                setPointFromArgs(sc.point, op);
                 advance(kOpWithPointSize);
                 continue;
             case CameraOp::SetActorOffset:
