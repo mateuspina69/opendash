@@ -23,6 +23,7 @@
 //     runs of a room (game/world_digest)
 //   OD_TRACE_THROW=1 (environment, dev): the call stack of every C++ throw on stderr (named with a build that has
 //     symbols, RelWithDebInfo)
+#include "app/own_world.hpp"
 #include "app/app.hpp"
 #include "app/log_file.hpp"
 #include "app/world_process.hpp"
@@ -109,6 +110,8 @@ void App::frame() {
         if (const uint64_t at = clockStart + clockNs; at > now) SDL_DelayNS(at - now);
     }
 
+    // the session on every rendered frame, a game tick due or not: what its players and worlds sent goes on at once
+    if (playerView.ownWorld) playerView.ownWorld->pump(SDL_GetTicksNS());
     const uint64_t simAt = SDL_GetTicksNS();
     photoResume();
     if (!photo.gameRuns()) { // the photo mode: no tick, the pacer's clock stands (no catching up afterwards)

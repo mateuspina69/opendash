@@ -106,6 +106,9 @@ public:
     void turn(uint64_t nowNs);
     // a turn away from a game (the title, a load): the session's save and what it says; nothing of a room
     void awayTurn(uint64_t nowNs);
+    // every rendered frame, in a room or not: the session's traffic read and passed on (on the host: between its players
+    // and their worlds), so that none of it waits for this game's next tick
+    void pump(uint64_t nowNs);
     // the part of a frame's body that runs on a client (app/play_session's frame)
     void localActors(const od::port::PlayerEnv& env, od::port::ActorContext& context, bool late);
     // the end of the frame's body: the lock-on and the radar from the world's actors, this tick's shots to the world
@@ -325,6 +328,12 @@ private:
     int8_t testLevel_ = 0;
     int testWeapon_ = -1;
     std::array<Other, 8> others_{};
+    // what the way to the world and back takes, as this game's ticks see it: each player update's time, by its sequence,
+    // until its acknowledgement is handled; and how far behind the newest tick heard the world is shown (a log line)
+    std::array<uint64_t, 64> uplinkSentNs_{};
+    uint64_t roundTripSumNs_ = 0, roundTripMaxNs_ = 0;
+    uint32_t roundTrips_ = 0, behindSum_ = 0, behindTicks_ = 0;
+    void netCheck();
 };
 
 } // namespace od::app

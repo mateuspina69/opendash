@@ -327,6 +327,10 @@ void OwnWorldClient::joinRoom() {
     joined_ = true;
 }
 
+void OwnWorldClient::pump(uint64_t nowNs) {
+    if (pipe_) pipe_->poll(nowNs);
+}
+
 void OwnWorldClient::awayTurn(uint64_t nowNs) {
     pipe_->poll(nowNs);
     const std::optional<uint8_t> id = pipe_->playerId();
@@ -372,7 +376,9 @@ void OwnWorldClient::turn(uint64_t nowNs) {
             one.insert(one.begin(), uint8_t(one.size()));
             return one;
         };
-        pipe_->sendLatest(playerId_, WorldMessageType::NetPlayer, listed(uplink_.update(playerId_, localTick_, fields)));
+        std::vector<uint8_t> update = uplink_.update(playerId_, localTick_, fields);
+        uplinkSentNs_[size_t(update[1] | update[2] << 8) % uplinkSentNs_.size()] = nowNs; // (its sequence: after its id)
+        pipe_->sendLatest(playerId_, WorldMessageType::NetPlayer, listed(std::move(update)));
         if (guest_ && coordinator_) {
             od::port::NetPlayerFields shifted = fields;
             shifted.pos[0] = int16_t(shifted.pos[0] + guest_->first);
@@ -467,9 +473,22 @@ void OwnWorldClient::turn(uint64_t nowNs) {
             state_->advance(shown_);
         }
         actors_->endTick();
+        behindSum_ += state_->newestTick() - shown_;
+        ++behindTicks_;
     }
+    netCheck();
     for (; failuresLogged_ < failures_.classes.size(); ++failuresLogged_)
         SDL_Log("own world: failed: %s", failures_.classes[failuresLogged_].c_str());
+}
+
+void OwnWorldClient::netCheck() {
+    constexpr uint32_t kEvery = 150;
+    if (localTick_ % kEvery != 0 || roundTrips_ == 0) return;
+    SDL_Log("netcheck: to the world and back avg %.1f ms, max %.1f ms (%u player updates); the world shown %.1f ticks behind the newest heard",
+            double(roundTripSumNs_) / double(roundTrips_) * 1e-6, double(roundTripMaxNs_) * 1e-6, roundTrips_,
+            behindTicks_ ? double(behindSum_) / double(behindTicks_) : 0.0);
+    roundTripSumNs_ = roundTripMaxNs_ = 0;
+    roundTrips_ = behindSum_ = behindTicks_ = 0;
 }
 
 void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
@@ -499,7 +518,15 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
         if (state_->heard()) clock_->heard(state_->newestTick());
         break;
     case WorldMessageType::NetPlayerAck:
-        if (m.netState.size() == 3) uplink_.acknowledge(uint16_t(m.netState[1] | m.netState[2] << 8));
+        if (m.netState.size() == 3) {
+            const uint16_t sequence = uint16_t(m.netState[1] | m.netState[2] << 8);
+            uplink_.acknowledge(sequence);
+            if (const uint64_t sent = std::exchange(uplinkSentNs_[sequence % uplinkSentNs_.size()], 0); sent != 0 && nowNs >= sent) {
+                roundTripSumNs_ += nowNs - sent;
+                roundTripMaxNs_ = std::max(roundTripMaxNs_, nowNs - sent);
+                ++roundTrips_;
+            }
+        }
         break;
     case WorldMessageType::NetPlayer: {
         std::vector<uint8_t> acks;
