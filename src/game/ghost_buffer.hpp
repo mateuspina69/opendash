@@ -4,7 +4,8 @@
 //
 // Per player the buffer keeps the states ordered by the sender's game tick. The shown instant (the render point, in
 // sender ticks) advances with the local clock at the sender's tick rate (estimated from the arrivals) and is steered
-// toward the newest received tick minus kInterpolationDelayTicks. Position and the angles (12-bit, wrapping: yaw,
+// toward the newest received tick minus the delay: one tick (a state on each side of the shown instant) and how unevenly
+// the states arrive, as measured (game/net_jitter). Position and the angles (12-bit, wrapping: yaw,
 // its offset, pitch, the two leans) are interpolated between the states around it; the discrete fields (animation,
 // look, flags, room) come from the nearer state. Past the newest state the position is extrapolated at most
 // kMaxExtrapolateTicks, then the ghost freezes. A room change or a jump over kSnapDistance is shown as a cut (no
@@ -15,11 +16,13 @@
 #include <deque>
 #include <optional>
 
+#include "game/net_jitter.hpp"
 #include "game/player/player_snapshot.hpp"
 
 namespace od::ghost {
 
-constexpr double kInterpolationDelayTicks = 3.0; // ~100 ms at the game's ~30 ticks / s
+constexpr double kStateDelayTicks = 1.0;   // the delay on a link with no jitter: the state after the shown instant is there
+constexpr double kMaxDelayTicks = 8.0;     // ... and however uneven the arrivals
 constexpr double kMaxExtrapolateTicks = 4.0;
 constexpr int64_t kSnapDistance = int64_t(0x400) << 16; // game units (16.16): a jump this long between two states
 constexpr uint64_t kSilentRemoveNs = 3'000'000'000ull;
@@ -38,6 +41,8 @@ public:
     bool empty() const { return states_.empty(); }
     void clear();
     double renderTick() const { return renderTick_; } // the last sample's render point (sender ticks)
+    // how far behind the newest state the render point is steered
+    double delayTicks() const { return std::min(kStateDelayTicks + jitter_.ticks(), kMaxDelayTicks); }
 
 private:
     struct Held {
@@ -48,6 +53,7 @@ private:
     double ticksPerNs() const;
 
     std::deque<Held> states_; // by tick
+    od::port::ArrivalJitter jitter_;
     bool clockSet_ = false;
     double renderTick_ = 0.0;
     uint64_t lastSampleNs_ = 0;

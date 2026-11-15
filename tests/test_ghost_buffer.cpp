@@ -53,12 +53,12 @@ void testSteady() {
     GhostBuffer g;
     steady(g, 0, 20);
     auto s = g.sample(20 * kTickNs);
-    CHECK(s && std::abs(g.renderTick() - 17.0) < 1e-6); // newest - the interpolation delay
-    CHECK(s && xOf(*s) == 170);
+    CHECK(s && std::abs(g.renderTick() - 19.0) < 1e-6); // newest - the delay of a steady link: one tick
+    CHECK(s && xOf(*s) == 190);
     // between ticks the position is between the states
     g.push(21 * kTickNs, 21, at(210));
     s = g.sample(20 * kTickNs + kTickNs / 2);
-    CHECK(s && xOf(*s) > 170 && xOf(*s) < 185);
+    CHECK(s && xOf(*s) > 190 && xOf(*s) < 205);
     std::printf("  half a tick later: render tick %.2f, x %d\n", g.renderTick(), s ? xOf(*s) : -1);
 }
 
@@ -151,10 +151,23 @@ void testRateEstimate() {
     double worst = 0;
     for (int k = 0; k <= 200; ++k) {
         g.push(uint64_t(k) * kSlowNs, uint32_t(k), at(k));
-        if (g.sample(uint64_t(k) * kSlowNs) && k > 20) worst = std::max(worst, std::abs(g.renderTick() - (k - 3.0)));
+        if (g.sample(uint64_t(k) * kSlowNs) && k > 20) worst = std::max(worst, std::abs(g.renderTick() - (k - 1.0)));
     }
-    std::printf("  20 ticks / s sender: render point within %.2f ticks of newest - 3\n", worst);
+    std::printf("  20 ticks / s sender: render point within %.2f ticks of newest - 1\n", worst);
     CHECK(worst < 1.0);
+}
+
+// a link whose states arrive unevenly is shown further back, a steady one a tick back
+void testDelayFollowsJitter() {
+    GhostBuffer steadyLink, uneven;
+    for (int k = 0; k <= 60; ++k) steadyLink.push(uint64_t(k) * kTickNs, uint32_t(k), at(k));
+    // every third state two ticks late: at each instant, what arrives then
+    for (int now = 0; now <= 62; ++now)
+        for (int k = std::max(now - 2, 0); k <= std::min(now, 60); ++k)
+            if (k + (k % 3 == 0 ? 2 : 0) == now) uneven.push(uint64_t(now) * kTickNs, uint32_t(k), at(k));
+    std::printf("  delay: a steady link %.2f ticks, an uneven one %.2f\n", steadyLink.delayTicks(), uneven.delayTicks());
+    CHECK(std::abs(steadyLink.delayTicks() - 1.0) < 0.05);
+    CHECK(uneven.delayTicks() > 2.5 && uneven.delayTicks() < 3.6);
 }
 
 } // namespace
@@ -166,5 +179,6 @@ int main() {
     testCuts();
     testExtrapolateFreezeTimeout();
     testRateEstimate();
+    testDelayFollowsJitter();
     return testResult("test_ghost_buffer");
 }

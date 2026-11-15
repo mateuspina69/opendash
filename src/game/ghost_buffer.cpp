@@ -57,6 +57,7 @@ void GhostBuffer::push(uint64_t nowNs, uint32_t tick, const od::port::RemotePlay
     const auto at = std::lower_bound(states_.begin(), states_.end(), tick,
                                      [](const Held& h, uint32_t t) { return h.tick < t; });
     if (at != states_.end() && at->tick == tick) return; // a duplicate
+    jitter_.heard(tick, nowNs);
     states_.insert(at, {tick, nowNs, s});
     while (states_.size() > kBufferStates) states_.pop_front();
     lastArrivalNs_ = std::max(lastArrivalNs_, nowNs);
@@ -65,16 +66,8 @@ void GhostBuffer::push(uint64_t nowNs, uint32_t tick, const od::port::RemotePlay
 void GhostBuffer::clear() { *this = GhostBuffer{}; }
 
 double GhostBuffer::ticksPerNs() const {
-    // the newest and the oldest arrival of the last kRateWindowNs (by tick order, arrivals are nearly monotonic)
-    const Held& last = states_.back();
-    const Held* first = &last;
-    for (auto it = states_.rbegin(); it != states_.rend(); ++it) {
-        if (last.arrivalNs - std::min(last.arrivalNs, it->arrivalNs) > kRateWindowNs) break;
-        first = &*it;
-    }
-    const uint64_t span = last.arrivalNs - std::min(last.arrivalNs, first->arrivalNs);
-    if (span < kMinRateSpanNs || last.tick == first->tick) return kNominalTicksPerSecond / kNsPerSecond;
-    return double(last.tick - first->tick) / double(span);
+    // from the arrivals of the last kRateWindowNs (the states themselves are dropped once shown)
+    return jitter_.rate(kRateWindowNs, kMinRateSpanNs, kNominalTicksPerSecond / kNsPerSecond);
 }
 
 std::optional<od::port::RemotePlayerState> GhostBuffer::sample(uint64_t nowNs) {
@@ -83,7 +76,7 @@ std::optional<od::port::RemotePlayerState> GhostBuffer::sample(uint64_t nowNs) {
         clear();
         return std::nullopt;
     }
-    const double target = double(states_.back().tick) - kInterpolationDelayTicks;
+    const double target = double(states_.back().tick) - delayTicks();
     if (!clockSet_) {
         clockSet_ = true;
         renderTick_ = target;
