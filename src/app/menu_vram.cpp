@@ -36,6 +36,9 @@ void MenuVram::reset() {
 
 void MenuVram::applyDat(const std::string& name, od::GameFile f) {
     vram.apply(f);
+    // the disc's own TITLE art is the PS1 overlay's (its logo 544 x 240): the title draws with that geometry with or
+    // without a pack's TITLE art over it
+    if (od::dataSource().isPs1() && std::filesystem::path(name).stem() == "TITLE") titlePs1 = true;
     packArt(name);
     art();
     dirty.push_back({0, 0, od::Vram::kWidth, od::Vram::kHeight});
