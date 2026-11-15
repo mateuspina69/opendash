@@ -44,15 +44,16 @@
 #include <vector>
 
 #include "game/actors.hpp"
+#include "game/net_jitter.hpp"
 
 namespace od::port {
 
 constexpr size_t kNetSlots = 256;                // a slot id is one byte: the pool's class + the index
-constexpr int kNetDefaultUpdateTicks = 2;        // an update every 2 ticks of 30 a second: 15 a second
+constexpr int kNetDefaultUpdateTicks = 1;        // an update every tick: what a client shows is one tick old, not several
 constexpr size_t kNetMaxPayload = 1160;          // a payload in net/udp_socket's 1200-byte datagram, with the link's framing
 constexpr size_t kNetUpdateBudget = 300;         // what an update carries before the rest waits for the next
 constexpr size_t kNetMaxEventBatch = 1100;       // an event batch, likewise
-constexpr double kNetInterpolationTicks = 4.0;   // how far in the past a client shows the world: an update's period + jitter
+constexpr double kNetMaxDelayTicks = 8.0;        // the farthest in the past a client shows the world, however late its updates
 constexpr uint8_t kNetNoModel = 0xff;            // an actor with no entry of the model bank
 constexpr uint16_t kNetAnimNotPlaying = 0xffff;  // an Appear's age: no animation has started on the actor
 constexpr uint32_t kNetNoAnimTick = 0xffffffffu; // an actor on which no animation has started
@@ -332,17 +333,22 @@ public:
     virtual void flash(uint8_t slot) = 0;
 };
 
-// The render clock: the shown instant, in world ticks, steered toward the newest tick heard minus the delay
+// The render clock: the shown instant, in world ticks, steered toward the newest tick heard minus the delay. The delay is
+// what the link needs and no more: the ticks between two updates less one (the state after the shown one has to be here)
+// and how unevenly the updates arrive, as measured.
 class NetRenderClock {
 public:
-    explicit NetRenderClock(double delayTicks = kNetInterpolationTicks) : delay_(delayTicks) {}
-    void heard(uint32_t tick);
+    explicit NetRenderClock(int updateTicks = kNetDefaultUpdateTicks) : period_(updateTicks) {}
+    // an update of this world tick was taken at nowNs
+    void heard(uint32_t tick, uint64_t nowNs);
+    double delayTicks() const;
     bool running() const { return running_; }
     // the shown instant at nowNs (it never goes back)
     double at(uint64_t nowNs);
 
 private:
-    double delay_;
+    int period_;
+    ArrivalJitter jitter_;
     bool running_ = false;
     bool started_ = false;
     uint32_t newest_ = 0;

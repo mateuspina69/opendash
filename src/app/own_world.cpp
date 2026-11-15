@@ -515,7 +515,7 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
     case WorldMessageType::NetUpdate:
         if (const auto sequence = state_->applyUpdate(m.netState))
             pipe_->sendLatest(playerId_, WorldMessageType::NetAck, {uint8_t(*sequence), uint8_t(*sequence >> 8)});
-        if (state_->heard()) clock_->heard(state_->newestTick());
+        if (state_->heard()) clock_->heard(state_->newestTick(), nowNs);
         break;
     case WorldMessageType::NetPlayerAck:
         if (m.netState.size() == 3) {

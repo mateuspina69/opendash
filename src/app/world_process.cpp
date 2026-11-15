@@ -357,7 +357,7 @@ int runClient(const WorldArgs& w) {
     LocalFile poses(w.poseLog), effects(w.effectLog);
     LoggedNetActors actors(effects.f);
     od::port::NetStateClient state(actors);
-    od::port::NetRenderClock clock;
+    od::port::NetRenderClock clock(w.netTicks);
     od::port::NetLocalRunFailures failures;
     const auto acknowledge = [&](std::optional<uint16_t> sequence) {
         if (!sequence) return;
@@ -379,7 +379,7 @@ int runClient(const WorldArgs& w) {
                 break;
             case WorldMessageType::NetUpdate:
                 acknowledge(state.applyUpdate(m.netState));
-                if (state.heard()) clock.heard(state.newestTick());
+                if (state.heard()) clock.heard(state.newestTick(), now);
                 break;
             case WorldMessageType::Stop: stopped = true; break;
             default: break;

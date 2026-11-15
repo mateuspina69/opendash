@@ -1140,14 +1140,20 @@ void NetStateSender::acknowledge(uint16_t sequence) {
 
 // ---- the render clock ------------------------------------------------------------------------------------------------
 
-void NetRenderClock::heard(uint32_t tick) {
+void NetRenderClock::heard(uint32_t tick, uint64_t nowNs) {
     if (!running_ || int32_t(tick - newest_) > 0) newest_ = tick;
     running_ = true;
+    jitter_.heard(tick, nowNs);
+}
+
+double NetRenderClock::delayTicks() const {
+    constexpr double kMargin = 0.25;
+    return std::min(double(period_ - 1) + jitter_.ticks() + kMargin, kNetMaxDelayTicks);
 }
 
 double NetRenderClock::at(uint64_t nowNs) {
     constexpr double kTicksPerNs = 30.0 / 1e9, kResyncTicks = 8.0, kSteering = 0.1;
-    const double target = double(newest_) - delay_;
+    const double target = double(newest_) - delayTicks();
     if (!started_) {
         started_ = true;
         shown_ = std::max(target, 0.0);
