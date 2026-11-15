@@ -60,6 +60,8 @@ target_include_directories(odengine PRIVATE ${Stb_INCLUDE_DIR} ${XXHASH_INCLUDE_
 file(GLOB od_net_sources CONFIGURE_DEPENDS src/net/*.cpp)
 add_library(odnet STATIC ${od_net_sources})
 target_include_directories(odnet PUBLIC src)
+find_package(Threads REQUIRED) # the session's lock, the coordinator's relay thread
+target_link_libraries(odnet PUBLIC Threads::Threads)
 if(WIN32)
     target_compile_definitions(odnet PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
     target_link_libraries(odnet PUBLIC ws2_32 iphlpapi)
