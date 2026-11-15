@@ -173,6 +173,45 @@ bool DeviceVulkan::init(SDL_Window* window, int w, int h, bool debug) {
     if (depthClip.depthClipEnable) deviceExtensions_.push_back(VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME);
     else SDL_Log("vulkan: no VK_EXT_depth_clip_enable: geometry is clipped at the near plane (unlike D3D12)");
     depthClip.pNext = nullptr;
+    // ray queries (the RT sun shadows and ambient occlusion, OD_RT): VK_KHR_acceleration_structure (which needs
+    // deferred host operations and buffer device addresses) and VK_KHR_ray_query, when the GPU has all of them
+    VkPhysicalDeviceRayQueryFeaturesKHR rayQuery{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR};
+    VkPhysicalDeviceAccelerationStructureFeaturesKHR accel{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR,
+                                                           &rayQuery};
+    VkPhysicalDeviceVulkan12Features rtHas12{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
+    rayQuery_ = false;
+    if (hasDeviceExtension(physical_, VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) &&
+        hasDeviceExtension(physical_, VK_KHR_RAY_QUERY_EXTENSION_NAME) &&
+        hasDeviceExtension(physical_, VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME)) {
+        rtHas12.pNext = &accel;
+        VkPhysicalDeviceFeatures2 query{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, &rtHas12};
+        vkGetPhysicalDeviceFeatures2(physical_, &query);
+        rayQuery_ = accel.accelerationStructure && rayQuery.rayQuery && rtHas12.bufferDeviceAddress;
+    }
+    // NVRHI, once acceleration structures are on, gives its upload buffers the shader-binding-table usage and puts
+    // the ray-tracing shader stage in its barriers: both need the ray tracing pipeline, enabled (unused) with them
+    VkPhysicalDeviceRayTracingPipelineFeaturesKHR rtPipeline{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR};
+    if (rayQuery_ && hasDeviceExtension(physical_, VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME)) {
+        VkPhysicalDeviceFeatures2 query{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, &rtPipeline};
+        vkGetPhysicalDeviceFeatures2(physical_, &query);
+    }
+    const bool rtPipelineOn = rtPipeline.rayTracingPipeline;
+    if (rayQuery_) {
+        deviceExtensions_.push_back(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
+        deviceExtensions_.push_back(VK_KHR_RAY_QUERY_EXTENSION_NAME);
+        deviceExtensions_.push_back(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
+        // only the features the renderer uses
+        accel = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR, &rayQuery};
+        accel.accelerationStructure = VK_TRUE;
+        rayQuery = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR};
+        rayQuery.rayQuery = VK_TRUE;
+        if (rtPipelineOn) {
+            deviceExtensions_.push_back(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME);
+            rtPipeline = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR};
+            rtPipeline.rayTracingPipeline = VK_TRUE;
+            rayQuery.pNext = &rtPipeline;
+        }
+    }
     const float priority = 1.0f;
     VkDeviceQueueCreateInfo qci{VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO};
     qci.queueFamilyIndex = queueFamily_;
@@ -191,9 +230,15 @@ bool DeviceVulkan::init(SDL_Window* window, int w, int h, bool debug) {
     f13.subgroupSizeControl = has13.subgroupSizeControl;
     f13.computeFullSubgroups = has13.computeFullSubgroups;
     f13.pNext = depthClip.depthClipEnable ? &depthClip : nullptr;
+    if (rayQuery_) {
+        if (rtPipelineOn) rtPipeline.pNext = f13.pNext;
+        else rayQuery.pNext = f13.pNext;
+        f13.pNext = &accel;
+    }
     VkPhysicalDeviceVulkan12Features f12{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES, &f13};
     f12.timelineSemaphore = VK_TRUE;
     f12.shaderFloat16 = has12.shaderFloat16;
+    f12.bufferDeviceAddress = rayQuery_ ? VK_TRUE : VK_FALSE; // the acceleration structures' build inputs
     VkPhysicalDeviceVulkan11Features f11{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES, &f12};
     f11.storageBuffer16BitAccess = has11.storageBuffer16BitAccess;
     f11.uniformAndStorageBuffer16BitAccess = has11.uniformAndStorageBuffer16BitAccess;
@@ -229,6 +274,7 @@ bool DeviceVulkan::init(SDL_Window* window, int w, int h, bool debug) {
     dd.numInstanceExtensions = instanceExtensions_.size();
     dd.deviceExtensions = deviceExtensions_.data();
     dd.numDeviceExtensions = deviceExtensions_.size();
+    dd.bufferDeviceAddressSupported = rayQuery_;
     vkDevice_ = nvrhi::vulkan::createDevice(dd);
     if (!vkDevice_) return false;
     device_ = vkDevice_;
