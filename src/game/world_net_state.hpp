@@ -16,8 +16,10 @@
 //   far that an update counts on (an actor appears or goes, the shift, the first tick), then per actor: u8 slot, u8 mask,
 //   the fields of the mask's bits: i16 x, i16 y, i16 z, i16 yaw, i16 rotation x + i16 rotation z, u8 animation; with the
 //   mask's top bit a second mask: u8 the animation's age, u16 key + u8 ticks left, i16 scale x, y, z, u16 tint, u24 hidden
-//   parts, u8 count + the aim offsets (u8 entry | lanes << 5, i16 per lane), u8 the path's age + its steps (i16 x, y, z in
-//   1/16 unit a tick, i16 rotation x, y, z a tick).
+//   parts, the parts a class painted (one by one, or those painted alike as a group), u8 count + the aim offsets (u8
+//   entry | lanes << 5, i16 per lane), the lock-on points (each: its offset, and when
+//   it is new its bone, its shape and whose it is), u8 the path's age + its steps (i16 x, y, z in 1/16 unit a tick, i16
+//   rotation x, y, z a tick).
 // Event batch: u16 the tick's low half, u16 the low half of the index of the batch's first event, then per event: u8 kind.
 //   First (a sender's first event): u32 the tick, whole: every tick after it is told by its low half. Appear: u8 slot, type,
 //   subtype, variant, the model bank's entry, shown; i16 x, y, z, rotation x, y, z; with an animation in play u8 animation,
@@ -109,12 +111,15 @@ struct NetAimOffset {
     friend bool operator==(const NetAimOffset&, const NetAimOffset&) = default;
 };
 
-// A lock-on candidate of an actor: its hit-list entry, relative to the actor. The client runs the game's selection over these.
+// A lock-on candidate of an actor: its hit-list entry, relative to the bone it moves with (the client poses that bone
+// itself, so a point that rides a bone is told once), else to the actor. The client runs the game's selection over these.
+constexpr uint8_t kNetNoBone = 0xff;
 struct NetLockPoint {
     std::array<int16_t, 3> offset{};
     uint16_t shape = 0;
     uint32_t owner = 0;    // the entry's owner word without the slot
     bool harmless = false; // kHitAttackHarmless
+    uint8_t bone = kNetNoBone; // the part whose bone point the offset is from (kNetNoBone: the actor's position)
     friend bool operator==(const NetLockPoint&, const NetLockPoint&) = default;
 };
 

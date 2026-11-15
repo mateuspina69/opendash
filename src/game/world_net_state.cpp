@@ -86,6 +86,7 @@ constexpr uint8_t kMoreAnimExtra = 0x01, kMoreLock = 0x02, kMoreSolids = 0x04, k
 constexpr uint8_t kExtraAge = 0x01, kExtraKey = 0x02, kExtraHeld = 0x04, kExtraPaint = 0x08, kExtraLook = 0x10,
                   kExtraUniformScale = 0x20, kExtraReport = 0x40, kExtraPicture = 0x80; // what else
 constexpr uint8_t kLookBoneScale = 0x01;
+constexpr uint8_t kPaintGrouped = 0x80; // the paint's count byte: that many groups of parts painted alike (u32 the parts)
 constexpr uint8_t kLockPositionsOnly = 0x80, kLockWide = 0x40, kLockOwners = 0x20, kLockCountMask = 0x1f;
 constexpr int kLockGrain = 4;   // the units a narrow lock offset counts in
 constexpr uint8_t kSolidHasParam = 0x80;
@@ -175,7 +176,7 @@ void NetWorldTable::seen(uint8_t slot, const Seen& s) {
     bool lockKept = a.state.lock.size() == s.lock.size();
     for (size_t i = 0; lockKept && i < s.lock.size(); ++i) {
         const NetLockPoint &was = a.state.lock[i], &now = s.lock[i];
-        lockKept = was.shape == now.shape && was.owner == now.owner && was.harmless == now.harmless;
+        lockKept = was.shape == now.shape && was.owner == now.owner && was.harmless == now.harmless && was.bone == now.bone;
         for (size_t l = 0; lockKept && l < 3; ++l) lockKept = std::abs(int(was.offset[l]) - int(now.offset[l])) <= kLockTolerance;
     }
     if (!lockKept) a.state.lock = s.lock;
@@ -362,6 +363,82 @@ void gatherLockEntries() {
                             (end.attack & kHitAttackHarmless) != 0});
         }
     }
+}
+
+// What each animated actor's lock-on points and bones were on the last tick: a point is told from the bone it moved with
+struct LockTrack {
+    bool any = false;
+    std::array<int16_t, 3> pos{};
+    std::vector<std::array<int16_t, 3>> bones, points;
+};
+std::array<LockTrack, kAnimatedFieldSlots>& lockTracks() {
+    static std::array<LockTrack, kAnimatedFieldSlots> tracks;
+    return tracks;
+}
+
+std::array<int16_t, 3> minus(const std::array<int16_t, 3>& a, const std::array<int16_t, 3>& b) {
+    return {int16_t(uint16_t(a[0]) - uint16_t(b[0])), int16_t(uint16_t(a[1]) - uint16_t(b[1])), int16_t(uint16_t(a[2]) - uint16_t(b[2]))};
+}
+int apart(const std::array<int16_t, 3>& a, const std::array<int16_t, 3>& b) {
+    return std::abs(int(a[0]) - int(b[0])) + std::abs(int(a[1]) - int(b[1])) + std::abs(int(a[2]) - int(b[2]));
+}
+
+// The lock-on points of an animated actor (`now`: relative to its position, as seenOf leaves them), each from what it
+// moves with: the bone it was told from while it stays there (`before`: the list the table holds of this occupant), else
+// the bone -- or the actor's position -- that moved as it did since the last tick; one new here, the bone it stands on
+void attachLockPoints(const AnimatedActor& a, size_t index, bool sameOccupant, const std::vector<NetLockPoint>& before,
+                      std::vector<NetLockPoint>& now) {
+    LockTrack& track = lockTracks()[index];
+    if (now.empty()) {
+        track.any = false;
+        return;
+    }
+    const std::array<int16_t, 3> pos = {a.pos.x.whole, a.pos.y.whole, a.pos.z.whole};
+    std::vector<std::array<int16_t, 3>> bones, points;
+    for (int k = 0; k < int(a.partCount) && k < 32; ++k) {
+        const BoneBlock* b = boneBlockOf(a, k >> 2);
+        if (!b) break;
+        const ShortVec4& p = b->points[size_t(k & 3)];
+        bones.push_back({p.x, p.y, p.z});
+    }
+    for (const NetLockPoint& p : now)
+        points.push_back({int16_t(uint16_t(pos[0]) + uint16_t(p.offset[0])), int16_t(uint16_t(pos[1]) + uint16_t(p.offset[1])),
+                          int16_t(uint16_t(pos[2]) + uint16_t(p.offset[2]))});
+    const bool history = sameOccupant && track.any && track.bones.size() == bones.size();
+    const auto from = [&](size_t n, uint8_t bone) { return minus(points[n], bone == kNetNoBone ? pos : bones[bone]); };
+    for (size_t n = 0; n < now.size(); ++n) {
+        NetLockPoint& p = now[n];
+        if (sameOccupant && n < before.size() && before[n].shape == p.shape && before[n].owner == p.owner && before[n].harmless == p.harmless &&
+            (before[n].bone == kNetNoBone || before[n].bone < bones.size())) {
+            const std::array<int16_t, 3> offset = from(n, before[n].bone);
+            bool stays = true;
+            for (size_t l = 0; l < 3; ++l) stays = stays && std::abs(int(offset[l]) - int(before[n].offset[l])) <= kLockTolerance;
+            if (stays) {
+                p.bone = before[n].bone;
+                p.offset = offset;
+                continue;
+            }
+        }
+        uint8_t best = kNetNoBone;
+        if (history && n < track.points.size()) {
+            const std::array<int16_t, 3> moved = minus(points[n], track.points[n]);
+            int least = apart(moved, minus(pos, track.pos));
+            for (size_t b = 0; b < bones.size(); ++b)
+                if (const int drift = apart(moved, minus(bones[b], track.bones[b])); drift < least) {
+                    least = drift;
+                    best = uint8_t(b);
+                }
+        } else {
+            for (size_t b = 0; b < bones.size() && best == kNetNoBone; ++b)
+                if (bones[b] == points[n]) best = uint8_t(b);
+        }
+        p.bone = best;
+        p.offset = from(n, best);
+    }
+    track.any = true;
+    track.pos = pos;
+    track.bones = std::move(bones);
+    track.points = std::move(points);
 }
 
 NetWorldTable::Seen seenOf(const Actor& a, uint32_t model, uint32_t animTable) {
@@ -659,6 +736,8 @@ void captureNetWorld(NetWorldTable& table, uint32_t tick) {
         }
         s.animScript = hasModel ? a.animScript.value() : 0;
         const NetWorldActor& held = table.actors[slot];
+        attachLockPoints(a, i, held.live && held.model == s.model && held.animTable == s.animTable && held.identity.type == a.type,
+                         held.state.lock, s.lock);
         s.modelEntry = held.live && held.model == s.model && held.animTable == s.animTable && held.identity.type == a.type
                            ? held.identity.modelEntry
                            : modelEntryOf(kAnimatedClass, s.model, s.animTable, s.bound);
@@ -1080,12 +1159,36 @@ std::vector<uint8_t> NetStateSender::update(const NetWorldTable& table) {
         }
         count(&UpdateBytes::aim);
         if (extra & kExtraPaint) {
-            e.u8(uint8_t(a.state.paint.size()));
+            // the parts painted alike as one group (a fade paints every part the same), when that is shorter
+            struct Group {
+                uint32_t parts = 0;
+                NetPartPaint paint;
+            };
+            std::vector<Group> groups;
             for (const NetPartPaint& p : a.state.paint) {
-                e.u8(p.part);
+                const auto alike = std::find_if(groups.begin(), groups.end(), [&](const Group& g) {
+                    return g.paint.colour == p.colour && g.paint.scale == p.scale && g.paint.semi == p.semi;
+                });
+                if (alike != groups.end()) alike->parts |= 1u << (p.part & 31);
+                else groups.push_back({1u << (p.part & 31), p});
+            }
+            const auto values = [&](const NetPartPaint& p) {
                 e.u16(p.colour);
                 for (const uint8_t c : p.scale) e.u8(c);
                 e.u8(p.semi);
+            };
+            if (groups.size() * 10 < a.state.paint.size() * 7) {
+                e.u8(uint8_t(groups.size() | kPaintGrouped));
+                for (const Group& g : groups) {
+                    e.u32(g.parts);
+                    values(g.paint);
+                }
+            } else {
+                e.u8(uint8_t(a.state.paint.size()));
+                for (const NetPartPaint& p : a.state.paint) {
+                    e.u8(p.part);
+                    values(p);
+                }
             }
         }
         if (extra & kExtraLook) {
@@ -1113,7 +1216,7 @@ std::vector<uint8_t> NetStateSender::update(const NetWorldTable& table) {
             bool positionsOnly = a.state.lock.size() == k.acked.lock.size() && !a.state.lock.empty();
             for (size_t n = 0; positionsOnly && n < a.state.lock.size(); ++n)
                 positionsOnly = a.state.lock[n].shape == k.acked.lock[n].shape && a.state.lock[n].owner == k.acked.lock[n].owner &&
-                                a.state.lock[n].harmless == k.acked.lock[n].harmless;
+                                a.state.lock[n].harmless == k.acked.lock[n].harmless && a.state.lock[n].bone == k.acked.lock[n].bone;
             bool wide = false, sameOwner = true;
             for (const NetLockPoint& p : a.state.lock) {
                 for (const int16_t c : p.offset) wide = wide || c < -127 * kLockGrain || c > 127 * kLockGrain;
@@ -1133,6 +1236,7 @@ std::vector<uint8_t> NetStateSender::update(const NetWorldTable& table) {
                     else e.u8(uint8_t(int8_t(c >= 0 ? (c + kLockGrain / 2) / kLockGrain : (c - kLockGrain / 2) / kLockGrain)));
                 }
                 if (positionsOnly) continue;
+                e.u8(p.bone);
                 e.u16(p.shape);
                 if (!sameOwner) owner(p);
             }
@@ -1435,12 +1539,31 @@ std::optional<uint16_t> NetStateClient::applyParsed(std::span<const uint8_t> byt
             }
         }
         if (extra & kExtraPaint) {
-            s.paint.resize(r.u8());
-            for (NetPartPaint& p : s.paint) {
-                p.part = r.u8();
+            const uint8_t count = r.u8();
+            const auto values = [&](NetPartPaint& p) {
                 p.colour = r.u16();
                 for (uint8_t& c : p.scale) c = r.u8();
                 p.semi = r.u8();
+            };
+            s.paint.clear();
+            if (count & kPaintGrouped) {
+                for (size_t g = 0; g < size_t(count & ~kPaintGrouped) && r.ok; ++g) {
+                    const uint32_t parts = r.u32();
+                    NetPartPaint p;
+                    values(p);
+                    for (uint8_t k = 0; k < 32; ++k)
+                        if (parts >> k & 1) {
+                            p.part = k;
+                            s.paint.push_back(p);
+                        }
+                }
+                std::sort(s.paint.begin(), s.paint.end(), [](const NetPartPaint& x, const NetPartPaint& y) { return x.part < y.part; });
+            } else {
+                s.paint.resize(count);
+                for (NetPartPaint& p : s.paint) {
+                    p.part = r.u8();
+                    values(p);
+                }
             }
         }
         if (extra & kExtraLook) {
@@ -1477,6 +1600,7 @@ std::optional<uint16_t> NetStateClient::applyParsed(std::span<const uint8_t> byt
             for (NetLockPoint& p : s.lock) {
                 for (int16_t& c : p.offset) c = wide ? r.i16() : int16_t(int(int8_t(r.u8())) * kLockGrain);
                 if (positionsOnly) continue;
+                p.bone = r.u8();
                 p.shape = r.u16();
                 if (owners) owner(p);
                 else {
@@ -2141,9 +2265,15 @@ void PoolNetActors::submitLockPoints() {
         const Actor& a = actorLayoutOf(*head);
         for (const NetLockPoint& p : lock_[i]) {
             if (box >= lockBoxes_.size()) return;
-            const int16_t pos[3] = {int16_t(uint16_t(a.pos.x.whole) + uint16_t(p.offset[0])),
-                                    int16_t(uint16_t(a.pos.y.whole) + uint16_t(p.offset[1])),
-                                    int16_t(uint16_t(a.pos.z.whole) + uint16_t(p.offset[2]))};
+            // from its bone as this game posed it (a copy not posed here yet is not drawn: nothing to lock on to)
+            std::array<int16_t, 3> at = {a.pos.x.whole, a.pos.y.whole, a.pos.z.whole};
+            if (p.bone != kNetNoBone) {
+                const ShortVec4* point = actorSlotClass(uint8_t(i)) == kAnimatedClass && posed_[i] ? bonePointOrNull(asAnimated(a), p.bone) : nullptr;
+                if (!point) continue;
+                at = {point->x, point->y, point->z};
+            }
+            const int16_t pos[3] = {int16_t(uint16_t(at[0]) + uint16_t(p.offset[0])), int16_t(uint16_t(at[1]) + uint16_t(p.offset[1])),
+                                    int16_t(uint16_t(at[2]) + uint16_t(p.offset[2]))};
             lockBoxes_[box].result = 0;
             hitListPutEntry(pos, p.shape, uint32_t(i) << kHitSlotShift | p.owner, p.harmless ? kHitAttackHarmless : 0u, lockBoxes_[box]);
             ++box;

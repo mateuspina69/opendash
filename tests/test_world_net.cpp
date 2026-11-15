@@ -480,6 +480,47 @@ void testUpdateWaitsOnlyForActors() {
     CHECK(rec.effects.size() == 1 && rec.live.count(kStatic) == 1);
 }
 
+// what a class paints on its parts: the parts painted alike go as one group, and come back part by part
+void testPartPaint() {
+    NetWorldTable t;
+    NetStateSender sender;
+    Recorded rec;
+    NetStateClient client(rec);
+    NetWorldTable::Seen s = seenAt(100);
+    t.seen(kSlotA, s);
+    for (const auto& batch : sender.events(t)) CHECK(client.applyEvents(batch));
+    sender.acknowledge(*client.applyUpdate(sender.update(t)));
+    // a fade: twenty parts, one colour
+    t.tick = 1;
+    for (uint8_t k = 0; k < 20; ++k) s.paint.push_back({k, 0x1234, {0x40, 0x40, 0x40}, 1});
+    t.seen(kSlotA, s);
+    const auto fade = sender.update(t);
+    CHECK(fade.size() == kHeader + 3 + 1 + 1 + 4 + 6); // slot, masks, what else, the group count, its parts, its paint
+    const auto seq = client.applyUpdate(fade);
+    CHECK(seq.has_value());
+    client.advance(1);
+    CHECK(rec.last[kSlotA].paint == s.paint);
+    sender.acknowledge(*seq);
+    // each part its own: one by one
+    t.tick = 2;
+    s.paint.clear();
+    for (uint8_t k = 0; k < 3; ++k) s.paint.push_back({uint8_t(k * 5), uint16_t(0x100 + k), {0x40, uint8_t(0x41 + k), 0x40}, 0});
+    t.seen(kSlotA, s);
+    const auto each = sender.update(t);
+    CHECK(each.size() == kHeader + 3 + 1 + 1 + 3 * 7);
+    CHECK(client.applyUpdate(each).has_value());
+    client.advance(2);
+    CHECK(rec.last[kSlotA].paint == s.paint);
+    // two groups among many parts
+    t.tick = 3;
+    s.paint.clear();
+    for (uint8_t k = 0; k < 12; ++k) s.paint.push_back({k, uint16_t(k % 2 ? 0x111 : 0x222), {0x40, 0x40, 0x40}, 0});
+    t.seen(kSlotA, s);
+    CHECK(client.applyUpdate(sender.update(t)).has_value());
+    client.advance(3);
+    CHECK(rec.last[kSlotA].paint == s.paint);
+}
+
 // a lock-on point: told when it moves past the tolerance, then its position alone
 void testLockPoints() {
     NetWorldTable t;
@@ -491,7 +532,7 @@ void testLockPoints() {
     t.seen(kSlotA, s);
     for (const auto& batch : sender.events(t)) CHECK(client.applyEvents(batch));
     const auto full = sender.update(t);
-    CHECK(full.size() == kHeader + 3 + 1 + 4 + 3 + 2); // slot, masks, count, owner, offset, shape
+    CHECK(full.size() == kHeader + 3 + 1 + 4 + 3 + 1 + 2); // slot, masks, count, owner, offset, bone, shape
     const auto seq = client.applyUpdate(full);
     CHECK(seq.has_value());
     client.advance(0);
@@ -907,6 +948,7 @@ int main(int argc, char** argv) {
     testPaths();
     testEffects();
     testUpdateWaitsOnlyForActors();
+    testPartPaint();
     testLockPoints();
     testRoomPatches();
     testPlayerState();
