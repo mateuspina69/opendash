@@ -181,7 +181,25 @@ private:
         int64_t stepped = -1;
         bool joined = false;
         std::vector<uint8_t> equipment; // what they wear (the world's NetEquip of them): their shots here are theirs
+        // the door they open, by their tick (their fields' door), and the one of the tick shown here (none: not posed here)
+        std::deque<std::pair<uint32_t, od::port::NetDoor>> doors;
+        od::port::NetDoor doorShown;
     };
+    // A door another player opens, shown here: its leaves in this game's static pool posed as theirs, the room's doors they
+    // stand in for hidden, the door actor carrying them at its height; once they are through, back to closed and gone
+    struct DoorMirror {
+        uint8_t leafCount = 0;
+        std::array<uint32_t, 2> leafAt{};
+        std::array<od::port::NetDoorLeaf, 2> leaves{}; // as last shown
+        uint16_t segment = od::port::kNetNoSegment;
+        uint8_t doorSlot = 0;
+        int16_t doorBaseY = 0, doorY = 0;
+        int closing = -1; // the ticks it has been closing (-1: open)
+        bool any() const { return leafCount != 0 || doorSlot != 0; }
+    };
+    std::array<DoorMirror, 8> doorMirrors_{}; // by player id, as others_
+    void doorMirrorTurn();
+    void doorMirrorEnd(DoorMirror& m);
     size_t gaugesHeard_ = 0; // the enemy gauges the world last showed (logged when it changes)
     // the ghost slot each other player of this machine's table is drawn in (-1: none), and the ghosts: their files are
     // what those players pose on here

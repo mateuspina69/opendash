@@ -14,6 +14,11 @@
 #include "game/player/room_player_effects.hpp"
 #include "game/fade_state.hpp"
 #include "game/transition.hpp"
+#include "game/door_actor.hpp"
+#include "game/door_leaves.hpp"
+#include "game/actor_model.hpp"
+#include "game/actor_pools.hpp"
+#include "game/room_grid.hpp"
 #include "game/hit_effects.hpp"
 #include "game/story_flags.hpp"
 #include "game/story_table.hpp"
@@ -154,6 +159,7 @@ void OwnWorldClient::roomBound(int stage, int sub) {
         return;
     }
     od::port::presentationLoopsClear();
+    doorMirrors_ = {}; // (the room left took their leaves; its doors are this room's)
     if (const auto at = std::exchange(doorArrival_, std::nullopt); at && (*at)[0] == stage && (*at)[1] == sub) {
         // through a gated door together: the door's script arrived at the exit's spot, the coordinator's is beside the others
         od::port::Player& p = od::port::player();
@@ -417,6 +423,7 @@ void OwnWorldClient::turn(uint64_t nowNs) {
     liftTurn();
     localSceneTurn();
     if (!room_) return;
+    doorMirrorTurn();
     // a scene's own room changes are the game's, as in the normal game; one held for everyone waits at the gate; once its
     // script is done (its world's end still to come) an exit is the player's own
     if (!localScene_ || heldHere_ || !od::port::scriptState().inUse()) gateTurn();
@@ -527,6 +534,12 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
             s.room = od::port::ghostRoomOf();
             s.snapshot = od::port::netPlayerSnapshot(o.from.fields(), o.tracks);
             o.buffer.push(nowNs, heard->tick, s);
+            // the door they open on that tick (shown here at the tick their ghost is shown at)
+            if (o.doors.empty() || o.doors.back().second != o.from.fields().door) {
+                o.doors.emplace_back(heard->tick, o.from.fields().door);
+                constexpr size_t kKeptDoors = 64;
+                while (o.doors.size() > kKeptDoors) o.doors.pop_front();
+            }
         }
         if (!acks.empty()) pipe_->sendLatest(playerId_, WorldMessageType::NetPlayerAck, std::move(acks));
         break;
@@ -870,6 +883,7 @@ void OwnWorldClient::otherPlayerRules(uint8_t id, Other& o, const od::port::Play
 }
 
 void OwnWorldClient::showPlayers(GhostView& ghosts, uint64_t localFingerprint, uint64_t nowNs) {
+    for (Other& o : others_) o.doorShown = {}; // (set below for each ghost posed here)
     if (localScene_) { // a scene has one Mega Man, this game's: the others are hidden until it ends
         for (int slot = 0; slot < od::ghost::kMaxGhosts; ++slot) ghosts.clearRemote(slot);
         return;
@@ -888,6 +902,12 @@ void OwnWorldClient::showPlayers(GhostView& ghosts, uint64_t localFingerprint, u
         const int64_t tick = int64_t(o.buffer.renderTick());
         const od::port::GhostRoom here = od::port::ghostRoomOf();
         const bool posed = here.fieldPlay && shown->room.fieldPlay && shown->room.stage == here.stage && shown->room.sub == here.sub;
+        if (posed) // the door they open at the shown tick: the newest by then
+            for (auto it = o.doors.rbegin(); it != o.doors.rend(); ++it)
+                if (int32_t(it->first - uint32_t(tick)) <= 0) {
+                    o.doorShown = it->second;
+                    break;
+                }
         if (!posed) o.stepped = -1; // where it is next posed it starts at the shown tick
         else if (od::LoadedFileData* files = ghosts.files(int(slot))) {
             const od::ScopedLoadedFiles bound(*files);
@@ -1236,6 +1256,134 @@ void OwnWorldClient::overridePad(uint16_t& buttons) {
         return;
     }
     buttons = scenePads_.step();
+}
+
+namespace {
+int32_t wholeToFixed(int16_t v) { return int32_t(uint32_t(uint16_t(v)) << 16); }
+int16_t between(int16_t from, int16_t to, int num, int den) { return int16_t(from + (int(to) - int(from)) * num / den); }
+int16_t yawBetween(int16_t from, int16_t to, int num, int den) {
+    const int d = int((uint32_t(uint16_t(to)) - uint32_t(uint16_t(from)) + 0x800u) & 0xfffu) - 0x800;
+    return int16_t((int(from) + d * num / den) & 0xfff);
+}
+void poseMirrorLeaf(uint32_t at, const std::array<int16_t, 3>& pos, int16_t yaw) {
+    od::port::StaticActor& l = od::port::staticActorAt(at);
+    l.prevPos = l.pos;
+    l.prevRotation = l.rotation;
+    l.pos.x = wholeToFixed(pos[0]);
+    l.pos.y = wholeToFixed(pos[1]);
+    l.pos.z = wholeToFixed(pos[2]);
+    l.rotation.y = yaw;
+}
+// this game's door actor in that slot (the room's setup placed it as on theirs); nullptr when it is not one
+od::port::StaticActor* mirrorDoorActor(uint8_t slot) {
+    if (od::port::actorSlotClass(slot) != od::port::kStaticClass) return nullptr;
+    od::port::StaticActor& door = od::port::staticActorAt(od::port::actorBySlot(slot));
+    return (door.flags & od::port::kActorLive) && door.type == od::port::kDoorActorType ? &door : nullptr;
+}
+} // namespace
+
+void OwnWorldClient::doorMirrorEnd(DoorMirror& m) {
+    for (size_t k = 0; k < m.leafCount; ++k)
+        if (m.leafAt[k] != 0) od::port::freeActor(od::port::staticActorAt(m.leafAt[k]));
+    if (m.segment != od::port::kNetNoSegment) od::port::segmentSetDoorsHidden(m.segment, false);
+    if (od::port::StaticActor* door = m.doorSlot != 0 ? mirrorDoorActor(m.doorSlot) : nullptr) {
+        door->prevPos.y = door->pos.y;
+        door->pos.y = wholeToFixed(m.doorBaseY);
+    }
+    m = DoorMirror{};
+}
+
+// The doors the others open, shown here as on their screen (with no camera of theirs): their leaves posed as theirs tick by
+// tick, the door actor carrying them at its height; once they are through, the leaves go back closed and go, the door actor
+// back up to its place
+void OwnWorldClient::doorMirrorTurn() {
+    constexpr int kLeafCloseTicks = 10; // a leaf back to closed (as a sliding leaf's 10-tick slide)
+    constexpr int kDoorBackTicks = 30;  // the door actor back to its place
+    for (size_t id = 0; id < others_.size() && id < doorMirrors_.size(); ++id) {
+        DoorMirror& m = doorMirrors_[id];
+        const od::port::NetDoor& told = others_[id].doorShown;
+        for (size_t k = 0; k < m.leafCount; ++k) { // a leaf's slot taken since (a scene's rebuild): not ours any more
+            if (m.leafAt[k] == 0) continue;
+            const od::port::StaticActor& l = od::port::staticActorAt(m.leafAt[k]);
+            if (!(l.flags & od::port::kActorLive) || l.type != m.leaves[k].type || l.variant != m.leaves[k].variant) m.leafAt[k] = 0;
+        }
+        if (told.any() && m.closing >= 0) doorMirrorEnd(m); // a new door while the last one closes: that one is done
+        if (told.any()) {
+            if (!m.any()) {
+                m.leafCount = told.leafCount;
+                for (size_t k = 0; k < told.leafCount; ++k) {
+                    const od::port::NetDoorLeaf& t = told.leaves[k];
+                    m.leaves[k] = t;
+                    const uint32_t at = od::port::allocActor60(0);
+                    if (at == 0) continue;
+                    od::port::StaticActor& l = od::port::staticActorAt(at);
+                    l.flags = od::port::kActorLiveDrawn;
+                    l.type = t.type;
+                    l.variant = t.variant;
+                    od::port::DoorLeafParams(l).clear();
+                    if (!od::port::bindActorModel(l, l.variant)) {
+                        od::port::freeActor(l);
+                        continue;
+                    }
+                    // placed and still: its pose is theirs (the leaves' pass leaves an idle / stopped leaf where it is)
+                    l.state = uint8_t(od::port::DoorLeafState::Moving);
+                    l.subState = 0;
+                    l.step = 0;
+                    l.stepCounter = 0;
+                    l.velocity.x = 0;
+                    l.velocity.y = 0;
+                    l.velocity.z = 0;
+                    l.rotation.x = 0;
+                    l.rotation.z = 0;
+                    poseMirrorLeaf(at, t.pos, t.yaw);
+                    l.prevPos = l.pos;
+                    l.prevRotation = l.rotation;
+                    m.leafAt[k] = at;
+                }
+                m.segment = told.leafCount != 0 ? told.segment : od::port::kNetNoSegment;
+                if (m.segment != od::port::kNetNoSegment) od::port::segmentSetDoorsHidden(m.segment, true);
+                if (const od::port::StaticActor* door = told.doorSlot != 0 ? mirrorDoorActor(told.doorSlot) : nullptr) {
+                    m.doorSlot = told.doorSlot;
+                    m.doorBaseY = door->pos.y.whole;
+                    m.doorY = m.doorBaseY;
+                }
+                SDL_Log("own world: player %zu opens a door here (%u leaves, segment %u, door actor %02x)", id, unsigned(m.leafCount),
+                        unsigned(m.segment), unsigned(m.doorSlot));
+            }
+            for (size_t k = 0; k < m.leafCount && k < told.leafCount; ++k) {
+                m.leaves[k] = told.leaves[k];
+                if (m.leafAt[k] != 0) poseMirrorLeaf(m.leafAt[k], told.leaves[k].pos, told.leaves[k].yaw);
+            }
+            if (m.doorSlot != 0 && told.doorSlot == m.doorSlot)
+                if (od::port::StaticActor* door = mirrorDoorActor(m.doorSlot)) {
+                    m.doorY = told.doorY;
+                    door->prevPos.y = door->pos.y;
+                    door->pos.y = wholeToFixed(m.doorY);
+                }
+            continue;
+        }
+        if (!m.any()) continue;
+        ++m.closing; // they are through (or gone from here): it closes behind them
+        const int leafT = std::min(m.closing, kLeafCloseTicks), doorT = std::min(m.closing, kDoorBackTicks);
+        for (size_t k = 0; k < m.leafCount; ++k) {
+            if (m.leafAt[k] == 0) continue;
+            const od::port::NetDoorLeaf& l = m.leaves[k];
+            const std::array<int16_t, 3> pos = {between(l.pos[0], l.closedPos[0], leafT, kLeafCloseTicks),
+                                                between(l.pos[1], l.closedPos[1], leafT, kLeafCloseTicks),
+                                                between(l.pos[2], l.closedPos[2], leafT, kLeafCloseTicks)};
+            poseMirrorLeaf(m.leafAt[k], pos, yawBetween(l.yaw, l.closedYaw, leafT, kLeafCloseTicks));
+        }
+        if (od::port::StaticActor* door = m.doorSlot != 0 ? mirrorDoorActor(m.doorSlot) : nullptr) {
+            door->prevPos.y = door->pos.y;
+            door->pos.y = wholeToFixed(between(m.doorY, m.doorBaseY, doorT, kDoorBackTicks));
+        }
+        // closed (a tick held there) and back: it goes
+        const int lasts = std::max(m.leafCount != 0 ? kLeafCloseTicks + 1 : 0, m.doorSlot != 0 ? kDoorBackTicks : 0);
+        if (m.closing >= lasts) {
+            SDL_Log("own world: player %zu's door closed here", id);
+            doorMirrorEnd(m);
+        }
+    }
 }
 
 // An exit this player has taken: not while a story boss is being fought; at a gate they wait, with who is at it

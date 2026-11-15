@@ -10,15 +10,16 @@
 #include "game/player/player_animation.hpp"
 #include "game/modern_aim.hpp"
 #include "game/player/player_state.hpp"
+#include "game/transition.hpp"
 
 namespace od::port {
 
 namespace {
 
 constexpr uint32_t kKeyBytes = 4;
-constexpr uint16_t kX = 1 << 0, kY = 1 << 1, kZ = 1 << 2, kYaw = 1 << 3, kPitch = 1 << 4, kLean = 1 << 5, kFlags = 1 << 6, kLight = 1 << 7,
+constexpr uint32_t kX = 1 << 0, kY = 1 << 1, kZ = 1 << 2, kYaw = 1 << 3, kPitch = 1 << 4, kLean = 1 << 5, kFlags = 1 << 6, kLight = 1 << 7,
                    kMaskStageAnims = 1 << 8, kFace = 1 << 9, kLook = 1 << 10, kChannel0 = 1 << 11, kChannel1 = 1 << 12, kFight = 1 << 13, kCamera = 1 << 14,
-                   kAim = 1 << 15;
+                   kAim = 1 << 15, kDoor = 1 << 16;
 constexpr uint8_t kChannelAge = 1, kChannelKey = 2, kChannelHeld = 4, kChannelNoTick = 8; // NoTick: none has started on it
 
 struct Out {
@@ -56,8 +57,8 @@ struct In {
     int16_t i16() { return int16_t(u16()); }
 };
 
-uint16_t maskOf(const NetPlayerFields& n, const NetPlayerFields& o) {
-    uint16_t m = 0;
+uint32_t maskOf(const NetPlayerFields& n, const NetPlayerFields& o) {
+    uint32_t m = 0;
     if (n.pos[0] != o.pos[0]) m |= kX;
     if (n.pos[1] != o.pos[1]) m |= kY;
     if (n.pos[2] != o.pos[2]) m |= kZ;
@@ -76,6 +77,7 @@ uint16_t maskOf(const NetPlayerFields& n, const NetPlayerFields& o) {
     if (n.status != o.status || n.charge != o.charge || n.specialFiring != o.specialFiring || n.downed != o.downed || n.specialHeld != o.specialHeld) m |= kFight;
     if (n.camera.known && !(n.camera == o.camera)) m |= kCamera;
     if (n.aimSet != o.aimSet || (n.aimSet && n.aimPoint != o.aimPoint)) m |= kAim;
+    if (!(n.door == o.door)) m |= kDoor;
     return m;
 }
 
@@ -167,6 +169,26 @@ NetPlayerFields NetPlayerWatch::see(const Player& p, uint32_t tick) {
         }
         was = {script, keyAt, ticks, ch.anim};
     }
+    // the door this game's exit opens (the exit script is this game's own player's)
+    f.door = NetDoor{};
+    const ExitDoorShown door = &p == &player() ? exitDoorShown() : ExitDoorShown{};
+    for (size_t k = 0; k < 2; ++k) {
+        if (k >= door.leafCount) {
+            leafAt_[k] = 0;
+            continue;
+        }
+        const ExitDoorLeaf& l = door.leaves[k];
+        if (leafAt_[k] != l.at) { // first seen placed: its closed pose
+            leafAt_[k] = l.at;
+            leafClosed_[k].closedPos = l.pos;
+            leafClosed_[k].closedYaw = l.yaw;
+        }
+        f.door.leaves[k] = {l.type, l.variant, l.pos, leafClosed_[k].closedPos, l.yaw, leafClosed_[k].closedYaw};
+    }
+    f.door.leafCount = door.leafCount;
+    f.door.segment = door.leafCount != 0 ? door.segment : kNetNoSegment;
+    f.door.doorSlot = door.doorSlot;
+    f.door.doorY = door.doorY;
     return f;
 }
 
@@ -177,11 +199,10 @@ std::vector<uint8_t> NetPlayerSender::update(uint8_t playerId, uint32_t tick, co
     o.u16(sequence);
     o.u32(tick);
     // started over (a receiver that may hold anything): every field until one update is acknowledged
-    constexpr uint16_t kAll = uint16_t(kAim | (kAim - 1));
+    constexpr uint32_t kAll = kDoor | (kDoor - 1);
     // (a camera not known yet is not sent: the receiver would take it as one)
-    const uint16_t mask = full_ ? uint16_t(now.camera.known ? kAll : (kAll & ~kCamera))
-                                : uint16_t(maskOf(now, acked_) | maskOf(now, sent_));
-    o.u16(mask);
+    const uint32_t mask = full_ ? (now.camera.known ? kAll : (kAll & ~kCamera)) : (maskOf(now, acked_) | maskOf(now, sent_));
+    o.u32(mask);
     if (mask & kX) o.i16(now.pos[0]);
     if (mask & kY) o.i16(now.pos[1]);
     if (mask & kZ) o.i16(now.pos[2]);
@@ -248,6 +269,22 @@ std::vector<uint8_t> NetPlayerSender::update(uint8_t playerId, uint32_t tick, co
         if (now.aimSet)
             for (const int16_t v : now.aimPoint) o.i16(v);
     }
+    if (mask & kDoor) {
+        const NetDoor& d = now.door;
+        o.u8(d.leafCount);
+        for (size_t k = 0; k < d.leafCount && k < d.leaves.size(); ++k) {
+            const NetDoorLeaf& l = d.leaves[k];
+            o.u8(l.type);
+            o.u8(l.variant);
+            for (const int16_t v : l.pos) o.i16(v);
+            o.i16(l.yaw);
+            for (const int16_t v : l.closedPos) o.i16(v);
+            o.i16(l.closedYaw);
+        }
+        o.u16(d.segment);
+        o.u8(d.doorSlot);
+        if (d.doorSlot != 0) o.i16(d.doorY);
+    }
     inFlight_.push_back({sequence, now});
     while (inFlight_.size() > 64) inFlight_.pop_front();
     sent_ = now;
@@ -274,7 +311,7 @@ std::optional<NetPlayerHeard> NetPlayerReceiver::apply(std::span<const uint8_t> 
     h.playerId = r.u8();
     h.sequence = r.u16();
     h.tick = r.u32();
-    const uint16_t mask = r.u16();
+    const uint32_t mask = r.u32();
     if (!r.ok || (any_ && int16_t(uint16_t(h.sequence - last_)) <= 0)) return std::nullopt;
     NetPlayerFields f = fields_;
     if (mask & kX) f.pos[0] = r.i16();
@@ -343,6 +380,24 @@ std::optional<NetPlayerHeard> NetPlayerReceiver::apply(std::span<const uint8_t> 
         f.aimSet = r.u8();
         if (f.aimSet)
             for (int16_t& v : f.aimPoint) v = r.i16();
+    }
+    if (mask & kDoor) {
+        NetDoor d;
+        d.leafCount = r.u8();
+        if (d.leafCount > d.leaves.size()) return std::nullopt;
+        for (size_t k = 0; k < d.leafCount; ++k) {
+            NetDoorLeaf& l = d.leaves[k];
+            l.type = r.u8();
+            l.variant = r.u8();
+            for (int16_t& v : l.pos) v = r.i16();
+            l.yaw = r.i16();
+            for (int16_t& v : l.closedPos) v = r.i16();
+            l.closedYaw = r.i16();
+        }
+        d.segment = r.u16();
+        d.doorSlot = r.u8();
+        if (d.doorSlot != 0) d.doorY = r.i16();
+        f.door = d;
     }
     if (!r.ok || r.at != bytes.size()) return std::nullopt;
     fields_ = f;

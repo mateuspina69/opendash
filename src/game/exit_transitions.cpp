@@ -586,6 +586,36 @@ void walkOffEnd() {
 // once the player is script driven, the camera by the door's yaw and the request armed from that exit
 } // namespace
 
+ExitDoorShown exitDoorShown() {
+    ExitDoorShown d;
+    ScriptState& s = scriptState();
+    if (!(s.flags & kScriptRunning) || s.id != 0) return d;
+    for (const size_t k : {kFirstLeaf, kSecondLeaf}) {
+        if (!s.actors[k]) continue;
+        const ActorHeader& h = *s.actors[k];
+        if (actorSlotClass(h.slot) != kStaticClass || !(h.flags & kActorLive)) continue;
+        const StaticActor& l = asStatic(const_cast<ActorHeader&>(h));
+        // a leaf its Init has placed (one not placed yet stands at the trigger)
+        if ((l.loopFlags & kActorStageClass) || l.type < kHingedLeafType || l.type > kSlidingLeafType ||
+            DoorLeafState(l.state) != DoorLeafState::Moving)
+            continue;
+        d.leaves[d.leafCount++] = {l.at, l.type, l.variant, {l.pos.x.whole, l.pos.y.whole, l.pos.z.whole}, l.rotation.y};
+    }
+    if (d.leafCount != 0) {
+        d.segment = s.part<DoorScriptBytes>().doorSegment;
+    } else if (transitionRequest().kind == uint8_t(TransitionKind::DoorActor)) {
+        const uint8_t slot = s.part<DoorActorScriptBytes>().doorSlot;
+        if (slot != 0) {
+            const StaticActor& door = staticActorAt(actorBySlot(slot));
+            if ((door.flags & kActorLive) && door.type == kDoorActorType) {
+                d.doorSlot = slot;
+                d.doorY = door.pos.y.whole;
+            }
+        }
+    }
+    return d;
+}
+
 bool endArrivalNow() {
     const ScriptState& s = scriptState();
     if (!(s.flags & kScriptRunning) || s.id != 0 || !storyFlag(kFlagTransitionArriving)) return false;

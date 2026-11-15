@@ -6,7 +6,7 @@
 // 0x512890), the frame body (exe 0x542280) and the play time. Bit-exact against tests/data/trans_*.bin.
 #pragma once
 
-#include <functional>
+#include <array>
 #include <cstdint>
 #include <functional>
 
@@ -59,6 +59,22 @@ void scriptFade(uint32_t request, uint8_t param);
 // a session's world: a transition asked in it goes here instead of playing
 struct TransitionRequest;
 struct Player;
+// The door this game's exit script opens now (OpenDash's co-op shows it in the others' games): its placed leaves, the
+// segment whose doors they stand in for, or the door actor carrying the player and its height. None: nothing
+struct ExitDoorLeaf {
+    uint32_t at = 0; // the leaf actor
+    uint8_t type = 0, variant = 0;
+    std::array<int16_t, 3> pos{};
+    int16_t yaw = 0;
+};
+struct ExitDoorShown {
+    uint8_t leafCount = 0;
+    std::array<ExitDoorLeaf, 2> leaves{};
+    uint16_t segment = 0xffff;
+    uint8_t doorSlot = 0;
+    int16_t doorY = 0;
+};
+ExitDoorShown exitDoorShown();
 // a passage's arrival walk-in (script 0's second run, in the room entered) ended now, as its own end does (a scene that
 // takes the room over: its script starts at once, as the world's copy does); false: none running
 bool endArrivalNow();

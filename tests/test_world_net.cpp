@@ -18,6 +18,7 @@
 
 #include "app/world_link.hpp"
 #include "check.hpp"
+#include "game/door_leaves.hpp"
 #include "game/player/net_player.hpp"
 #include "game/player/remote_combat.hpp"
 #include "game/global_state.hpp"
@@ -518,14 +519,14 @@ void testPlayerState() {
     CHECK(h && h->playerId == 3);
     CHECK(receiver.fields() == f);
     sender.acknowledge(h->sequence);
-    CHECK(sender.update(3, 2, f).size() == 9); // id, sequence, tick, mask: nothing else
+    CHECK(sender.update(3, 2, f).size() == 11); // id, sequence, tick, mask: nothing else
     f.pos[0] = 104;
     const auto moved = sender.update(3, 3, f);
-    CHECK(moved.size() == 9 + 2);
+    CHECK(moved.size() == 11 + 2);
     f.channels[0].anim = 6;
     f.channels[0].tick = 5;
     const auto anim = sender.update(3, 5, f);
-    CHECK(anim.size() == 9 + 2 + 2);
+    CHECK(anim.size() == 11 + 2 + 2);
     CHECK(receiver.apply(moved).has_value());
     CHECK(receiver.apply(anim).has_value());
     CHECK(receiver.fields() == f);
@@ -533,8 +534,24 @@ void testPlayerState() {
     sender.acknowledge(4); // the animation's update
     f.camera = {{10, -20, 30}, 0x900, {0xabc, 0x123, 0xfed}, true}; // the owner's camera: 13 bytes, when it changes
     const auto camera = sender.update(3, 6, f);
-    CHECK(camera.size() == 9 + 13);
+    CHECK(camera.size() == 11 + 13);
     CHECK(receiver.apply(camera).has_value());
+    CHECK(receiver.fields() == f);
+    // the door they open: two leaves (18 bytes each), its segment; then the door actor carrying them
+    sender.acknowledge(5); // the camera's update
+    f.door.leafCount = 2;
+    f.door.leaves[0] = {kSlidingLeafType, 4, {100, 0, -20}, {90, 0, -20}, 0x400, 0x400};
+    f.door.leaves[1] = {kSlidingLeafType, 5, {60, 0, -20}, {70, 0, -20}, 0x400, 0x400};
+    f.door.segment = 12;
+    const auto door = sender.update(3, 7, f);
+    CHECK(door.size() == 11 + 1 + 2 * 18 + 2 + 1);
+    CHECK(receiver.apply(door).has_value());
+    CHECK(receiver.fields() == f);
+    f.door = {};
+    f.door.doorSlot = 0x61;
+    f.door.doorY = -300;
+    const auto lift = sender.update(3, 8, f);
+    CHECK(receiver.apply(lift).has_value());
     CHECK(receiver.fields() == f);
 }
 

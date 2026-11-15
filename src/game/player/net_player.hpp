@@ -28,6 +28,25 @@ struct NetPlayerChannel {
     friend bool operator==(const NetPlayerChannel&, const NetPlayerChannel&) = default;
 };
 
+// A door the player opens (their exit's script: the leaves it spawned, or the door actor that carries them): what the other
+// games in the room show of it. The closed pose is the leaf's as its script placed it, where the others close it again.
+struct NetDoorLeaf {
+    uint8_t type = 0, variant = 0;
+    std::array<int16_t, 3> pos{}, closedPos{};
+    int16_t yaw = 0, closedYaw = 0;
+    friend bool operator==(const NetDoorLeaf&, const NetDoorLeaf&) = default;
+};
+constexpr uint16_t kNetNoSegment = 0xffff;
+struct NetDoor {
+    uint8_t leafCount = 0;
+    std::array<NetDoorLeaf, 2> leaves{};
+    uint16_t segment = kNetNoSegment; // the room's segment whose doors the leaves stand in for (hidden while they show)
+    uint8_t doorSlot = 0;             // the door actor carrying them (0: none) and its height
+    int16_t doorY = 0;
+    bool any() const { return leafCount != 0 || doorSlot != 0; }
+    friend bool operator==(const NetDoor&, const NetDoor&) = default;
+};
+
 struct NetPlayerFields {
     std::array<int16_t, 3> pos{};
     int16_t pitch = 0, yaw = 0, yawOfs = 0, lean = 0, lean2 = 0;
@@ -47,6 +66,7 @@ struct NetPlayerFields {
     // (a held beam follows it); aimSet 0: no free aim now (a lock-on, the classic aim)
     uint8_t aimSet = 0;
     std::array<int16_t, 3> aimPoint{};
+    NetDoor door; // the door they open now
     friend bool operator==(const NetPlayerFields&, const NetPlayerFields&) = default;
 };
 
@@ -61,6 +81,9 @@ private:
         uint8_t ticks = 0, anim = 0;
     };
     std::array<Place, 2> last_{};
+    // the leaves of the door being opened: each one's closed pose, as first seen placed
+    std::array<uint32_t, 2> leafAt_{};
+    std::array<NetDoorLeaf, 2> leafClosed_{};
     NetPlayerFields fields_;
 };
 
