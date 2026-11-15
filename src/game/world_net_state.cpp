@@ -91,9 +91,14 @@ constexpr int kLockGrain = 4;   // the units a narrow lock offset counts in
 constexpr uint8_t kSolidHasParam = 0x80;
 constexpr int kLockTolerance = 4; // units a lock-on point may drift before the client is told
 constexpr size_t kMaxLockPoints = 8;
-constexpr uint8_t kEventAppear = 1, kEventGo = 2, kEventAppearStill = 3, kEventEffect = 4, kEventShift = 5, kEventRoomPatch = 6, kEventFlash = 7; // Still: no animation in play
-constexpr size_t kBatchHeaderBytes = 8;
-constexpr size_t kAppearBytes = 27, kGoBytes = 2, kEffectBytes = 35 + 4 + 16 + 1;
+constexpr uint8_t kEventAppear = 1, kEventGo = 2, kEventAppearStill = 3, kEventEffect = 4, kEventShift = 5, kEventRoomPatch = 6, kEventFlash = 7, // Still: no animation in play
+                  kEventFirst = 8;
+constexpr size_t kBatchHeaderBytes = 4;
+constexpr size_t kAppearBytes = 27, kGoBytes = 2, kFirstBytes = 5, kEffectBytes = 13 + 8 + 17 + 6 + 2 + 12;
+// an effect's fields that follow only when they are not their usual value (zero; no parent, no second actor)
+constexpr uint16_t kFxSubtype = 1 << 0, kFxVariant = 1 << 1, kFxSpawnByte = 1 << 2, kFxParent = 1 << 3, kFxSecond = 1 << 4, kFxSteps = 1 << 5,
+                   kFxTrail = 1 << 6, kFxBone = 1 << 7, kFxOwner = 1 << 8, kFxParams = 1 << 9, kFxSpare = 1 << 10, kFxRot = 1 << 11,
+                   kFxVelocity = 1 << 12;
 constexpr int kPathPosTolerance = 32; // 1/16 units an actor may leave its path by before the world sends a new one
 constexpr int kPathRotTolerance = 16; // of a turn of 4096
 constexpr size_t kMaxInFlight = 64;
@@ -794,17 +799,27 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
             w.bytes.clear();
         }
         if (w.bytes.empty()) {
-            w.u32(table.tick);
-            w.u32(eventsSent_);
+            w.u16(uint16_t(table.tick));
+            w.u16(uint16_t(eventsSent_));
             events_.head += kBatchHeaderBytes;
         }
     };
+    if (!firstTold_) { // the tick, whole, before anything else: the client tells every later one from its low half
+        room(kFirstBytes);
+        w.u8(kEventFirst);
+        w.u32(table.tick);
+        events_.room += kFirstBytes;
+        ++eventsSent_;
+        ++structureSent_;
+        firstTold_ = true;
+    }
     if (table.coordinateShift != shiftTold_ && table.coordinateShift != 0xff) {
         room(kGoBytes);
         w.u8(kEventShift);
         w.u8(table.coordinateShift);
         events_.room += kGoBytes;
         ++eventsSent_;
+        ++structureSent_;
         shiftTold_ = table.coordinateShift;
     }
     for (; patchesTold_ < table.roomPatches.size(); ++patchesTold_) {
@@ -849,6 +864,7 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
             events_.go += kGoBytes;
             ++events_.goes;
             ++eventsSent_;
+            ++structureSent_;
             k.told = false;
         }
         if (!live) continue;
@@ -861,30 +877,49 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
             const NetEffect& e = a.effectStart;
             room(kEffectBytes);
             const size_t effectFrom = w.bytes.size();
+            uint8_t lanes = 0;
+            for (size_t l = 0; l < e.trail.size(); ++l)
+                if (e.trail[l] != 0) lanes |= uint8_t(1u << l);
+            const bool turns = e.pool == kStaticClass || e.pool == kProjectileClass; // (the others hold no rotation or velocity)
+            const uint16_t has = uint16_t((e.subtype != 0 ? kFxSubtype : 0) | (e.variant != 0 ? kFxVariant : 0) | (e.spawnByte != 0 ? kFxSpawnByte : 0) |
+                                          (e.parent != kNetNoParent ? kFxParent : 0) | (e.second != kNetNoParent ? kFxSecond : 0) |
+                                          (e.subState != 0 || e.step != 0 || e.stepCounter != 0 ? kFxSteps : 0) | (lanes != 0 ? kFxTrail : 0) |
+                                          (e.bone != 0 ? kFxBone : 0) | (e.owner != 0 ? kFxOwner : 0) |
+                                          (e.params != std::array<uint8_t, 4>{} ? kFxParams : 0) | (e.spare != 0 ? kFxSpare : 0) |
+                                          (turns && e.rot != std::array<int16_t, 3>{} ? kFxRot : 0) |
+                                          (turns && e.velocity != std::array<int16_t, 3>{} ? kFxVelocity : 0));
             w.u8(kEventEffect);
             w.u8(slot);
             w.u8(e.pool);
             w.u8(e.type);
-            w.u8(e.subtype);
-            w.u8(e.variant);
-            w.u8(e.spawnByte);
             w.u8(e.loopFlags);
             w.u8(e.flags);
-            w.u8(e.parent);
-            w.u8(e.second);
-            w.u8(e.subState);
-            w.u8(e.step);
-            w.u8(e.stepCounter);
-            for (const int16_t v : e.trail) w.i16(v);
-            w.u8(e.bone);
-            w.u8(e.owner);
-            for (const uint8_t p : e.params) w.u8(p);
+            w.u16(has);
             for (const int16_t v : e.pos) w.i16(v);
-            w.i16(e.spare);
-            if (e.pool == kStaticClass || e.pool == kProjectileClass) {
-                for (const int16_t v : e.rot) w.i16(v);
-                for (const int16_t v : e.velocity) w.i16(v);
+            if (has & kFxSubtype) w.u8(e.subtype);
+            if (has & kFxVariant) w.u8(e.variant);
+            if (has & kFxSpawnByte) w.u8(e.spawnByte);
+            if (has & kFxParent) w.u8(e.parent);
+            if (has & kFxSecond) w.u8(e.second);
+            if (has & kFxSteps) {
+                w.u8(e.subState);
+                w.u8(e.step);
+                w.u8(e.stepCounter);
             }
+            if (has & kFxTrail) {
+                w.u8(lanes);
+                for (size_t l = 0; l < e.trail.size(); ++l)
+                    if (lanes >> l & 1) w.i16(e.trail[l]);
+            }
+            if (has & kFxBone) w.u8(e.bone);
+            if (has & kFxOwner) w.u8(e.owner);
+            if (has & kFxParams)
+                for (const uint8_t p : e.params) w.u8(p);
+            if (has & kFxSpare) w.i16(e.spare);
+            if (has & kFxRot)
+                for (const int16_t v : e.rot) w.i16(v);
+            if (has & kFxVelocity)
+                for (const int16_t v : e.velocity) w.i16(v);
             events_.effect += uint32_t(w.bytes.size() - effectFrom);
             ++events_.effects;
             ++eventsSent_;
@@ -914,6 +949,7 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
         events_.appear += uint32_t(w.bytes.size() - appearFrom);
         ++events_.appears;
         ++eventsSent_;
+        ++structureSent_;
         k.told = true;
         k.generation = a.generation;
         k.flashTold = a.flashTick;
@@ -934,8 +970,8 @@ std::vector<uint8_t> NetStateSender::update(const NetWorldTable& table) {
     Writer w;
     const uint16_t sequence = nextSequence_++;
     w.u16(sequence);
-    w.u32(table.tick);
-    w.u32(eventsSent_);
+    w.u16(uint16_t(table.tick));
+    w.u16(uint16_t(structureSent_));
     Sent sent;
     sent.sequence = sequence;
     bool cut = false;
@@ -1118,9 +1154,8 @@ std::vector<uint8_t> NetStateSender::update(const NetWorldTable& table) {
             if (steps & 0x40) e.i16(a.state.fallStep);
         }
         count(&UpdateBytes::path);
-        // past the budget the rest waits for the next update (a burst spreads over a few), one actor at least goes
-        const size_t after = w.bytes.size() + e.bytes.size();
-        if (after > kNetMaxPayload || (after > kNetUpdateBudget && !sent.entries.empty())) {
+        // what one datagram does not hold waits for the next update
+        if (w.bytes.size() + e.bytes.size() > kNetMaxPayload) {
             cursor_ = i; // the next update starts with what did not fit
             cut = true;
             break;
@@ -1202,36 +1237,55 @@ void NetStateClient::noteStart(Occupant& o, const NetActorState& s) {
 
 bool NetStateClient::applyEvents(std::span<const uint8_t> bytes) {
     Reader r{bytes};
-    const uint32_t tick = r.u32();
-    const uint32_t first = r.u32();
-    if (!r.ok || first != eventsArrived_) return false;
+    const uint16_t tickLow = r.u16();
+    const uint16_t first = r.u16();
+    if (!r.ok || first != uint16_t(eventsArrived_)) return false;
+    uint32_t tick = tickKnown_ ? tickOf(tickLow) : 0;
     while (r.ok && r.at < bytes.size()) {
         const uint8_t kind = r.u8();
+        if (kind == kEventFirst) {
+            tick = r.u32();
+            if (!r.ok || uint16_t(tick) != tickLow) return false;
+            tickKnown_ = true;
+            tickHeard_ = tick;
+            ++eventsArrived_;
+            ++structureArrived_;
+            continue;
+        }
+        if (!tickKnown_) return false; // (a sender's first event tells the tick)
         if (kind == kEventEffect) {
             NetEffect e;
             e.slot = r.u8();
             e.pool = r.u8();
             e.type = r.u8();
-            e.subtype = r.u8();
-            e.variant = r.u8();
-            e.spawnByte = r.u8();
             e.loopFlags = r.u8();
             e.flags = r.u8();
-            e.parent = r.u8();
-            e.second = r.u8();
-            e.subState = r.u8();
-            e.step = r.u8();
-            e.stepCounter = r.u8();
-            for (int16_t& v : e.trail) v = r.i16();
-            e.bone = r.u8();
-            e.owner = r.u8();
-            for (uint8_t& p : e.params) p = r.u8();
+            const uint16_t has = r.u16();
             for (int16_t& v : e.pos) v = r.i16();
-            e.spare = r.i16();
-            if (e.pool == kStaticClass || e.pool == kProjectileClass) {
-                for (int16_t& v : e.rot) v = r.i16();
-                for (int16_t& v : e.velocity) v = r.i16();
+            if (has & kFxSubtype) e.subtype = r.u8();
+            if (has & kFxVariant) e.variant = r.u8();
+            if (has & kFxSpawnByte) e.spawnByte = r.u8();
+            if (has & kFxParent) e.parent = r.u8();
+            if (has & kFxSecond) e.second = r.u8();
+            if (has & kFxSteps) {
+                e.subState = r.u8();
+                e.step = r.u8();
+                e.stepCounter = r.u8();
             }
+            if (has & kFxTrail) {
+                const uint8_t lanes = r.u8();
+                for (size_t l = 0; l < e.trail.size(); ++l)
+                    if (lanes >> l & 1) e.trail[l] = r.i16();
+            }
+            if (has & kFxBone) e.bone = r.u8();
+            if (has & kFxOwner) e.owner = r.u8();
+            if (has & kFxParams)
+                for (uint8_t& p : e.params) p = r.u8();
+            if (has & kFxSpare) e.spare = r.i16();
+            if (has & kFxRot)
+                for (int16_t& v : e.rot) v = r.i16();
+            if (has & kFxVelocity)
+                for (int16_t& v : e.velocity) v = r.i16();
             due_.push_back({tick, false, nullptr, e, std::nullopt, std::nullopt});
             ++eventsArrived_;
             continue;
@@ -1239,6 +1293,7 @@ bool NetStateClient::applyEvents(std::span<const uint8_t> bytes) {
         if (kind == kEventShift) {
             due_.push_back({tick, false, nullptr, std::nullopt, r.u8(), std::nullopt});
             ++eventsArrived_;
+            ++structureArrived_;
             continue;
         }
         if (kind == kEventRoomPatch) {
@@ -1257,7 +1312,10 @@ bool NetStateClient::applyEvents(std::span<const uint8_t> bytes) {
                 d.flash = true;
                 due_.push_back(std::move(d));
             }
-        } else if (kind == kEventGo) {
+            ++eventsArrived_;
+            continue;
+        }
+        if (kind == kEventGo) {
             if (std::shared_ptr<Occupant>& o = heardOf_[slot]) {
                 due_.push_back({tick, false, o, std::nullopt, std::nullopt, std::nullopt});
                 o = nullptr;
@@ -1288,7 +1346,7 @@ bool NetStateClient::applyEvents(std::span<const uint8_t> bytes) {
                 o->last.animKeyed = (bits & 1) != 0;
                 o->last.held = (bits & 2) != 0;
             }
-            o->appearedAtEvent = eventsArrived_ + 1;
+            o->appearedAtEvent = structureArrived_ + 1;
             o->last.pathTick = tick;
             o->samples.push_back({tick, o->last});
             noteStart(*o, o->last);
@@ -1298,16 +1356,32 @@ bool NetStateClient::applyEvents(std::span<const uint8_t> bytes) {
             return false;
         }
         ++eventsArrived_;
+        ++structureArrived_;
     }
+    if (r.done()) tickTold(tick);
     return r.done();
 }
 
-std::optional<uint16_t> NetStateClient::applyParsed(std::span<const uint8_t> bytes, uint32_t eventsThrough) {
+std::optional<NetStateClient::UpdateHead> NetStateClient::updateHead(std::span<const uint8_t> bytes) const {
+    Reader r{bytes};
+    UpdateHead head;
+    head.sequence = r.u16();
+    r.u16();
+    const uint16_t counted = r.u16();
+    if (!r.ok) return std::nullopt;
+    // what it counts on has arrived: the first tick, and every event of its count (a count behind this game's is of an
+    // update built before the newest of them: as ready)
+    head.ready = tickKnown_ && int16_t(uint16_t(counted - uint16_t(structureArrived_))) <= 0;
+    return head;
+}
+
+std::optional<uint16_t> NetStateClient::applyParsed(std::span<const uint8_t> bytes) {
     Reader r{bytes};
     const uint16_t sequence = r.u16();
-    const uint32_t tick = r.u32();
-    r.u32();
+    const uint32_t tick = tickOf(r.u16());
+    const uint16_t counted = r.u16();
     if (!r.ok) return std::nullopt;
+    const uint32_t eventsThrough = structureArrived_ + uint32_t(int32_t(int16_t(uint16_t(counted - uint16_t(structureArrived_)))));
     // every actor holds its last state at this tick unless the update says otherwise
     std::array<std::optional<NetActorState>, kNetSlots> changed{};
     while (r.ok && r.at < bytes.size()) {
@@ -1425,6 +1499,7 @@ std::optional<uint16_t> NetStateClient::applyParsed(std::span<const uint8_t> byt
     anySequence_ = true;
     heard_ = true;
     newestTick_ = tick;
+    tickTold(tick);
     for (size_t i = 0; i < kNetSlots; ++i) {
         Occupant* o = heardOf_[i].get();
         if (!o) continue;
@@ -1448,32 +1523,24 @@ std::optional<uint16_t> NetStateClient::applyParsed(std::span<const uint8_t> byt
 }
 
 std::optional<uint16_t> NetStateClient::applyUpdate(std::span<const uint8_t> bytes) {
-    Reader r{bytes};
-    const uint16_t sequence = r.u16();
-    r.u32();
-    const uint32_t eventsThrough = r.u32();
-    if (!r.ok) return std::nullopt;
-    if (anySequence_ && !seqNewer(sequence, lastSequence_)) return std::nullopt; // an older one replaced by a newer
-    if (eventsThrough > eventsArrived_) { // its actors are on their way: the newest of these waits for them
-        Reader held{held_};
-        const uint16_t heldSequence = held.u16();
-        if (held_.empty() || seqNewer(sequence, heldSequence)) held_.assign(bytes.begin(), bytes.end());
+    const std::optional<UpdateHead> head = updateHead(bytes);
+    if (!head) return std::nullopt;
+    if (anySequence_ && !seqNewer(head->sequence, lastSequence_)) return std::nullopt; // an older one replaced by a newer
+    if (!head->ready) { // its actors are on their way: the newest of these waits for them
+        const std::optional<UpdateHead> held = updateHead(held_);
+        if (!held || seqNewer(head->sequence, held->sequence)) held_.assign(bytes.begin(), bytes.end());
         return std::nullopt;
     }
-    return applyParsed(bytes, eventsThrough);
+    return applyParsed(bytes);
 }
 
 std::optional<uint16_t> NetStateClient::applyHeld() {
-    if (held_.empty()) return std::nullopt;
-    Reader r{held_};
-    const uint16_t sequence = r.u16();
-    r.u32();
-    const uint32_t eventsThrough = r.u32();
-    if (eventsThrough > eventsArrived_) return std::nullopt;
+    const std::optional<UpdateHead> head = updateHead(held_);
+    if (!head || !head->ready) return std::nullopt;
     const std::vector<uint8_t> bytes = std::move(held_);
     held_.clear();
-    if (anySequence_ && !seqNewer(sequence, lastSequence_)) return std::nullopt;
-    return applyParsed(bytes, eventsThrough);
+    if (anySequence_ && !seqNewer(head->sequence, lastSequence_)) return std::nullopt;
+    return applyParsed(bytes);
 }
 
 namespace {

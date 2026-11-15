@@ -12,18 +12,22 @@
 //   new animation that started `steps` ticks ago. PoolNetActors is that on the game's pools: it binds the model from the
 //   client's own files and runs animSetPose / animStepPose; no class update runs.
 //
-// Update payload (little-endian): u16 sequence, u32 tick, u32 events sent so far, then per actor: u8 slot, u8 mask,
+// Update payload (little-endian): u16 sequence, u16 the tick's low half, u16 the low half of the count of events sent so
+//   far that an update counts on (an actor appears or goes, the shift, the first tick), then per actor: u8 slot, u8 mask,
 //   the fields of the mask's bits: i16 x, i16 y, i16 z, i16 yaw, i16 rotation x + i16 rotation z, u8 animation; with the
 //   mask's top bit a second mask: u8 the animation's age, u16 key + u8 ticks left, i16 scale x, y, z, u16 tint, u24 hidden
 //   parts, u8 count + the aim offsets (u8 entry | lanes << 5, i16 per lane), u8 the path's age + its steps (i16 x, y, z in
 //   1/16 unit a tick, i16 rotation x, y, z a tick).
-// Event batch: u32 tick, u32 index of the batch's first event, then per event: u8 kind, Appear: u8 slot, type, subtype,
-//   variant, the model bank's entry, shown; i16 x, y, z, rotation x, y, z; with an animation in play u8 animation, u16 its
-//   age, u16 key, u8 ticks left, u8 held. Go: u8 slot. What a class changes of the model (scale, tint, hidden parts, aim)
-//   goes in the updates, against what the model binds: a client's bind gives the same.
-//   Effect: u8 pool, type, subtype, variant, spawn byte, loop flags, flags, parent, 4 parameters; i16 x, y, z; statics: i16 rotation
-//   and velocity x, y, z; effects: i16 the short after the position. Flash: u8 slot (a hit's one-tick white flash, which
-//   an update every other tick would miss; the updates' tint leaves it out).
+// Event batch: u16 the tick's low half, u16 the low half of the index of the batch's first event, then per event: u8 kind.
+//   First (a sender's first event): u32 the tick, whole: every tick after it is told by its low half. Appear: u8 slot, type,
+//   subtype, variant, the model bank's entry, shown; i16 x, y, z, rotation x, y, z; with an animation in play u8 animation,
+//   u16 its age, u16 key, u8 ticks left, u8 held. Go: u8 slot. What a class changes of the model (scale, tint, hidden parts,
+//   aim) goes in the updates, against what the model binds: a client's bind gives the same.
+//   Effect: u8 slot, pool, type, loop flags, flags; u16 which of the rest are not their usual value and so follow; i16 x, y,
+//   z; then those: u8 subtype, variant, spawn byte, parent, second, the three steps, the trail (u8 which lanes, i16 each),
+//   bone, owner, 4 parameters, i16 the short after the position, i16 rotation x, y, z, i16 velocity x, y, z.
+//   Flash: u8 slot (a hit's one-tick white flash; the updates' tint leaves it out).
+// An update waits only for the events it counts on: an effect or a flash on its way holds no actor's update back.
 //
 // A shot or a projectile goes as a path: the client moves it by itself from a point and its steps, and the world sends a new
 // path only when the actor leaves the last one (a straight shot: once; a homing one or a falling one: as often as it turns).
@@ -51,7 +55,6 @@ namespace od::port {
 constexpr size_t kNetSlots = 256;                // a slot id is one byte: the pool's class + the index
 constexpr int kNetDefaultUpdateTicks = 1;        // an update every tick: what a client shows is one tick old, not several
 constexpr size_t kNetMaxPayload = 1160;          // a payload in net/udp_socket's 1200-byte datagram, with the link's framing
-constexpr size_t kNetUpdateBudget = 300;         // what an update carries before the rest waits for the next
 constexpr size_t kNetMaxEventBatch = 1100;       // an event batch, likewise
 constexpr double kNetMaxDelayTicks = 8.0;        // the farthest in the past a client shows the world, however late its updates
 constexpr uint8_t kNetNoModel = 0xff;            // an actor with no entry of the model bank
@@ -308,6 +311,8 @@ private:
     size_t patchesTold_ = 0;
     uint16_t nextSequence_ = 1;
     uint32_t eventsSent_ = 0;
+    uint32_t structureSent_ = 0; // ... those an update counts on
+    bool firstTold_ = false;     // the first tick was told whole
     size_t cursor_ = 0;
     uint64_t updatesCut_ = 0;
     UpdateBytes largest_, allUpdates_;
@@ -390,7 +395,7 @@ private:
     };
     struct Occupant {
         uint8_t slot = 0;
-        uint32_t appearedAtEvent = 0; // an update built before this event says nothing of this occupant
+        uint32_t appearedAtEvent = 0; // an update built before this event (of those it counts on) says nothing of this occupant
         NetActorIdentity identity;
         NetActorState last;           // the newest state heard
         std::deque<Sample> samples;
@@ -413,7 +418,13 @@ private:
         std::optional<uint8_t> goShot; // what runs from its event ends with the world's (its slot: no occupant was shown for it)
     };
     void noteStart(Occupant& o, const NetActorState& s);
-    std::optional<uint16_t> applyParsed(std::span<const uint8_t> bytes, uint32_t eventsThrough);
+    std::optional<uint16_t> applyParsed(std::span<const uint8_t> bytes);
+    // an update's head: its sequence; whether what it counts on has arrived
+    struct UpdateHead {
+        uint16_t sequence = 0;
+        bool ready = false;
+    };
+    std::optional<UpdateHead> updateHead(std::span<const uint8_t> bytes) const;
 
     NetClientActors& actors_;
     std::array<std::shared_ptr<Occupant>, kNetSlots> heardOf_{}; // the occupant of each slot, by what has arrived
@@ -421,6 +432,13 @@ private:
     std::deque<Due> due_;
     std::vector<uint8_t> held_;
     uint32_t eventsArrived_ = 0;
+    uint32_t structureArrived_ = 0; // ... those an update counts on
+    bool tickKnown_ = false;        // the sender's first tick came whole: a tick's low half tells it from here on
+    uint32_t tickHeard_ = 0;        // the newest tick an event batch or an update told
+    uint32_t tickOf(uint16_t low) const { return tickHeard_ + uint32_t(int32_t(int16_t(uint16_t(low - uint16_t(tickHeard_))))); }
+    void tickTold(uint32_t tick) {
+        if (int32_t(tick - tickHeard_) > 0) tickHeard_ = tick;
+    }
     uint16_t lastSequence_ = 0;
     bool anySequence_ = false;
     bool heard_ = false;

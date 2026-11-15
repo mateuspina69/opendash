@@ -72,7 +72,7 @@ struct Recorded : NetClientActors {
     void flash(uint8_t slot) override { flashes.push_back(slot); }
 };
 
-constexpr size_t kHeader = 10;
+constexpr size_t kHeader = 6;
 
 void testChangesOnly() {
     NetWorldTable t;
@@ -189,7 +189,7 @@ void testEventsFirstAndReuse() {
     other.modelEntry = 4;
     t.seen(kSlotA, other);
     const auto batches = sender.events(t);
-    CHECK(batches.size() == 1 && batches[0].size() == 8 + 2 + 27);
+    CHECK(batches.size() == 1 && batches[0].size() == 4 + 2 + 27);
     for (const auto& batch : batches) CHECK(client.applyEvents(batch));
     CHECK(client.applyUpdate(before).has_value());
     client.advance(5);
@@ -229,9 +229,9 @@ void testFitsOneDatagram() {
     t.tick = 2;
     fill(1);
     std::map<uint8_t, int> told;
-    for (int round = 0; round < 6; ++round) { // a burst spreads over updates of the budget
+    for (int round = 0; round < 6; ++round) { // what one datagram does not hold goes in the next update
         const auto u = sender.update(t);
-        CHECK(u.size() <= kNetUpdateBudget);
+        CHECK(u.size() <= kNetMaxPayload);
         // walks past what the last one held: every actor is in some update (the mask of a whole entry: 14 bytes)
         for (size_t at = kHeader; at + 14 <= u.size(); at += 14) ++told[u[at]];
     }
@@ -319,7 +319,7 @@ void testHitFlash() {
     s.visual.tint = kTintFlash;
     t.seen(kSlotA, s);
     const auto batches = sender.events(t);
-    CHECK(batches.size() == 1 && batches[0].size() == 8 + 2);
+    CHECK(batches.size() == 1 && batches[0].size() == 4 + 2);
     for (const auto& batch : batches) CHECK(client.applyEvents(batch));
     t.tick = 4;
     s.visual.tint = kTintNeutral;
@@ -396,7 +396,8 @@ void testEffects() {
     s.pos = {1, 2, 3};
     t.seen(0x61, s);
     auto batches = sender.events(t);
-    CHECK(batches.size() == 1 && batches[0].size() == 8 + 56);
+    // the batch's head, the sender's first tick, the effect: what every one holds and its parameters, nothing else
+    CHECK(batches.size() == 1 && batches[0].size() == 4 + 5 + 14 + 4);
     for (const auto& batch : batches) CHECK(client.applyEvents(batch));
     CHECK(sender.update(t).size() == kHeader); // no state for it
     client.advance(0);
@@ -416,7 +417,67 @@ void testEffects() {
     s.effectGoes = false;
     NetWorldTable t2;
     t2.seen(0x62, s);
-    CHECK(second.events(t2).empty());
+    const auto none = second.events(t2); // (a sender's first batch: its first tick, alone)
+    CHECK(none.size() == 1 && none[0].size() == 4 + 5);
+    // every field an effect may hold comes back as it was
+    NetStateSender third;
+    Recorded rec3;
+    NetStateClient client3(rec3);
+    NetWorldTable t3;
+    t3.tick = 70000; // (past a tick's low half)
+    NetWorldTable::Seen f;
+    f.type = 9;
+    f.effect = true;
+    f.effectGoes = true;
+    f.owner = 5;
+    f.effectStart = NetEffect{0x60, 9, 2, 3, 4, 5, 6, 0x21, 7, 0, 0, 0x22, 8, 9, 10, {1, 0, -3, 0, 0, 6, 0, -8}, {4, 5, 6, 7}, {-1, 2, -3}, {11, 12, 13}, {-14, 15, 16}, -17};
+    f.pos = {-1, 2, -3};
+    t3.seen(0x63, f);
+    for (const auto& batch : third.events(t3)) CHECK(client3.applyEvents(batch));
+    client3.advance(70000);
+    NetEffect whole = f.effectStart;
+    whole.slot = 0x63;
+    whole.owner = 5;
+    CHECK(rec3.effects.size() == 1 && rec3.effects[0] == whole);
+}
+
+// An update waits for the actors it speaks of, not for an effect or a flash on its way
+void testUpdateWaitsOnlyForActors() {
+    NetWorldTable t;
+    NetStateSender sender;
+    Recorded rec;
+    NetStateClient client(rec);
+    t.tick = 100000;
+    t.seen(kSlotA, seenAt(100));
+    for (const auto& batch : sender.events(t)) CHECK(client.applyEvents(batch));
+    sender.acknowledge(*client.applyUpdate(sender.update(t)));
+    // an effect starts and the actor moves: the effect's event is lost on its way, the update still counts
+    t.tick = 100001;
+    NetWorldTable::Seen fx;
+    fx.type = 7;
+    fx.effect = true;
+    fx.effectGoes = true;
+    fx.effectStart.pool = 0x60;
+    fx.effectStart.type = 7;
+    t.seen(0x61, fx);
+    t.seen(kSlotA, seenAt(140));
+    const auto late = sender.events(t);
+    CHECK(late.size() == 1);
+    CHECK(client.applyUpdate(sender.update(t)).has_value());
+    client.advance(100001);
+    CHECK(rec.last[kSlotA].pos[0] == 140 && rec.effects.empty());
+    // ... and a new actor's update waits for its appearance
+    t.tick = 100002;
+    t.seen(kStatic, seenAt(500));
+    const auto appears = sender.events(t);
+    const auto u = sender.update(t);
+    CHECK(!client.applyUpdate(u).has_value());
+    for (const auto& batch : late) CHECK(client.applyEvents(batch));
+    CHECK(!client.applyHeld().has_value());
+    for (const auto& batch : appears) CHECK(client.applyEvents(batch));
+    CHECK(client.applyHeld().has_value());
+    client.advance(100002);
+    CHECK(rec.effects.size() == 1 && rec.live.count(kStatic) == 1);
 }
 
 // a lock-on point: told when it moves past the tolerance, then its position alone
@@ -461,8 +522,9 @@ void testOwnShotsWithheld() {
     s.owner = 3;
     s.onPath = true;
     t.seen(kShot, s);
-    CHECK(mine.events(t).empty());
-    CHECK(other.events(t).size() == 1);
+    const auto withheld = mine.events(t), told = other.events(t);
+    CHECK(withheld.size() == 1 && withheld[0].size() == 4 + 5); // (its first tick, alone)
+    CHECK(told.size() == 1 && told[0].size() > 4 + 5);
 }
 
 void testFightMessages() {
@@ -844,6 +906,7 @@ int main(int argc, char** argv) {
     testHitFlash();
     testPaths();
     testEffects();
+    testUpdateWaitsOnlyForActors();
     testLockPoints();
     testRoomPatches();
     testPlayerState();
