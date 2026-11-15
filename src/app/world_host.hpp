@@ -94,6 +94,12 @@ public:
     // the turn between frames: the links, the worlds' reports, the keep-alives; a world that ended on its own is forgotten
     void poll(uint64_t nowNs);
 
+    // the sockets of every world's link, for one who waits for what the worlds send (UdpSocket::waitAnyReadable)
+    std::vector<uintptr_t> socketHandles() const;
+
+    // a world's tick is still arriving (WorldLink::midBurst): what it says to its players is not whole yet
+    bool midBurst() const;
+
     size_t worldCount() const { return worlds_.size(); }
     std::optional<WorldRoom> roomOf(uint8_t playerId) const { return playerRoom_.at(playerId); }
     // the room's world's last report (none before its first, or with no world)

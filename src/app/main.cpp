@@ -287,6 +287,7 @@ void App::handleEvents() {
 }
 
 void App::shutdown() {
+    if (playerView.ownWorld) playerView.ownWorld->sessionEnds();
     netplay.stop(); // Bye to the other players
     // the mixer's SDL audio stream (and its callback thread) must go before SDL_Quit: SDL_Quit frees the audio
     // streams, and ~Mixer destroying its stream afterwards (at the end of main) crashed the exit (0xC0000005)

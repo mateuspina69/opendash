@@ -137,6 +137,8 @@ public:
     explicit WorldLink(uint16_t to); // the world's side
 
     uint16_t port() const { return socket_.port(); }
+    // the socket's handle, for one who waits on several links (UdpSocket::waitAnyReadable)
+    uintptr_t socketHandle() const { return socket_.handle(); }
     bool hasPeer() const { return peer_.has_value(); }
     // what must arrive: sent now, each resent kResendNs after its last sending until acknowledged, delivered in order (of
     // any length a message has)
@@ -157,6 +159,9 @@ public:
     // side reads in one turn (and passes on as one datagram a player)
     void defer() { deferred_ = true; }
     void flush();
+    // the peer's burst (what one flush of its sent) is still arriving: its last datagram has not come (nor has a turn
+    // gone by with nothing from it). One who passes the burst on waits for the rest
+    bool midBurst() const { return midBurst_; }
 
 private:
     void sendRaw(std::span<const uint8_t> bytes);
@@ -173,6 +178,7 @@ private:
     static constexpr size_t kMaxEarly = 256;
     WorldParts parts_;
     bool deferred_ = false;
+    bool midBurst_ = false;
     std::vector<std::vector<uint8_t>> outbox_; // deferred: the datagrams waiting for the flush
     uint32_t nextSend_ = 1, nextReceive_ = 1;
     uint64_t lastHeardNs_ = 0;

@@ -174,7 +174,8 @@ void Netplay::step(uint64_t nowNs, GhostView& ghosts) {
     if (session_) {
         if (latest_ && !worldMode_) session_->sendPlayerState(nowNs, localTick_, od::port::encodePlayerState(*latest_));
         latest_.reset();
-        session_->poll(nowNs);
+        // (a co-op session's is read by the way to its worlds: app/own_world's pump, the host's coordinator)
+        if (!worldMode_) session_->poll(nowNs);
         for (const od::net::PeerEvent& e : session_->takePeerEvents()) {
             if (e.kind == od::net::PeerEvent::Kind::Joined) {
                 SDL_Log("netplay: %s (id %u) joined", e.peer.name.c_str(), unsigned(e.peer.playerId));

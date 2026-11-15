@@ -1116,6 +1116,7 @@ std::string App::sessionStart(const NetSettings& net) {
 }
 
 void App::sessionStop() {
+    if (playerView.ownWorld) playerView.ownWorld->sessionEnds();
     netplay.stop();
     playerView.ownWorld.reset();
     netplay.setWorldMode(false);

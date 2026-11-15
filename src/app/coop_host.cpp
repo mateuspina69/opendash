@@ -87,9 +87,37 @@ std::vector<uint8_t> readSave(const std::filesystem::path& storySave) {
 } // namespace
 
 CoopHost::CoopHost(std::filesystem::path exe, std::filesystem::path storySave)
-    : worlds_(exe, storySave, od::port::saveZenny(readSave(storySave))), save_(readSave(storySave)), written_(save_) {}
+    : worlds_(exe, storySave, od::port::saveZenny(readSave(storySave))), save_(readSave(storySave)), written_(save_) {
+    relay_ = std::thread([this] { relayLoop(); });
+}
 
-void CoopHost::hostSaved(std::span<const uint8_t> save) { written_.assign(save.begin(), save.end()); }
+CoopHost::~CoopHost() {
+    stop_ = true;
+    relay_.join();
+}
+
+void CoopHost::relayLoop() {
+    // a datagram wakes it at once; with none it still turns this often, for what goes by time (the resends, the
+    // keep-alives, a gate's countdown, a simulated link's delays)
+    constexpr uint64_t kWaitNs = 4'000'000;
+    std::vector<uintptr_t> handles;
+    while (!stop_) {
+        {
+            const std::lock_guard lock(mutex_);
+            handles = worlds_.socketHandles();
+            if (session_) handles.push_back(session_->socketHandle());
+        }
+        od::net::UdpSocket::waitAnyReadable(handles, kWaitNs);
+        if (stop_) break;
+        const std::lock_guard lock(mutex_);
+        relayTurn(SDL_GetTicksNS());
+    }
+}
+
+void CoopHost::hostSaved(std::span<const uint8_t> save) {
+    const std::lock_guard lock(mutex_);
+    written_.assign(save.begin(), save.end());
+}
 
 const std::vector<uint8_t>& CoopHost::liveSave() {
     if (live_)
@@ -98,6 +126,7 @@ const std::vector<uint8_t>& CoopHost::liveSave() {
 }
 
 void CoopHost::hostBound(WorldRoom room) {
+    const std::lock_guard lock(mutex_);
     const std::vector<uint8_t>& save = liveSave();
     if (save.empty()) bound_.reset();
     else bound_ = Bound{room, save};
@@ -110,6 +139,8 @@ void CoopHost::liveSaveForWorlds(WorldRoom room) {
 }
 
 void CoopHost::hostLoaded(std::span<const uint8_t> save, uint64_t nowNs) {
+    const std::lock_guard lock(mutex_);
+    nowNs = std::max(nowNs, lastRelayNs_);
     save_.assign(save.begin(), save.end());
     written_ = save_;
     hostPlaying_ = true;
@@ -125,16 +156,22 @@ void CoopHost::hostLoaded(std::span<const uint8_t> save, uint64_t nowNs) {
         sendSave(id, nowNs);
         placeNext_.insert(id);
     }
+    session_->flush(nowNs);
 }
 
-std::optional<std::vector<uint8_t>> CoopHost::takeReload() { return std::exchange(reload_, std::nullopt); }
+std::optional<std::vector<uint8_t>> CoopHost::takeReload() {
+    const std::lock_guard lock(mutex_);
+    return std::exchange(reload_, std::nullopt);
+}
 
 void CoopHost::enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& state, const std::vector<uint8_t>& banks) {
+    const std::lock_guard lock(mutex_);
     liveSaveForWorlds(room); // a world started now starts from the host's state as it is
     worlds_.enter(playerId, room, state, banks, nextEntry(playerId));
 }
 
 void CoopHost::sendReliable(uint8_t playerId, WorldMessageType type, std::vector<uint8_t> bytes) {
+    const std::lock_guard lock(mutex_);
     if (type == WorldMessageType::NetJoin) worlds_.netJoin(playerId);
     else if (type == WorldMessageType::GlobalChange) worlds_.globalFromPlayer(playerId, bytes);
     else if (type == WorldMessageType::NetRespawnAsk) worlds_.respawnAsk(playerId);
@@ -146,11 +183,13 @@ void CoopHost::sendReliable(uint8_t playerId, WorldMessageType type, std::vector
 }
 
 void CoopHost::sendLatest(uint8_t playerId, WorldMessageType type, std::vector<uint8_t> bytes) {
+    const std::lock_guard lock(mutex_);
     if (type == WorldMessageType::NetAck && bytes.size() == 2) worlds_.netAck(playerId, uint16_t(bytes[0] | bytes[1] << 8));
     else worlds_.netSendLatest(playerId, type, std::move(bytes));
 }
 
 std::vector<WorldMessage> CoopHost::take(uint8_t playerId) {
+    const std::lock_guard lock(mutex_);
     std::vector<WorldMessage> in = worlds_.takeNet(playerId);
     dropStale(in);
     return in;
@@ -164,6 +203,17 @@ void CoopHost::sendSave(uint8_t id, uint64_t nowNs) {
     m.playerId = id;
     m.netState = save;
     sendWorld(*session_, nowNs, id, m, true);
+}
+
+void CoopHost::fromClientOrHold(uint8_t id, WorldMessage m, uint64_t nowNs) {
+    std::vector<WorldMessage>& held = held_[id];
+    if (held.empty() && m.type != WorldMessageType::NetEnter) {
+        fromClient(id, m, nowNs);
+        return;
+    }
+    // (of what the next one replaces, the newest is enough: the game's thread may be long in coming)
+    if (!isReliable(m.type) && !held.empty() && held.back().type == m.type) held.back() = std::move(m);
+    else held.push_back(std::move(m));
 }
 
 void CoopHost::fromClient(uint8_t id, const WorldMessage& m, uint64_t nowNs) {
@@ -220,8 +270,14 @@ void CoopHost::fromClient(uint8_t id, const WorldMessage& m, uint64_t nowNs) {
 }
 
 void CoopHost::poll(uint64_t nowNs) {
-    if (session_) session_->poll(nowNs, false); // what the clients sent, read now (what goes to them leaves below, at once)
-    worlds_.poll(nowNs);
+    const std::lock_guard lock(mutex_);
+    // (the caller read its clock before it had the lock: the relay may have turned since, and time does not go back)
+    nowNs = std::max(nowNs, lastRelayNs_);
+    relayTurn(nowNs);
+    gameTurn(nowNs);
+}
+
+void CoopHost::gameTurn(uint64_t nowNs) {
     if (worlds_.takeEveryoneDown()) {
         // the worlds start from the host's last save (a game over's way back)
         worlds_.reloadFrom(written_);
@@ -237,19 +293,6 @@ void CoopHost::poll(uint64_t nowNs) {
             }
     }
     if (!session_) return;
-    for (const od::net::ReceivedWorld& d : session_->takeWorld()) {
-        if (d.fromId >= parts_.size()) continue;
-        if (auto m = decodeWorldMessage(d.payload))
-            if (const auto whole = parts_[d.fromId].take(std::move(*m))) fromClient(d.fromId, *whole, nowNs);
-    }
-    // who is in the session: asked again only when someone joined or left
-    if (!peersKnown_ || peersAt_ != session_->membership()) {
-        peersAt_ = session_->membership();
-        peersKnown_ = true;
-        peers_ = session_->peers();
-        for (const od::net::PeerInfo& p : peers_)
-            if (p.playerId < WorldHost::kPlayers) worlds_.setPlayerName(p.playerId, p.name);
-    }
     for (const od::net::PeerInfo& p : peers_) {
         // a game that connects is told the session's save once the host's game is on: at its title it starts from it
         // (the host back at its title or lobby: no game to give; the one that connects waits in its lobby)
@@ -260,6 +303,31 @@ void CoopHost::poll(uint64_t nowNs) {
             sendSave(p.playerId, nowNs);
         }
     }
+    // what the clients sent that waited for this thread, each one's in its order
+    for (size_t id = 0; id < held_.size(); ++id)
+        for (const WorldMessage& m : std::exchange(held_[id], {})) fromClient(uint8_t(id), m, nowNs);
+    session_->flush(nowNs);
+}
+
+void CoopHost::relayTurn(uint64_t nowNs) {
+    if (lastRelayNs_ != 0 && nowNs > lastRelayNs_) relayGapMaxNs_ = std::max(relayGapMaxNs_, nowNs - lastRelayNs_);
+    lastRelayNs_ = nowNs;
+    if (session_) session_->poll(nowNs, false); // what the clients sent, read now (what goes to them leaves below, at once)
+    worlds_.poll(nowNs);
+    if (!session_) return;
+    for (od::net::ReceivedWorld& d : session_->takeWorld()) {
+        if (d.fromId >= parts_.size()) continue;
+        if (auto m = decodeWorldMessage(d.payload))
+            if (auto whole = parts_[d.fromId].take(std::move(*m))) fromClientOrHold(d.fromId, std::move(*whole), nowNs);
+    }
+    // who is in the session: asked again only when someone joined or left
+    if (!peersKnown_ || peersAt_ != session_->membership()) {
+        peersAt_ = session_->membership();
+        peersKnown_ = true;
+        peers_ = session_->peers();
+        for (const od::net::PeerInfo& p : peers_)
+            if (p.playerId < WorldHost::kPlayers) worlds_.setPlayerName(p.playerId, p.name);
+    }
     // a client that has gone is out of its world
     const auto gone = [&](uint8_t id) {
         return std::none_of(peers_.begin(), peers_.end(), [&](const od::net::PeerInfo& p) { return p.playerId == id; });
@@ -267,7 +335,10 @@ void CoopHost::poll(uint64_t nowNs) {
     std::erase_if(told_, gone);
     std::erase_if(stale_, gone);
     for (size_t id = 0; id < parts_.size(); ++id)
-        if (gone(uint8_t(id))) parts_[id] = {}; // (a message it left half sent is not the start of its next one's)
+        if (gone(uint8_t(id))) {
+            parts_[id] = {}; // (a message it left half sent is not the start of its next one's)
+            held_[id].clear();
+        }
     for (auto it = clients_.begin(); it != clients_.end();) {
         if (!gone(*it)) {
             ++it;
@@ -278,7 +349,9 @@ void CoopHost::poll(uint64_t nowNs) {
     }
     for (const uint8_t id : clients_)
         for (WorldMessage& m : worlds_.takeNet(id)) sendWorld(*session_, nowNs, id, m, isReliable(m.type));
-    session_->flush(nowNs); // what the worlds sent their players leaves now, a datagram a player
+    // what the worlds sent their players leaves now, a datagram a player -- once a world's tick has come whole (its
+    // datagrams arrive one after the other, and each wakes the relay)
+    if (!worlds_.midBurst()) session_->flush(nowNs);
 }
 
 void WorldPipe::dropStale(std::vector<WorldMessage>& in) {

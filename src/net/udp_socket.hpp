@@ -63,6 +63,11 @@ public:
     std::vector<Datagram> receive();
     // waits until a datagram is there to receive, at most timeoutNs; false: none came
     bool waitReadable(uint64_t timeoutNs);
+    // the system's handle of this socket (waitAnyReadable)
+    uintptr_t handle() const { return socket_; }
+    // waits until one of the sockets of these handles has a datagram to receive, at most timeoutNs (a handle whose
+    // socket was closed meanwhile ends the wait); false: none came
+    static bool waitAnyReadable(std::span<const uintptr_t> handles, uint64_t timeoutNs);
 
 private:
     uintptr_t socket_; // the Winsock SOCKET or the file descriptor

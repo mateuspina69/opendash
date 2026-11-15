@@ -19,7 +19,10 @@
 #include <unistd.h>
 #endif
 
+#include <algorithm>
+#include <chrono>
 #include <stdexcept>
+#include <thread>
 
 namespace od::net {
 
@@ -199,14 +202,29 @@ bool UdpSocket::sendTo(const Endpoint& to, std::span<const uint8_t> bytes) {
     return sent == int(bytes.size());
 }
 
-bool UdpSocket::waitReadable(uint64_t timeoutNs) {
+bool UdpSocket::waitReadable(uint64_t timeoutNs) { return waitAnyReadable(std::span<const uintptr_t>(&socket_, 1), timeoutNs); }
+
+bool UdpSocket::waitAnyReadable(std::span<const uintptr_t> handles, uint64_t timeoutNs) {
     fd_set readable;
     FD_ZERO(&readable);
-    FD_SET(SOCKET(socket_), &readable);
+    int highest = -1, count = 0;
+    for (const uintptr_t h : handles) {
+        if (count == FD_SETSIZE) break;
+#ifndef _WIN32
+        if (h >= uintptr_t(FD_SETSIZE)) continue; // (select's set does not hold it)
+#endif
+        FD_SET(SOCKET(h), &readable);
+        highest = std::max(highest, int(SOCKET(h)));
+        ++count;
+    }
+    if (count == 0) { // nothing to wait on: the time passes (select takes no empty set everywhere)
+        std::this_thread::sleep_for(std::chrono::nanoseconds(timeoutNs));
+        return false;
+    }
     timeval timeout{};
     timeout.tv_sec = long(timeoutNs / 1'000'000'000ull);
     timeout.tv_usec = long(timeoutNs % 1'000'000'000ull / 1000);
-    return ::select(int(SOCKET(socket_)) + 1, &readable, nullptr, nullptr, &timeout) > 0;
+    return ::select(highest + 1, &readable, nullptr, nullptr, &timeout) > 0;
 }
 
 std::vector<Datagram> UdpSocket::receive() {

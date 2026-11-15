@@ -49,6 +49,8 @@ public:
     std::optional<std::vector<uint8_t>> takeReload();
     // this game has written a save: on the host, it is what a game over goes back to
     void gameSaved(std::span<const uint8_t> image) { if (coordinator_) coordinator_->hostSaved(image); }
+    // the session is about to end: the coordinator lets go of it (its relay thread reads it no more)
+    void sessionEnds() { if (coordinator_) coordinator_->useSession(nullptr); }
     // on the host: this game's state as a save image, now (none: not played): what the session's state is
     // this game's stage banks (app/stage_banks, encoded) and the taking of a world's
     void setStageBanks(std::function<std::vector<uint8_t>()> held, std::function<void(std::span<const uint8_t>)> take) {

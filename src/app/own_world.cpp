@@ -500,10 +500,12 @@ void OwnWorldClient::netCheck(uint64_t nowNs) {
     const double seconds = checkedNs_ != 0 && nowNs > checkedNs_ ? double(nowNs - checkedNs_) * 1e-9 : 0.0;
     const auto rate = [&](uint64_t now, uint64_t before) { return seconds > 0.0 ? double(now - before) / seconds : 0.0; };
     SDL_Log("netcheck: to the world and back avg %.1f ms, max %.1f ms (%u player updates); the world shown %.1f ticks behind the newest heard, "
-            "its clock stood %u of %u turns; the session left unread %.1f ms at most; sent %.0f datagrams %.0f bytes a second, received %.0f "
-            "datagrams %.0f bytes a second",
+            "its clock stood %u of %u turns; the session left unread %.1f ms at most (this game's frames %.1f ms apart at most); sent %.0f "
+            "datagrams %.0f bytes a second, received %.0f datagrams %.0f bytes a second",
             double(roundTripSumNs_) / double(roundTrips_) * 1e-6, double(roundTripMaxNs_) * 1e-6, roundTrips_,
-            behindTicks_ ? double(behindSum_) / double(behindTicks_) : 0.0, stoodTicks_, behindTicks_, double(pumpGapMaxNs_) * 1e-6,
+            behindTicks_ ? double(behindSum_) / double(behindTicks_) : 0.0, stoodTicks_, behindTicks_,
+            double(coordinator_ ? coordinator_->takeRelayGapNs() : pumpGapMaxNs_) * 1e-6, // (a host's is read by its relay)
+            double(pumpGapMaxNs_) * 1e-6,
             rate(traffic.sentDatagrams, trafficAt_.sentDatagrams), rate(traffic.sentBytes, trafficAt_.sentBytes),
             rate(traffic.receivedDatagrams, trafficAt_.receivedDatagrams), rate(traffic.receivedBytes, trafficAt_.receivedBytes));
     trafficAt_ = traffic;

@@ -164,6 +164,11 @@ void Session::flushLink(uint64_t nowNs, Link& link) {
 }
 
 void Session::flush(uint64_t nowNs) {
+    const std::lock_guard lock(mutex_);
+    flushLinks(std::max(nowNs, lastNowNs_));
+}
+
+void Session::flushLinks(uint64_t nowNs) {
     if (config_.role == Role::Host) {
         for (auto& [e, c] : clients_) flushLink(nowNs, c.link);
     } else if (connection_ != Connection::Refused && started_) {
@@ -217,6 +222,9 @@ bool Session::acceptState(uint64_t nowNs, const PlayerState& s) {
 }
 
 void Session::poll(uint64_t nowNs, bool flushNow) {
+    const std::lock_guard lock(mutex_);
+    // (a caller's clock reading may be older than the last one's of another thread: the session's time does not go back)
+    nowNs = std::max(nowNs, lastNowNs_);
     lastNowNs_ = nowNs;
     if (config_.role == Role::Client && !started_) {
         started_ = true;
@@ -242,10 +250,12 @@ void Session::poll(uint64_t nowNs, bool flushNow) {
         if (nowNs - hostLink_.lastHeardNs >= kPeerTimeoutNs) clientLost(nowNs, "the host is silent");
         else serviceLink(nowNs, hostLink_);
     }
-    if (flushNow) flush(nowNs);
+    if (flushNow) flushLinks(nowNs);
 }
 
 void Session::sendPlayerState(uint64_t nowNs, uint32_t tick, std::span<const uint8_t> payload) {
+    const std::lock_guard lock(mutex_);
+    nowNs = std::max(nowNs, lastNowNs_);
     const PlayerState s{localId_, ++stateSequence_, tick, std::vector<uint8_t>(payload.begin(), payload.end())};
     if (config_.role == Role::Host) {
         const std::vector<uint8_t> bytes = encode(s);
@@ -256,10 +266,14 @@ void Session::sendPlayerState(uint64_t nowNs, uint32_t tick, std::span<const uin
     }
 }
 
-std::vector<ReceivedState> Session::takePlayerStates() { return std::exchange(states_, {}); }
+std::vector<ReceivedState> Session::takePlayerStates() {
+    const std::lock_guard lock(mutex_);
+    return std::exchange(states_, {});
+}
 
 void Session::sendWorld(uint8_t toId, bool reliable, std::span<const uint8_t> payload) {
     if (payload.size() > kMaxWorldBytes) return;
+    const std::lock_guard lock(mutex_);
     Link* link = nullptr;
     if (config_.role == Role::Host) {
         for (auto& [e, c] : clients_)
@@ -273,8 +287,14 @@ void Session::sendWorld(uint8_t toId, bool reliable, std::span<const uint8_t> pa
     else link->latest.push_back(std::move(bytes));
 }
 
-std::vector<ReceivedWorld> Session::takeWorld() { return std::exchange(world_, {}); }
-std::vector<PeerEvent> Session::takePeerEvents() { return std::exchange(events_, {}); }
+std::vector<ReceivedWorld> Session::takeWorld() {
+    const std::lock_guard lock(mutex_);
+    return std::exchange(world_, {});
+}
+std::vector<PeerEvent> Session::takePeerEvents() {
+    const std::lock_guard lock(mutex_);
+    return std::exchange(events_, {});
+}
 
 // ---- host ----------------------------------------------------------------------------------------------------------
 
@@ -516,6 +536,7 @@ void Session::clientDeliver(uint64_t nowNs, const Message& m) {
 // ---- status --------------------------------------------------------------------------------------------------------
 
 std::vector<PeerInfo> Session::peers() const {
+    const std::lock_guard lock(mutex_);
     std::vector<PeerInfo> out;
     if (config_.role == Role::Host) {
         for (const auto& [e, c] : clients_)
@@ -527,6 +548,8 @@ std::vector<PeerInfo> Session::peers() const {
 }
 
 SessionStatus Session::status(uint64_t nowNs) const {
+    const std::lock_guard lock(mutex_);
+    nowNs = std::max(nowNs, lastNowNs_);
     SessionStatus st;
     st.role = config_.role;
     st.port = socket_.port();

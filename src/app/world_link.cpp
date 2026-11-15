@@ -12,6 +12,8 @@ namespace od::app {
 namespace {
 // a datagram: its kind, then (Reliable) the sequence and the message, (Ack) the sequence, (Latest) the message
 enum class Kind : uint8_t { Reliable = 1, Ack = 2, Latest = 3 };
+// with a datagram's kind: the last one of a flush's burst
+constexpr uint8_t kBurstEnd = 0x80;
 } // namespace
 
 std::vector<uint8_t> encodeBrief(const WorldBrief& b) {
@@ -292,6 +294,7 @@ void WorldLink::sendRaw(std::span<const uint8_t> bytes) {
 }
 
 void WorldLink::flush() {
+    if (!outbox_.empty()) outbox_.back()[0] |= kBurstEnd;
     if (peer_)
         for (const std::vector<uint8_t>& bytes : outbox_) socket_.sendTo(*peer_, bytes);
     outbox_.clear();
@@ -329,12 +332,15 @@ std::vector<WorldMessage> WorldLink::poll(uint64_t nowNs) {
             if (auto whole = parts_.take(std::move(*m))) in.push_back(std::move(*whole));
         ++nextReceive_;
     };
+    bool heard = false;
     for (const od::net::Datagram& d : socket_.receive()) {
         if (!peer_) peer_ = d.from;
         if (d.from != *peer_ || d.bytes.empty()) continue;
         lastHeardNs_ = nowNs;
+        heard = true;
         od::net::ByteReader r(d.bytes);
-        const uint8_t kind = r.u8();
+        const uint8_t head = r.u8(), kind = head & uint8_t(~kBurstEnd);
+        midBurst_ = (head & kBurstEnd) == 0;
         if (kind == uint8_t(Kind::Ack)) {
             const uint32_t acked = r.u32();
             if (!r.done()) continue;
@@ -359,6 +365,7 @@ std::vector<WorldMessage> WorldLink::poll(uint64_t nowNs) {
             if (auto m = decodeWorldMessage(std::span(d.bytes).subspan(1)); m && m->type != WorldMessageType::Part) in.push_back(std::move(*m));
         }
     }
+    if (!heard) midBurst_ = false; // (a burst's end that did not come: nothing waits for it longer than a turn)
     if (ackDue) { // one for all that came this turn
         od::net::ByteWriter ack;
         ack.u8(uint8_t(Kind::Ack));

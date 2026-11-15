@@ -597,6 +597,20 @@ void WorldHost::poll(uint64_t nowNs) {
     });
 }
 
+std::vector<uintptr_t> WorldHost::socketHandles() const {
+    std::vector<uintptr_t> out;
+    for (const auto& [room, world] : worlds_) out.push_back(world->link.socketHandle());
+    if (standby_) out.push_back(standby_->link.socketHandle());
+    for (const std::unique_ptr<World>& world : stopping_) out.push_back(world->link.socketHandle());
+    return out;
+}
+
+bool WorldHost::midBurst() const {
+    for (const auto& [room, world] : worlds_)
+        if (world->link.midBurst()) return true;
+    return false;
+}
+
 void WorldHost::gameOverTurn() {
     bool anyone = false, allDown = true;
     for (uint8_t id = 0; id < kPlayers; ++id) {

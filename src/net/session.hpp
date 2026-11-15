@@ -3,15 +3,18 @@
 // 1..7), refuses a Hello whose protocol version, build id, game files or session key differ (naming what differs),
 // forwards every client's player state unchanged to the other clients and announces joins and leaves.
 //
-// No threads: poll(nowNs) is called from the main thread (every frame, and around a game tick); it reads the socket,
-// sends the resends and pings, updates the per-player stats, times out a silent peer and sends what was handed to
-// sendWorld since the last call: one datagram per peer for all of it (net/protocol Bundle), with the acknowledgement of
-// what that peer sent. The game's traffic travels as opaque payloads (the app encodes them).
+// No thread of its own: poll(nowNs) is called by whoever runs the session (a client's game every frame; a host's
+// coordinator from its relay thread); it reads the socket, sends the resends and pings, updates the per-player stats,
+// times out a silent peer and sends what was handed to sendWorld since the last call: one datagram per peer for all of
+// it (net/protocol Bundle), with the acknowledgement of what that peer sent. The game's traffic travels as opaque
+// payloads (the app encodes them). Every call is safe from any thread (one lock; the game's thread asks the status and
+// the joins while the coordinator's relays).
 #pragma once
 
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <span>
 #include <string>
@@ -113,17 +116,26 @@ public:
     SessionStatus status(uint64_t nowNs) const;
     // this game's player id once it is in the session (a host: at once)
     std::optional<uint8_t> localPlayer() const {
+        const std::lock_guard lock(mutex_);
         return config_.role == Role::Host || connection_ == Connection::Connected ? std::optional(localId_) : std::nullopt;
     }
     // counts the session's joins and leaves, and the losses of the connection: who is in it changes only when this does
-    uint32_t membership() const { return membership_; }
+    uint32_t membership() const {
+        const std::lock_guard lock(mutex_);
+        return membership_;
+    }
     // everyone else in the session now
     std::vector<PeerInfo> peers() const;
     // the datagrams and their bytes (as UDP carries them: the payload) sent and received so far
     struct Traffic {
         uint64_t sentDatagrams = 0, sentBytes = 0, receivedDatagrams = 0, receivedBytes = 0;
     };
-    const Traffic& traffic() const { return traffic_; }
+    Traffic traffic() const {
+        const std::lock_guard lock(mutex_);
+        return traffic_;
+    }
+    // the socket's handle, for one who waits for the session's datagrams (UdpSocket::waitAnyReadable)
+    uintptr_t socketHandle() const { return socket_.handle(); }
 
 private:
     // a reliable message not acknowledged yet: a control message's whole datagram, or a bundle item's payload (sent with
@@ -182,6 +194,7 @@ private:
     void handleLinkMessage(uint64_t nowNs, Link& link, const Message& m); // ping / pong
     void serviceLink(uint64_t nowNs, Link& link);                          // the control messages' resends, pings
     void flushLink(uint64_t nowNs, Link& link);                            // a bundle: items due, acknowledgement
+    void flushLinks(uint64_t nowNs);                                       // ... of every link
     // a bundle's acknowledgement taken, its reliable items through accept; false: an older datagram than the newest seen
     bool openBundle(Link& link, const Bundle& b, std::vector<Incoming>& ready);
     bool acceptState(uint64_t nowNs, const PlayerState& s);                // newest wins; the stats
@@ -198,6 +211,7 @@ private:
     void clientStart(uint64_t nowNs); // a new connection attempt: fresh channel, new nonce, Hello
     void clientLost(uint64_t nowNs, const char* why);
 
+    mutable std::mutex mutex_; // every public call holds it
     SessionConfig config_;
     UdpSocket socket_;
     std::optional<LinkConditioner> conditioner_;

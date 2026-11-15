@@ -3,14 +3,18 @@
 #pragma once
 
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <filesystem>
 #include <functional>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <set>
 #include <span>
+#include <thread>
+#include <utility>
 #include <vector>
 
 #include "app/world_host.hpp"
@@ -52,17 +56,39 @@ protected:
     void dropStale(std::vector<WorldMessage>& in);
 };
 
-// The coordinator in the host's game: the worlds, this game's player directly, the session's clients routed
+// The coordinator in the host's game: the worlds, this game's player directly, the session's clients routed.
+// What goes between the clients and their worlds is passed on by a thread of its own, as it arrives: the host's game may
+// be loading a room, or between two frames. Only what needs the game's state (a client's entry into a room, the save a
+// new player is told, a game over's way back) waits for the game's thread, in poll. Every call holds the one lock.
 class CoopHost : public WorldPipe {
 public:
     CoopHost(std::filesystem::path exe, std::filesystem::path storySave);
-    // the session whose clients come through here (none: a game on its own)
-    void useSession(od::net::Session* session) { session_ = session; }
-    void testClearFlag(uint32_t flag) { worlds_.testClearFlag(flag); }
-    void testFlagNow(uint32_t flag, bool set, uint8_t stage) { worlds_.testFlagNow(flag, set, stage); }
-    void testStory(uint8_t story) { worlds_.testStory(story); }
-    void testEnemyLife(int life) { worlds_.testEnemyLife(life); }
-    void setGateTeleport(bool teleport) { worlds_.setGateTeleport(teleport); }
+    ~CoopHost() override; // the relay thread ended
+    // the session whose clients come through here (none: a game on its own, or the session is about to end)
+    void useSession(od::net::Session* session) {
+        const std::lock_guard lock(mutex_);
+        session_ = session;
+    }
+    void testClearFlag(uint32_t flag) {
+        const std::lock_guard lock(mutex_);
+        worlds_.testClearFlag(flag);
+    }
+    void testFlagNow(uint32_t flag, bool set, uint8_t stage) {
+        const std::lock_guard lock(mutex_);
+        worlds_.testFlagNow(flag, set, stage);
+    }
+    void testStory(uint8_t story) {
+        const std::lock_guard lock(mutex_);
+        worlds_.testStory(story);
+    }
+    void testEnemyLife(int life) {
+        const std::lock_guard lock(mutex_);
+        worlds_.testEnemyLife(life);
+    }
+    void setGateTeleport(bool teleport) {
+        const std::lock_guard lock(mutex_);
+        worlds_.setGateTeleport(teleport);
+    }
     // the host's game has written a save: a game over goes back to it
     void hostSaved(std::span<const uint8_t> save);
     // the host's game started from this save (a load, a new game): the session's worlds and clients start over from it
@@ -70,7 +96,11 @@ public:
     // everyone was down: the host's game goes on from this save
     std::optional<std::vector<uint8_t>> takeReload();
     // the host's game state as a save image, now (none: no game is played): what the session is, never a file it began with
-    void setLiveState(std::function<std::optional<std::vector<uint8_t>>()> live) { live_ = std::move(live); }
+    // (asked on the game's thread only: in poll and in what the game calls here)
+    void setLiveState(std::function<std::optional<std::vector<uint8_t>>()> live) {
+        const std::lock_guard lock(mutex_);
+        live_ = std::move(live);
+    }
     // the host's game is in this room, its first field tick still to run: a world of the room starts from the state now
     // (what that tick changes -- a room's script, its flags -- the world's own first tick does as the game does)
     void hostBound(WorldRoom room);
@@ -79,12 +109,30 @@ public:
     void enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& state, const std::vector<uint8_t>& banks) override;
     void sendReliable(uint8_t playerId, WorldMessageType type, std::vector<uint8_t> bytes) override;
     void sendLatest(uint8_t playerId, WorldMessageType type, std::vector<uint8_t> bytes) override;
+    // the game's thread's turn: a relay turn, then what waited for the game's state
     void poll(uint64_t nowNs) override;
-    void flush(uint64_t) override {} // (its poll passes on what the worlds and the clients sent, and sends it)
+    void flush(uint64_t) override {} // (a relay turn passes on what the worlds and the clients sent, and sends it)
     std::vector<WorldMessage> take(uint8_t playerId) override;
-    od::net::Session::Traffic traffic() const override { return session_ ? session_->traffic() : od::net::Session::Traffic{}; }
+    od::net::Session::Traffic traffic() const override {
+        const std::lock_guard lock(mutex_);
+        return session_ ? session_->traffic() : od::net::Session::Traffic{};
+    }
+    // the longest time between two relay turns since the last call
+    uint64_t takeRelayGapNs() {
+        const std::lock_guard lock(mutex_);
+        return std::exchange(relayGapMaxNs_, 0);
+    }
 
 private:
+    // the relay thread: waits for a datagram of the session or of a world, then a relay turn
+    void relayLoop();
+    // the session and the worlds read, the clients' messages to their worlds, the worlds' to their clients
+    void relayTurn(uint64_t nowNs);
+    // what the relay left for the game's thread
+    void gameTurn(uint64_t nowNs);
+    // a client's message: to its world now, or held for the game's thread (a room's entry, and all of that client's
+    // after one that is held: in order)
+    void fromClientOrHold(uint8_t id, WorldMessage m, uint64_t nowNs);
     void fromClient(uint8_t id, const WorldMessage& m, uint64_t nowNs);
     void sendSave(uint8_t id, uint64_t nowNs);
     // the host's live state (else the last one known: the game is not played now)
@@ -114,7 +162,13 @@ private:
     std::set<uint8_t> told_;      // the players told the session's save (on connecting, at the title or in a game)
     std::set<uint8_t> placeNext_; // ... who come next to the host when they enter (the session started over)
     std::array<WorldParts, od::net::kMaxPlayers> parts_{}; // each client's message on its way in parts
+    std::array<std::vector<WorldMessage>, od::net::kMaxPlayers> held_{}; // each client's messages waiting for the game's thread
     std::optional<std::vector<uint8_t>> reload_;
+    uint64_t lastRelayNs_ = 0, relayGapMaxNs_ = 0;
+
+    mutable std::mutex mutex_; // every public call and the relay's turn hold it
+    std::atomic<bool> stop_{false};
+    std::thread relay_; // (last: it runs on all of the above)
 };
 
 // A client's way: the session to the host
