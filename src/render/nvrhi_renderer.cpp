@@ -144,7 +144,9 @@ struct FrameConstants {
     float sunDisc[4];     // the sun in the sky (SunLight::disc): its angular radius (radians), the sky draw (1 dome, 2
                           // screen-space layer; 0 none)
     XMFLOAT4X4 sunShadowVp; // the sun's shadow map without ray queries (drawSunMap): world -> its NDC
-    float sunShadow[4];     // ... its texels a side, world units a texel, its depth span, tan of the sun's angular radius
+    float sunShadow[4];     // ... its texels a side (0: none this frame), world units a texel, its depth span, tan of the
+                            // sun's angular radius
+    float traceInfo[4];     // 1 = rays may be traced this frame (ray tracing supported and on)
 };
 // bloom.hlsl Params
 struct BloomConstants {
@@ -566,7 +568,7 @@ public:
             lightNone_ = makeTarget(1, 1, nvrhi::Format::RG8_UNORM, "no traced light");
             preDepthNone_ = makeTarget(1, 1, nvrhi::Format::R32_FLOAT, "no light prepass");
         }
-        if (!rt_) { // the sun's shadows from a shadow map instead (drawSunMap)
+        { // the sun's shadows from a shadow map: without ray queries, or with ray tracing turned off (drawSunMap)
             sunVs_ = d->createShader({nvrhi::ShaderType::Vertex, "", "vs_sun"}, g_sun_vs, sizeof(g_sun_vs));
             sunPs_ = d->createShader({nvrhi::ShaderType::Pixel, "", "ps_sun"}, g_sun_ps, sizeof(g_sun_ps));
             nvrhi::BindingLayoutDesc sl; // the frame, the pages (their alpha test), the point sampler
@@ -746,6 +748,8 @@ public:
         seeDebug_ = debug;
     }
     bool rayTracingSupported() const override { return rt_; }
+    void setRayTracing(bool on) override { rtOn_ = on; }
+    bool rayTracingEnabled() const override { return tracing(); }
     bool sunShadowsSupported() const override { return true; } // ray queries, else the shadow map
 
     void updateSlice(int slice, const std::vector<uint8_t>& rgba) override {
@@ -1896,8 +1900,8 @@ private:
     }
 
     // The traced light (scene.hlsl lightTex): the sun's soft shadows and the ambient occlusion
-    bool sunSoft() const { return rt_ && sun_.enabled && !sun_.sheltered && sun_.softness > 0.0f; }
-    bool occluding() const { return rt_ && occlusion_.enabled && occlusion_.strength > 0.0f; }
+    bool sunSoft() const { return tracing() && sun_.enabled && !sun_.sheltered && sun_.softness > 0.0f; }
+    bool occluding() const { return tracing() && occlusion_.enabled && occlusion_.strength > 0.0f; }
 
     // its targets at render size (the prepass's depth and normals, the rays' result and its two blur passes), made when
     // a frame first traces; the scene's set binds the result
@@ -2298,8 +2302,8 @@ private:
             bs.bindings.push_back(nvrhi::BindingSetItem::StructuredBuffer_SRV(3, dynAttr_));
             bs.bindings.push_back(nvrhi::BindingSetItem::Texture_SRV(7, light_ ? light_ : lightNone_));
             bs.bindings.push_back(nvrhi::BindingSetItem::Texture_SRV(8, preDepth_ ? preDepth_ : preDepthNone_));
-        } else
-            bs.bindings.push_back(nvrhi::BindingSetItem::Texture_SRV(12, sunMap_ ? sunMap_ : sunMapNone_));
+        }
+        bs.bindings.push_back(nvrhi::BindingSetItem::Texture_SRV(12, sunMap_ ? sunMap_ : sunMapNone_));
         sunSet_ = nullptr; // it binds the pages
         sceneSet_ = dev_.device()->createBindingSet(bs, sceneLayout_);
     }
@@ -2309,7 +2313,7 @@ private:
     // sun_.mapReach world units on either side of the point half that far ahead of the eye; its centre moves in whole
     // texels, so the shadows' edges stay still as the camera moves
     bool sunMapping() const {
-        return !rt_ && sun_.enabled && !sun_.sheltered && roomBounds_ &&
+        return !tracing() && sun_.enabled && !sun_.sheltered && roomBounds_ &&
                sun_.dir[0] * sun_.dir[0] + sun_.dir[1] * sun_.dir[1] + sun_.dir[2] * sun_.dir[2] > 0.0f;
     }
 
@@ -2409,12 +2413,12 @@ private:
         nvrhi::rt::InstanceDesc inst[2];
         size_t n = 0;
         const auto flags = nvrhi::rt::InstanceFlags::TriangleCullDisable; // shadows from both sides of every face
-        if (staticBlas_)
+        if (staticBlas_ && tracing())
             inst[n++] = nvrhi::rt::InstanceDesc().setBLAS(staticBlas_).setInstanceID(0).setInstanceMask(kRayMaskRoom).setFlags(flags);
         const uint32_t casters = dynOpaque / 3 * 3;
         // the characters cast the sun's shadow and the particle lights', and close the ambient occlusion's rays
         nvrhi::IBuffer* const dynBuf = dynDrawn();
-        if (((sun_.enabled && !sun_.sheltered) || !particleLights_.empty() || occluding()) && casters && dynBuf) {
+        if (tracing() && ((sun_.enabled && !sun_.sheltered) || !particleLights_.empty() || occluding()) && casters && dynBuf) {
             if (dynTris_.empty()) { // (a subdivided frame's are expandDynamic's)
                 toAttr(dynGpu_, casters, dynAttrCpu_);
                 if (dynAttr_->getDesc().byteSize < dynAttrCpu_.size() * sizeof(float)) {
@@ -2508,10 +2512,11 @@ private:
         for (int c = 0; c < 3; ++c) f.sunDir[c] = len > 0.0f ? sun_.dir[c] / len : 0.0f;
         f.sunStrength = sun_.strength;
         // without ray queries: the shadow map drawn this frame (a room with no sky needs none)
-        const bool sunShades = rt_ || sun_.sheltered || sunMapDrawn_;
+        const bool sunShades = tracing() || sun_.sheltered || sunMapDrawn_;
         f.shadowMode = shadow && sunShades && sun_.enabled && len > 0.0f ? (sun_.sheltered ? 2.0f : 1.0f) : 0.0f;
         f.sunShadowVp = sunVp_;
-        std::copy(std::begin(sunInfo_), std::end(sunInfo_), f.sunShadow);
+        if (sunMapDrawn_) std::copy(std::begin(sunInfo_), std::end(sunInfo_), f.sunShadow);
+        f.traceInfo[0] = tracing() ? 1.0f : 0.0f;
         f.sunScatter = sun_.enabled && !sun_.sheltered && len > 0.0f ? 0.35f : 0.0f;
         if (shadow && !particleLights_.empty()) { // the draws of the opaque surfaces, as the sun's shadow
             for (size_t k = 0; k < particleLights_.size(); ++k) {
@@ -2640,8 +2645,8 @@ private:
         stream(skyBuf_, skyGpu, "sky vertices");
         stream(dynBuf_, dynGpu_, "dynamic vertices", rt_);
         if (dynCount_ && !dynTris_.empty()) expandDynamic();
-        if (rt_) buildScene(std::min(dynStart_[0], dynCount_));
-        else sunMapDrawn_ = sunMapping() && drawSunMap(cam.eye, fwdv);
+        if (rt_) buildScene(std::min(dynStart_[0], dynCount_)); // (empty with ray tracing off)
+        sunMapDrawn_ = sunMapping() && drawSunMap(cam.eye, fwdv);
 
         if (depthCopyStale()) makeDepthCopy(); // (the set below binds it)
         invVp_ = XMMatrixInverse(nullptr, vpJit); // the traced light's passes and the blown snow's: NDC -> world
@@ -2969,6 +2974,8 @@ private:
     Fog fog_;
     // sun shadows (ray queries)
     bool rt_ = false;
+    bool rtOn_ = true; // setRayTracing: off = the shadow map, no rays, on a GPU that has them
+    bool tracing() const { return rt_ && rtOn_; }
     SunLight sun_;
     // ... without them: the shadow map (drawSunMap)
     nvrhi::ShaderHandle sunVs_, sunPs_;

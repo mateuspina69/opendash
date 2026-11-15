@@ -66,8 +66,9 @@ cbuffer Frame : register(b0) {
     float4 sunDisc;        // the sun in the sky (OpenDash): x its angular radius (radians), y the sky draw it is on (1
                            // the dome, 2 a screen-space layer; 0 none)
     float4x4 sunShadowVp;  // the sun's shadow map without ray tracing (OD_SM): world -> the map's NDC (orthographic)
-    float4 sunShadow;      // ... x its texels a side, y world units a texel, z its depth span (world units), w the
-                           // tangent of the sun's angular radius (0: hard shadows)
+    float4 sunShadow;      // ... x its texels a side (0: no map this frame), y world units a texel, z its depth span
+                           // (world units), w the tangent of the sun's angular radius (0: hard shadows)
+    float4 traceInfo;      // x 1 = rays may be traced this frame (OD_RT with ray tracing on; off: the shadow map)
 };
 Texture2DArray pages : register(t0);
 SamplerState pointClamp : register(s0);
@@ -277,7 +278,7 @@ float3 particleLight(float3 wp, float3 n, float3 ns, bool cel, float3 nc, out fl
 #ifdef OD_RT
         // as the sun's: a low-poly face turned away from the light starts further out, past its own neighbours
         const float lift = dot(n, dir) > 0.0 ? 2.0 : 12.0;
-        if (lightVisibility(wp + ns * lift, dir, dist, lightColor[k].w) < 0.5) continue;
+        if (traceInfo.x > 0.5 && lightVisibility(wp + ns * lift, dir, dist, lightColor[k].w) < 0.5) continue;
 #endif
         sum += add;
         rim += lightColor[k].rgb * reach * (cel ? facing : saturate(dot(ns, dir)));
@@ -731,9 +732,15 @@ PSOut ps_main(VSOut i, bool front : SV_IsFrontFace) {
         // a model of the anime look: on its side away from the sun too, whether it stands in a cast shadow (its bands
         // there are those of a room with no sky)
 #ifdef OD_SM // the shadow map: a model of the anime look keeps its bands flat (no soft edge on it)
-        if (cel) vis = step(0.5, sunMapVisibility(i.world, ns, 2.0, i.object, i.pos.xy));
-        else if (facing > 0.0) vis = sunMapVisibility(i.world, ns, dot(n, sunDir) > 0.0 ? 2.0 : 12.0, -1.0, i.pos.xy);
-#else
+        if (sunShadow.x > 0.5) {
+            if (cel) vis = step(0.5, sunMapVisibility(i.world, ns, 2.0, i.object, i.pos.xy));
+            else if (facing > 0.0) vis = sunMapVisibility(i.world, ns, dot(n, sunDir) > 0.0 ? 2.0 : 12.0, -1.0, i.pos.xy);
+        }
+#endif
+#ifdef OD_RT
+#ifdef OD_SM
+        else
+#endif
         if (cel) vis = sunVisibilityPastSelf(i.world, ns, i.object);
         else if (facing > 0.0) {
             // a face turned away from the sun while its smooth normal still faces it would shadow itself on its

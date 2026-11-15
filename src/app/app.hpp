@@ -170,6 +170,7 @@ struct App {
     bool resizeTest = false;     // --resize-test: in --shot mode, resize to 640x360, 1x1, back, reset history
     std::string aaArg, aaQualityArg; // --aa / --aa-quality override opendash.ini
     int vsyncArg = -1;               // --vsync 0|1 overrides vsync=
+    int rayTracingArg = -1;          // --rt 0|1 overrides ray_tracing=
     std::string langArg;             // --lang jp|en|ptbr overrides opendash.ini lang=
     std::string textureDumpArg;      // --texture-dump <dir> overrides opendash.ini texture_dump=
     bool audioDeviceArg = false;     // --audio-device 1: scripted runs open the real audio device (shutdown test)
@@ -289,6 +290,7 @@ struct App {
     od::AaBackend aaBackend = od::AaBackend::Auto;
     od::AaQuality aaQuality = od::AaQuality::NativeAA;
     bool vsync = true;
+    bool rayTracing = true; // where supported (renderer setRayTracing)
     SDL_Gamepad* pad = nullptr; // the first gamepad (opened in the loop)
     od::port::PadMotors rumbleSent;       // the motors last sent to the gamepad (App::rumble)
     uint64_t rumbleSentAt = 0, rumbleFrameAt = 0;

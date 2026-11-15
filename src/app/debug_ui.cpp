@@ -224,8 +224,18 @@ void App::drawDebugMenu() {
                 changed |= ImGui::SliderFloat("tamanho do sol", &sunDiscSize, 0.3f, 6.0f, "%.1f graus");
                 if (changed) applySun();
             }
+            if (renderer->rayTracingSupported()) {
+                ImGui::SeparatorText("Ray tracing");
+                if (ImGui::Checkbox("usar ray tracing", &rayTracing)) {
+                    renderer->setRayTracing(rayTracing);
+                    od::saveConfigValue("ray_tracing", rayTracing ? "1" : "0");
+                }
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("Desligado: as sombras do sol vem de um mapa de sombras (mais leve), sem oclusao\n"
+                                      "ambiente, e a luz de tiros e explosoes atravessa paredes.");
+            }
             if (renderer->sunShadowsSupported()) { // experiment: the sun's shadows (ray-traced, else a shadow map)
-                const bool rt = renderer->rayTracingSupported();
+                const bool rt = renderer->rayTracingEnabled();
                 ImGui::SeparatorText(rt ? "Sombras do sol (ray tracing)" : "Sombras do sol (shadow map)");
                 bool changed = ImGui::Checkbox("sombras do sol", &sunOn);
                 if (!rt) {
@@ -263,7 +273,8 @@ void App::drawDebugMenu() {
                         ImGui::SliderFloat("alcance da oclusao", &occlusionRadius, 20.0f, 400.0f, "%.0f");
                     }
                 } else
-                    ImGui::TextDisabled("Oclusao ambiente: GPU sem ray tracing");
+                    ImGui::TextDisabled(renderer->rayTracingSupported() ? "Oclusao ambiente: so com ray tracing ligado"
+                                                                       : "Oclusao ambiente: GPU sem ray tracing");
             }
             else
                 ImGui::TextDisabled("Sol e oclusao ambiente: GPU sem ray tracing");

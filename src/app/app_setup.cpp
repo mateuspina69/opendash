@@ -98,6 +98,7 @@ void App::parseArgs(int argc, char** argv) {
         else if (a == "--voice-test") voiceTestArg = argv[++i];
         else if (a == "--aa-quality") aaQualityArg = argv[++i];
         else if (a == "--vsync") vsyncArg = std::stoi(argv[++i]) != 0;
+        else if (a == "--rt") rayTracingArg = std::stoi(argv[++i]) != 0;
         else if (a == "--view") {
             static const char* kViews[] = {"final", "color", "motion", "normal", "depth", "reactive"};
             const std::string v = argv[++i];
@@ -601,6 +602,8 @@ int App::init() {
     }
     vsync = vsyncArg >= 0 ? vsyncArg != 0 : cfg.vsync;
     renderer->setVsync(vsync);
+    rayTracing = rayTracingArg >= 0 ? rayTracingArg != 0 : cfg.rayTracing;
+    renderer->setRayTracing(rayTracing);
     { // the options page (game/status_options page 6: the status menu and the title's options) on OpenDash's settings
         od::port::OptionsHost& h = od::port::optionsHost();
         h.language = [&] { return int(od::lang::uiLanguage(playerView.language)); };

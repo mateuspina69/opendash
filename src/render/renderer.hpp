@@ -392,6 +392,10 @@ public:
     virtual bool rayTracingSupported() const = 0;
     // the sun's shadows (and the anime look's bands that follow them): ray-traced, or shadow-mapped without ray queries
     virtual bool sunShadowsSupported() const { return rayTracingSupported(); }
+    // ray tracing on / off where supported (off: the sun's shadows from the shadow map, no ambient occlusion, the
+    // particle lights pass through walls)
+    virtual void setRayTracing(bool on) { (void)on; }
+    virtual bool rayTracingEnabled() const { return rayTracingSupported(); }
     // anti-aliasing backend + quality; an unavailable backend falls back to Auto (DLSS, else FSR, else none)
     virtual void setAntiAliasing(AaBackend backend, AaQuality quality) = 0;
     virtual void setVsync(bool on) = 0; // off: MAILBOX / IMMEDIATE (Vulkan), tearing allowed (D3D12)
