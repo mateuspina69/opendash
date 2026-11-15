@@ -151,7 +151,7 @@ std::vector<uint8_t> encodeWorldMessage(const WorldMessage& m) {
     case WorldMessageType::Part: // (entry: more of the message follows)
         w.u8(m.playerId);
         w.u8(m.entry);
-        w.blob(m.netState);
+        w.raw(m.netState); // (the rest of the message: its datagram, or its place in one, tells the length)
         break;
     default: break;
     }
@@ -236,7 +236,7 @@ std::optional<WorldMessage> decodeWorldMessage(std::span<const uint8_t> bytes) {
     case WorldMessageType::Part:
         m.playerId = r.u8();
         m.entry = r.u8();
-        m.netState = r.blob();
+        m.netState = r.bytes(r.remaining());
         break;
     default: break;
     }
@@ -245,8 +245,8 @@ std::optional<WorldMessage> decodeWorldMessage(std::span<const uint8_t> bytes) {
 }
 
 namespace {
-constexpr size_t kPartBytes = kWorldMessageBytes - 5;   // a Part's bytes: its type, player, mark and length come first
-constexpr size_t kWholeBytes = 0x10000 + 16;            // the longest message there is (wire's blob, its fields)
+constexpr size_t kPartBytes = kWorldMessageBytes - 3;   // a Part's bytes: its type, player and mark come first
+constexpr size_t kWholeBytes = 0x10000 + 16;            // no message is longer (a save, a room's command line, their fields)
 } // namespace
 
 std::vector<std::vector<uint8_t>> encodeWorldMessageParts(const WorldMessage& m) {
@@ -295,7 +295,7 @@ void WorldLink::sendReliable(const WorldMessage& m) {
         w.u8(uint8_t(Kind::Reliable));
         w.u32(nextSend_);
         w.raw(part);
-        unacked_.push_back({nextSend_++, w.take()});
+        unacked_.push_back({nextSend_++, w.take(), 0});
         sendRaw(unacked_.back().bytes);
     }
 }
@@ -315,6 +315,12 @@ void WorldLink::sendLatest(const WorldMessage& m) {
 std::vector<WorldMessage> WorldLink::poll(uint64_t nowNs) {
     if (lastHeardNs_ == 0) lastHeardNs_ = nowNs;
     std::vector<WorldMessage> in;
+    bool ackDue = false;
+    const auto deliver = [&](std::span<const uint8_t> body) {
+        if (auto m = decodeWorldMessage(body))
+            if (auto whole = parts_.take(std::move(*m))) in.push_back(std::move(*whole));
+        ++nextReceive_;
+    };
     for (const od::net::Datagram& d : socket_.receive()) {
         if (!peer_) peer_ = d.from;
         if (d.from != *peer_ || d.bytes.empty()) continue;
@@ -330,22 +336,34 @@ std::vector<WorldMessage> WorldLink::poll(uint64_t nowNs) {
             if (!r.ok()) continue;
             const std::span<const uint8_t> body = std::span(d.bytes).subspan(5);
             if (sequence == nextReceive_) {
-                if (auto m = decodeWorldMessage(body))
-                    if (auto whole = parts_.take(std::move(*m))) in.push_back(std::move(*whole));
-                ++nextReceive_;
+                deliver(body);
+                for (auto next = early_.find(nextReceive_); next != early_.end(); next = early_.find(nextReceive_)) {
+                    const std::vector<uint8_t> held = std::move(next->second);
+                    early_.erase(next);
+                    deliver(held);
+                }
+            } else if (sequence > nextReceive_ && early_.size() < kMaxEarly) {
+                early_.emplace(sequence, std::vector<uint8_t>(body.begin(), body.end())); // ahead of a gap: kept until it closes
             }
-            od::net::ByteWriter ack; // what came in order so far, also when this one was a repeat or came early
-            ack.u8(uint8_t(Kind::Ack));
-            ack.u32(nextReceive_ - 1);
-            sendRaw(ack.bytes());
+            ackDue = true; // what came in order so far, also when this one was a repeat or came early
         } else if (kind == uint8_t(Kind::Latest)) {
             // (a Part goes only where what is sent arrives in order)
             if (auto m = decodeWorldMessage(std::span(d.bytes).subspan(1)); m && m->type != WorldMessageType::Part) in.push_back(std::move(*m));
         }
     }
-    if (nowNs - lastSendNs_ >= kResendNs) {
-        lastSendNs_ = nowNs;
-        for (const Unacked& u : unacked_) sendRaw(u.bytes);
+    if (ackDue) { // one for all that came this turn
+        od::net::ByteWriter ack;
+        ack.u8(uint8_t(Kind::Ack));
+        ack.u32(nextReceive_ - 1);
+        sendRaw(ack.bytes());
+    }
+    for (Unacked& u : unacked_) {
+        if (u.sentNs == 0) {
+            u.sentNs = nowNs; // (sent since the last poll)
+        } else if (nowNs - std::min(nowNs, u.sentNs) >= kResendNs) {
+            sendRaw(u.bytes);
+            u.sentNs = nowNs;
+        }
     }
     return in;
 }

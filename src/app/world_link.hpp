@@ -6,6 +6,7 @@
 
 #include <array>
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <optional>
 #include <span>
@@ -137,7 +138,8 @@ public:
 
     uint16_t port() const { return socket_.port(); }
     bool hasPeer() const { return peer_.has_value(); }
-    // what must arrive: sent now, resent every kResendNs until acknowledged, in order (of any length a message has)
+    // what must arrive: sent now, each resent kResendNs after its last sending until acknowledged, delivered in order (of
+    // any length a message has)
     void sendReliable(const WorldMessage& m);
     // what the next one replaces (nothing happens before the peer is known): one datagram, a longer one is not sent
     void sendLatest(const WorldMessage& m);
@@ -149,6 +151,8 @@ public:
     bool silent(uint64_t nowNs) const;
     // nothing of what must arrive is still unacknowledged
     bool settled() const { return unacked_.empty(); }
+    // waits until a datagram is there to poll, at most timeoutNs (a process with nothing else to do between two polls)
+    void wait(uint64_t timeoutNs) { socket_.waitReadable(timeoutNs); }
 
 private:
     void sendRaw(std::span<const uint8_t> bytes);
@@ -158,11 +162,14 @@ private:
     struct Unacked {
         uint32_t sequence = 0;
         std::vector<uint8_t> bytes;
+        uint64_t sentNs = 0; // its last sending (0: since the last poll)
     };
     std::vector<Unacked> unacked_;
+    std::map<uint32_t, std::vector<uint8_t>> early_; // what came ahead of the next one due, by sequence
+    static constexpr size_t kMaxEarly = 256;
     WorldParts parts_;
     uint32_t nextSend_ = 1, nextReceive_ = 1;
-    uint64_t lastSendNs_ = 0, lastHeardNs_ = 0;
+    uint64_t lastHeardNs_ = 0;
 };
 
 } // namespace od::app

@@ -14,6 +14,7 @@
 #include <net/if.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <sys/select.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #endif
@@ -196,6 +197,16 @@ bool UdpSocket::sendTo(const Endpoint& to, std::span<const uint8_t> bytes) {
     const int sent = ::sendto(SOCKET(socket_), reinterpret_cast<const char*>(bytes.data()), int(bytes.size()), 0,
                               reinterpret_cast<const sockaddr*>(&a), sizeof a);
     return sent == int(bytes.size());
+}
+
+bool UdpSocket::waitReadable(uint64_t timeoutNs) {
+    fd_set readable;
+    FD_ZERO(&readable);
+    FD_SET(SOCKET(socket_), &readable);
+    timeval timeout{};
+    timeout.tv_sec = long(timeoutNs / 1'000'000'000ull);
+    timeout.tv_usec = long(timeoutNs % 1'000'000'000ull / 1000);
+    return ::select(int(SOCKET(socket_)) + 1, &readable, nullptr, nullptr, &timeout) > 0;
 }
 
 std::vector<Datagram> UdpSocket::receive() {

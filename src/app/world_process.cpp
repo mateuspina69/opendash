@@ -485,7 +485,7 @@ int run(const WorldArgs& given) {
                 lastSaid = now;
                 waitingLink->sendLatest({WorldMessageType::KeepAlive});
             }
-            if (!assigned) SDL_DelayNS(2'000'000);
+            if (!assigned) waitingLink->wait(100'000'000); // until the coordinator says something, or the next look at the clock
         }
     }
     if (!givenSave.empty()) {
@@ -1066,7 +1066,7 @@ int run(const WorldArgs& given) {
                         WorldMessage m{WorldMessageType::NetScreen};
                         m.playerId = client;
                         m.netState = screen;
-                        link->sendLatest(m);
+                        link->sendReliable(m); // (told on a change only: a lost one would leave the last screen)
                     }
                 }
             }

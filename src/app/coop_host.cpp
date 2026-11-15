@@ -54,6 +54,7 @@ bool isReliable(WorldMessageType t) {
     case WorldMessageType::NetNotice:
     case WorldMessageType::NetBossFight:
     case WorldMessageType::NetWarp:
+    case WorldMessageType::NetScreen:
     case WorldMessageType::NetGateGlow:
     case WorldMessageType::NetReload:
     case WorldMessageType::NetAlert:

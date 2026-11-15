@@ -61,6 +61,8 @@ public:
     bool sendTo(const Endpoint& to, std::span<const uint8_t> bytes);
     // every datagram waiting on the socket, oldest first (empty when none)
     std::vector<Datagram> receive();
+    // waits until a datagram is there to receive, at most timeoutNs; false: none came
+    bool waitReadable(uint64_t timeoutNs);
 
 private:
     uintptr_t socket_; // the Winsock SOCKET or the file descriptor
