@@ -333,6 +333,7 @@ private:
     std::array<uint64_t, 64> uplinkSentNs_{};
     uint64_t roundTripSumNs_ = 0, roundTripMaxNs_ = 0;
     uint32_t roundTrips_ = 0, behindSum_ = 0, behindTicks_ = 0;
+    uint64_t lastPumpNs_ = 0, pumpGapMaxNs_ = 0; // ... and the longest this game left the session unread (a load)
     void netCheck();
 };
 

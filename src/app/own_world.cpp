@@ -328,7 +328,10 @@ void OwnWorldClient::joinRoom() {
 }
 
 void OwnWorldClient::pump(uint64_t nowNs) {
-    if (pipe_) pipe_->poll(nowNs);
+    if (!pipe_) return;
+    if (lastPumpNs_ != 0 && nowNs > lastPumpNs_) pumpGapMaxNs_ = std::max(pumpGapMaxNs_, nowNs - lastPumpNs_);
+    lastPumpNs_ = nowNs;
+    pipe_->poll(nowNs);
 }
 
 void OwnWorldClient::awayTurn(uint64_t nowNs) {
@@ -484,9 +487,11 @@ void OwnWorldClient::turn(uint64_t nowNs) {
 void OwnWorldClient::netCheck() {
     constexpr uint32_t kEvery = 150;
     if (localTick_ % kEvery != 0 || roundTrips_ == 0) return;
-    SDL_Log("netcheck: to the world and back avg %.1f ms, max %.1f ms (%u player updates); the world shown %.1f ticks behind the newest heard",
+    SDL_Log("netcheck: to the world and back avg %.1f ms, max %.1f ms (%u player updates); the world shown %.1f ticks behind the newest heard; "
+            "the session left unread %.1f ms at most",
             double(roundTripSumNs_) / double(roundTrips_) * 1e-6, double(roundTripMaxNs_) * 1e-6, roundTrips_,
-            behindTicks_ ? double(behindSum_) / double(behindTicks_) : 0.0);
+            behindTicks_ ? double(behindSum_) / double(behindTicks_) : 0.0, double(pumpGapMaxNs_) * 1e-6);
+    pumpGapMaxNs_ = 0;
     roundTripSumNs_ = roundTripMaxNs_ = 0;
     roundTrips_ = behindSum_ = behindTicks_ = 0;
 }
