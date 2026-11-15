@@ -186,6 +186,9 @@ struct App {
     // hidden window and quit by themselves: nothing pops up, takes the focus or stays open; only plain interactive
     // launches show a window
     bool scripted = false;
+    // --visible: a scripted run shows its window (to watch a test play); --window-pos X Y: where it stands
+    bool visibleArg = false;
+    std::optional<std::pair<int, int>> windowPosArg;
     // the safety net: a scripted run that has not ended after this many frames quits anyway
     uint64_t scriptedFrameLimit = 0;
     uint64_t scriptedFrames = 0;

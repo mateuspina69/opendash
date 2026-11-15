@@ -304,6 +304,11 @@ void App::parseArgs(int argc, char** argv) {
         else if (a == "--pt-speed") ptSpeed = std::max(1, std::stoi(argv[++i])); // scripted: logic ticks per frame
         else if (a == "--model-cull") g_modelsBothSides = std::stoi(argv[++i]) == 0;
         else if (a == "--cullsign") cullSign = std::stof(argv[++i]); // debug: -1 shows back faces
+        else if (a == "--visible") visibleArg = true;
+        else if (a == "--window-pos" && i + 2 < argc) {
+            const int x = std::stoi(argv[++i]), y = std::stoi(argv[++i]);
+            windowPosArg = std::pair{x, y};
+        }
         else if (a == "--window" && i + 1 < argc) { // WxH: the window's size (e.g. the widescreen checks)
             if (std::sscanf(argv[++i], "%dx%d", &windowArgW, &windowArgH) != 2) windowArgW = windowArgH = 0;
         }
@@ -346,7 +351,8 @@ int App::init() {
     window = SDL_CreateWindow("OpenDash (M1)", video.window.w, video.window.h,
                               SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN | kRendererWindow);
     video = videoApply(window, video);
-    if (!scripted) SDL_ShowWindow(window);
+    if (windowPosArg) SDL_SetWindowPosition(window, windowPosArg->first, windowPosArg->second);
+    if (!scripted || visibleArg) SDL_ShowWindow(window);
     SDL_GetWindowSizeInPixels(window, &width, &height);
     renderer = od::createRenderer(window, width, height);
     if (!renderer) {
