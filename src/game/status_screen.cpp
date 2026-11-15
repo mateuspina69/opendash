@@ -178,7 +178,7 @@ void panelTileMapDraw() {
     const bool small = map.tileSize == 8;
     const int sh = small ? 3 : 4;
     const bool grown = panelHasTitle();
-    artBegin(kVecStatusPanel);
+    artBegin(grown ? kVecStatusPanelGrown : kVecStatusPanel);
     for (int r = 0; r < rows; ++r)
         for (int k = 0; k < cols; ++k) {
             // OpenDash's sixth row: the rows' box (the map's columns 0..kBoxColumns - 1) grows by kBoxGrowRows plain rows

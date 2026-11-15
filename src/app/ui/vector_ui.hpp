@@ -100,7 +100,10 @@ private:
     };
     std::map<std::string, Frame> frames_;
     static std::string frameSvg(int style, float w, float h); // empty = a style not drawn yet
-    bool frame(od::Renderer& r, ui::Canvas& cv, int style, float x, float y, float w, float h, float s, ui::Vec2 o);
+    // (tint: the brightness as draw's, 0x80 full; styles 3 / 4 the status screen's panels, statusSvgBody)
+    bool frame(od::Renderer& r, ui::Canvas& cv, int style, float x, float y, float w, float h, float s, ui::Vec2 o,
+               uint32_t tint = 0x80);
+    static constexpr float kStatusW = 320.0f, kStatusH = 240.0f; // the status panels' screen
 };
 
 } // namespace od::app

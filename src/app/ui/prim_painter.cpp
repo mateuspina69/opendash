@@ -270,7 +270,8 @@ void PrimPainter::draw(od::Renderer& r, MenuVram& mv, ui::Canvas& cv, const std:
                     by1 = std::max(by1, float(q.y + q.h));
                 }
             }
-            const bool full = p.vec == od::port::kVecStatusPanel; // a whole-screen picture: drawn at the origin
+            const bool full = p.vec == od::port::kVecStatusPanel ||
+                              p.vec == od::port::kVecStatusPanelGrown; // a whole-screen picture: drawn at the origin
             if ((p.vec && vector &&
                  vector->draw(r, cv, p.vec, full ? 0.0f : bx0, full ? 0.0f : by0, bx1 - bx0, by1 - by0, s, o,
                               p.colour & 0xff)) ||

@@ -30,7 +30,6 @@ namespace {
 
 const char* fileOf(uint16_t vec) {
     switch (vec) {
-    case od::port::kVecStatusPanel: return "status.svg";
     case od::port::kVecOptJunction: return "options_junction.svg";
     case od::port::kVecDualShock: return "dualshock.svg";
     case od::port::kVecLanguage: return "language.svg";
@@ -302,7 +301,7 @@ std::string VectorUi::frameSvg(int style, float w, float h) {
 }
 
 bool VectorUi::frame(od::Renderer& r, ui::Canvas& cv, int style, float x, float y, float w, float h, float s,
-                     ui::Vec2 o) {
+                     ui::Vec2 o, uint32_t tint) {
     char key[64];
     std::snprintf(key, sizeof key, "%d:%gx%g", style, double(w), double(h));
     Frame& fr = frames_[key];
@@ -325,8 +324,9 @@ bool VectorUi::frame(od::Renderer& r, ui::Canvas& cv, int style, float x, float 
         if (!fr.tex) return false;
     }
     const ui::Vec2 a(std::floor(o.x + x * s + 0.5f), std::floor(o.y + y * s + 0.5f));
+    const uint32_t lv = std::min<uint32_t>(tint * 2u, 255u);
     cv.image(fr.tex, a, ui::Vec2(a.x + float(fr.w), a.y + float(fr.h)), ui::Vec2(0.0f, 0.0f), ui::Vec2(1.0f, 1.0f),
-             ui::rgba(255, 255, 255));
+             ui::rgba(lv, lv, lv));
     return true;
 }
 
@@ -487,6 +487,12 @@ bool VectorUi::draw(od::Renderer& r, ui::Canvas& cv, uint16_t vec, float x, floa
     if (vec >= od::port::kVecItemIcon) itemFile = "icons/item_" + std::to_string(vec - od::port::kVecItemIcon) + ".svg";
     if (vec >= od::port::kVecFrame0 && vec <= od::port::kVecFrame2)
         return frame(r, cv, vec - od::port::kVecFrame0, x, y, w, h, s, o);
+    if (vec == od::port::kVecStatusPanel || vec == od::port::kVecStatusPanelGrown) { // drawn by code (statusSvgBody)
+        if (!frame(r, cv, vec == od::port::kVecStatusPanelGrown ? 4 : 3, 0.0f, 0.0f, kStatusW, kStatusH, s, o, tint))
+            return false;
+        if (fonts(r)) pictureText(cv, od::port::kVecStatusPanel, s, o);
+        return true;
+    }
     Picture& p = pics_[vec];
     if (!p.tried) {
         p.tried = true;

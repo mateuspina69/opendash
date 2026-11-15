@@ -30,6 +30,7 @@ enum VecArt : uint16_t {
     kVecOptJunction = 5, // the options page's corner pieces where its two frames meet (FUN_005eeda0, 0x10, 0x94)
     kVecDualShock = 6,   // OpenDash: the PS1's DualShock behind the key configuration's pad list (128 x 88)
     kVecLanguage = 7,    // OpenDash: the globe on the options' language row (10 x 10, white: tinted as the caption)
+    kVecStatusPanelGrown = 8, // OpenDash: kVecStatusPanel with the rows' box grown by the sixth row
     kVecItemIcon = 0x100, // + k: an item's 16 x 16 icon (FUN_005ea6d0, kind k of 0x91aab0)
 };
 
