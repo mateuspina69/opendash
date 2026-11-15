@@ -813,8 +813,11 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
                 od::port::transitionRequest().kind = exit.kind;
                 od::port::setStoryFlag(od::port::kFlagTransitionArmed);
             } else {
+                // the request as the exit's trigger armed it, its flag with it: the flag is what starts the exit's
+                // script, and the wait took it (gateTurn) -- without it the field waits for a script that never runs
                 od::port::transitionRequest() = exit;
                 od::port::transitionRequest().state = od::port::kTransitionAsked;
+                od::port::setStoryFlag(od::port::kFlagTransitionArmed);
             }
             SDL_Log("own world: the gate opens: through the exit (kind %u)", unsigned(exit.kind));
             break;
