@@ -286,7 +286,15 @@ WorldLink::WorldLink() : socket_(0) {}
 WorldLink::WorldLink(uint16_t to) : socket_(0), peer_(od::net::Endpoint::loopback(to)) {}
 
 void WorldLink::sendRaw(std::span<const uint8_t> bytes) {
-    if (peer_) socket_.sendTo(*peer_, bytes);
+    if (!peer_) return;
+    if (deferred_) outbox_.emplace_back(bytes.begin(), bytes.end());
+    else socket_.sendTo(*peer_, bytes);
+}
+
+void WorldLink::flush() {
+    if (peer_)
+        for (const std::vector<uint8_t>& bytes : outbox_) socket_.sendTo(*peer_, bytes);
+    outbox_.clear();
 }
 
 void WorldLink::sendReliable(const WorldMessage& m) {

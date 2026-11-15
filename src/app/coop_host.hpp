@@ -32,8 +32,12 @@ public:
     // what the next one replaces
     virtual void sendLatest(uint8_t playerId, WorldMessageType type, std::vector<uint8_t> bytes) = 0;
     virtual void poll(uint64_t nowNs) = 0;
+    // what was sent since the last flush leaves now: once at the end of a turn, so that all of it is one datagram
+    virtual void flush(uint64_t nowNs) = 0;
     // what came for this player since the last call
     virtual std::vector<WorldMessage> take(uint8_t playerId) = 0;
+    // the session's datagrams so far (none: a game with no session)
+    virtual od::net::Session::Traffic traffic() const = 0;
     // test instrument: this player, on joining, stays where they are instead of coming next to the host
     void setStays(bool stays) { stays_ = stays; }
 
@@ -76,7 +80,9 @@ public:
     void sendReliable(uint8_t playerId, WorldMessageType type, std::vector<uint8_t> bytes) override;
     void sendLatest(uint8_t playerId, WorldMessageType type, std::vector<uint8_t> bytes) override;
     void poll(uint64_t nowNs) override;
+    void flush(uint64_t) override {} // (its poll passes on what the worlds and the clients sent, and sends it)
     std::vector<WorldMessage> take(uint8_t playerId) override;
+    od::net::Session::Traffic traffic() const override { return session_ ? session_->traffic() : od::net::Session::Traffic{}; }
 
 private:
     void fromClient(uint8_t id, const WorldMessage& m, uint64_t nowNs);
@@ -121,7 +127,9 @@ public:
     void sendReliable(uint8_t playerId, WorldMessageType type, std::vector<uint8_t> bytes) override;
     void sendLatest(uint8_t playerId, WorldMessageType type, std::vector<uint8_t> bytes) override;
     void poll(uint64_t nowNs) override;
+    void flush(uint64_t nowNs) override { session_.flush(nowNs); }
     std::vector<WorldMessage> take(uint8_t playerId) override;
+    od::net::Session::Traffic traffic() const override { return session_.traffic(); }
 
 private:
     od::net::Session& session_;

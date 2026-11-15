@@ -93,7 +93,7 @@ constexpr uint8_t kSolidHasParam = 0x80;
 constexpr int kLockTolerance = 4; // units a lock-on point may drift before the client is told
 constexpr size_t kMaxLockPoints = 8;
 constexpr uint8_t kEventAppear = 1, kEventGo = 2, kEventAppearStill = 3, kEventEffect = 4, kEventShift = 5, kEventRoomPatch = 6, kEventFlash = 7, // Still: no animation in play
-                  kEventFirst = 8;
+                  kEventFirst = 8, kEventEnd = 9; // End: what runs on the client from its event ends with the world's
 constexpr size_t kBatchHeaderBytes = 4;
 constexpr size_t kAppearBytes = 27, kGoBytes = 2, kFirstBytes = 5, kEffectBytes = 13 + 8 + 17 + 6 + 2 + 12;
 // an effect's fields that follow only when they are not their usual value (zero; no parent, no second actor)
@@ -903,12 +903,12 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
             k.told = false;
         } else if (k.told) {
             room(kGoBytes);
-            w.u8(kEventGo);
+            w.u8(k.effect ? kEventEnd : kEventGo);
             w.u8(slot);
             events_.go += kGoBytes;
             ++events_.goes;
             ++eventsSent_;
-            ++structureSent_;
+            if (!k.effect) ++structureSent_; // (no update speaks of what runs from its event)
             k.told = false;
         }
         if (!live) continue;
@@ -1270,7 +1270,7 @@ void NetRenderClock::heard(uint32_t tick, uint64_t nowNs) {
 
 double NetRenderClock::delayTicks() const {
     constexpr double kMargin = 0.25;
-    return std::min(double(period_ - 1) + jitter_.ticks() + kMargin, kNetMaxDelayTicks);
+    return std::min(double(period_ - 1) + jitter_.ticks() + jitter_.lostTicks(period_) + kMargin, kNetMaxDelayTicks);
 }
 
 double NetRenderClock::at(uint64_t nowNs) {
@@ -1386,16 +1386,21 @@ bool NetStateClient::applyEvents(std::span<const uint8_t> bytes) {
             ++eventsArrived_;
             continue;
         }
+        if (kind == kEventEnd) {
+            // what runs here from its event and ends with the world's: a shot (a beam, a swing), a pickup taken, a
+            // bullet that hit (an effect ends by itself: the world tells no end for one)
+            if (actorSlotClass(slot) != kEffectClass) {
+                Due d{tick, false, nullptr, std::nullopt, std::nullopt, std::nullopt};
+                d.goShot = slot;
+                due_.push_back(std::move(d));
+            }
+            ++eventsArrived_;
+            continue;
+        }
         if (kind == kEventGo) {
             if (std::shared_ptr<Occupant>& o = heardOf_[slot]) {
                 due_.push_back({tick, false, o, std::nullopt, std::nullopt, std::nullopt});
                 o = nullptr;
-            } else if (actorSlotClass(slot) != kEffectClass) {
-                // what runs here from its event and ends with the world's: a shot (a beam, a swing), a pickup taken, a
-                // bullet that hit (an effect ends by itself: the world tells no go for one)
-                Due d{tick, false, nullptr, std::nullopt, std::nullopt, std::nullopt};
-                d.goShot = slot;
-                due_.push_back(std::move(d));
             }
         } else if (kind == kEventAppear || kind == kEventAppearStill) {
             auto o = std::make_shared<Occupant>();

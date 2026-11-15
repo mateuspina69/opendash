@@ -334,7 +334,10 @@ private:
     uint64_t roundTripSumNs_ = 0, roundTripMaxNs_ = 0;
     uint32_t roundTrips_ = 0, behindSum_ = 0, behindTicks_ = 0;
     uint64_t lastPumpNs_ = 0, pumpGapMaxNs_ = 0; // ... and the longest this game left the session unread (a load)
-    void netCheck();
+    uint32_t stoodTicks_ = 0;                    // ... the turns the world's clock ran and showed no new tick
+    od::net::Session::Traffic trafficAt_;        // ... the session's datagrams as of the last line
+    uint64_t checkedNs_ = 0;
+    void netCheck(uint64_t nowNs);
 };
 
 } // namespace od::app

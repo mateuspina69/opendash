@@ -153,6 +153,10 @@ public:
     bool settled() const { return unacked_.empty(); }
     // waits until a datagram is there to poll, at most timeoutNs (a process with nothing else to do between two polls)
     void wait(uint64_t timeoutNs) { socket_.waitReadable(timeoutNs); }
+    // from here on what this side sends leaves at its flush(), all at once: a world's tick is one burst, which the other
+    // side reads in one turn (and passes on as one datagram a player)
+    void defer() { deferred_ = true; }
+    void flush();
 
 private:
     void sendRaw(std::span<const uint8_t> bytes);
@@ -168,6 +172,8 @@ private:
     std::map<uint32_t, std::vector<uint8_t>> early_; // what came ahead of the next one due, by sequence
     static constexpr size_t kMaxEarly = 256;
     WorldParts parts_;
+    bool deferred_ = false;
+    std::vector<std::vector<uint8_t>> outbox_; // deferred: the datagrams waiting for the flush
     uint32_t nextSend_ = 1, nextReceive_ = 1;
     uint64_t lastHeardNs_ = 0;
 };

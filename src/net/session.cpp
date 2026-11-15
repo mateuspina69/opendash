@@ -16,6 +16,14 @@ constexpr uint64_t kMinResendNs = 100 * kNsPerMs, kMaxResendNs = 1'000 * kNsPerM
 constexpr uint64_t kStatsWindowNs = 2'000'000'000ull;      // the loss figure covers this much play
 constexpr double kRttSmoothing = 0.2;                      // weight of a new round-trip sample
 constexpr size_t kMaxEarly = 64;                           // reliable messages held ahead of a gap
+// A small reliable item goes again soon after its first sendings, before its acknowledgement could have come back on a
+// slow link: what waits for it (an actor's appearance, which the updates count on) waits two ticks for a lost datagram,
+// not a round trip. A large one (a save in parts) waits for the round trip.
+constexpr uint64_t kEagerResendNs = 66 * kNsPerMs;
+constexpr uint8_t kEagerSends = 3;
+constexpr size_t kEagerBytes = 256;
+// an acknowledgement with nothing to ride waits this long for a bundle of this turn before it goes alone
+constexpr uint64_t kAckDelayNs = 25 * kNsPerMs;
 
 // a reliable message is resent after twice the smoothed round trip (bounded)
 uint64_t resendAfterNs(double rttMs) {
@@ -67,6 +75,8 @@ Session::~Session() {
 }
 
 void Session::transmit(uint64_t nowNs, const Endpoint& to, std::span<const uint8_t> bytes) {
+    ++traffic_.sentDatagrams;
+    traffic_.sentBytes += bytes.size();
     if (conditioner_) conditioner_->send(nowNs, to, bytes);
     else socket_.sendTo(to, bytes);
 }
@@ -133,14 +143,24 @@ void Session::flushLink(uint64_t nowNs, Link& link) {
         size += need;
     };
     for (Unacked& u : link.unacked) {
-        if (!u.item || (u.sentNs != 0 && nowNs - std::min(nowNs, u.sentNs) < after)) continue;
+        if (!u.item) continue;
+        const uint64_t wait = u.sends < kEagerSends && u.bytes.size() <= kEagerBytes ? std::min(kEagerResendNs, after) : after;
+        if (u.sentNs != 0 && nowNs - std::min(nowNs, u.sentNs) < wait) continue;
         add(true, u.sequence, u.bytes);
         u.sentNs = sentAt;
+        if (u.sends < 0xff) ++u.sends;
     }
     for (const std::vector<uint8_t>& payload : link.latest) add(false, 0, payload);
     link.latest.clear();
-    if (!b.items.empty() || (link.ackDue && !sent)) send();
+    if (b.items.empty() && !sent) {
+        // only an acknowledgement to say: it rides this turn's bundle if one comes, else goes alone
+        if (!link.ackDue) return;
+        if (link.ackSinceNs == 0) link.ackSinceNs = sentAt;
+        if (nowNs - std::min(nowNs, link.ackSinceNs) < kAckDelayNs) return;
+    }
+    if (!b.items.empty() || !sent) send();
     link.ackDue = false;
+    link.ackSinceNs = 0;
 }
 
 void Session::flush(uint64_t nowNs) {
@@ -196,7 +216,7 @@ bool Session::acceptState(uint64_t nowNs, const PlayerState& s) {
     return true;
 }
 
-void Session::poll(uint64_t nowNs) {
+void Session::poll(uint64_t nowNs, bool flushNow) {
     lastNowNs_ = nowNs;
     if (config_.role == Role::Client && !started_) {
         started_ = true;
@@ -204,6 +224,8 @@ void Session::poll(uint64_t nowNs) {
     }
     std::vector<Datagram> in = conditioner_ ? conditioner_->receive(nowNs) : socket_.receive();
     for (Datagram& d : in) {
+        ++traffic_.receivedDatagrams;
+        traffic_.receivedBytes += d.bytes.size();
         auto decoded = decode(d.bytes);
         if (!decoded) continue; // not ours, or malformed
         if (config_.role == Role::Host) hostReceive(nowNs, d.from, std::move(*decoded));
@@ -220,7 +242,7 @@ void Session::poll(uint64_t nowNs) {
         if (nowNs - hostLink_.lastHeardNs >= kPeerTimeoutNs) clientLost(nowNs, "the host is silent");
         else serviceLink(nowNs, hostLink_);
     }
-    flush(nowNs);
+    if (flushNow) flush(nowNs);
 }
 
 void Session::sendPlayerState(uint64_t nowNs, uint32_t tick, std::span<const uint8_t> payload) {

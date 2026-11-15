@@ -1364,6 +1364,10 @@ int run(const WorldArgs& given) {
     };
 
     uint64_t next = SDL_GetTicksNS(), statsNs = 0, statsMaxNs = 0, tick = 0;
+    if (link) {
+        link->flush();
+        link->defer(); // from the first tick: what a tick says leaves as it ends
+    }
     while (view->play && !stopped && (w.ticks == 0 || tick < w.ticks)) {
         if (link) linkTurn(tick);
         const uint64_t at = SDL_GetTicksNS();
@@ -1393,6 +1397,7 @@ int run(const WorldArgs& given) {
             holdRoom(current, current.stage, current.sub);
             g_inStageSwitch = false;
         }
+        if (link) link->flush(); // the tick's whole say, at once
         const uint64_t cost = SDL_GetTicksNS() - at;
         statsNs += cost;
         statsMaxNs = std::max(statsMaxNs, cost);
@@ -1409,6 +1414,7 @@ int run(const WorldArgs& given) {
             else next = after; // late: no burst to catch up, the tick rate falls
         }
     }
+    if (link) link->flush(); // (what its last turn said)
     if (w.listActors) { // test instrument: what stands in the room
         const auto list = [](auto& pool, size_t count, od::port::ActorPool kind) {
             for (size_t i = 0; i < count; ++i) {

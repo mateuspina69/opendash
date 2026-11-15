@@ -168,6 +168,12 @@ void testDelayFollowsJitter() {
     std::printf("  delay: a steady link %.2f ticks, an uneven one %.2f\n", steadyLink.delayTicks(), uneven.delayTicks());
     CHECK(std::abs(steadyLink.delayTicks() - 1.0) < 0.05);
     CHECK(uneven.delayTicks() > 2.5 && uneven.delayTicks() < 3.6);
+    // ... and one that loses a state now and then, a tick further back than a steady one: the next state is there
+    GhostBuffer lossy;
+    for (int k = 0; k <= 60; ++k)
+        if (k % 20 != 7) lossy.push(uint64_t(k) * kTickNs, uint32_t(k), at(k));
+    std::printf("  delay: a link that loses one state in twenty %.2f ticks\n", lossy.delayTicks());
+    CHECK(lossy.delayTicks() > 1.9 && lossy.delayTicks() < 2.3);
 }
 
 } // namespace

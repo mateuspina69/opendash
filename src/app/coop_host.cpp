@@ -220,7 +220,7 @@ void CoopHost::fromClient(uint8_t id, const WorldMessage& m, uint64_t nowNs) {
 }
 
 void CoopHost::poll(uint64_t nowNs) {
-    if (session_) session_->poll(nowNs); // what the clients sent, read now
+    if (session_) session_->poll(nowNs, false); // what the clients sent, read now (what goes to them leaves below, at once)
     worlds_.poll(nowNs);
     if (worlds_.takeEveryoneDown()) {
         // the worlds start from the host's last save (a game over's way back)
@@ -316,7 +316,7 @@ void SessionPipe::sendLatest(uint8_t playerId, WorldMessageType type, std::vecto
 
 void SessionPipe::poll(uint64_t nowNs) {
     nowNs_ = nowNs;
-    session_.poll(nowNs); // what the host sent, read now
+    session_.poll(nowNs, false); // what the host sent, read now (what this game sends leaves with its flush)
     if (!playerId()) parts_ = {}; // (the session was lost: what the host had half sent is not the start of its next one's)
     for (const od::net::ReceivedWorld& d : session_.takeWorld())
         if (auto m = decodeWorldMessage(d.payload))

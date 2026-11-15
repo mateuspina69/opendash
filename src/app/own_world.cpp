@@ -332,10 +332,12 @@ void OwnWorldClient::pump(uint64_t nowNs) {
     if (lastPumpNs_ != 0 && nowNs > lastPumpNs_) pumpGapMaxNs_ = std::max(pumpGapMaxNs_, nowNs - lastPumpNs_);
     lastPumpNs_ = nowNs;
     pipe_->poll(nowNs);
+    pipe_->flush(nowNs);
 }
 
 void OwnWorldClient::awayTurn(uint64_t nowNs) {
     pipe_->poll(nowNs);
+    pipe_->flush(nowNs);
     const std::optional<uint8_t> id = pipe_->playerId();
     if (!id) return;
     for (const WorldMessage& m : pipe_->take(*id))
@@ -344,6 +346,12 @@ void OwnWorldClient::awayTurn(uint64_t nowNs) {
 
 void OwnWorldClient::turn(uint64_t nowNs) {
     if (!room_ || entering_) return; // entering: the room's first field tick decides first (roomScriptsRan)
+    // all this turn sends -- this player's state, the acknowledgements of what it read -- leaves once, as it ends
+    struct Flush {
+        WorldPipe& pipe;
+        uint64_t nowNs;
+        ~Flush() { pipe.flush(nowNs); }
+    } flushAtEnd{*pipe_, nowNs};
     pipe_->poll(nowNs);
     if (!joined_) {
         const std::optional<uint8_t> id = pipe_->playerId();
@@ -470,6 +478,7 @@ void OwnWorldClient::turn(uint64_t nowNs) {
     }
     if (clock_->running() && !localScene_) { // in a scene the room's actors are this game's own
         const int64_t at = int64_t(clock_->at(nowNs));
+        if (shownAny_ && int64_t(shown_) >= at) ++stoodTicks_;
         while (at >= 0 && (!shownAny_ || int64_t(shown_) < at)) {
             shown_ = shownAny_ ? shown_ + 1 : uint32_t(at);
             shownAny_ = true;
@@ -479,18 +488,27 @@ void OwnWorldClient::turn(uint64_t nowNs) {
         behindSum_ += state_->newestTick() - shown_;
         ++behindTicks_;
     }
-    netCheck();
+    netCheck(nowNs);
     for (; failuresLogged_ < failures_.classes.size(); ++failuresLogged_)
         SDL_Log("own world: failed: %s", failures_.classes[failuresLogged_].c_str());
 }
 
-void OwnWorldClient::netCheck() {
+void OwnWorldClient::netCheck(uint64_t nowNs) {
     constexpr uint32_t kEvery = 150;
     if (localTick_ % kEvery != 0 || roundTrips_ == 0) return;
-    SDL_Log("netcheck: to the world and back avg %.1f ms, max %.1f ms (%u player updates); the world shown %.1f ticks behind the newest heard; "
-            "the session left unread %.1f ms at most",
+    const od::net::Session::Traffic traffic = pipe_->traffic();
+    const double seconds = checkedNs_ != 0 && nowNs > checkedNs_ ? double(nowNs - checkedNs_) * 1e-9 : 0.0;
+    const auto rate = [&](uint64_t now, uint64_t before) { return seconds > 0.0 ? double(now - before) / seconds : 0.0; };
+    SDL_Log("netcheck: to the world and back avg %.1f ms, max %.1f ms (%u player updates); the world shown %.1f ticks behind the newest heard, "
+            "its clock stood %u of %u turns; the session left unread %.1f ms at most; sent %.0f datagrams %.0f bytes a second, received %.0f "
+            "datagrams %.0f bytes a second",
             double(roundTripSumNs_) / double(roundTrips_) * 1e-6, double(roundTripMaxNs_) * 1e-6, roundTrips_,
-            behindTicks_ ? double(behindSum_) / double(behindTicks_) : 0.0, double(pumpGapMaxNs_) * 1e-6);
+            behindTicks_ ? double(behindSum_) / double(behindTicks_) : 0.0, stoodTicks_, behindTicks_, double(pumpGapMaxNs_) * 1e-6,
+            rate(traffic.sentDatagrams, trafficAt_.sentDatagrams), rate(traffic.sentBytes, trafficAt_.sentBytes),
+            rate(traffic.receivedDatagrams, trafficAt_.receivedDatagrams), rate(traffic.receivedBytes, trafficAt_.receivedBytes));
+    trafficAt_ = traffic;
+    checkedNs_ = nowNs;
+    stoodTicks_ = 0;
     pumpGapMaxNs_ = 0;
     roundTripSumNs_ = roundTripMaxNs_ = 0;
     roundTrips_ = behindSum_ = behindTicks_ = 0;
@@ -986,6 +1004,11 @@ void OwnWorldClient::addGuest(int dx, int dz) { guest_ = std::make_pair(dx, dz);
 
 void OwnWorldClient::endFrame(const od::CollisionRoom& room) {
     if (!room_) return;
+    // what the tick's body sends -- this tick's shots -- leaves as it ends, not with the next frame
+    struct Flush {
+        WorldPipe& pipe;
+        ~Flush() { pipe.flush(SDL_GetTicksNS()); }
+    } flushAtEnd{*pipe_};
     if (ownEvent_) {
         od::port::talkerMenusTick(eventSaveMenu_, eventMenus_, eventHints_);
         od::port::EventState& ev = od::port::eventState();

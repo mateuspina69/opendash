@@ -42,7 +42,7 @@ public:
     void clear();
     double renderTick() const { return renderTick_; } // the last sample's render point (sender ticks)
     // how far behind the newest state the render point is steered
-    double delayTicks() const { return std::min(kStateDelayTicks + jitter_.ticks(), kMaxDelayTicks); }
+    double delayTicks() const { return std::min(kStateDelayTicks + jitter_.ticks() + jitter_.lostTicks(1), kMaxDelayTicks); }
 
 private:
     struct Held {

@@ -94,7 +94,9 @@ public:
     Session(const Session&) = delete;
     Session& operator=(const Session&) = delete;
 
-    void poll(uint64_t nowNs);
+    // flush false: what sendWorld was handed stays until the caller's own flush (a turn that reads, then sends, then
+    // flushes once: one datagram for all of it)
+    void poll(uint64_t nowNs, bool flush = true);
     // this player's own state: the host sends it to every client, a connected client to the host
     void sendPlayerState(uint64_t nowNs, uint32_t tick, std::span<const uint8_t> payload);
     // the player states received since the last call (newer than every earlier one of the same player)
@@ -117,6 +119,11 @@ public:
     uint32_t membership() const { return membership_; }
     // everyone else in the session now
     std::vector<PeerInfo> peers() const;
+    // the datagrams and their bytes (as UDP carries them: the payload) sent and received so far
+    struct Traffic {
+        uint64_t sentDatagrams = 0, sentBytes = 0, receivedDatagrams = 0, receivedBytes = 0;
+    };
+    const Traffic& traffic() const { return traffic_; }
 
 private:
     // a reliable message not acknowledged yet: a control message's whole datagram, or a bundle item's payload (sent with
@@ -126,6 +133,7 @@ private:
         std::vector<uint8_t> bytes;
         uint64_t sentNs;
         bool item = false;
+        uint8_t sends = 0; // a bundle item's: how often it went
     };
     // a reliable message as it arrived: a control message, or a bundle item's payload
     struct Incoming {
@@ -141,6 +149,7 @@ private:
         std::map<uint32_t, Incoming> early; // received ahead of nextIn
         std::vector<std::vector<uint8_t>> latest; // what the next one replaces, waiting for the flush
         bool ackDue = false;             // a reliable message arrived since the last bundle sent
+        uint64_t ackSinceNs = 0;         // ... and has waited since then for a bundle to ride (0: not waiting)
         uint16_t orderOut = 0;           // the last bundle sent
         uint16_t orderIn = 0;            // the newest bundle received
         bool anyOrder = false;
@@ -206,6 +215,7 @@ private:
     std::vector<ReceivedWorld> world_;
     std::vector<PeerEvent> events_;
     uint32_t membership_ = 0;
+    Traffic traffic_;
     uint64_t lastNowNs_ = 0;
 };
 

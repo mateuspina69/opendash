@@ -28,7 +28,8 @@
 //   Effect: u8 slot, pool, type, loop flags, flags; u16 which of the rest are not their usual value and so follow; i16 x, y,
 //   z; then those: u8 subtype, variant, spawn byte, parent, second, the three steps, the trail (u8 which lanes, i16 each),
 //   bone, owner, 4 parameters, i16 the short after the position, i16 rotation x, y, z, i16 velocity x, y, z.
-//   Flash: u8 slot (a hit's one-tick white flash; the updates' tint leaves it out).
+//   Flash: u8 slot (a hit's one-tick white flash; the updates' tint leaves it out). End: u8 slot (what runs on the client
+//   from its event ends with the world's: a shot, a pickup taken).
 // An update waits only for the events it counts on: an effect or a flash on its way holds no actor's update back.
 //
 // A shot or a projectile goes as a path: the client moves it by itself from a point and its steps, and the world sends a new
