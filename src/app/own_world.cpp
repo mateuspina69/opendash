@@ -906,6 +906,7 @@ void OwnWorldClient::showPlayers(GhostView& ghosts, uint64_t localFingerprint, u
             for (auto it = o.doors.rbegin(); it != o.doors.rend(); ++it)
                 if (int32_t(it->first - uint32_t(tick)) <= 0) {
                     o.doorShown = it->second;
+                    o.doorShownTick = it->first;
                     break;
                 }
         if (!posed) o.stepped = -1; // where it is next posed it starts at the shown tick
@@ -1290,7 +1291,9 @@ void OwnWorldClient::doorMirrorEnd(DoorMirror& m) {
         door->prevPos.y = door->pos.y;
         door->pos.y = wholeToFixed(m.doorBaseY);
     }
+    const uint32_t told = m.toldTick; // (kept: a door shown again from before it is not a new one)
     m = DoorMirror{};
+    m.toldTick = told;
 }
 
 // The doors the others open, shown here as on their screen (with no camera of theirs): their leaves posed as theirs tick by
@@ -1301,13 +1304,19 @@ void OwnWorldClient::doorMirrorTurn() {
     constexpr int kDoorBackTicks = 30;  // the door actor back to its place
     for (size_t id = 0; id < others_.size() && id < doorMirrors_.size(); ++id) {
         DoorMirror& m = doorMirrors_[id];
-        const od::port::NetDoor& told = others_[id].doorShown;
         for (size_t k = 0; k < m.leafCount; ++k) { // a leaf's slot taken since (a scene's rebuild): not ours any more
             if (m.leafAt[k] == 0) continue;
             const od::port::StaticActor& l = od::port::staticActorAt(m.leafAt[k]);
             if (!(l.flags & od::port::kActorLive) || l.type != m.leaves[k].type || l.variant != m.leaves[k].variant) m.leafAt[k] = 0;
         }
-        if (told.any() && m.closing >= 0) doorMirrorEnd(m); // a new door while the last one closes: that one is done
+        // their door at the tick shown, taken only going forward: open, a state of that tick or after; closing, a newer one
+        // (their ghost shown again from before, after they left, brings back the states it showed already)
+        const Other& o = others_[id];
+        const bool fresh = o.doorShown.any() && (m.any() && m.closing < 0 ? int32_t(o.doorShownTick - m.toldTick) >= 0
+                                                                            : int32_t(o.doorShownTick - m.toldTick) > 0 || m.toldTick == 0);
+        const od::port::NetDoor told = fresh ? o.doorShown : od::port::NetDoor{};
+        if (fresh && m.closing >= 0) doorMirrorEnd(m); // a newer door while the last one closes: that one is done
+        if (fresh) m.toldTick = o.doorShownTick;
         if (told.any()) {
             if (!m.any()) {
                 m.leafCount = told.leafCount;

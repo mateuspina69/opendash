@@ -184,6 +184,7 @@ private:
         // the door they open, by their tick (their fields' door), and the one of the tick shown here (none: not posed here)
         std::deque<std::pair<uint32_t, od::port::NetDoor>> doors;
         od::port::NetDoor doorShown;
+        uint32_t doorShownTick = 0; // ... the tick it was heard at
     };
     // A door another player opens, shown here: its leaves in this game's static pool posed as theirs, the room's doors they
     // stand in for hidden, the door actor carrying them at its height; once they are through, back to closed and gone
@@ -195,6 +196,7 @@ private:
         uint8_t doorSlot = 0;
         int16_t doorBaseY = 0, doorY = 0;
         int closing = -1; // the ticks it has been closing (-1: open)
+        uint32_t toldTick = 0; // the tick of the newest state shown (kept once it is gone): an older one is not taken
         bool any() const { return leafCount != 0 || doorSlot != 0; }
     };
     std::array<DoorMirror, 8> doorMirrors_{}; // by player id, as others_
