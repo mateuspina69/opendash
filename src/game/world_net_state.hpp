@@ -278,7 +278,8 @@ public:
     void continueFrom(uint16_t next) { nextSequence_ = next; }
     // the bytes of the largest update, by kind of field (measuring)
     struct UpdateBytes {
-        uint32_t total = 0, head = 0, position = 0, rotation = 0, animation = 0, visual = 0, aim = 0, paint = 0, solids = 0, lock = 0, path = 0;
+        uint32_t total = 0, head = 0, position = 0, rotation = 0, animation = 0, visual = 0, aim = 0, paint = 0, solids = 0, lock = 0, path = 0,
+                 picture = 0;
     };
     const UpdateBytes& largestUpdate() const { return largest_; }
     // ... of every update so far, and of every event by kind (measuring)

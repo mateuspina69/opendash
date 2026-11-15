@@ -334,10 +334,11 @@ void fireEffectDraw(fx::DrawContext& c, const fx::State& st, uint32_t actor, uin
 void fireMissionTextures(std::vector<fx::Texture>& out);
 
 // A session (game/world_net_state, ContentRegistry::netPictures / netStops): a fire's picture (the wall blast's too) -- its
-// state, its strength, its sprite's frame -- given by the world's fire to its copies, whose lock goes once it is put out; a
-// flame (each client runs it) told to stop by its fire
+// state, its strength -- given by the world's fire to its copies, whose lock goes once it is put out; its sprite's frame,
+// which each copy counts itself; a flame (each client runs it) told to stop by its fire
 std::vector<uint8_t> firePicture(uint32_t actor);
 void fireTakePicture(uint32_t actor, std::span<const uint8_t> picture);
+void fireStepPicture(uint32_t actor);
 bool flameStopped(uint32_t actor);
 void flameStop(uint32_t actor);
 // ... the burning Data's picture -- burning, his hit points (his flame's size); taken on a client, his copy burning lights

@@ -818,20 +818,26 @@ std::vector<uint8_t> firePicture(uint32_t address) {
     const uint32_t strength = uint32_t(fire.strength);
     // (a fire its pool loop passes by, during a message: no draw command, as in the game)
     const uint8_t state = uint8_t(actor.state | ((actor.runFlags & kActorRun) ? 0 : kFireHeldPicture));
-    return {state,             uint8_t(strength), uint8_t(strength >> 8), uint8_t(strength >> 16), uint8_t(strength >> 24),
-            fire.frame,        fire.frameTicks};
+    return {state, uint8_t(strength), uint8_t(strength >> 8), uint8_t(strength >> 16), uint8_t(strength >> 24)};
 }
 
 void fireTakePicture(uint32_t address, std::span<const uint8_t> picture) {
-    if (picture.size() != 7) return;
+    if (picture.size() != 5) return;
     StaticActor& actor = staticActorAt(address);
     BurningFields& fire = classState<BurningFields>(actor);
     actor.state = picture[0];
     // put out: the lock on it goes to the next fire at once here too (its class released the world's own player's)
     if (FireState(actor.state) == FireState::PutOut) releaseLockOnTarget(actor.slot);
     fire.strength = int32_t(uint32_t(picture[1]) | uint32_t(picture[2]) << 8 | uint32_t(picture[3]) << 16 | uint32_t(picture[4]) << 24);
-    fire.frame = picture[5];
-    fire.frameTicks = picture[6];
+}
+
+// the sprite's frame of a copy: each machine counts its own, while the fire burns and its class runs there (fireBurn)
+void fireStepPicture(uint32_t address) {
+    StaticActor& actor = staticActorAt(address);
+    if (FireState(actor.state) != FireState::Burn) return;
+    BurningFields& fire = classState<BurningFields>(actor);
+    if (fire.frameTicks == 0) fire.frameTicks = fireFrames[uint32_t(actor.variant) * kFireFramesPerSize + fire.frame].ticks; // (a copy's first)
+    else stepFrame(actor, fire);
 }
 
 bool flameStopped(uint32_t address) { return classState<FlameFields>(staticActorAt(address)).stopped != 0; }

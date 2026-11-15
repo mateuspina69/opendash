@@ -365,52 +365,30 @@ void gatherLockEntries() {
     }
 }
 
-// What each animated actor's lock-on points and bones were on the last tick: a point is told from the bone it moved with
-struct LockTrack {
-    bool any = false;
-    std::array<int16_t, 3> pos{};
-    std::vector<std::array<int16_t, 3>> bones, points;
-};
-std::array<LockTrack, kAnimatedFieldSlots>& lockTracks() {
-    static std::array<LockTrack, kAnimatedFieldSlots> tracks;
-    return tracks;
-}
-
-std::array<int16_t, 3> minus(const std::array<int16_t, 3>& a, const std::array<int16_t, 3>& b) {
-    return {int16_t(uint16_t(a[0]) - uint16_t(b[0])), int16_t(uint16_t(a[1]) - uint16_t(b[1])), int16_t(uint16_t(a[2]) - uint16_t(b[2]))};
-}
-int apart(const std::array<int16_t, 3>& a, const std::array<int16_t, 3>& b) {
-    return std::abs(int(a[0]) - int(b[0])) + std::abs(int(a[1]) - int(b[1])) + std::abs(int(a[2]) - int(b[2]));
-}
-
 // The lock-on points of an animated actor (`now`: relative to its position, as seenOf leaves them), each from what it
-// moves with: the bone it was told from while it stays there (`before`: the list the table holds of this occupant), else
-// the bone -- or the actor's position -- that moved as it did since the last tick; one new here, the bone it stands on
-void attachLockPoints(const AnimatedActor& a, size_t index, bool sameOccupant, const std::vector<NetLockPoint>& before,
-                      std::vector<NetLockPoint>& now) {
-    LockTrack& track = lockTracks()[index];
-    if (now.empty()) {
-        track.any = false;
-        return;
-    }
+// rides: the bone it was told from while it stays there (`before`: the list the table holds of this occupant), else the
+// bone whose point it stands on (a class hands its hit entry a bone's point), else the actor's position
+void attachLockPoints(const AnimatedActor& a, bool sameOccupant, const std::vector<NetLockPoint>& before, std::vector<NetLockPoint>& now) {
+    if (now.empty()) return;
     const std::array<int16_t, 3> pos = {a.pos.x.whole, a.pos.y.whole, a.pos.z.whole};
-    std::vector<std::array<int16_t, 3>> bones, points;
+    std::vector<std::array<int16_t, 3>> bones;
     for (int k = 0; k < int(a.partCount) && k < 32; ++k) {
         const BoneBlock* b = boneBlockOf(a, k >> 2);
         if (!b) break;
         const ShortVec4& p = b->points[size_t(k & 3)];
         bones.push_back({p.x, p.y, p.z});
     }
-    for (const NetLockPoint& p : now)
-        points.push_back({int16_t(uint16_t(pos[0]) + uint16_t(p.offset[0])), int16_t(uint16_t(pos[1]) + uint16_t(p.offset[1])),
-                          int16_t(uint16_t(pos[2]) + uint16_t(p.offset[2]))});
-    const bool history = sameOccupant && track.any && track.bones.size() == bones.size();
-    const auto from = [&](size_t n, uint8_t bone) { return minus(points[n], bone == kNetNoBone ? pos : bones[bone]); };
+    const auto minus = [](const std::array<int16_t, 3>& x, const std::array<int16_t, 3>& y) {
+        return std::array<int16_t, 3>{int16_t(uint16_t(x[0]) - uint16_t(y[0])), int16_t(uint16_t(x[1]) - uint16_t(y[1])),
+                                      int16_t(uint16_t(x[2]) - uint16_t(y[2]))};
+    };
     for (size_t n = 0; n < now.size(); ++n) {
         NetLockPoint& p = now[n];
-        if (sameOccupant && n < before.size() && before[n].shape == p.shape && before[n].owner == p.owner && before[n].harmless == p.harmless &&
-            (before[n].bone == kNetNoBone || before[n].bone < bones.size())) {
-            const std::array<int16_t, 3> offset = from(n, before[n].bone);
+        const std::array<int16_t, 3> point = {int16_t(uint16_t(pos[0]) + uint16_t(p.offset[0])), int16_t(uint16_t(pos[1]) + uint16_t(p.offset[1])),
+                                              int16_t(uint16_t(pos[2]) + uint16_t(p.offset[2]))};
+        if (sameOccupant && n < before.size() && before[n].bone < bones.size() && before[n].shape == p.shape && before[n].owner == p.owner &&
+            before[n].harmless == p.harmless) {
+            const std::array<int16_t, 3> offset = minus(point, bones[before[n].bone]);
             bool stays = true;
             for (size_t l = 0; l < 3; ++l) stays = stays && std::abs(int(offset[l]) - int(before[n].offset[l])) <= kLockTolerance;
             if (stays) {
@@ -419,26 +397,13 @@ void attachLockPoints(const AnimatedActor& a, size_t index, bool sameOccupant, c
                 continue;
             }
         }
-        uint8_t best = kNetNoBone;
-        if (history && n < track.points.size()) {
-            const std::array<int16_t, 3> moved = minus(points[n], track.points[n]);
-            int least = apart(moved, minus(pos, track.pos));
-            for (size_t b = 0; b < bones.size(); ++b)
-                if (const int drift = apart(moved, minus(bones[b], track.bones[b])); drift < least) {
-                    least = drift;
-                    best = uint8_t(b);
-                }
-        } else {
-            for (size_t b = 0; b < bones.size() && best == kNetNoBone; ++b)
-                if (bones[b] == points[n]) best = uint8_t(b);
-        }
-        p.bone = best;
-        p.offset = from(n, best);
+        for (size_t b = 0; b < bones.size(); ++b)
+            if (bones[b] == point) {
+                p.bone = uint8_t(b);
+                p.offset = {};
+                break;
+            }
     }
-    track.any = true;
-    track.pos = pos;
-    track.bones = std::move(bones);
-    track.points = std::move(points);
 }
 
 NetWorldTable::Seen seenOf(const Actor& a, uint32_t model, uint32_t animTable) {
@@ -736,8 +701,8 @@ void captureNetWorld(NetWorldTable& table, uint32_t tick) {
         }
         s.animScript = hasModel ? a.animScript.value() : 0;
         const NetWorldActor& held = table.actors[slot];
-        attachLockPoints(a, i, held.live && held.model == s.model && held.animTable == s.animTable && held.identity.type == a.type,
-                         held.state.lock, s.lock);
+        attachLockPoints(a, held.live && held.model == s.model && held.animTable == s.animTable && held.identity.type == a.type, held.state.lock,
+                         s.lock);
         s.modelEntry = held.live && held.model == s.model && held.animTable == s.animTable && held.identity.type == a.type
                            ? held.identity.modelEntry
                            : modelEntryOf(kAnimatedClass, s.model, s.animTable, s.bound);
@@ -1197,11 +1162,12 @@ std::vector<uint8_t> NetStateSender::update(const NetWorldTable& table) {
             e.u8(a.state.visual.semi);
         }
         if (extra & kExtraReport) e.u8(a.state.report);
+        count(&UpdateBytes::paint);
         if (extra & kExtraPicture) {
             e.u8(uint8_t(a.state.picture.size()));
             e.bytes.insert(e.bytes.end(), a.state.picture.begin(), a.state.picture.end());
         }
-        count(&UpdateBytes::paint);
+        count(&UpdateBytes::picture);
         if (more & kMoreSolids) {
             e.u8(uint8_t(a.state.solids.size()));
             for (const NetSolid& s : a.state.solids) {
@@ -1271,7 +1237,8 @@ std::vector<uint8_t> NetStateSender::update(const NetWorldTable& table) {
     counted.total = uint32_t(w.bytes.size());
     if (counted.total > largest_.total) largest_ = counted;
     for (const auto field : {&UpdateBytes::total, &UpdateBytes::head, &UpdateBytes::position, &UpdateBytes::rotation, &UpdateBytes::animation,
-                             &UpdateBytes::visual, &UpdateBytes::aim, &UpdateBytes::paint, &UpdateBytes::solids, &UpdateBytes::lock, &UpdateBytes::path})
+                             &UpdateBytes::visual, &UpdateBytes::aim, &UpdateBytes::paint, &UpdateBytes::solids, &UpdateBytes::lock, &UpdateBytes::path,
+                             &UpdateBytes::picture})
         allUpdates_.*field += counted.*field;
     if (cut) ++updatesCut_;
     else cursor_ = 0;
@@ -2016,8 +1983,10 @@ void PoolNetActors::tick(uint8_t slot, const NetActorState& state, const std::op
             RoutineRef h = actorHandler(*head, ActorPool::Statics, false);
             if (!h) h = actorHandler(*head, ActorPool::StaticsLate, false);
             const auto& pictures = content().netPictures;
-            if (const auto it = h ? pictures.find(h.id()) : pictures.end(); it != pictures.end() && it->second.apply)
-                it->second.apply(a.at, state.picture);
+            if (const auto it = h ? pictures.find(h.id()) : pictures.end(); it != pictures.end()) {
+                if (it->second.apply) it->second.apply(a.at, state.picture);
+                if (it->second.step) it->second.step(a.at);
+            }
         }
         return;
     }

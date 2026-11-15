@@ -114,6 +114,9 @@ struct ContentRegistry {
         // (script: the scene's; picture: the world's, by `capture`; false: not one this scene goes on with -- it goes, as
         // the rest the rebuild did not spawn)
         bool (*adopt)(const PlayerEnv& env, uint32_t actor, uint8_t script, std::span<const uint8_t> picture) = nullptr;
+        // what a copy runs by itself on each of its ticks, after it took the picture: what is only seen and the same on
+        // every machine by its own count (a sprite's frame), which the picture leaves out
+        void (*step)(uint32_t actor) = nullptr;
     };
     std::map<RoutineId, NetPicture> netPictures;
 
