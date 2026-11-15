@@ -282,6 +282,12 @@ public:
             const od::port::NetStateSender::UpdateBytes& b = r.sender.largestUpdate();
             std::fprintf(out.f, "largest %u head %u position %u rotation %u animation %u visual %u aim %u paint %u solids %u lock %u path %u\n",
                          b.total, b.head, b.position, b.rotation, b.animation, b.visual, b.aim, b.paint, b.solids, b.lock, b.path);
+            const od::port::NetStateSender::UpdateBytes& a = r.sender.updateBytes();
+            std::fprintf(out.f, "all %u head %u position %u rotation %u animation %u visual %u aim %u paint %u solids %u lock %u path %u\n",
+                         a.total, a.head, a.position, a.rotation, a.animation, a.visual, a.aim, a.paint, a.solids, a.lock, a.path);
+            const od::port::NetStateSender::EventBytes& e = r.sender.eventBytes();
+            std::fprintf(out.f, "events head %u appear %u go %u effect %u flash %u room %u appears %u goes %u effects %u flashes %u\n", e.head,
+                         e.appear, e.go, e.effect, e.flash, e.room, e.appears, e.goes, e.effects, e.flashes);
         }
     }
 
@@ -1351,10 +1357,7 @@ int run(const WorldArgs& given) {
             link->sendLatest(briefMessage);
         }
         WorldMessage report{WorldMessageType::Report};
-        const od::port::WorldDigest digest = od::port::worldDigest();
         report.tick = tick;
-        report.liveActors = digest.liveActors;
-        report.digest = digest.hash;
         for (size_t id = 0; id < od::port::kPlayerSlots; ++id)
             if (od::port::playerPresent(id)) ++report.players;
         link->sendLatest(report);

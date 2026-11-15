@@ -16,7 +16,7 @@
 namespace od::app {
 
 // Coordinator -> world: Join {id, player state}, State {id, player state}, Leave {id}, Stop, KeepAlive.
-// World -> coordinator: Hello, Report {tick, live actors, players in the world, digest}.
+// World -> coordinator: Hello, Report {tick, players in the world}.
 // Both ways: StageState {the stage's record: game/stage_record}.
 // The network state (game/world_net_state), per client: NetJoin {client} and NetAck {client, sequence} toward the world,
 // NetEvents {client, batch} (what must arrive) and NetUpdate {client, update} (what the next one replaces) from it.
@@ -97,9 +97,7 @@ struct WorldMessage {
     std::vector<uint8_t> playerState; // Join, State: game/player/player_snapshot's encodePlayerState
     std::vector<uint8_t> stageRecord; // StageState: game/stage_record's encodeStageRecord
     uint64_t tick = 0;                // Report
-    uint32_t liveActors = 0;
     uint8_t players = 0;
-    uint64_t digest = 0;
     uint16_t netSequence = 0;         // NetAck
     std::vector<uint8_t> netState;    // NetEvents, NetUpdate
     // a Net message's: the player's entry into a room it belongs to (WorldPipe::enter counts them; a NetEnter carries the

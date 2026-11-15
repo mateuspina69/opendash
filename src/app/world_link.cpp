@@ -89,9 +89,7 @@ std::vector<uint8_t> encodeWorldMessage(const WorldMessage& m) {
     case WorldMessageType::StageState: w.blob(m.stageRecord); break;
     case WorldMessageType::Report:
         w.u64(m.tick);
-        w.u32(m.liveActors);
         w.u8(m.players);
-        w.u64(m.digest);
         break;
     case WorldMessageType::NetJoin:
     case WorldMessageType::NetLeave: w.u8(m.playerId); break;
@@ -176,9 +174,7 @@ std::optional<WorldMessage> decodeWorldMessage(std::span<const uint8_t> bytes) {
     case WorldMessageType::StageState: m.stageRecord = r.blob(); break;
     case WorldMessageType::Report:
         m.tick = r.u64();
-        m.liveActors = r.u32();
         m.players = r.u8();
-        m.digest = r.u64();
         break;
     case WorldMessageType::NetJoin:
     case WorldMessageType::NetLeave: m.playerId = r.u8(); break;

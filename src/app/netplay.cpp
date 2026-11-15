@@ -151,7 +151,7 @@ od::net::SessionStatus Netplay::status(uint64_t nowNs) const {
 }
 
 void Netplay::afterTick() {
-    if (!session_ && !mirror_) return;
+    if (!mirror_ && (!session_ || worldMode_)) return; // (a session's players go through their worlds: app/own_world)
     ++localTick_;
     od::port::RemotePlayerState s{od::port::ghostRoomOf(),
                                   od::port::loadedDataFingerprint(loadedDataIdentity()),

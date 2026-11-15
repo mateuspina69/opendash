@@ -473,7 +473,7 @@ void WorldHost::poll(uint64_t nowNs) {
                 world.startedNs = 0;
             }
             if (m.type == WorldMessageType::Report) {
-                world.report = WorldReport{m.tick, m.liveActors, m.players, m.digest};
+                world.report = WorldReport{m.tick, m.players};
                 world.running = true;
             }
             if ((m.type == WorldMessageType::NetEvents || m.type == WorldMessageType::NetUpdate ||

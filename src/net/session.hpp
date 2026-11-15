@@ -109,6 +109,14 @@ public:
     // joins and leaves since the last call
     std::vector<PeerEvent> takePeerEvents();
     SessionStatus status(uint64_t nowNs) const;
+    // this game's player id once it is in the session (a host: at once)
+    std::optional<uint8_t> localPlayer() const {
+        return config_.role == Role::Host || connection_ == Connection::Connected ? std::optional(localId_) : std::nullopt;
+    }
+    // counts the session's joins and leaves, and the losses of the connection: who is in it changes only when this does
+    uint32_t membership() const { return membership_; }
+    // everyone else in the session now
+    std::vector<PeerInfo> peers() const;
 
 private:
     // a reliable message not acknowledged yet: a control message's whole datagram, or a bundle item's payload (sent with
@@ -197,6 +205,7 @@ private:
     std::vector<ReceivedState> states_;
     std::vector<ReceivedWorld> world_;
     std::vector<PeerEvent> events_;
+    uint32_t membership_ = 0;
     uint64_t lastNowNs_ = 0;
 };
 

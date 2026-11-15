@@ -30,9 +30,7 @@ struct WorldRoom {
 // What a world last said of itself
 struct WorldReport {
     uint64_t tick = 0;
-    uint32_t liveActors = 0;
     uint8_t players = 0;
-    uint64_t digest = 0;
 };
 
 class WorldHost {

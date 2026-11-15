@@ -796,12 +796,14 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
         if (w.bytes.empty()) {
             w.u32(table.tick);
             w.u32(eventsSent_);
+            events_.head += kBatchHeaderBytes;
         }
     };
     if (table.coordinateShift != shiftTold_ && table.coordinateShift != 0xff) {
         room(kGoBytes);
         w.u8(kEventShift);
         w.u8(table.coordinateShift);
+        events_.room += kGoBytes;
         ++eventsSent_;
         shiftTold_ = table.coordinateShift;
     }
@@ -812,6 +814,7 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
         w.u32(p.offset);
         w.u8(uint8_t(p.bytes.size()));
         w.bytes.insert(w.bytes.end(), p.bytes.begin(), p.bytes.end());
+        events_.room += uint32_t(1 + 4 + 1 + p.bytes.size());
         ++eventsSent_;
     }
     for (size_t i = 0; i < kNetSlots; ++i) {
@@ -829,6 +832,8 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
             room(kGoBytes);
             w.u8(kEventFlash);
             w.u8(slot);
+            events_.flash += kGoBytes;
+            ++events_.flashes;
             ++eventsSent_;
             k.flashTold = a.flashTick;
         }
@@ -841,6 +846,8 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
             room(kGoBytes);
             w.u8(kEventGo);
             w.u8(slot);
+            events_.go += kGoBytes;
+            ++events_.goes;
             ++eventsSent_;
             k.told = false;
         }
@@ -853,6 +860,7 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
             if (!a.effectGoes) continue;
             const NetEffect& e = a.effectStart;
             room(kEffectBytes);
+            const size_t effectFrom = w.bytes.size();
             w.u8(kEventEffect);
             w.u8(slot);
             w.u8(e.pool);
@@ -877,11 +885,14 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
                 for (const int16_t v : e.rot) w.i16(v);
                 for (const int16_t v : e.velocity) w.i16(v);
             }
+            events_.effect += uint32_t(w.bytes.size() - effectFrom);
+            ++events_.effects;
             ++eventsSent_;
             continue;
         }
         k.effect = false;
         room(kAppearBytes);
+        const size_t appearFrom = w.bytes.size();
         const bool playing = a.state.animTick != kNetNoAnimTick;
         w.u8(playing ? kEventAppear : kEventAppearStill);
         w.u8(slot);
@@ -900,6 +911,8 @@ std::vector<std::vector<uint8_t>> NetStateSender::events(const NetWorldTable& ta
             w.u8(a.state.animKeyed ? a.state.animTicks : uint8_t(0));
             w.u8(uint8_t((a.state.held ? 2 : 0) | (a.state.animKeyed ? 1 : 0)));
         }
+        events_.appear += uint32_t(w.bytes.size() - appearFrom);
+        ++events_.appears;
         ++eventsSent_;
         k.told = true;
         k.generation = a.generation;
@@ -1118,6 +1131,9 @@ std::vector<uint8_t> NetStateSender::update(const NetWorldTable& table) {
     }
     counted.total = uint32_t(w.bytes.size());
     if (counted.total > largest_.total) largest_ = counted;
+    for (const auto field : {&UpdateBytes::total, &UpdateBytes::head, &UpdateBytes::position, &UpdateBytes::rotation, &UpdateBytes::animation,
+                             &UpdateBytes::visual, &UpdateBytes::aim, &UpdateBytes::paint, &UpdateBytes::solids, &UpdateBytes::lock, &UpdateBytes::path})
+        allUpdates_.*field += counted.*field;
     if (cut) ++updatesCut_;
     else cursor_ = 0;
     inFlight_.push_back(std::move(sent));

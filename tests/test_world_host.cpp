@@ -44,12 +44,9 @@ bool waitFor(WorldHost& host, double seconds, const std::function<bool()>& done)
 void testCodecAndLink() {
     WorldMessage m{WorldMessageType::Report};
     m.tick = 123456789012ull;
-    m.liveActors = 42;
     m.players = 3;
-    m.digest = 0xfeedfacecafebeefull;
     const auto back = decodeWorldMessage(encodeWorldMessage(m));
-    CHECK(back && back->type == m.type && back->tick == m.tick && back->liveActors == 42 && back->players == 3 &&
-          back->digest == m.digest);
+    CHECK(back && back->type == m.type && back->tick == m.tick && back->players == 3);
     const std::vector<uint8_t> bad = {0x7f};
     CHECK(!decodeWorldMessage(bad));
     // every type the link carries comes back: the last ones too (the enemy gauges, a session's alert)

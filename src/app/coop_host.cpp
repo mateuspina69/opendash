@@ -242,10 +242,15 @@ void CoopHost::poll(uint64_t nowNs) {
         if (auto m = decodeWorldMessage(d.payload))
             if (const auto whole = parts_[d.fromId].take(std::move(*m))) fromClient(d.fromId, *whole, nowNs);
     }
-    // a client that has gone is out of its world
-    const od::net::SessionStatus status = session_->status(nowNs);
-    for (const od::net::PlayerStatus& p : status.players) {
-        if (p.playerId < WorldHost::kPlayers) worlds_.setPlayerName(p.playerId, p.name);
+    // who is in the session: asked again only when someone joined or left
+    if (!peersKnown_ || peersAt_ != session_->membership()) {
+        peersAt_ = session_->membership();
+        peersKnown_ = true;
+        peers_ = session_->peers();
+        for (const od::net::PeerInfo& p : peers_)
+            if (p.playerId < WorldHost::kPlayers) worlds_.setPlayerName(p.playerId, p.name);
+    }
+    for (const od::net::PeerInfo& p : peers_) {
         // a game that connects is told the session's save once the host's game is on: at its title it starts from it
         // (the host back at its title or lobby: no game to give; the one that connects waits in its lobby)
         if (hostPlaying_ && p.playerId != 0 && p.playerId < WorldHost::kPlayers && !told_.contains(p.playerId) &&
@@ -255,16 +260,16 @@ void CoopHost::poll(uint64_t nowNs) {
             sendSave(p.playerId, nowNs);
         }
     }
+    // a client that has gone is out of its world
     const auto gone = [&](uint8_t id) {
-        return std::none_of(status.players.begin(), status.players.end(), [&](const od::net::PlayerStatus& p) { return p.playerId == id; });
+        return std::none_of(peers_.begin(), peers_.end(), [&](const od::net::PeerInfo& p) { return p.playerId == id; });
     };
     std::erase_if(told_, gone);
     std::erase_if(stale_, gone);
     for (size_t id = 0; id < parts_.size(); ++id)
         if (gone(uint8_t(id))) parts_[id] = {}; // (a message it left half sent is not the start of its next one's)
     for (auto it = clients_.begin(); it != clients_.end();) {
-        const bool there = std::any_of(status.players.begin(), status.players.end(), [&](const od::net::PlayerStatus& p) { return p.playerId == *it; });
-        if (there) {
+        if (!gone(*it)) {
             ++it;
         } else {
             worlds_.leave(*it);
@@ -282,10 +287,7 @@ void WorldPipe::dropStale(std::vector<WorldMessage>& in) {
     if (in.size() != before) SDL_Log("own world: %zu message(s) of a room left, not played", before - in.size());
 }
 
-std::optional<uint8_t> SessionPipe::playerId() const {
-    const od::net::SessionStatus s = session_.status(nowNs_);
-    return s.connection == od::net::Connection::Connected ? std::optional(s.localId) : std::nullopt;
-}
+std::optional<uint8_t> SessionPipe::playerId() const { return session_.localPlayer(); }
 
 void SessionPipe::enter(uint8_t playerId, WorldRoom room, const std::vector<uint8_t>& state, const std::vector<uint8_t>& banks) {
     WorldMessage m{WorldMessageType::NetEnter};

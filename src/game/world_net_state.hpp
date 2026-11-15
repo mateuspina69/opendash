@@ -273,6 +273,13 @@ public:
         uint32_t total = 0, head = 0, position = 0, rotation = 0, animation = 0, visual = 0, aim = 0, paint = 0, solids = 0, lock = 0, path = 0;
     };
     const UpdateBytes& largestUpdate() const { return largest_; }
+    // ... of every update so far, and of every event by kind (measuring)
+    const UpdateBytes& updateBytes() const { return allUpdates_; }
+    struct EventBytes {
+        uint32_t appear = 0, go = 0, effect = 0, flash = 0, room = 0, head = 0;
+        uint32_t appears = 0, goes = 0, effects = 0, flashes = 0;
+    };
+    const EventBytes& eventBytes() const { return events_; }
 
 private:
     struct Known {
@@ -303,7 +310,8 @@ private:
     uint32_t eventsSent_ = 0;
     size_t cursor_ = 0;
     uint64_t updatesCut_ = 0;
-    UpdateBytes largest_;
+    UpdateBytes largest_, allUpdates_;
+    EventBytes events_;
 };
 
 // What a client does with what it holds, tick by tick of its timeline

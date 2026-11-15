@@ -97,6 +97,9 @@ private:
     std::function<std::optional<std::vector<uint8_t>>()> live_;
     od::net::Session* session_ = nullptr;
     std::set<uint8_t> clients_;
+    std::vector<od::net::PeerInfo> peers_; // everyone else in the session, as of membership peersAt_
+    uint32_t peersAt_ = 0;
+    bool peersKnown_ = false;
     bool hostPlaying_ = false;    // the host's game has started (until then a client waits in its lobby)
     // the clients told a save they have not started from yet: what they send is of a game the session no longer has,
     // dropped until they enter the save's own room

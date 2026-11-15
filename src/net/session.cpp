@@ -371,6 +371,7 @@ void Session::hostWelcomeOrRefuse(uint64_t nowNs, Client& c, const Hello& h) {
         return;
     }
     c.accepted = true;
+    ++membership_;
     c.info = {id, h.name};
     Welcome w{id, {{kHostPlayerId, config_.name}}};
     for (auto& [e, other] : clients_)
@@ -389,6 +390,7 @@ void Session::hostDrop(uint64_t nowNs, const Endpoint& e) {
     const PeerInfo info = it->second.info;
     clients_.erase(it);
     if (!accepted) return;
+    ++membership_;
     stats_.erase(info.playerId);
     for (auto& [oe, other] : clients_)
         if (other.accepted) sendReliable(nowNs, other.link, PeerLeft{info});
@@ -417,6 +419,7 @@ void Session::clientLost(uint64_t nowNs, const char* why) {
     for (const auto& [id, p] : players_) events_.push_back({PeerEvent::Kind::Left, p});
     players_.clear();
     stats_.clear();
+    ++membership_;
     localId_ = kHostPlayerId;
     text_ = std::string(why) + "; joining " + config_.host.text() + " again";
     clientStart(nowNs);
@@ -460,6 +463,7 @@ void Session::clientDeliver(uint64_t nowNs, const Message& m) {
     if (const Welcome* w = std::get_if<Welcome>(&m)) {
         if (connection_ != Connection::Connecting) return;
         connection_ = Connection::Connected;
+        ++membership_;
         localId_ = w->playerId;
         text_.clear();
         for (const PeerInfo& p : w->peers) {
@@ -473,10 +477,12 @@ void Session::clientDeliver(uint64_t nowNs, const Message& m) {
         hostLink_.unacked.clear();
     } else if (const PeerJoined* j = std::get_if<PeerJoined>(&m)) {
         if (j->peer.playerId == localId_) return;
+        ++membership_;
         players_[j->peer.playerId] = j->peer;
         events_.push_back({PeerEvent::Kind::Joined, j->peer});
     } else if (const PeerLeft* l = std::get_if<PeerLeft>(&m)) {
         if (players_.erase(l->peer.playerId)) {
+            ++membership_;
             stats_.erase(l->peer.playerId);
             events_.push_back({PeerEvent::Kind::Left, l->peer});
         }
@@ -486,6 +492,17 @@ void Session::clientDeliver(uint64_t nowNs, const Message& m) {
 }
 
 // ---- status --------------------------------------------------------------------------------------------------------
+
+std::vector<PeerInfo> Session::peers() const {
+    std::vector<PeerInfo> out;
+    if (config_.role == Role::Host) {
+        for (const auto& [e, c] : clients_)
+            if (c.accepted) out.push_back(c.info);
+    } else {
+        for (const auto& [id, info] : players_) out.push_back(info);
+    }
+    return out;
+}
 
 SessionStatus Session::status(uint64_t nowNs) const {
     SessionStatus st;
