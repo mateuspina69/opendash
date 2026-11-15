@@ -123,7 +123,10 @@ od_add_shader(TARGET opendash FILE src/render/shaders/ui.hlsl ENTRY ps_main PROF
 od_add_shader(TARGET opendash FILE src/render/shaders/preview.hlsl ENTRY vs_main PROFILE vs_6_0 NAME g_preview_vs)
 od_add_shader(TARGET opendash FILE src/render/shaders/preview.hlsl ENTRY ps_main PROFILE ps_6_0 NAME g_preview_ps)
 od_add_shader(TARGET opendash FILE src/render/shaders/scene.hlsl ENTRY vs_main PROFILE vs_6_0 NAME g_scene_vs)
-od_add_shader(TARGET opendash FILE src/render/shaders/scene.hlsl ENTRY ps_main PROFILE ps_6_0 NAME g_scene_ps)
+od_add_shader(TARGET opendash FILE src/render/shaders/scene.hlsl ENTRY ps_main PROFILE ps_6_0 NAME g_scene_ps
+              DEFINES OD_SM=1)
+od_add_shader(TARGET opendash FILE src/render/shaders/scene.hlsl ENTRY vs_sun PROFILE vs_6_0 NAME g_sun_vs)
+od_add_shader(TARGET opendash FILE src/render/shaders/scene.hlsl ENTRY ps_sun PROFILE ps_6_0 NAME g_sun_ps)
 od_add_shader(TARGET opendash FILE src/render/shaders/scene.hlsl ENTRY ps_main PROFILE ps_6_5 NAME g_scene_rt_ps
               DEFINES OD_RT=1)
 od_add_shader(TARGET opendash FILE src/render/shaders/scene.hlsl ENTRY ps_main PROFILE ps_6_0 NAME g_scene_pre_ps

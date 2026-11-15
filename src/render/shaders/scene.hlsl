@@ -65,6 +65,9 @@ cbuffer Frame : register(b0) {
     float4 outlineLook;    // ... x how much of the colour of what it goes around the line takes (0 = the dark ink)
     float4 sunDisc;        // the sun in the sky (OpenDash): x its angular radius (radians), y the sky draw it is on (1
                            // the dome, 2 a screen-space layer; 0 none)
+    float4x4 sunShadowVp;  // the sun's shadow map without ray tracing (OD_SM): world -> the map's NDC (orthographic)
+    float4 sunShadow;      // ... x its texels a side, y world units a texel, z its depth span (world units), w the
+                           // tangent of the sun's angular radius (0: hard shadows)
 };
 Texture2DArray pages : register(t0);
 SamplerState pointClamp : register(s0);
@@ -195,6 +198,57 @@ float2 lightAt(float2 px, float depth) {
         if (off < 0.5 + depth * 0.002) break;
     }
     return terms;
+}
+#endif
+
+#ifdef OD_SM
+// Sun shadows without ray tracing (OpenDash): the opaque room and characters seen from the sun (ps_sun), x the depth
+// nearest the sun (0..1 over sunShadow.z), y the object there (VSIn::object; 0 the room, -1 nothing)
+Texture2D<float2> sunMap : register(t12);
+
+static const float2 kSunTaps[16] = {
+    float2(-0.94201624, -0.39906216), float2(0.94558609, -0.76890725), float2(-0.09418410, -0.92938870),
+    float2(0.34495938, 0.29387760),   float2(-0.91588581, 0.45771432),  float2(-0.81544232, -0.87912464),
+    float2(-0.38277543, 0.27676845),  float2(0.97484398, 0.75648379),   float2(0.44323325, -0.97511554),
+    float2(0.53742981, -0.47373420),  float2(-0.26496911, -0.41893023), float2(0.79197514, 0.19090188),
+    float2(-0.24188840, 0.99706507),  float2(-0.81409955, 0.91437590),  float2(0.19984126, 0.78641367),
+    float2(0.14383161, -0.14100790)};
+
+// 1 = the sun reaches wp (0..1 at a shadow's soft edge); the point looked up starts `lift` units (and a texel and a
+// half) off the surface along n, as the rays do. A texel of the object `self` never shadows (the anime look's models
+// pass their own faces, as sunVisibilityPastSelf; -1 = none). With the sun's disc (sunShadow.w) the edge widens with the
+// distance from what casts it (the blockers' mean depth around the point). The shadow fades out toward the map's edge
+float sunMapVisibility(float3 wp, float3 n, float lift, float self, float2 px) {
+    const float texel = sunShadow.y;
+    const float4 c = mul(float4(wp + n * (lift + 1.5 * texel), 1.0), sunShadowVp);
+    const float2 uv = c.xy * float2(0.5, -0.5) + 0.5;
+    const float edge = saturate(min(min(uv.x, uv.y), min(1.0 - uv.x, 1.0 - uv.y)) * 20.0);
+    if (edge <= 0.0 || c.z >= 1.0) return 1.0;
+    const float z = c.z - texel / sunShadow.z;
+    const float2 tap = 1.0 / sunShadow.x;
+    // the taps turn from pixel to pixel (and frame to frame with a temporal upscaler, lightTrace.w)
+    const float turn = frac(52.9829189 * frac(dot(floor(px), float2(0.06711056, 0.00583715)))) * 6.2831853 + lightTrace.w;
+    const float2x2 rot = float2x2(cos(turn), -sin(turn), sin(turn), cos(turn));
+    float radius = 1.0; // texels
+    if (sunShadow.w > 0.0) {
+        const float search = min(sunShadow.w * 800.0 / texel, 16.0) + 1.0;
+        float sum = 0.0, count = 0.0;
+        for (int k = 0; k < 16; k += 2) {
+            const float2 s = sunMap.SampleLevel(pointClamp, uv + mul(kSunTaps[k], rot) * search * tap, 0);
+            if (s.x < z && abs(s.y - self) >= 0.5) {
+                sum += s.x;
+                count += 1.0;
+            }
+        }
+        if (count == 0.0) return 1.0;
+        radius = clamp(sunShadow.w * (z - sum / count) * sunShadow.z / texel, 1.0, 16.0);
+    }
+    float lit = 0.0;
+    for (int k = 0; k < 16; ++k) {
+        const float2 s = sunMap.SampleLevel(pointClamp, uv + mul(kSunTaps[k], rot) * radius * tap, 0);
+        lit += s.x < z && abs(s.y - self) >= 0.5 ? 0.0 : 1.0;
+    }
+    return lerp(1.0, lit / 16.0, edge);
 }
 #endif
 
@@ -652,10 +706,12 @@ PSOut ps_main(VSOut i, bool front : SV_IsFrontFace) {
         nc = normalize(i.pieceN);
         if (dot(nc, n) < 0.0) nc = -nc;
     }
-#ifdef OD_RT
+#if defined(OD_RT) || defined(OD_SM)
     // the traced light of this pixel: the sun through its disc, the ambient occlusion (1 = open)
     float2 traced = float2(1.0, 1.0);
+#ifdef OD_RT
     if (lightTerms.x + lightTerms.y > 0.0) traced = lightAt(i.pos.xy, i.depth);
+#endif
     const float open = cel ? 1.0 : 1.0 - lightTerms.y * (1.0 - traced.y);
     if (shadowMode > 1.5) { // a room with no sky: the sun reaches nothing in it
         const float room = (1.0 - sunStrength) * open;
@@ -674,6 +730,10 @@ PSOut ps_main(VSOut i, bool front : SV_IsFrontFace) {
         float vis = 1.0;
         // a model of the anime look: on its side away from the sun too, whether it stands in a cast shadow (its bands
         // there are those of a room with no sky)
+#ifdef OD_SM // the shadow map: a model of the anime look keeps its bands flat (no soft edge on it)
+        if (cel) vis = step(0.5, sunMapVisibility(i.world, ns, 2.0, i.object, i.pos.xy));
+        else if (facing > 0.0) vis = sunMapVisibility(i.world, ns, dot(n, sunDir) > 0.0 ? 2.0 : 12.0, -1.0, i.pos.xy);
+#else
         if (cel) vis = sunVisibilityPastSelf(i.world, ns, i.object);
         else if (facing > 0.0) {
             // a face turned away from the sun while its smooth normal still faces it would shadow itself on its
@@ -682,6 +742,7 @@ PSOut ps_main(VSOut i, bool front : SV_IsFrontFace) {
             if (lightTerms.x > 0.5) vis = traced.x; // (ps_light's ray, the same way)
             else vis = sunVisibility(i.world, ns, dot(n, sunDir) > 0.0 ? 2.0 : 12.0);
         }
+#endif
         const float lit = facing * vis;
         const float3 hue = lerp(float3(1.0, 1.0, 1.0), lerp(kShadowHue, kSunHue, lit), lightTerms.z);
         if (cel) {
@@ -936,6 +997,27 @@ OutlineOut ps_outline(float4 pos : SV_Position) {
 }
 
 // ---- precipitation (OpenDash remaster: renderer.hpp Precipitation) ----
+
+// the sun's shadow map (OD_SM's sunMap): the opaque room and characters seen from the sun, orthographic (sunShadowVp);
+// as the rays, PS1 colour 0 (alpha test) lets the light through and both sides of every face cast
+struct SunOut {
+    float4 pos : SV_Position;
+    float3 uvs : TEXCOORD0;
+    nointerpolation float object : TEXCOORD1;
+};
+
+SunOut vs_sun(VSIn i) {
+    SunOut o;
+    o.pos = mul(float4(i.pos, 1.0), sunShadowVp);
+    o.uvs = float3(i.uv, i.slice);
+    o.object = i.object;
+    return o;
+}
+
+float2 ps_sun(SunOut i) : SV_Target {
+    if (i.uvs.z >= 0) clip(pages.SampleLevel(pointClamp, i.uvs, 0).a - 0.25);
+    return float2(i.pos.z, i.object);
+}
 
 // the height map (made once per room, upload()): the room's surfaces seen from above, the highest one per texel; the
 // alpha-tested texels (PS1 colour 0: railings, foliage) let the snow through

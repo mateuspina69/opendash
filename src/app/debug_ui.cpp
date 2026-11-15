@@ -224,9 +224,23 @@ void App::drawDebugMenu() {
                 changed |= ImGui::SliderFloat("tamanho do sol", &sunDiscSize, 0.3f, 6.0f, "%.1f graus");
                 if (changed) applySun();
             }
-            if (renderer->rayTracingSupported()) { // experiment: ray-traced sun shadows
-                ImGui::SeparatorText("Sombras do sol (ray tracing)");
+            if (renderer->sunShadowsSupported()) { // experiment: the sun's shadows (ray-traced, else a shadow map)
+                const bool rt = renderer->rayTracingSupported();
+                ImGui::SeparatorText(rt ? "Sombras do sol (ray tracing)" : "Sombras do sol (shadow map)");
                 bool changed = ImGui::Checkbox("sombras do sol", &sunOn);
+                if (!rt) {
+                    static const int kSizes[] = {1024, 2048, 4096};
+                    static const char* kSizeNames[] = {"1024 (leve)", "2048", "4096 (nitida)"};
+                    int s = sunMapSize <= 1024 ? 0 : sunMapSize <= 2048 ? 1 : 2;
+                    if (ImGui::Combo("resolucao da sombra", &s, kSizeNames, 3)) {
+                        sunMapSize = kSizes[s];
+                        changed = true;
+                    }
+                    changed |= ImGui::SliderFloat("alcance da sombra", &sunMapReach, 1500.0f, 12000.0f, "%.0f");
+                    if (ImGui::IsItemHovered())
+                        ImGui::SetTooltip("Ate que distancia em volta do que a camera ve o mapa de sombras cobre.\n"
+                                          "Maior = sombras mais longe, porem menos nitidas.");
+                }
                 changed |= ImGui::SliderFloat("forca (aberto)", &sunStrength, 0.0f, 1.0f, "%.2f");
                 changed |= ImGui::SliderFloat("forca (sala fechada)", &sunStrengthClosed, 0.0f, 1.0f, "%.2f");
                 changed |= ImGui::SliderFloat("penumbra (experimento; 0 = sombra dura)", &sunSoftness, 0.0f, 5.0f, "%.1f graus");
@@ -238,15 +252,18 @@ void App::drawDebugMenu() {
                     ImGui::SetTooltip("A sombra puxa para o azul do ceu e a area iluminada para o tom quente do sol.\n"
                                       "So em salas a ceu aberto.");
                 if (changed) applySun();
-                ImGui::SeparatorText("Oclusao ambiente (experimento, ray tracing)");
-                ImGui::Checkbox("escurecer cantos e contatos", &occlusionOn);
-                if (ImGui::IsItemHovered())
-                    ImGui::SetTooltip("Cantos, quinas e o chao sob os personagens perdem a luz do ambiente.\n"
-                                      "Funciona com o sol ligado ou desligado, e em salas fechadas.");
-                if (occlusionOn) {
-                    ImGui::SliderFloat("forca da oclusao", &occlusionStrength, 0.0f, 1.0f, "%.2f");
-                    ImGui::SliderFloat("alcance da oclusao", &occlusionRadius, 20.0f, 400.0f, "%.0f");
-                }
+                if (rt) {
+                    ImGui::SeparatorText("Oclusao ambiente (experimento, ray tracing)");
+                    ImGui::Checkbox("escurecer cantos e contatos", &occlusionOn);
+                    if (ImGui::IsItemHovered())
+                        ImGui::SetTooltip("Cantos, quinas e o chao sob os personagens perdem a luz do ambiente.\n"
+                                          "Funciona com o sol ligado ou desligado, e em salas fechadas.");
+                    if (occlusionOn) {
+                        ImGui::SliderFloat("forca da oclusao", &occlusionStrength, 0.0f, 1.0f, "%.2f");
+                        ImGui::SliderFloat("alcance da oclusao", &occlusionRadius, 20.0f, 400.0f, "%.0f");
+                    }
+                } else
+                    ImGui::TextDisabled("Oclusao ambiente: GPU sem ray tracing");
             }
             else
                 ImGui::TextDisabled("Sol e oclusao ambiente: GPU sem ray tracing");

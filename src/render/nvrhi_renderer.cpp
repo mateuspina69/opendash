@@ -52,6 +52,8 @@
 #include "g_scene_rt_ps.h"
 #include "g_scene_vs.h"
 #include "g_subdivide_cs.h"
+#include "g_sun_ps.h"
+#include "g_sun_vs.h"
 
 using namespace DirectX;
 
@@ -141,6 +143,8 @@ struct FrameConstants {
     float outlineLook[4]; // ... how much of the colour of what it goes around it takes
     float sunDisc[4];     // the sun in the sky (SunLight::disc): its angular radius (radians), the sky draw (1 dome, 2
                           // screen-space layer; 0 none)
+    XMFLOAT4X4 sunShadowVp; // the sun's shadow map without ray queries (drawSunMap): world -> its NDC
+    float sunShadow[4];     // ... its texels a side, world units a texel, its depth span, tan of the sun's angular radius
 };
 // bloom.hlsl Params
 struct BloomConstants {
@@ -484,7 +488,7 @@ public:
 
         // the ray-query scene shader is SM 6.5
         rt_ = d->queryFeatureSupport(nvrhi::Feature::RayQuery) && dev_.rayQueryShaders();
-        SDL_Log("render: ray queries %s", rt_ ? "supported (sun shadows available)" : "unsupported");
+        SDL_Log("render: ray queries %s", rt_ ? "supported (ray-traced sun shadows)" : "unsupported (shadow-mapped sun shadows)");
         sceneVs_ = d->createShader({nvrhi::ShaderType::Vertex, "", "vs_main"}, g_scene_vs, sizeof(g_scene_vs));
         scenePs_ = rt_ ? d->createShader({nvrhi::ShaderType::Pixel, "", "ps_main"}, g_scene_rt_ps, sizeof(g_scene_rt_ps))
                        : d->createShader({nvrhi::ShaderType::Pixel, "", "ps_main"}, g_scene_ps, sizeof(g_scene_ps));
@@ -561,6 +565,17 @@ public:
             // what the scene binds while no light is traced (never read: scene.hlsl lightTerms)
             lightNone_ = makeTarget(1, 1, nvrhi::Format::RG8_UNORM, "no traced light");
             preDepthNone_ = makeTarget(1, 1, nvrhi::Format::R32_FLOAT, "no light prepass");
+        }
+        if (!rt_) { // the sun's shadows from a shadow map instead (drawSunMap)
+            sunVs_ = d->createShader({nvrhi::ShaderType::Vertex, "", "vs_sun"}, g_sun_vs, sizeof(g_sun_vs));
+            sunPs_ = d->createShader({nvrhi::ShaderType::Pixel, "", "ps_sun"}, g_sun_ps, sizeof(g_sun_ps));
+            nvrhi::BindingLayoutDesc sl; // the frame, the pages (their alpha test), the point sampler
+            sl.visibility = nvrhi::ShaderType::All;
+            sl.bindings = {nvrhi::BindingLayoutItem::VolatileConstantBuffer(0), nvrhi::BindingLayoutItem::Texture_SRV(0),
+                           nvrhi::BindingLayoutItem::Sampler(0)};
+            sunLayout_ = d->createBindingLayout(sl);
+            bl.bindings.push_back(nvrhi::BindingLayoutItem::Texture_SRV(12));
+            sunMapNone_ = makeTarget(1, 1, nvrhi::Format::RG32_FLOAT, "no sun shadow map");
         }
         sceneLayout_ = d->createBindingLayout(bl);
         outlinePs_[0] = d->createShader({nvrhi::ShaderType::Pixel, "", "ps_outline"}, g_outline_ps, sizeof(g_outline_ps));
@@ -653,6 +668,17 @@ public:
             return bool(height_);
         }
 
+        roomBounds_ = false; // the sun's shadow map covers them (drawSunMap)
+        for (int c = 0; c < 3; ++c) {
+            roomLo_[c] = FLT_MAX;
+            roomHi_[c] = -FLT_MAX;
+        }
+        for (uint32_t k = 0; k < semiStart_[0] && k < tris.size(); ++k)
+            for (int c = 0; c < 3; ++c) {
+                roomLo_[c] = std::min(roomLo_[c], tris[k].pos[c]);
+                roomHi_[c] = std::max(roomHi_[c], tris[k].pos[c]);
+            }
+        roomBounds_ = roomLo_[0] <= roomHi_[0];
         // the room's normals smoothed as a model's (its creases kept): on its few large faces the sun's light varies
         // across a slope instead of stepping from face to face
         std::vector<GpuVertex> gv;
@@ -720,6 +746,7 @@ public:
         seeDebug_ = debug;
     }
     bool rayTracingSupported() const override { return rt_; }
+    bool sunShadowsSupported() const override { return true; } // ray queries, else the shadow map
 
     void updateSlice(int slice, const std::vector<uint8_t>& rgba) override {
         if (pages_ && slice >= 0 && uint32_t(slice) < pages_->getDesc().arraySize &&
@@ -2271,8 +2298,108 @@ private:
             bs.bindings.push_back(nvrhi::BindingSetItem::StructuredBuffer_SRV(3, dynAttr_));
             bs.bindings.push_back(nvrhi::BindingSetItem::Texture_SRV(7, light_ ? light_ : lightNone_));
             bs.bindings.push_back(nvrhi::BindingSetItem::Texture_SRV(8, preDepth_ ? preDepth_ : preDepthNone_));
-        }
+        } else
+            bs.bindings.push_back(nvrhi::BindingSetItem::Texture_SRV(12, sunMap_ ? sunMap_ : sunMapNone_));
+        sunSet_ = nullptr; // it binds the pages
         sceneSet_ = dev_.device()->createBindingSet(bs, sceneLayout_);
+    }
+
+    // Sun shadows without ray queries (scene.hlsl OD_SM): the opaque room and characters (the rays' casters) seen from
+    // the sun into an orthographic shadow map of sun_.mapSize texels a side. It covers the room's bounds, at most
+    // sun_.mapReach world units on either side of the point half that far ahead of the eye; its centre moves in whole
+    // texels, so the shadows' edges stay still as the camera moves
+    bool sunMapping() const {
+        return !rt_ && sun_.enabled && !sun_.sheltered && roomBounds_ &&
+               sun_.dir[0] * sun_.dir[0] + sun_.dir[1] * sun_.dir[1] + sun_.dir[2] * sun_.dir[2] > 0.0f;
+    }
+
+    bool drawSunMap(const float* eye, const float* fwd) {
+        if (!vbuf_ || !pages_ || !sunLayout_) return false;
+        nvrhi::IDevice* d = dev_.device();
+        const int size = std::clamp(sun_.mapSize, 256, 8192);
+        if (!sunMap_ || int(sunMap_->getDesc().width) != size) {
+            sunMap_ = makeTarget(size, size, nvrhi::Format::RG32_FLOAT, "sun shadow map");
+            sunZ_ = makeTarget(size, size, nvrhi::Format::D32, "sun shadow map z", true);
+            sunFb_ = d->createFramebuffer(nvrhi::FramebufferDesc().addColorAttachment(sunMap_).setDepthAttachment(sunZ_));
+            if (!sunPipe_) {
+                nvrhi::GraphicsPipelineDesc pd;
+                pd.primType = nvrhi::PrimitiveType::TriangleList;
+                pd.inputLayout = inputLayout_;
+                pd.VS = sunVs_;
+                pd.PS = sunPs_;
+                pd.bindingLayouts = {sunLayout_};
+                pd.renderState.rasterState.setCullNone(); // both sides of every face cast, as the rays
+                pd.renderState.depthStencilState.depthTestEnable = true;
+                pd.renderState.depthStencilState.depthWriteEnable = true;
+                pd.renderState.depthStencilState.depthFunc = nvrhi::ComparisonFunc::Less; // the nearest to the sun
+                sunPipe_ = d->createGraphicsPipeline(pd, sunFb_->getFramebufferInfo());
+            }
+            makeSceneSet(); // the scene's set binds the map
+        }
+        if (!sunSet_) {
+            nvrhi::BindingSetDesc bs;
+            bs.bindings = {nvrhi::BindingSetItem::ConstantBuffer(0, frameCb_), nvrhi::BindingSetItem::Texture_SRV(0, pages_),
+                           nvrhi::BindingSetItem::Sampler(0, pointClamp_)};
+            sunSet_ = d->createBindingSet(bs, sunLayout_);
+        }
+        if (!sunPipe_ || !sunSet_ || !sceneSet_) return false;
+
+        // the sun's view: looking from the sun along its light (depth grows away from it)
+        const XMVECTOR to = XMVector3Normalize(XMVectorSet(sun_.dir[0], sun_.dir[1], sun_.dir[2], 0.0f));
+        const XMVECTOR up = std::fabs(XMVectorGetY(to)) > 0.99f ? XMVectorSet(0, 0, 1, 0) : XMVectorSet(0, 1, 0, 0);
+        const XMMATRIX view = XMMatrixLookToLH(XMVectorZero(), XMVectorNegate(to), up);
+        float lo[3] = {FLT_MAX, FLT_MAX, FLT_MAX}, hi[3] = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
+        for (int corner = 0; corner < 8; ++corner) {
+            const XMVECTOR p = XMVector3TransformCoord(
+                XMVectorSet(corner & 1 ? roomHi_[0] : roomLo_[0], corner & 2 ? roomHi_[1] : roomLo_[1],
+                            corner & 4 ? roomHi_[2] : roomLo_[2], 1.0f),
+                view);
+            for (int c = 0; c < 3; ++c) {
+                lo[c] = std::min(lo[c], XMVectorGetByIndex(p, c));
+                hi[c] = std::max(hi[c], XMVectorGetByIndex(p, c));
+            }
+        }
+        const float reach = std::max(sun_.mapReach, 100.0f);
+        const float side = std::max(std::min(2.0f * reach, std::max(hi[0] - lo[0], hi[1] - lo[1])), 1.0f);
+        const float texel = side / float(size), half = side * 0.5f;
+        const XMVECTOR focus = XMVector3TransformCoord(
+            XMVectorSet(eye[0] + fwd[0] * reach * 0.5f, eye[1] + fwd[1] * reach * 0.5f, eye[2] + fwd[2] * reach * 0.5f, 1.0f),
+            view);
+        float centre[2];
+        for (int c = 0; c < 2; ++c) {
+            const float a = lo[c] + half, b = hi[c] - half;
+            centre[c] = a <= b ? std::clamp(XMVectorGetByIndex(focus, c), a, b) : (lo[c] + hi[c]) * 0.5f;
+            centre[c] = std::floor(centre[c] / texel + 0.5f) * texel;
+        }
+        // a character may stand above the room's top (a jump, a flyer): room toward the sun for it
+        const float nearZ = lo[2] - 0.25f * reach, farZ = hi[2] + 1.0f;
+        const XMMATRIX proj = XMMatrixOrthographicOffCenterLH(centre[0] - half, centre[0] + half, centre[1] - half,
+                                                              centre[1] + half, nearZ, farZ);
+        XMStoreFloat4x4(&sunVp_, view * proj);
+        sunInfo_[0] = float(size);
+        sunInfo_[1] = texel;
+        sunInfo_[2] = farZ - nearZ;
+        sunInfo_[3] = sun_.softness > 0.0f ? std::tan(std::min(sun_.softness, 20.0f) * 3.14159265f / 180.0f) : 0.0f;
+
+        cl_->clearTextureFloat(sunMap_, nvrhi::AllSubresources, nvrhi::Color(1.0f, -1.0f, 0.0f, 0.0f));
+        cl_->clearDepthStencilTexture(sunZ_, nvrhi::AllSubresources, true, 1.0f, false, 0);
+        FrameConstants f{};
+        f.sunShadowVp = sunVp_;
+        cl_->writeBuffer(frameCb_, &f, sizeof f);
+        nvrhi::GraphicsState gs;
+        gs.pipeline = sunPipe_;
+        gs.framebuffer = sunFb_;
+        gs.viewport.addViewportAndScissorRect(nvrhi::Viewport(float(size), float(size)));
+        gs.bindings = {sunSet_};
+        const auto range = [&](nvrhi::IBuffer* vb, uint32_t count) {
+            if (!count || !vb) return;
+            gs.vertexBuffers = {nvrhi::VertexBufferBinding().setBuffer(vb).setSlot(0).setOffset(0)};
+            cl_->setGraphicsState(gs);
+            cl_->draw(nvrhi::DrawArguments().setVertexCount(count));
+        };
+        range(vbuf_, semiStart_[0]); // the opaque ranges: semi-transparent water / glass lets the sun through
+        if (dynCount_) range(dynDrawn(), std::min(dynStart_[0], dynCount_));
+        return true;
     }
 
     // this frame's acceleration structures: room BLAS (built at upload) + actors' BLAS (rebuilt from the opaque
@@ -2380,7 +2507,11 @@ private:
         const float len = std::sqrt(sun_.dir[0] * sun_.dir[0] + sun_.dir[1] * sun_.dir[1] + sun_.dir[2] * sun_.dir[2]);
         for (int c = 0; c < 3; ++c) f.sunDir[c] = len > 0.0f ? sun_.dir[c] / len : 0.0f;
         f.sunStrength = sun_.strength;
-        f.shadowMode = shadow && rt_ && sun_.enabled && len > 0.0f ? (sun_.sheltered ? 2.0f : 1.0f) : 0.0f;
+        // without ray queries: the shadow map drawn this frame (a room with no sky needs none)
+        const bool sunShades = rt_ || sun_.sheltered || sunMapDrawn_;
+        f.shadowMode = shadow && sunShades && sun_.enabled && len > 0.0f ? (sun_.sheltered ? 2.0f : 1.0f) : 0.0f;
+        f.sunShadowVp = sunVp_;
+        std::copy(std::begin(sunInfo_), std::end(sunInfo_), f.sunShadow);
         f.sunScatter = sun_.enabled && !sun_.sheltered && len > 0.0f ? 0.35f : 0.0f;
         if (shadow && !particleLights_.empty()) { // the draws of the opaque surfaces, as the sun's shadow
             for (size_t k = 0; k < particleLights_.size(); ++k) {
@@ -2510,6 +2641,7 @@ private:
         stream(dynBuf_, dynGpu_, "dynamic vertices", rt_);
         if (dynCount_ && !dynTris_.empty()) expandDynamic();
         if (rt_) buildScene(std::min(dynStart_[0], dynCount_));
+        else sunMapDrawn_ = sunMapping() && drawSunMap(cam.eye, fwdv);
 
         if (depthCopyStale()) makeDepthCopy(); // (the set below binds it)
         invVp_ = XMMatrixInverse(nullptr, vpJit); // the traced light's passes and the blown snow's: NDC -> world
@@ -2838,6 +2970,18 @@ private:
     // sun shadows (ray queries)
     bool rt_ = false;
     SunLight sun_;
+    // ... without them: the shadow map (drawSunMap)
+    nvrhi::ShaderHandle sunVs_, sunPs_;
+    nvrhi::BindingLayoutHandle sunLayout_;
+    nvrhi::BindingSetHandle sunSet_;
+    nvrhi::GraphicsPipelineHandle sunPipe_;
+    nvrhi::TextureHandle sunMap_, sunZ_, sunMapNone_;
+    nvrhi::FramebufferHandle sunFb_;
+    XMFLOAT4X4 sunVp_{};
+    float sunInfo_[4]{};
+    bool sunMapDrawn_ = false;
+    float roomLo_[3]{}, roomHi_[3]{}; // the room's opaque surfaces' bounds
+    bool roomBounds_ = false;
     // the traced light (drawLight): the sun's soft shadows, the ambient occlusion
     AmbientOcclusion occlusion_;
     nvrhi::ShaderHandle prePs_, lightPs_, lightBlurPs_[2];

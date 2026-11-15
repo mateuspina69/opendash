@@ -85,6 +85,10 @@ struct App {
     // experiments on the sun (renderer SunLight; F1 Video): its angular radius in degrees (--sun-softness, 0 = hard
     // shadows) and the shadows' colour (--sun-tint 0..1)
     float sunSoftness = 0.0f, sunTint = 0.0f;
+    // without ray tracing, the shadow map's texels a side and how far it reaches around the view in game units
+    // (renderer SunLight::mapSize / mapReach; F1 Video, --sun-map <texels>, --sun-map-reach <units>)
+    int sunMapSize = 2048;
+    float sunMapReach = 4000.0f;
     // the sun seen in the sky (renderer SunLight::disc; F1 Video, --sun-disc <radius deg>): only where the room has a sky
     bool sunDiscOn = false;
     float sunDiscSize = 1.5f;
