@@ -839,8 +839,12 @@ bool fireEffectLinkRead(EffectActor& effect, std::array<const ActorHeader*, 2>& 
     return true;
 }
 void fireEffectLinkWrite(EffectActor& effect, const std::array<ActorHeader*, 2>& held) {
-    if (FireEffectKind(effect.subtype) == FireEffectKind::DataFlame && held[0])
-        classState<FireEffectFields>(effect).followed = actorLayoutOf(*held[0]).at;
+    if (FireEffectKind(effect.subtype) != FireEffectKind::DataFlame) return;
+    // a new copy: its own fields are this one's, not the slot's last fire effect's (a flame of a Data put out since, seen
+    // burning: this one would end on its first tick, before his picture says he burns)
+    FireEffectFields& fx = classState<FireEffectFields>(effect);
+    fx.followed = held[0] ? actorLayoutOf(*held[0]).at : 0;
+    fx.followedBurning = false;
 }
 
 bool flameStopped(uint32_t address) { return classState<FlameFields>(staticActorAt(address)).stopped != 0; }
