@@ -223,6 +223,10 @@ private:
     bool bossFight_ = false, testBossFight_ = false;
     std::string notice_;
     int noticeTicks_ = 0;
+    // another player's talk of everyone's plays elsewhere (NetInvite): who talks; Select held this long goes there
+    std::optional<uint8_t> invite_;
+    int inviteHeld_ = 0;
+    void inviteTurn();
     std::string alert_;        // what went wrong (notice), shown until alertUntilNs_
     uint64_t alertUntilNs_ = 0;
     bool gateAsked_ = false;

@@ -595,14 +595,21 @@ int run(const WorldArgs& given) {
         m.netState = {uint8_t(field), uint8_t(value), uint8_t(uint16_t(value) >> 8)};
         link->sendReliable(m);
     };
-    // an event the room or everyone sees (game/event EventReach): its owner's game plays it, the others' a copy of it on the
-    // owner's pad; one of everyone's waits for everyone to be in the room first (the scenes' gate)
+    // an event the room or everyone sees (game/event EventReach): its owner's game plays it, the others' in the room a copy
+    // of it on the owner's pad; of one of everyone's the session is told too, and whoever is elsewhere is invited to it
+    // (NetInvite): nobody is brought, nothing waits
     struct SharedEvent {
         od::port::OwnerEvent start;
         std::vector<std::vector<uint8_t>> pads; // the owner's, as heard: a game joining during it is told them all
     };
     std::optional<SharedEvent> sharedEvent;
-    std::optional<od::port::OwnerEvent> heldEvent;
+    const auto inviteMessage = [&](const od::port::OwnerEvent& e, bool on) {
+        if (e.reach != od::port::EventReach::Everyone || od::port::storyOptionalStage(uint8_t(w.stage))) return;
+        WorldMessage invite{WorldMessageType::NetInvite};
+        invite.playerId = uint8_t(e.player);
+        invite.netState = {uint8_t(on ? 1 : 0)};
+        link->sendReliable(invite);
+    };
     std::optional<od::port::OwnerEvent> waitingEvent; // the room's, started before anyone was in: the first one in plays it
     const auto eventFollowMessage = [&](uint8_t client) {
         od::port::OwnerEvent copy = sharedEvent->start;
@@ -621,8 +628,8 @@ int run(const WorldArgs& given) {
     };
     // the shared event's owner ended it at this tick of theirs (0: at once, they are gone): its copies end there too
     const auto endSharedEvent = [&](uint8_t owner, std::vector<uint8_t> at) {
-        if (heldEvent && heldEvent->player == owner && at.empty()) heldEvent.reset();
         if (!sharedEvent || sharedEvent->start.player != owner) return;
+        inviteMessage(sharedEvent->start, false);
         if (at.size() != 4) at = {0, 0, 0, 0};
         for (const auto& [client, sender] : netClients) {
             if (client == owner) continue;
@@ -645,17 +652,10 @@ int run(const WorldArgs& given) {
                 e.reach == od::port::EventReach::Everyone ? "everyone" : "the room");
         for (const auto& [client, sender] : netClients)
             if (client != e.player) eventFollowMessage(client);
+        inviteMessage(e, true);
     };
-    // an event of this room runs on its player's machine; one of everyone's once everyone is here
-    const auto routeEvent = [&](const od::port::OwnerEvent& e) {
-        if (e.reach == od::port::EventReach::Everyone && !od::port::storyOptionalStage(uint8_t(w.stage))) {
-            heldEvent = e;
-            link->sendReliable({WorldMessageType::NetSceneGate});
-            SDL_Log("world: player %zu's event (message %u) is everyone's: it waits for them", e.player, unsigned(e.message));
-            return;
-        }
-        startOwnerEvent(e);
-    };
+    // an event of this room runs on its player's machine
+    const auto routeEvent = [&](const od::port::OwnerEvent& e) { startOwnerEvent(e); };
     if (w.linkPort != 0) {
         link = waitingLink ? std::move(waitingLink) : std::make_unique<WorldLink>(uint16_t(w.linkPort));
         if (!w.keepPlayer) {
@@ -1183,18 +1183,10 @@ int run(const WorldArgs& given) {
                 for (size_t f = 0; f < roomPlayerFields.size(); ++f)
                     if (roomPlayerFields[f]) roomPlayerMessage(m.playerId, od::port::RoomPlayerField(f), *roomPlayerFields[f]);
                 break;
-            case WorldMessageType::NetSceneGo: {
-                const bool forEvent = heldEvent.has_value();
-                if (heldEvent) { // everyone is here: the event of everyone's plays (its owner still in it)
-                    const od::port::OwnerEvent e = *std::exchange(heldEvent, std::nullopt);
-                    if (od::port::playerPresent(e.player) && od::port::eventOfOwner(e.player).active) startOwnerEvent(e);
-                }
-                if (sceneAsked || !forEvent) { // the scene's: its script starts
-                    sceneGated = false;
-                    od::port::setScriptsGated(false);
-                }
+            case WorldMessageType::NetSceneGo: // everyone is here: the scene's script starts
+                sceneGated = false;
+                od::port::setScriptsGated(false);
                 break;
-            }
             case WorldMessageType::NetEventPad:
                 if (sharedEvent && m.playerId == sharedEvent->start.player && ScenePads::decode(m.netState)) {
                     sharedEvent->pads.push_back(m.netState);

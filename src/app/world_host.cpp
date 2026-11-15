@@ -142,6 +142,8 @@ void WorldHost::removeFromWorld(uint8_t playerId) {
     playerRoom_[playerId].reset();
     briefs_[playerId].reset();
     gateLeave(playerId);
+    if (invite_ && invite_->owner == playerId) inviteEnd(); // (the one who talked has left the room: the talk is over)
+    else if (invite_ && invite_->invited.erase(playerId) != 0) inviteTell(playerId, false, invite_->owner);
     const auto it = worlds_.find(*was);
     if (it == worlds_.end()) return;
     World& world = *it->second;
@@ -193,7 +195,9 @@ void WorldHost::netJoin(uint8_t client) {
     const std::optional<WorldRoom> room = playerRoom_.at(client);
     if (!room) return;
     // what came from the room they left is over; where the coordinator sends them is not
-    std::erase_if(netInbox_.at(client), [](const WorldMessage& held) { return held.type != WorldMessageType::NetMoveTo; });
+    std::erase_if(netInbox_.at(client), [](const WorldMessage& held) {
+        return held.type != WorldMessageType::NetMoveTo && held.type != WorldMessageType::NetInvite;
+    });
     WorldMessage m{WorldMessageType::NetJoin};
     m.playerId = client;
     worlds_.at(*room)->link.sendReliable(m);
@@ -368,6 +372,32 @@ void WorldHost::storyMove(uint8_t playerId, const std::vector<uint8_t>& move) {
         if (id != playerId && playerRoom_[id]) moveTo(id, arrivalBeside(where, k++));
 }
 
+void WorldHost::inviteTell(uint8_t playerId, bool on, uint8_t owner) {
+    WorldMessage m{WorldMessageType::NetInvite};
+    m.playerId = playerId;
+    m.netState = {uint8_t(on ? 1 : 0), owner};
+    netInbox_.at(playerId).push_back(std::move(m));
+}
+
+void WorldHost::inviteEnd() {
+    if (!invite_) return;
+    for (const uint8_t id : invite_->invited) inviteTell(id, false, invite_->owner);
+    invite_.reset();
+}
+
+void WorldHost::inviteAccept(uint8_t playerId) {
+    // (one whose invitation is over, or who is there already, is not moved)
+    if (!invite_ || invite_->invited.erase(playerId) == 0) return;
+    inviteTell(playerId, false, invite_->owner);
+    if (!playerRoom_.at(playerId) || playerRoom_[playerId] == invite_->room || !briefs_[invite_->owner]) return;
+    SDL_Log("coordinator: player %u goes to player %u's talk in ST%02X sub %d", unsigned(playerId), unsigned(invite_->owner),
+            unsigned(invite_->room.stage), invite_->room.sub);
+    const WorldBrief::Entry& e = *briefs_[invite_->owner]; // beside the one who talks, as a scene brings its players
+    const int16_t x = int16_t(e.x + 0x80);
+    moveTo(playerId, {uint8_t(invite_->room.stage), uint8_t(invite_->room.sub), uint8_t(x), uint8_t(uint16_t(x) >> 8), uint8_t(e.y),
+                      uint8_t(uint16_t(e.y) >> 8), uint8_t(e.z), uint8_t(uint16_t(e.z) >> 8), uint8_t(e.yaw), uint8_t(uint16_t(e.yaw) >> 8), 2, 0x11});
+}
+
 void WorldHost::gateLeave(uint8_t playerId) {
     if (!gate_ || gate_->scene) return;
     gate_->waiting.erase(playerId);
@@ -493,6 +523,19 @@ void WorldHost::poll(uint64_t nowNs) {
                 netInbox_[m.playerId].push_back(m);
                 netInbox_[m.playerId].back().entry = entry_[m.playerId];
             }
+            if (m.type == WorldMessageType::NetInvite) {
+                // an event of everyone's began or ended there: those elsewhere are invited to it, or told it is over
+                inviteEnd();
+                if (!m.netState.empty() && m.netState[0] != 0 && m.playerId < kPlayers) {
+                    invite_ = Invite{it->first, m.playerId, {}};
+                    for (uint8_t id = 0; id < kPlayers; ++id) {
+                        if (id == m.playerId || !playerRoom_[id] || playerRoom_[id] == it->first) continue;
+                        invite_->invited.insert(id);
+                        inviteTell(id, true, m.playerId);
+                    }
+                }
+                continue;
+            }
             if (m.type == WorldMessageType::NetSceneGate) {
                 if (gate_ && !gate_->scene) {
                     sceneAsks_.insert(it->first); // a door's gate is on: the scene's (an event's of everyone's) comes after it
@@ -571,6 +614,7 @@ void WorldHost::poll(uint64_t nowNs) {
             alert(text);
         }
         for (uint8_t id : world.players) playerRoom_[id].reset();
+        if (invite_ && invite_->room == it->first) inviteEnd();
         const int stage = it->first.stage;
         it = worlds_.erase(it);
         dropEmptiedStage(stage);
@@ -631,6 +675,7 @@ void WorldHost::gameOverTurn() {
 bool WorldHost::takeEveryoneDown() { return std::exchange(everyoneDown_, false); }
 
 void WorldHost::reloadFrom(const std::vector<uint8_t>& save) {
+    inviteEnd();
     for (auto& [room, world] : worlds_) {
         world->link.sendReliable({WorldMessageType::Stop});
         stopping_.push_back(std::move(world));

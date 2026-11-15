@@ -91,6 +91,8 @@ public:
     void storyMove(uint8_t playerId, const std::vector<uint8_t>& move);
     // the host starts it without those missing, after a visible countdown
     void gateForce(uint64_t nowNs);
+    // a player takes the invitation to the event of everyone's that plays now (NetInvite): brought beside its owner
+    void inviteAccept(uint8_t playerId);
     // the turn between frames: the links, the worlds' reports, the keep-alives; a world that ended on its own is forgotten
     void poll(uint64_t nowNs);
 
@@ -154,6 +156,15 @@ private:
         uint64_t forceAtNs = 0, nextNoticeNs = 0;
     };
     std::optional<Gate> gate_;
+    // the event of everyone's that plays now, and who was invited to it (those elsewhere when it began)
+    struct Invite {
+        WorldRoom room{};
+        uint8_t owner = 0;
+        std::set<uint8_t> invited;
+    };
+    std::optional<Invite> invite_;
+    void inviteTell(uint8_t playerId, bool on, uint8_t owner);
+    void inviteEnd(); // its invitations withdrawn
     std::set<WorldRoom> sceneAsks_; // the rooms whose scene asked while a door's gate was on: theirs come next
     void sceneGate(WorldRoom room);
     bool gateTeleport_ = false;

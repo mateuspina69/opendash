@@ -435,6 +435,7 @@ void OwnWorldClient::turn(uint64_t nowNs) {
         SDL_Log("own world: a script of this game's started in the room's world (script %02x): a scene here", unsigned(script));
     }
     if (noticeTicks_ > 0) --noticeTicks_; // a notice lasts its ticks, a scene playing here or not
+    inviteTurn();
     storyMoveTurn();
     sceneTurn();
     liftTurn();
@@ -862,6 +863,13 @@ void OwnWorldClient::handle(const WorldMessage& m, uint64_t nowNs) {
     case WorldMessageType::NetNotice:
         notice_.assign(m.netState.begin(), m.netState.end());
         noticeTicks_ = 30;
+        break;
+    case WorldMessageType::NetInvite:
+        if (m.netState.size() == 2) {
+            if (m.netState[0] != 0) invite_ = m.netState[1];
+            else invite_.reset();
+            inviteHeld_ = 0;
+        }
         break;
     case WorldMessageType::NetBossFight:
         bossFight_ = !m.netState.empty() && m.netState[0] != 0;
@@ -1461,6 +1469,23 @@ void OwnWorldClient::doorMirrorTurn() {
     }
 }
 
+// The invitation to another player's talk: Select held a second takes it (the coordinator brings this player beside them,
+// and the talk plays here from its start). Only from free play: not in an event or a scene of this game's, at a gate, in a
+// story boss's fight or down
+void OwnWorldClient::inviteTurn() {
+    constexpr int kHoldTicks = 30;
+    if (!invite_) return;
+    const od::port::GameState& g = od::port::gameState();
+    const bool free = joined_ && !ownEvent_ && !followEvent_ && !scene_ && !localScene_ && !gateAsked_ && !bossFight_ && !testBossFight_ &&
+                      !od::port::playerIsDowned(od::port::player()) && g.gameMode() == od::port::GameMode::Field &&
+                      g.fieldStep() == od::port::FieldStep::Playing && od::port::transitionRequest().state == od::port::kTransitionNone;
+    inviteHeld_ = free && (padBefore_ & od::port::kPadSelect) != 0 ? inviteHeld_ + 1 : 0;
+    if (inviteHeld_ < kHoldTicks) return;
+    pipe_->sendReliable(playerId_, WorldMessageType::NetInviteAccept, {});
+    invite_.reset();
+    inviteHeld_ = 0;
+}
+
 // An exit this player has taken: not while a story boss is being fought; at a gate they wait, with who is at it
 void OwnWorldClient::gateTurn() {
     if (gateGlow_) {
@@ -1564,6 +1589,10 @@ void OwnWorldClient::drawNotice() const {
         std::snprintf(text, sizeof text, "Reviving: %d%%", reviveTicks_ * 100 / od::port::kReviveTicks);
     }
     if (text[0] == 0 && noticeTicks_ > 0) std::snprintf(text, sizeof text, "%s", notice_.c_str());
+    if (text[0] == 0 && invite_) {
+        const std::string who = *invite_ == 0 ? "The host" : "Player " + std::to_string(int(*invite_));
+        std::snprintf(text, sizeof text, "%s is in a conversation. Hold Select to join.", who.c_str());
+    }
     if (text[0] == 0) return;
     const ImGuiViewport* view = ImGui::GetMainViewport();
     const ImVec2 size = ImGui::CalcTextSize(text);
