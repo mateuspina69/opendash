@@ -1860,6 +1860,7 @@ void PoolNetActors::tick(uint8_t slot, const NetActorState& state, const std::op
         } else {
             animStep(animated);
         }
+        aim_[slot] = state.aim;
         DecodedFrame& decoded = decodedFrame();
         for (const NetAimOffset& o : state.aim) {
             if (o.entry >= DecodedFrame::kEntries) continue;
@@ -1876,6 +1877,27 @@ void PoolNetActors::tick(uint8_t slot, const NetActorState& state, const std::op
 }
 
 void PoolNetActors::endTick() { applyActorFrees(); }
+
+void PoolNetActors::repose(uint8_t slot) {
+    if (!animates_[slot] || !posed_[slot]) return;
+    ActorHeader* head = slotOf(slot);
+    if (!head || !(head->flags & kActorLive)) return;
+    AnimatedActor& animated = asAnimated(actorLayoutOf(*head));
+    if (animated.animScript.value() == 0) return;
+    try {
+        animDecodeCurrent(animated);
+        DecodedFrame& decoded = decodedFrame();
+        for (const NetAimOffset& o : aim_[slot]) {
+            if (o.entry >= DecodedFrame::kEntries) continue;
+            const LaneVec4 at = decoded.entries[o.entry];
+            decoded.entries[o.entry].assign(int16_t(uint16_t(at.x) + uint16_t(o.lanes[0])), int16_t(uint16_t(at.y) + uint16_t(o.lanes[1])),
+                                            int16_t(uint16_t(at.z) + uint16_t(o.lanes[2])));
+        }
+        animPose(animated);
+    } catch (const std::exception&) {
+        animates_[slot] = false;
+    }
+}
 
 bool PoolNetActors::heldShot(size_t index) const {
     if (index >= ShotPool::size()) return false;

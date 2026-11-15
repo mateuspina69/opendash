@@ -1187,6 +1187,7 @@ void OwnWorldClient::liftPlace() {
     if (!copy || p.interactionTarget.actor.get() != copy || (p.carryFlags & od::port::kCarryReleased)) return;
     const std::array<int32_t, 3>& at = *lifted_->place;
     od::port::carryAtHandsOf(p, od::port::actorLayoutOf(*copy), at[0], at[1], at[2]);
+    actors_->repose(lifted_->slot); // (its bones were posed where the world had it: all of it at the hands)
 }
 
 // This player's event of the room's world is over here: its world ends it there (its speaker is free again), and the

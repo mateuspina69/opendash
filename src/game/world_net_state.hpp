@@ -435,6 +435,9 @@ public:
     void submitLockPoints();
     // the actor this machine holds for a world's slot (none: not here)
     ActorHeader* mirrorOf(uint8_t slot) const { return slotOf(slot); }
+    // the actor of this slot moved here since its tick (this machine's Mega Man holds it at its hands): its pose again
+    // there, the same frame of its animation and the same offsets of its class
+    void repose(uint8_t slot);
     // what the world named the actor of this slot by, as it appeared here
     const NetActorIdentity& identityOf(uint8_t slot) const { return identity_[slot]; }
     // the picture the world last gave of the actor in this slot (ContentRegistry::NetPicture::capture, there; none: empty)
@@ -471,6 +474,7 @@ private:
     uint8_t ownPlayerId_ = 0;
     std::array<bool, kNetSlots> animates_{}, held_{};
     std::array<bool, kNetSlots> posed_{}; // an animated copy posed on this machine since it appeared (drawn from then)
+    std::array<std::vector<NetAimOffset>, kNetSlots> aim_{}; // ... with these offsets of its class on its frame
     std::array<NetActorIdentity, kNetSlots> identity_{};
     std::array<std::vector<uint8_t>, kNetSlots> picture_{};
     std::array<uint32_t, kNetSlots> ownSlot_{}; // a world's shot in a slot of the client's: its address
