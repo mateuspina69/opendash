@@ -197,6 +197,8 @@ void App::parseArgs(int argc, char** argv) {
         else if (a == "--sun-strength-closed") sunStrengthClosed = std::stof(argv[++i]);
         else if (a == "--sun-softness") sunSoftness = std::stof(argv[++i]);
         else if (a == "--sun-tint") sunTint = std::stof(argv[++i]);
+        else if (a == "--sun-map") sunMapSize = std::stoi(argv[++i]);
+        else if (a == "--sun-map-reach") sunMapReach = std::stof(argv[++i]);
         else if (a == "--sun-disc") { // 0 = off
             sunDiscSize = std::stof(argv[++i]);
             sunDiscOn = sunDiscSize > 0.0f;
@@ -1192,6 +1194,8 @@ void App::applySun() {
     sun.softness = sunSoftness;
     sun.tint = sunTint;
     sun.disc = sunDiscOn ? sunDiscSize : 0.0f;
+    sun.mapSize = sunMapSize;
+    sun.mapReach = sunMapReach * float(1 << current.shift);
     renderer->setSun(sun);
 }
 

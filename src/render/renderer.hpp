@@ -100,6 +100,10 @@ struct SunLight {
     // OpenDash: the sun seen in the sky, a disc of this angular radius in degrees with its halo, toward dir (0 = none).
     // Drawn on the sky only: never in a room with no sky, nor on a 2D layer that is not the sky. Needs no ray tracing
     float disc = 0.0f;
+    // Without ray queries the shadows come from a shadow map (seen from the sun) of mapSize texels a side, over at most
+    // mapReach world units around what the camera looks at (shadows beyond it fade out)
+    int mapSize = 2048;
+    float mapReach = 4000.0f;
 };
 
 // OpenDash experiment: ray-traced ambient occlusion. A surface loses the sky's light (what the sun's shadow keeps; all
@@ -373,7 +377,7 @@ public:
     virtual void setDebugView(DebugView view) = 0;
     // the DynamicObject::nearFade draws, by view depth in world units: whole from `to`, gone at `from`
     virtual void setEffectNearFade(float from, float to) = 0;
-    // sun shadows; ignored when the GPU has no ray queries (DXR 1.1)
+    // sun shadows: ray-traced with ray queries (DXR 1.1), else from a shadow map (SunLight::mapSize)
     virtual void setSun(const SunLight& sun) = 0;
     // the ambient occlusion (AmbientOcclusion above); ignored without ray queries
     virtual void setAmbientOcclusion(const AmbientOcclusion& ao) { (void)ao; }
@@ -386,6 +390,8 @@ public:
     virtual void setSeeThrough(const std::vector<SeeThroughBody>& bodies, const std::vector<SeeThroughPiece>& pieces,
                                bool debug) = 0;
     virtual bool rayTracingSupported() const = 0;
+    // the sun's shadows (and the anime look's bands that follow them): ray-traced, or shadow-mapped without ray queries
+    virtual bool sunShadowsSupported() const { return rayTracingSupported(); }
     // anti-aliasing backend + quality; an unavailable backend falls back to Auto (DLSS, else FSR, else none)
     virtual void setAntiAliasing(AaBackend backend, AaQuality quality) = 0;
     virtual void setVsync(bool on) = 0; // off: MAILBOX / IMMEDIATE (Vulkan), tearing allowed (D3D12)

@@ -23,7 +23,7 @@ public:
     int width() const { return width_; }
     int height() const { return height_; }
     void present(bool vsync); // presents the acquired image, waits until at most one frame is in flight, acquires the next
-    bool rayQueryShaders() const { return false; } // the ray-query scene shader is not enabled on Vulkan yet
+    bool rayQueryShaders() const { return rayQuery_; } // VK_KHR_ray_query + acceleration structures are enabled
 
 private:
     bool createSwapchain(bool vsync);
@@ -40,6 +40,7 @@ private:
     VkSwapchainKHR swapchain_ = VK_NULL_HANDLE;
     VkFormat format_ = VK_FORMAT_R8G8B8A8_UNORM;
     bool vsync_ = true;
+    bool rayQuery_ = false;
     std::vector<const char*> instanceExtensions_, deviceExtensions_;
     std::vector<VkSemaphore> acquireSemaphores_; // one per swapchain image, used round robin
     std::vector<VkSemaphore> presentSemaphores_; // one per swapchain image, indexed by the image
