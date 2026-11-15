@@ -75,9 +75,9 @@ enum class WorldMessageType : uint8_t {
     // what a scene's script left in a room it went to (game/spawn SpawnNote), from its owner's game to that room's world,
     // which played none of it and makes them
     NetSceneLeft = 64,
-    // an event of everyone's plays in a room (its owner's talk with one of the story's people): from its world to the
-    // coordinator when it starts and ends {on}, and from the coordinator to each player elsewhere {on, the owner}: an
-    // invitation their game shows; one who takes it is brought beside the owner, and their game plays the event with them
+    // an event of everyone's waits in a room (its owner's talk with one of the story's people) until everyone is there: from
+    // its world to the coordinator as it waits and when the wait is off {on}, and from the coordinator to each player
+    // elsewhere {on, the owner}: an invitation their game shows; one who takes it is brought beside the owner
     NetInvite = 65, NetInviteAccept = 66
 };
 // the last type: what a decoder takes (a type added after it is the new last)

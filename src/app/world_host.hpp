@@ -91,7 +91,7 @@ public:
     void storyMove(uint8_t playerId, const std::vector<uint8_t>& move);
     // the host starts it without those missing, after a visible countdown
     void gateForce(uint64_t nowNs);
-    // a player takes the invitation to the event of everyone's that plays now (NetInvite): brought beside its owner
+    // a player takes the invitation to the event of everyone's that waits for them (NetInvite): brought beside its owner
     void inviteAccept(uint8_t playerId);
     // the turn between frames: the links, the worlds' reports, the keep-alives; a world that ended on its own is forgotten
     void poll(uint64_t nowNs);
@@ -147,6 +147,7 @@ private:
     void gameOverTurn();
     struct Gate {
         bool scene = false;       // a scene waits in `room`; else a door, to `move`
+        bool invite = false;      // ... an event of everyone's: nobody is brought, those elsewhere are invited
         bool mission = false;     // ... a mission's: everyone walks there, nobody is brought
         WorldRoom room{};
         std::vector<uint8_t> move;
@@ -156,7 +157,7 @@ private:
         uint64_t forceAtNs = 0, nextNoticeNs = 0;
     };
     std::optional<Gate> gate_;
-    // the event of everyone's that plays now, and who was invited to it (those elsewhere when it began)
+    // the event of everyone's that waits at the gate (Gate::invite), and who is invited to it (those elsewhere as it began)
     struct Invite {
         WorldRoom room{};
         uint8_t owner = 0;
@@ -166,6 +167,8 @@ private:
     void inviteTell(uint8_t playerId, bool on, uint8_t owner);
     void inviteEnd(); // its invitations withdrawn
     std::set<WorldRoom> sceneAsks_; // the rooms whose scene asked while a door's gate was on: theirs come next
+    std::map<WorldRoom, uint8_t> eventAsks_; // ... whose event of everyone's asked while another gate was on: its owner
+    void eventGate(WorldRoom room, uint8_t owner);
     void sceneGate(WorldRoom room);
     bool gateTeleport_ = false;
     std::array<std::string, kPlayers> names_{};

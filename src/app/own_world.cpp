@@ -1469,8 +1469,8 @@ void OwnWorldClient::doorMirrorTurn() {
     }
 }
 
-// The invitation to another player's talk: Select held a second takes it (the coordinator brings this player beside them,
-// and the talk plays here from its start). Only from free play: not in an event or a scene of this game's, at a gate, in a
+// The invitation to another player's talk, which waits for everyone: Select held a second takes it (the coordinator brings
+// this player beside them). Only from free play: not in an event or a scene of this game's, at a gate, in a
 // story boss's fight or down
 void OwnWorldClient::inviteTurn() {
     constexpr int kHoldTicks = 30;
@@ -1588,11 +1588,11 @@ void OwnWorldClient::drawNotice() const {
     } else if (reviving_) {
         std::snprintf(text, sizeof text, "Reviving: %d%%", reviveTicks_ * 100 / od::port::kReviveTicks);
     }
-    if (text[0] == 0 && noticeTicks_ > 0) std::snprintf(text, sizeof text, "%s", notice_.c_str());
-    if (text[0] == 0 && invite_) {
+    if (text[0] == 0 && invite_) { // (over the gate's own notice: this player is the one it waits for)
         const std::string who = *invite_ == 0 ? "The host" : "Player " + std::to_string(int(*invite_));
-        std::snprintf(text, sizeof text, "%s is in a conversation. Hold Select to join.", who.c_str());
+        std::snprintf(text, sizeof text, "%s is waiting to start a conversation. Hold Select to join.", who.c_str());
     }
+    if (text[0] == 0 && noticeTicks_ > 0) std::snprintf(text, sizeof text, "%s", notice_.c_str());
     if (text[0] == 0) return;
     const ImGuiViewport* view = ImGui::GetMainViewport();
     const ImVec2 size = ImGui::CalcTextSize(text);

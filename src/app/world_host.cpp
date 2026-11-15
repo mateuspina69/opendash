@@ -142,8 +142,12 @@ void WorldHost::removeFromWorld(uint8_t playerId) {
     playerRoom_[playerId].reset();
     briefs_[playerId].reset();
     gateLeave(playerId);
-    if (invite_ && invite_->owner == playerId) inviteEnd(); // (the one who talked has left the room: the talk is over)
-    else if (invite_ && invite_->invited.erase(playerId) != 0) inviteTell(playerId, false, invite_->owner);
+    if (invite_ && invite_->owner == playerId) { // (the one who would talk has left the room: nothing waits)
+        inviteEnd();
+        if (gate_ && gate_->invite) gate_.reset();
+    } else if (invite_ && invite_->invited.erase(playerId) != 0) {
+        inviteTell(playerId, false, invite_->owner);
+    }
     const auto it = worlds_.find(*was);
     if (it == worlds_.end()) return;
     World& world = *it->second;
@@ -386,7 +390,7 @@ void WorldHost::inviteEnd() {
 }
 
 void WorldHost::inviteAccept(uint8_t playerId) {
-    // (one whose invitation is over, or who is there already, is not moved)
+    // (one whose invitation is over, or who is there already, is not moved; one who takes it is asked no more)
     if (!invite_ || invite_->invited.erase(playerId) == 0) return;
     inviteTell(playerId, false, invite_->owner);
     if (!playerRoom_.at(playerId) || playerRoom_[playerId] == invite_->room || !briefs_[invite_->owner]) return;
@@ -421,8 +425,28 @@ void WorldHost::sceneGate(WorldRoom room) {
     gate_ = g;
 }
 
+void WorldHost::eventGate(WorldRoom room, uint8_t owner) {
+    if (worlds_.find(room) == worlds_.end()) return;
+    Gate g;
+    g.scene = true;
+    g.invite = true;
+    g.room = room;
+    g.first = owner;
+    gate_ = g;
+    invite_ = Invite{room, owner, {}};
+    for (uint8_t id = 0; id < kPlayers; ++id) {
+        if (id == owner || !playerRoom_[id] || playerRoom_[id] == room) continue;
+        invite_->invited.insert(id);
+        inviteTell(id, true, owner);
+    }
+}
+
 void WorldHost::gateTurn(uint64_t nowNs) {
     while (!gate_ && !sceneAsks_.empty()) sceneGate(sceneAsks_.extract(sceneAsks_.begin()).value());
+    while (!gate_ && !eventAsks_.empty()) {
+        const auto ask = eventAsks_.extract(eventAsks_.begin());
+        eventGate(ask.key(), ask.mapped());
+    }
     if (!gate_) return;
     Gate& g = *gate_;
     size_t all = 0, here = 0;
@@ -432,7 +456,7 @@ void WorldHost::gateTurn(uint64_t nowNs) {
         if (g.scene ? playerRoom_[id] == g.room : g.waiting.count(id) != 0) ++here;
     }
     // a scene brings everyone to its room (it is everyone's); a door's gate, with the session's teleport option
-    const bool bring = (g.scene || gateTeleport_) && !g.mission;
+    const bool bring = (g.scene || gateTeleport_) && !g.mission && !g.invite;
     if (bring) {
         if (g.scene) { // next to who is there
             for (uint8_t id = 0; id < kPlayers; ++id) {
@@ -455,6 +479,7 @@ void WorldHost::gateTurn(uint64_t nowNs) {
     if (here >= all || forced) {
         if (g.scene) {
             if (const auto it = worlds_.find(g.room); it != worlds_.end()) it->second->link.sendReliable({WorldMessageType::NetSceneGo});
+            if (g.invite) inviteEnd(); // (it starts: whoever did not come is invited no more)
         } else if (g.mission && forced && playerRoom_[g.first]) {
             // a mission is one world: a forced start takes its whole room along
             const WorldRoom room = *playerRoom_[g.first];
@@ -524,15 +549,18 @@ void WorldHost::poll(uint64_t nowNs) {
                 netInbox_[m.playerId].back().entry = entry_[m.playerId];
             }
             if (m.type == WorldMessageType::NetInvite) {
-                // an event of everyone's began or ended there: those elsewhere are invited to it, or told it is over
-                inviteEnd();
-                if (!m.netState.empty() && m.netState[0] != 0 && m.playerId < kPlayers) {
-                    invite_ = Invite{it->first, m.playerId, {}};
-                    for (uint8_t id = 0; id < kPlayers; ++id) {
-                        if (id == m.playerId || !playerRoom_[id] || playerRoom_[id] == it->first) continue;
-                        invite_->invited.insert(id);
-                        inviteTell(id, true, m.playerId);
+                // an event of everyone's waits there for everyone (its gate, by invitation), or waits no more
+                const bool on = !m.netState.empty() && m.netState[0] != 0 && m.playerId < kPlayers;
+                if (!on) {
+                    eventAsks_.erase(it->first);
+                    if (gate_ && gate_->invite && gate_->room == it->first) {
+                        inviteEnd();
+                        gate_.reset();
                     }
+                } else if (gate_) {
+                    eventAsks_[it->first] = m.playerId; // another gate is on: this one comes after it
+                } else {
+                    eventGate(it->first, m.playerId);
                 }
                 continue;
             }
@@ -614,7 +642,11 @@ void WorldHost::poll(uint64_t nowNs) {
             alert(text);
         }
         for (uint8_t id : world.players) playerRoom_[id].reset();
-        if (invite_ && invite_->room == it->first) inviteEnd();
+        eventAsks_.erase(it->first);
+        if (invite_ && invite_->room == it->first) {
+            inviteEnd();
+            if (gate_ && gate_->invite) gate_.reset();
+        }
         const int stage = it->first.stage;
         it = worlds_.erase(it);
         dropEmptiedStage(stage);
@@ -676,6 +708,7 @@ bool WorldHost::takeEveryoneDown() { return std::exchange(everyoneDown_, false);
 
 void WorldHost::reloadFrom(const std::vector<uint8_t>& save) {
     inviteEnd();
+    eventAsks_.clear();
     for (auto& [room, world] : worlds_) {
         world->link.sendReliable({WorldMessageType::Stop});
         stopping_.push_back(std::move(world));
