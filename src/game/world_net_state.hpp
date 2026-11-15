@@ -470,6 +470,7 @@ private:
     bool shotsInOwnSlots_;
     uint8_t ownPlayerId_ = 0;
     std::array<bool, kNetSlots> animates_{}, held_{};
+    std::array<bool, kNetSlots> posed_{}; // an animated copy posed on this machine since it appeared (drawn from then)
     std::array<NetActorIdentity, kNetSlots> identity_{};
     std::array<std::vector<uint8_t>, kNetSlots> picture_{};
     std::array<uint32_t, kNetSlots> ownSlot_{}; // a world's shot in a slot of the client's: its address

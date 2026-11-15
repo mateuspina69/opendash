@@ -1585,6 +1585,8 @@ void PoolNetActors::appear(uint8_t slot, const NetActorIdentity& identity, const
     a.rotation.z = state.rot[2];
     const bool bound = identity.modelEntry != kNetNoModel && bindActorModelEntry(a, identity.modelEntry);
     animates_[slot] = bound && actorSlotClass(slot) == kAnimatedClass;
+    posed_[slot] = false; // its bone blocks hold another actor's pose until this machine poses it
+    if (animates_[slot]) a.setDrawn(false);
     if (netSlotVisibleOrShot(slot)) appeared_.push_back({slot, identity, bound});
 }
 
@@ -1606,6 +1608,7 @@ void PoolNetActors::go(uint8_t slot) {
     }
     ownSlot_[slot] = 0;
     animates_[slot] = false;
+    posed_[slot] = false;
     lock_[slot].clear();
     solids_[slot].clear();
 }
@@ -1765,7 +1768,9 @@ void PoolNetActors::tick(uint8_t slot, const NetActorState& state, const std::op
     a.rotation.x = state.rot[0];
     a.rotation.y = state.rot[1];
     a.rotation.z = state.rot[2];
-    a.setDrawn(state.shown);
+    // an animated copy not posed here yet is not drawn: its bone blocks are another actor's (a model subdivided from that
+    // frame kept its shape)
+    a.setDrawn(state.shown && (!animates_[slot] || posed_[slot]));
     if (actorSlotClass(slot) != kAnimatedClass) {
         MeshActor& mesh = meshActorAt(a.at);
         if (state.told & kNetToldScale) {
@@ -1854,6 +1859,8 @@ void PoolNetActors::tick(uint8_t slot, const NetActorState& state, const std::op
                                             int16_t(uint16_t(at.z) + uint16_t(o.lanes[2])));
         }
         animPose(animated);
+        posed_[slot] = true;
+        a.setDrawn(state.shown);
     } catch (const std::exception&) {
         animates_[slot] = false;
     }
