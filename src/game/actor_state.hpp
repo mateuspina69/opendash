@@ -454,6 +454,9 @@ struct ActorHeader {
     // OpenDash's co-op: this slot started in the update of one every client runs from its event (a player's shot, an
     // effect): each client's copy starts its own
     bool startedByClientRun = false;
+    // OpenDash's co-op: a visual of this machine's own (Data's flame and its smoke): every machine makes its own, the world's
+    // is never sent
+    bool localVisual = false;
     // OpenDash's co-op: a client's copy of a world's actor run from its event, or what such a copy started: seen, it plays
     // with no one (its hits are the world's)
     bool worldCopy = false;

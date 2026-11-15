@@ -347,6 +347,7 @@ void catchFire(AnimatedActor& actor, DataFields& data) { // the flame on his hea
             flame.flags = kActorLive;
             flame.type = kFireEffectType;
             flame.subtype = uint8_t(FireEffectKind::DataFlame);
+            flame.localVisual = true; // (a session's games light their own on his copies: dataTakePicture)
             actor.hitPoints = actor.maxHitPoints;
             ++mission.firesLeft;
             data.cryTimer = 0x28;
@@ -931,6 +932,27 @@ void dataTakePicture(uint32_t address, std::span<const uint8_t> picture) {
     DataFields& data = classState<DataFields>(actor);
     data.flags = picture[0] ? uint16_t(data.flags | DataFields::kBurning) : uint16_t(data.flags & ~DataFields::kBurning);
     actor.hitPoints = int16_t(uint16_t(picture[1] | picture[2] << 8));
+    if (!picture[0]) return;
+    // burning: this machine's own flame on him (the world's is a visual it does not send), unless it burns there already
+    if (data.flame != 0) {
+        const EffectActor& lit = effectActorAt(data.flame);
+        if ((lit.flags & kActorLive) && lit.worldCopy && lit.type == kFireEffectType &&
+            FireEffectKind(lit.subtype) == FireEffectKind::DataFlame && classState<FireEffectFields>(lit).followed == address)
+            return;
+    }
+    data.flame = 0;
+    const uint32_t e = allocActorA0(kActorStageClass); // as his class lights it (exe 0x5e13a0)
+    if (e == 0) return;
+    EffectActor& flame = effectActorAt(e);
+    flame.flags = kActorLive;
+    flame.type = kFireEffectType;
+    flame.subtype = uint8_t(FireEffectKind::DataFlame);
+    flame.worldCopy = true; // it follows his copy (content/intro/flutter_fire)
+    flame.localVisual = true;
+    FireEffectFields& fx = classState<FireEffectFields>(flame);
+    fx.followed = address;
+    fx.followedBurning = false;
+    data.flame = e;
 }
 
 bool dataFlameOn(uint32_t dataAddress, ShortVec3& point, int16_t& size, bool& burning) {
@@ -948,15 +970,5 @@ bool dataFlameOn(uint32_t dataAddress, ShortVec3& point, int16_t& size, bool& bu
     return true;
 }
 
-const ActorHeader* dataOfFlame(uint32_t effect) {
-    AnimatedPool& pool = animatedPool();
-    for (size_t i = 0; i < kAnimatedFieldSlots; ++i) {
-        const AnimatedActor& a = pool[i];
-        if (!(a.flags & kActorLive)) continue;
-        const RoutineRef h = fieldActorHandler(a, ActorPool::Animated, false);
-        if (h && h.is(RoutineId::BurningDataUpdate) && classState<DataFields>(pool[i]).flame == effect) return &a;
-    }
-    return nullptr;
-}
 
 } // namespace od::port

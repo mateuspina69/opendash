@@ -776,8 +776,8 @@ void fireEffectUpdate(const PlayerEnv& env, uint32_t address) {
             return;
         }
         if (effect.worldCopy) {
-            // a session's client: its Data's copy carries it as the world's Data does his (at his head, his hit points
-            // its size); it ends once he has stopped burning. Its smoke comes from the world's
+            // a session's client: its own flame on its Data's copy (lit from his picture: burning), at his head, his hit
+            // points its size; it ends once he has stopped burning
             int16_t followedSize = 0;
             bool burning = false;
             if (!dataFlameOn(fx.followed, fx.pos, followedSize, burning) || (fx.followedBurning && !burning)) {
@@ -786,12 +786,12 @@ void fireEffectUpdate(const PlayerEnv& env, uint32_t address) {
             }
             fx.followedBurning = fx.followedBurning || burning;
             fx.size = followedSize;
-            stepKeys(effect, fx, emberKeys[effect.variant]);
-            return;
+        } else {
+            // exe 0x437c30: its size from Data
+            fx.size = int16_t(DataFlameParams(effect).size);
         }
-        // exe 0x437c30: its size from Data, smoke puffs (variant 3 every other frame, variant 4 every frame)
-        fx.size = int16_t(DataFlameParams(effect).size);
         stepKeys(effect, fx, emberKeys[effect.variant]);
+        // ... smoke puffs (variant 3 every other frame, variant 4 every frame): each machine's own visual
         for (const uint8_t v : {uint8_t(3), uint8_t(4)}) {
             if (v == 3 && (gameState().frame & 1)) continue;
             if (const uint32_t e = allocActorA0(kActorStageClass)) { // exe 0x5e13a0
@@ -801,6 +801,7 @@ void fireEffectUpdate(const PlayerEnv& env, uint32_t address) {
                 puff.subtype = uint8_t(FireEffectKind::SmokePuff);
                 puff.variant = v;
                 puff.copyPositionWords(effect);
+                puff.localVisual = true;
             }
         }
         return;
@@ -831,20 +832,6 @@ void fireTakePicture(uint32_t address, std::span<const uint8_t> picture) {
     fire.strength = int32_t(uint32_t(picture[1]) | uint32_t(picture[2]) << 8 | uint32_t(picture[3]) << 16 | uint32_t(picture[4]) << 24);
     fire.frame = picture[5];
     fire.frameTicks = picture[6];
-}
-
-// the world: the Data a flame effect burns on (the other kinds hold nothing); the client: his copy, the one its copy follows
-bool fireEffectLinkRead(EffectActor& effect, std::array<const ActorHeader*, 2>& held) {
-    if (FireEffectKind(effect.subtype) == FireEffectKind::DataFlame) held[0] = dataOfFlame(effect.at);
-    return true;
-}
-void fireEffectLinkWrite(EffectActor& effect, const std::array<ActorHeader*, 2>& held) {
-    if (FireEffectKind(effect.subtype) != FireEffectKind::DataFlame) return;
-    // a new copy: its own fields are this one's, not the slot's last fire effect's (a flame of a Data put out since, seen
-    // burning: this one would end on its first tick, before his picture says he burns)
-    FireEffectFields& fx = classState<FireEffectFields>(effect);
-    fx.followed = held[0] ? actorLayoutOf(*held[0]).at : 0;
-    fx.followedBurning = false;
 }
 
 bool flameStopped(uint32_t address) { return classState<FlameFields>(staticActorAt(address)).stopped != 0; }

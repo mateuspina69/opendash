@@ -716,6 +716,8 @@ void captureNetWorld(NetWorldTable& table, uint32_t tick) {
                 if (held[1]) s.effectStart.second = held[1]->slot;
             }
         }
+        // a visual each machine makes itself (Data's flame, its smoke): the world's is not sent
+        if (e.localVisual) s.effectGoes = false;
         // what each game keeps of its own room (the weather's layer): the world's is not sent
         if (const RoutineRef h = actorHandler(e, (e.loopFlags & kActorLateLoop) ? ActorPool::EffectsLate : ActorPool::Effects, false);
             h && netClientKeepsClass(h.id()))
@@ -1636,7 +1638,10 @@ void PoolNetActors::effect(const NetEffect& e) {
     if (e.parent != kNetNoParent) {
         // ... held in a slot of this client's, for a shot; a player's by this machine's table
         ActorHeader* head = actorSlotClass(e.parent) == kPlayerClass ? &actorHeaderAt(playerAddress(tableOfPlayer(e.parent))) : slotOf(e.parent);
-        if (!head || (!(head->flags & kActorLive) && actorSlotClass(e.parent) != kPlayerClass)) return;
+        if (!head || (!(head->flags & kActorLive) && actorSlotClass(e.parent) != kPlayerClass)) {
+            if (logged) std::fprintf(stderr, "net effect subtype %02x: its parent %02x is not here\n", unsigned(e.subtype), unsigned(e.parent));
+            return;
+        }
         parent = &actorLayoutOf(*head);
     }
     // a projectile or a static runs in the world's slot (the world's are held here in theirs: one in a slot of its own would
@@ -1666,7 +1671,8 @@ void PoolNetActors::effect(const NetEffect& e) {
                                  : e.pool == kEffectClass ? actorHandler(head, (e.loopFlags & kActorLateLoop) ? ActorPool::EffectsLate : ActorPool::Effects, false)
                                  : e.pool == kProjectileClass ? actorHandler(head, ActorPool::Projectiles, false)
                                                           : actorHandler(head, (e.loopFlags & kActorLateLoop) ? ActorPool::StaticsLate : ActorPool::Statics, false);
-        std::fprintf(stderr, "net effect %s\n", named ? routineName(named.id()) : "?");
+        std::fprintf(stderr, "net effect %s subtype %02x parent %02x\n", named ? routineName(named.id()) : "?", unsigned(e.subtype),
+                     unsigned(e.parent));
     }
     if (e.pool == kShotClass) {
         head.loopFlags = e.loopFlags;

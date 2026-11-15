@@ -108,9 +108,8 @@ void registerIntroClasses(ContentRegistry& r) {
     r.netPictures.emplace(RoutineId::FireUpdate, ContentRegistry::NetPicture{&firePicture, &fireTakePicture});
     r.netPictures.emplace(RoutineId::WallBlastUpdate, ContentRegistry::NetPicture{&firePicture, &fireTakePicture});
     r.netEffects.insert(RoutineId::FlameUpdate);
-    // ... the burning Data's picture, which his flame follows on every machine
+    // ... the burning Data's picture: each machine lights its own flame on him from it
     r.netPictures.emplace(RoutineId::BurningDataUpdate, ContentRegistry::NetPicture{&dataPicture, &dataTakePicture});
-    registerNetEffectLinks(RoutineId::FireEffectUpdate, NetEffectLinks{&fireEffectLinkRead, &fireEffectLinkWrite});
     r.netStops.emplace(RoutineId::FlameUpdate, ContentRegistry::NetStop{&flameStopped, &flameStop});
     r.effectTextures.push_back(&openingEffectTextures);
     r.effectGradientRows.push_back({kExhaustGlow, 0});
