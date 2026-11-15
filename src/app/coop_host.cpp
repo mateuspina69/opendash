@@ -64,9 +64,10 @@ bool isReliable(WorldMessageType t) {
 
 // a message through the session, to its player `toId` (from a client: to the host). What must arrive goes whole, in
 // parts when one datagram does not hold it; what the next one replaces is one datagram
-void sendWorld(od::net::Session& session, uint64_t nowNs, uint8_t toId, const WorldMessage& m, bool reliable) {
+static_assert(kWorldMessageBytes <= od::net::kMaxWorldBytes, "a world message's datagram share fits the session's bundle");
+void sendWorld(od::net::Session& session, uint64_t, uint8_t toId, const WorldMessage& m, bool reliable) {
     if (reliable) {
-        for (const std::vector<uint8_t>& part : encodeWorldMessageParts(m)) session.sendWorld(nowNs, toId, true, part);
+        for (const std::vector<uint8_t>& part : encodeWorldMessageParts(m)) session.sendWorld(toId, true, part);
         return;
     }
     const std::vector<uint8_t> bytes = encodeWorldMessage(m);
@@ -74,7 +75,7 @@ void sendWorld(od::net::Session& session, uint64_t nowNs, uint8_t toId, const Wo
         SDL_Log("session: a message of type %u is %zu bytes, more than one datagram holds: not sent", unsigned(m.type), bytes.size());
         return;
     }
-    session.sendWorld(nowNs, toId, false, bytes);
+    session.sendWorld(toId, false, bytes);
 }
 
 } // namespace
@@ -272,6 +273,7 @@ void CoopHost::poll(uint64_t nowNs) {
     }
     for (const uint8_t id : clients_)
         for (WorldMessage& m : worlds_.takeNet(id)) sendWorld(*session_, nowNs, id, m, isReliable(m.type));
+    session_->flush(nowNs); // what the worlds sent their players leaves now, a datagram a player
 }
 
 void WorldPipe::dropStale(std::vector<WorldMessage>& in) {

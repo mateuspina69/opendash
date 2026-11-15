@@ -198,12 +198,10 @@ void testMessages() {
         {PeerJoined{{4, "Rui"}}, 3},
         {PeerLeft{{4, "Rui"}}, 4},
         {PlayerState{2, 1234, 99, {1, 2, 3, 4}}, 0},
-        {WorldState{5, 6, {7, 8}}, 0},
+        {Bundle{42, 7, {{true, 9, {1, 2, 3}}, {false, 0, {7, 8}}, {false, 0, {}}}}, 0},
         {Ping{123456789}, 0},
         {Pong{123456789}, 0},
         {Bye{}, 5},
-        {Ack{42}, 0},
-        {WorldEvent{{1, 2, 3}}, 7},
         {Probe{}, 0},
         {Offer{"Mateus", "netplay-2 abc", 2, 27460}, 0},
     };
@@ -238,6 +236,10 @@ void testMessages() {
     CHECK(sessionKeyHash("abc") != sessionKeyHash("abd") && sessionKeyHash("") == 0xcbf29ce484222325ull);
 }
 
+// The session's world traffic: a turn's messages in one datagram each way, the reliable ones in order and once, through
+// loss and reordering; a newest-wins one that arrives after a newer one is dropped
+void testWorldTraffic();
+
 // sessions on loopback, polled on a fake clock (stepNs per round, a short real pause so the loopback delivers)
 struct Net {
     std::vector<od::net::Session*> all;
@@ -269,6 +271,71 @@ od::net::SessionConfig clientConfig(uint16_t hostPort, const char* name, uint64_
     c.name = name;
     c.seed = seed;
     return c;
+}
+
+void testWorldTraffic() {
+    using namespace od::net;
+    const auto run = [](std::optional<LinkSim> sim, const char* what) {
+        SessionConfig hc = hostConfig();
+        hc.sim = sim;
+        Session host(hc);
+        SessionConfig cc = clientConfig(host.status(0).port, "Ana", 5);
+        cc.sim = sim;
+        Session client(cc);
+        Net net{{&host, &client}};
+        net.run(sim ? 400 : 40);
+        CHECK(client.status(net.now).connection == Connection::Connected);
+        (void)host.takeWorld();
+        (void)client.takeWorld();
+        // each round both ways: two reliable messages and a newest-wins one, numbered
+        constexpr int kRounds = 120;
+        std::vector<uint8_t> hostGot, clientGot;
+        int hostLatest = -1, clientLatest = -1;
+        bool latestInOrder = true;
+        const auto take = [&](Session& s, std::vector<uint8_t>& reliable, int& latest) {
+            for (const ReceivedWorld& w : s.takeWorld()) {
+                if (w.payload.size() == 2 && w.payload[0] == 'R') reliable.push_back(w.payload[1]);
+                if (w.payload.size() == 2 && w.payload[0] == 'L') {
+                    latestInOrder = latestInOrder && int(w.payload[1]) > latest;
+                    latest = w.payload[1];
+                }
+            }
+        };
+        for (int i = 0; i < kRounds; ++i) {
+            for (int k = 0; k < 2; ++k) {
+                const std::vector<uint8_t> r = {'R', uint8_t(i * 2 + k)};
+                host.sendWorld(1, true, r);
+                client.sendWorld(0, true, r);
+            }
+            const std::vector<uint8_t> l = {'L', uint8_t(i)};
+            host.sendWorld(1, false, l);
+            client.sendWorld(0, false, l);
+            net.run(1);
+            take(host, hostGot, hostLatest);
+            take(client, clientGot, clientLatest);
+        }
+        for (int i = 0; i < (sim ? 3000 : 20); ++i) {
+            net.run(1);
+            take(host, hostGot, hostLatest);
+            take(client, clientGot, clientLatest);
+        }
+        std::vector<uint8_t> all;
+        for (int i = 0; i < kRounds * 2; ++i) all.push_back(uint8_t(i));
+        std::printf("  world traffic, %s: reliable %zu / %zu of %zu, newest-wins up to %d / %d\n", what, hostGot.size(),
+                    clientGot.size(), all.size(), hostLatest, clientLatest);
+        CHECK(hostGot == all && clientGot == all); // every reliable one, once, in order
+        CHECK(latestInOrder);                      // never an older newest-wins one after a newer
+        if (!sim) CHECK(hostLatest == kRounds - 1 && clientLatest == kRounds - 1);
+        // a payload one datagram does not hold is not sent
+        host.sendWorld(1, false, std::vector<uint8_t>(kMaxWorldBytes + 1, 0));
+        client.sendWorld(0, true, std::vector<uint8_t>(kMaxWorldBytes, 9)); // ... the longest that fits arrives
+        net.run(sim ? 400 : 20);
+        bool whole = false;
+        for (const ReceivedWorld& w : host.takeWorld()) whole = whole || w.payload.size() == kMaxWorldBytes;
+        CHECK(whole && client.takeWorld().empty());
+    };
+    run(std::nullopt, "a clean link");
+    run(LinkSim{40, 30, 20.0}, "20 % loss, 40 ms +- 30");
 }
 
 void testRefusals() {
@@ -445,7 +512,7 @@ void testReliableUnderLoss() {
     std::printf("  lossy path: %d of 300 host states at Ana, loss %.1f %%, rtt %d ms\n", got, hp.lossPercent,
                 hp.rttMs);
     CHECK(got > 170 && got < 250);
-    CHECK(hp.rttMs > 200 && hp.rttMs < 320);
+    CHECK(hp.rttMs > 200 && hp.rttMs < 340); // 250 ms, its jitter, and a 33 ms poll at each end
 }
 
 } // namespace
@@ -460,5 +527,6 @@ int main() {
     testForwarding();
     testTimeout();
     testReliableUnderLoss();
+    testWorldTraffic();
     return testResult("test_net_protocol");
 }

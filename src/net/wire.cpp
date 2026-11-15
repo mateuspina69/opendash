@@ -46,8 +46,9 @@ std::string ByteReader::string() {
     return s;
 }
 
-std::vector<uint8_t> ByteReader::blob() {
-    const size_t n = u16();
+std::vector<uint8_t> ByteReader::blob() { return bytes(u16()); }
+
+std::vector<uint8_t> ByteReader::bytes(size_t n) {
     if (!ok_ || bytes_.size() - pos_ < n) {
         ok_ = false;
         return {};

@@ -75,15 +75,15 @@ void Session::sendReliable(uint64_t nowNs, Link& link, const Message& m) {
     const uint32_t seq = link.nextOut++;
     std::vector<uint8_t> bytes = encode(m, seq);
     transmit(nowNs, link.endpoint, bytes);
-    link.unacked.push_back({seq, std::move(bytes), nowNs});
+    link.unacked.push_back({seq, std::move(bytes), std::max<uint64_t>(nowNs, 1), false});
 }
 
 void Session::sendUnreliable(uint64_t nowNs, const Link& link, const Message& m) {
     transmit(nowNs, link.endpoint, encode(m));
 }
 
-std::vector<Message> Session::accept(uint64_t nowNs, Link& link, uint32_t sequence, Message m) {
-    std::vector<Message> ready;
+std::vector<Session::Incoming> Session::accept(Link& link, uint32_t sequence, Incoming m) {
+    std::vector<Incoming> ready;
     if (sequence == link.nextIn) {
         ready.push_back(std::move(m));
         ++link.nextIn;
@@ -95,15 +95,64 @@ std::vector<Message> Session::accept(uint64_t nowNs, Link& link, uint32_t sequen
     } else if (sequence > link.nextIn && link.early.size() < kMaxEarly) {
         link.early.emplace(sequence, std::move(m)); // a duplicate of an early one keeps the first
     }
-    // below nextIn: a resend of something delivered (its ack was lost); acked again below
-    sendUnreliable(nowNs, link, Ack{link.nextIn});
+    // below nextIn: a resend of something delivered (its ack was lost); acked again
+    link.ackDue = true;
     return ready;
 }
 
+bool Session::openBundle(Link& link, const Bundle& b, std::vector<Incoming>& ready) {
+    std::erase_if(link.unacked, [&](const Unacked& u) { return u.sequence < b.ackNext; });
+    const bool fresh = !link.anyOrder || int16_t(uint16_t(b.order - link.orderIn)) > 0;
+    if (fresh) {
+        link.orderIn = b.order;
+        link.anyOrder = true;
+    }
+    for (const Bundle::Item& item : b.items)
+        if (item.reliable)
+            for (Incoming& in : accept(link, item.sequence, Incoming{std::nullopt, item.payload})) ready.push_back(std::move(in));
+    return fresh;
+}
+
+void Session::flushLink(uint64_t nowNs, Link& link) {
+    const uint64_t after = resendAfterNs(link.rttMs), sentAt = std::max<uint64_t>(nowNs, 1);
+    Bundle b;
+    size_t size = kBundleHeadBytes;
+    bool sent = false;
+    const auto send = [&] {
+        b.ackNext = link.nextIn;
+        b.order = ++link.orderOut;
+        transmit(nowNs, link.endpoint, encode(b));
+        b.items.clear();
+        size = kBundleHeadBytes;
+        sent = true;
+    };
+    const auto add = [&](bool reliable, uint32_t sequence, const std::vector<uint8_t>& payload) {
+        const size_t need = kBundleItemHeadBytes + (reliable ? kBundleSequenceBytes : 0) + payload.size();
+        if ((size + need > kMaxDatagram || b.items.size() == kMaxBundleItems) && !b.items.empty()) send();
+        b.items.push_back({reliable, sequence, payload});
+        size += need;
+    };
+    for (Unacked& u : link.unacked) {
+        if (!u.item || (u.sentNs != 0 && nowNs - std::min(nowNs, u.sentNs) < after)) continue;
+        add(true, u.sequence, u.bytes);
+        u.sentNs = sentAt;
+    }
+    for (const std::vector<uint8_t>& payload : link.latest) add(false, 0, payload);
+    link.latest.clear();
+    if (!b.items.empty() || (link.ackDue && !sent)) send();
+    link.ackDue = false;
+}
+
+void Session::flush(uint64_t nowNs) {
+    if (config_.role == Role::Host) {
+        for (auto& [e, c] : clients_) flushLink(nowNs, c.link);
+    } else if (connection_ != Connection::Refused && started_) {
+        flushLink(nowNs, hostLink_);
+    }
+}
+
 void Session::handleLinkMessage(uint64_t nowNs, Link& link, const Message& m) {
-    if (const Ack* a = std::get_if<Ack>(&m)) {
-        std::erase_if(link.unacked, [&](const Unacked& u) { return u.sequence < a->next; });
-    } else if (const Ping* p = std::get_if<Ping>(&m)) {
+    if (const Ping* p = std::get_if<Ping>(&m)) {
         sendUnreliable(nowNs, link, Pong{p->sentNs});
     } else if (const Pong* echo = std::get_if<Pong>(&m)) {
         if (echo->echoNs <= nowNs) {
@@ -116,7 +165,7 @@ void Session::handleLinkMessage(uint64_t nowNs, Link& link, const Message& m) {
 void Session::serviceLink(uint64_t nowNs, Link& link) {
     const uint64_t after = resendAfterNs(link.rttMs);
     for (Unacked& u : link.unacked)
-        if (nowNs - u.sentNs >= after) {
+        if (!u.item && nowNs - std::min(nowNs, u.sentNs) >= after) {
             transmit(nowNs, link.endpoint, u.bytes);
             u.sentNs = nowNs;
         }
@@ -171,6 +220,7 @@ void Session::poll(uint64_t nowNs) {
         if (nowNs - hostLink_.lastHeardNs >= kPeerTimeoutNs) clientLost(nowNs, "the host is silent");
         else serviceLink(nowNs, hostLink_);
     }
+    flush(nowNs);
 }
 
 void Session::sendPlayerState(uint64_t nowNs, uint32_t tick, std::span<const uint8_t> payload) {
@@ -186,7 +236,8 @@ void Session::sendPlayerState(uint64_t nowNs, uint32_t tick, std::span<const uin
 
 std::vector<ReceivedState> Session::takePlayerStates() { return std::exchange(states_, {}); }
 
-void Session::sendWorld(uint64_t nowNs, uint8_t toId, bool reliable, std::span<const uint8_t> payload) {
+void Session::sendWorld(uint8_t toId, bool reliable, std::span<const uint8_t> payload) {
+    if (payload.size() > kMaxWorldBytes) return;
     Link* link = nullptr;
     if (config_.role == Role::Host) {
         for (auto& [e, c] : clients_)
@@ -196,8 +247,8 @@ void Session::sendWorld(uint64_t nowNs, uint8_t toId, bool reliable, std::span<c
     }
     if (!link) return;
     std::vector<uint8_t> bytes(payload.begin(), payload.end());
-    if (reliable) sendReliable(nowNs, *link, WorldEvent{std::move(bytes)});
-    else sendUnreliable(nowNs, *link, WorldState{++worldSequence_, 0, std::move(bytes)});
+    if (reliable) link->unacked.push_back({link->nextOut++, std::move(bytes), 0, true});
+    else link->latest.push_back(std::move(bytes));
 }
 
 std::vector<ReceivedWorld> Session::takeWorld() { return std::exchange(world_, {}); }
@@ -241,10 +292,18 @@ void Session::hostReceive(uint64_t nowNs, const Endpoint& from, Decoded d) {
     }
     const MessageType t = typeOf(d.message);
     if (isReliable(t)) {
-        for (const Message& m : accept(nowNs, c.link, d.sequence, std::move(d.message))) {
-            hostDeliver(nowNs, c, m);
-            if (!clients_.contains(from)) return; // a Bye dropped it
-        }
+        hostTake(nowNs, from, accept(c.link, d.sequence, Incoming{std::move(d.message), {}}));
+        return;
+    }
+    if (const Bundle* b = std::get_if<Bundle>(&d.message)) {
+        std::vector<Incoming> ready;
+        const bool fresh = openBundle(c.link, *b, ready);
+        const bool accepted = c.accepted;
+        const uint8_t id = c.info.playerId;
+        if (!hostTake(nowNs, from, std::move(ready))) return;
+        if (fresh && accepted)
+            for (const Bundle::Item& item : b->items)
+                if (!item.reliable) world_.push_back({id, item.payload});
         return;
     }
     if (const PlayerState* s = std::get_if<PlayerState>(&d.message)) {
@@ -256,19 +315,22 @@ void Session::hostReceive(uint64_t nowNs, const Endpoint& from, Decoded d) {
             if (other.accepted && e != from) transmit(nowNs, e, bytes);
         return;
     }
-    if (const WorldState* s = std::get_if<WorldState>(&d.message)) {
-        if (c.accepted) world_.push_back({c.info.playerId, s->payload});
-        return;
-    }
     // what else a client sends is its link's
     handleLinkMessage(nowNs, c.link, d.message);
 }
 
-void Session::hostDeliver(uint64_t nowNs, Client& c, const Message& m) {
-    if (const WorldEvent* e = std::get_if<WorldEvent>(&m)) {
-        if (c.accepted) world_.push_back({c.info.playerId, e->payload});
-        return;
+bool Session::hostTake(uint64_t nowNs, const Endpoint& from, std::vector<Incoming> ready) {
+    for (Incoming& in : ready) {
+        const auto it = clients_.find(from);
+        if (it == clients_.end()) return false; // a Bye dropped it
+        Client& c = it->second;
+        if (in.control) hostDeliver(nowNs, c, *in.control);
+        else if (c.accepted) world_.push_back({c.info.playerId, std::move(in.world)});
     }
+    return clients_.contains(from);
+}
+
+void Session::hostDeliver(uint64_t nowNs, Client& c, const Message& m) {
     if (const Hello* h = std::get_if<Hello>(&m)) {
         if (!c.accepted) hostWelcomeOrRefuse(nowNs, c, *h);
     } else if (std::holds_alternative<Bye>(m)) {
@@ -366,29 +428,35 @@ void Session::clientReceive(uint64_t nowNs, const Endpoint& from, Decoded d) {
     if (d.version != kProtocolVersion && !std::holds_alternative<Refuse>(d.message)) return;
     const MessageType t = typeOf(d.message);
     if (isReliable(t)) {
-        for (const Message& m : accept(nowNs, hostLink_, d.sequence, std::move(d.message))) {
-            clientDeliver(nowNs, m);
-            if (connection_ == Connection::Refused) return;
-        }
+        clientTake(nowNs, accept(hostLink_, d.sequence, Incoming{std::move(d.message), {}}));
+        return;
+    }
+    if (const Bundle* b = std::get_if<Bundle>(&d.message)) {
+        std::vector<Incoming> ready;
+        const bool fresh = openBundle(hostLink_, *b, ready);
+        clientTake(nowNs, std::move(ready));
+        if (fresh && connection_ == Connection::Connected)
+            for (const Bundle::Item& item : b->items)
+                if (!item.reliable) world_.push_back({kHostPlayerId, item.payload});
         return;
     }
     if (const PlayerState* s = std::get_if<PlayerState>(&d.message)) {
         if (connection_ == Connection::Connected && s->playerId != localId_) acceptState(nowNs, *s);
         return;
     }
-    if (const WorldState* s = std::get_if<WorldState>(&d.message)) {
-        if (connection_ == Connection::Connected) world_.push_back({kHostPlayerId, s->payload});
-        return;
-    }
     // the link's
     handleLinkMessage(nowNs, hostLink_, d.message);
 }
 
-void Session::clientDeliver(uint64_t nowNs, const Message& m) {
-    if (const WorldEvent* e = std::get_if<WorldEvent>(&m)) {
-        if (connection_ == Connection::Connected) world_.push_back({kHostPlayerId, e->payload});
-        return;
+void Session::clientTake(uint64_t nowNs, std::vector<Incoming> ready) {
+    for (Incoming& in : ready) {
+        if (connection_ == Connection::Refused) return;
+        if (in.control) clientDeliver(nowNs, *in.control);
+        else if (connection_ == Connection::Connected) world_.push_back({kHostPlayerId, std::move(in.world)});
     }
+}
+
+void Session::clientDeliver(uint64_t nowNs, const Message& m) {
     if (const Welcome* w = std::get_if<Welcome>(&m)) {
         if (connection_ != Connection::Connecting) return;
         connection_ = Connection::Connected;

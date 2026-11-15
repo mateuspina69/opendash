@@ -1,6 +1,8 @@
 // The netplay messages' layout (see protocol.hpp).
 #include "net/protocol.hpp"
 
+#include <stdexcept>
+
 #include "net/wire.hpp"
 
 namespace od::net {
@@ -47,19 +49,22 @@ void writeBody(ByteWriter& w, const Message& m) {
                 w.u32(v.sequence);
                 w.u32(v.tick);
                 w.blob(v.payload);
-            } else if constexpr (std::is_same_v<T, WorldState>) {
-                w.u32(v.sequence);
-                w.u32(v.tick);
-                w.blob(v.payload);
+            } else if constexpr (std::is_same_v<T, Bundle>) {
+                w.u32(v.ackNext);
+                w.u16(v.order);
+                if (v.items.size() > kMaxBundleItems) throw std::length_error("net: a bundle over its item count");
+                w.u8(uint8_t(v.items.size()));
+                for (const Bundle::Item& item : v.items) {
+                    if (item.payload.size() > kMaxBundleItem) throw std::length_error("net: a bundle item over its length");
+                    w.u16(uint16_t(item.payload.size() | (item.reliable ? 0x8000u : 0u)));
+                    if (item.reliable) w.u32(item.sequence);
+                    w.raw(item.payload);
+                }
             } else if constexpr (std::is_same_v<T, Ping>) {
                 w.u64(v.sentNs);
             } else if constexpr (std::is_same_v<T, Pong>) {
                 w.u64(v.echoNs);
             } else if constexpr (std::is_same_v<T, Bye>) {
-            } else if constexpr (std::is_same_v<T, Ack>) {
-                w.u32(v.next);
-            } else if constexpr (std::is_same_v<T, WorldEvent>) {
-                w.blob(v.payload);
             } else if constexpr (std::is_same_v<T, Probe>) {
             } else if constexpr (std::is_same_v<T, Offer>) {
                 w.string(v.name);
@@ -118,19 +123,24 @@ std::optional<Message> readBody(MessageType t, ByteReader& r) {
         m = std::move(s);
         break;
     }
-    case MessageType::WorldState: {
-        WorldState s;
-        s.sequence = r.u32();
-        s.tick = r.u32();
-        s.payload = r.blob();
-        m = std::move(s);
+    case MessageType::Bundle: {
+        Bundle b;
+        b.ackNext = r.u32();
+        b.order = r.u16();
+        for (size_t n = r.u8(); n > 0 && r.ok(); --n) {
+            Bundle::Item item;
+            const uint16_t head = r.u16();
+            item.reliable = (head & 0x8000u) != 0;
+            if (item.reliable) item.sequence = r.u32();
+            item.payload = r.bytes(head & 0x7fffu);
+            b.items.push_back(std::move(item));
+        }
+        m = std::move(b);
         break;
     }
     case MessageType::Ping: m = Ping{r.u64()}; break;
     case MessageType::Pong: m = Pong{r.u64()}; break;
     case MessageType::Bye: m = Bye{}; break;
-    case MessageType::Ack: m = Ack{r.u32()}; break;
-    case MessageType::WorldEvent: m = WorldEvent{r.blob()}; break;
     case MessageType::Probe: m = Probe{}; break;
     case MessageType::Offer: {
         Offer o;
@@ -156,7 +166,6 @@ bool isReliable(MessageType t) {
     case MessageType::Refuse:
     case MessageType::PeerJoined:
     case MessageType::PeerLeft:
-    case MessageType::WorldEvent:
     case MessageType::Bye: return true;
     default: return false;
     }

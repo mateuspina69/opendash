@@ -3,8 +3,8 @@
 // the sender's reliable channel (net/session acknowledges and resends them). The header and the Refuse message keep
 // their layout across protocol versions, so a host can always tell an older or newer client why it is refused.
 //
-// The game's state travels as opaque bytes (PlayerState::payload, WorldState::payload): the protocol knows no game
-// struct (the app encodes them, game/player/player_snapshot).
+// The game's traffic travels as opaque bytes, every message of a turn in one datagram (Bundle): the protocol knows no
+// game struct (the app encodes them).
 #pragma once
 
 #include <cstdint>
@@ -18,7 +18,7 @@
 namespace od::net {
 
 constexpr uint32_t kMagic = 0x504e444f; // "ODNP" little endian
-constexpr uint16_t kProtocolVersion = 2;
+constexpr uint16_t kProtocolVersion = 3;
 constexpr int kMaxPlayers = 8;          // the host (player 0) and up to 7 clients
 constexpr uint8_t kHostPlayerId = 0;
 
@@ -29,14 +29,12 @@ enum class MessageType : uint8_t {
     PeerJoined = 4,  // host -> clients: a player joined (reliable)
     PeerLeft = 5,    // host -> clients: a player left (reliable)
     PlayerState = 6, // a player's own character (unreliable, newest wins; the host forwards it unchanged)
-    WorldState = 7,  // what the next one replaces between a game and the coordinator: the shared world, opaque here
+    Bundle = 7,      // a turn's traffic between a player's game and the coordinator, and the link's acknowledgement
     Ping = 8,        // round-trip probe (unreliable)
     Pong = 9,        // its echo (unreliable)
     Bye = 10,        // leaving (reliable)
-    Ack = 11,        // the reliable messages received in order so far (unreliable)
-    WorldEvent = 12, // what must arrive between a player's game and the coordinator (reliable)
-    Probe = 13,      // a lobby looking for hosts on the local network (broadcast, unreliable)
-    Offer = 14,      // host -> that lobby: its session (unreliable)
+    Probe = 11,      // a lobby looking for hosts on the local network (broadcast, unreliable)
+    Offer = 12,      // host -> that lobby: its session (unreliable)
 };
 // the types that travel on the reliable channel (they carry a sequence number after the header)
 bool isReliable(MessageType t);
@@ -90,12 +88,27 @@ struct PlayerState {
     std::vector<uint8_t> payload;
     bool operator==(const PlayerState&) const = default;
 };
-struct WorldState {
-    uint32_t sequence = 0;
-    uint32_t tick = 0;
-    std::vector<uint8_t> payload;
-    bool operator==(const WorldState&) const = default;
+// One datagram of a link's traffic: every reliable message received in order so far (below `ackNext`), this datagram's
+// place among the sender's (`order`: a receiver drops the newest-wins items of one older than the newest it has seen), and
+// the items. A reliable item carries its sequence on the sender's reliable channel, shared with the control messages.
+// Layout: u32 ackNext, u16 order, u8 the item count, then per item u16 its length (top bit: reliable), u32 its sequence
+// when reliable, its bytes.
+constexpr size_t kMaxBundleItem = 0x7fff;
+struct Bundle {
+    struct Item {
+        bool reliable = false;
+        uint32_t sequence = 0;
+        std::vector<uint8_t> payload;
+        bool operator==(const Item&) const = default;
+    };
+    uint32_t ackNext = 0;
+    uint16_t order = 0;
+    std::vector<Item> items;
+    bool operator==(const Bundle&) const = default;
 };
+// the bytes of a datagram's header with a Bundle's own fields, of one item's head, and of a reliable item's sequence
+constexpr size_t kBundleHeadBytes = 4 + 2 + 1 + 4 + 2 + 1, kBundleItemHeadBytes = 2, kBundleSequenceBytes = 4;
+constexpr size_t kMaxBundleItems = 255;
 struct Ping {
     uint64_t sentNs = 0; // the sender's clock
     bool operator==(const Ping&) const = default;
@@ -106,15 +119,6 @@ struct Pong {
 };
 struct Bye {
     bool operator==(const Bye&) const = default;
-};
-struct Ack {
-    uint32_t next = 0; // every reliable message below this sequence arrived
-    bool operator==(const Ack&) const = default;
-};
-
-struct WorldEvent {
-    std::vector<uint8_t> payload;
-    bool operator==(const WorldEvent&) const = default;
 };
 
 struct Probe {
@@ -128,10 +132,9 @@ struct Offer {
     bool operator==(const Offer&) const = default;
 };
 
-using Message = std::variant<Hello, Welcome, Refuse, PeerJoined, PeerLeft, PlayerState, WorldState, Ping, Pong, Bye, Ack,
-                             WorldEvent, Probe, Offer>;
+using Message = std::variant<Hello, Welcome, Refuse, PeerJoined, PeerLeft, PlayerState, Bundle, Ping, Pong, Bye, Probe, Offer>;
 static_assert(std::is_same_v<std::variant_alternative_t<0, Message>, Hello> &&
-              std::is_same_v<std::variant_alternative_t<size_t(MessageType::Ack) - 1, Message>, Ack> &&
+              std::is_same_v<std::variant_alternative_t<size_t(MessageType::Bundle) - 1, Message>, Bundle> &&
               std::variant_size_v<Message> == size_t(MessageType::Offer),
               "Message lists the types in MessageType order from Hello = 1 (typeOf)");
 MessageType typeOf(const Message& m);

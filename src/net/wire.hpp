@@ -52,6 +52,8 @@ public:
     bool boolean();
     std::string string();
     std::vector<uint8_t> blob();
+    // the next n bytes
+    std::vector<uint8_t> bytes(size_t n);
 
     // every read so far was inside the bytes (and every boolean was 0 / 1)
     bool ok() const { return ok_; }
