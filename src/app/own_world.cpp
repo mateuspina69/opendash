@@ -468,7 +468,6 @@ void OwnWorldClient::turn(uint64_t nowNs) {
         }
         actors_->endTick();
     }
-    liftPlace();
     for (; failuresLogged_ < failures_.classes.size(); ++failuresLogged_)
         SDL_Log("own world: failed: %s", failures_.classes[failuresLogged_].c_str());
 }
@@ -1511,6 +1510,8 @@ void OwnWorldClient::drawNotice() const {
 void OwnWorldClient::localActors(const od::port::PlayerEnv& env, od::port::ActorContext& context, bool late) {
     od::port::runNetLocalActors(env, context, late, failures_);
     if (!late && actors_) actors_->submitSolids();
+    // what this Mega Man holds, at its hands as this tick's player update left them (its update has run: no tick behind)
+    if (late) liftPlace();
 }
 
 } // namespace od::app
